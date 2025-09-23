@@ -33,6 +33,7 @@ ENV/
 .env.production
 
 # IDE
+.vscode/
 .idea/
 *.swp
 *.swo
@@ -90,3 +91,5 @@ tests/data/*.csv
 
 # Generated dependency exports
 requirements.txt
+requirements-dev.txt
+dev-requirements.txt

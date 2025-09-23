@@ -26,21 +26,10 @@ print_error() {
 echo "🧱 TradeBlocks - Quick Code Fix"
 echo "==============================="
 
-# Ensure uv exists and environment is synced
-if ! command -v uv &> /dev/null; then
-    print_error "uv not found. Install it from https://github.com/astral-sh/uv and rerun."
-    exit 1
-fi
-
-if [ ! -d ".venv" ]; then
-    print_error ".venv not found. Run './scripts/setup.sh' first."
-    exit 1
-fi
-
 # 1. Format code with Black (if available)
-if uv run black --version &> /dev/null; then
+if POETRY_VIRTUALENVS_IN_PROJECT=1 poetry run black --version &> /dev/null; then
     echo "🎨 Formatting code..."
-    if uv run black app/ -q; then
+    if POETRY_VIRTUALENVS_IN_PROJECT=1 poetry run black app/ -q; then
         print_success "Code formatted"
     else
         print_warning "Formatting had issues"
@@ -50,9 +39,9 @@ else
 fi
 
 # 2. Sort imports (if available)
-if uv run isort --version &> /dev/null; then
+if POETRY_VIRTUALENVS_IN_PROJECT=1 poetry run isort --version &> /dev/null; then
     echo "📚 Sorting imports..."
-    if uv run isort app/ -q; then
+    if POETRY_VIRTUALENVS_IN_PROJECT=1 poetry run isort app/ -q; then
         print_success "Imports sorted"
     else
         print_warning "Import sorting had issues"

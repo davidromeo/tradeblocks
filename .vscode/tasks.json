@@ -2,10 +2,10 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Sync Dependencies",
+      "label": "Install Dependencies",
       "type": "shell",
-      "command": "uv",
-      "args": ["sync", "--extra", "dev"],
+      "command": "poetry",
+      "args": ["install"],
       "group": "build",
       "presentation": {
         "echo": true,
@@ -45,7 +45,7 @@
     {
       "label": "Run Tests",
       "type": "shell",
-      "command": "uv",
+      "command": "poetry",
       "args": ["run", "pytest"],
       "group": "test",
       "presentation": {
@@ -59,7 +59,7 @@
     {
       "label": "Run Tests with Coverage",
       "type": "shell",
-      "command": "uv",
+      "command": "poetry",
       "args": [
         "run",
         "pytest",
@@ -79,7 +79,7 @@
     {
       "label": "Format Code",
       "type": "shell",
-      "command": "uv",
+      "command": "poetry",
       "args": ["run", "black", "app", "tests"],
       "group": "build",
       "presentation": {
@@ -93,7 +93,7 @@
     {
       "label": "Lint Code",
       "type": "shell",
-      "command": "uv",
+      "command": "poetry",
       "args": ["run", "ruff", "check", "app", "tests"],
       "group": "build",
       "presentation": {
@@ -107,7 +107,7 @@
     {
       "label": "Type Check",
       "type": "shell",
-      "command": "uv",
+      "command": "poetry",
       "args": ["run", "mypy", "app"],
       "group": "build",
       "presentation": {

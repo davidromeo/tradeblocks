@@ -41,15 +41,9 @@ cd tradeblocks
 # One-command setup
 ./scripts/setup.sh
 
-# Or manual setup with uv:
-uv python install 3.12
-uv sync --extra dev
-source .venv/bin/activate
+# Or manual setup with Poetry:
+# poetry install --with dev
 ```
-
-> **Deployment tip:** before pushing to Vercel, refresh the lock-derived requirements with `uv pip compile pyproject.toml --output-file requirements.txt` so the build can use the standard pip workflow.
->
-> **Need SciPy / scikit-learn?** Install the optional analytics extra locally with `uv sync --extra analytics` (already included with `--extra dev`). These heavier dependencies stay out of production so the Vercel Serverless bundle stays under the 250 MB limit.
 
 ### 2. Configuration
 
@@ -63,11 +57,11 @@ cp .env.example .env
 ### 3. Set Up Development Tools (Optional)
 
 ```bash
-# Ensure dev dependencies are installed (included in `uv sync --extra dev`)
-uv sync --extra dev
+# Install development dependencies (includes pre-commit, linting, etc.)
+poetry install --with dev
 
 # Install pre-commit hooks for automatic code quality checks
-uv run pre-commit install
+poetry run pre-commit install
 
 # Run code quality checks locally
 ./scripts/check-code.sh
@@ -83,10 +77,10 @@ uv run pre-commit install
 ./scripts/start-dev.sh
 
 # Or manually:
-uv run python app/main.py
+poetry run python app/main.py
 
 # Or using uvicorn directly
-uv run uvicorn app.main:app --reload --port 8000
+poetry run uvicorn app.main:app --reload --port 8000
 ```
 
 Navigate to `http://localhost:8000` to access the application.
@@ -133,13 +127,13 @@ TradeBlocks includes a comprehensive testing framework that allows you to test a
 3. **Run comprehensive tests** with your data:
    ```bash
    # Test all performance calculations with your data
-   PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/unit/test_performance_calculator.py -v
+   PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/unit/test_performance_calculator.py -v
 
    # Run all tests with verbose output
-   PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/ -v -s
+   PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/ -v -s
 
    # Test specific calculations
-   PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
+   PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
    ```
 
 4. **What gets tested**:
@@ -156,7 +150,7 @@ TradeBlocks includes a comprehensive testing framework that allows you to test a
 
 ### Test Output Example
 ```bash
-$ PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
+$ PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
 
 Using real tradelog data: /path/to/tests/data/tradelog.csv
 Loaded 1,247 trades for testing
@@ -242,7 +236,7 @@ For other platforms:
 
 ```bash
 # Build and run with gunicorn (production)
-uv run gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+poetry run gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
 ## API Documentation
