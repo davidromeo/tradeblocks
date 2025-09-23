@@ -59,6 +59,11 @@ cp .env.example .env
 ```bash
 # Install development dependencies (includes pre-commit, linting, etc.)
 poetry install --with dev
+poetry install --with analytics  # optional: SciPy + scikit-learn
+poetry export --without-hashes -f requirements.txt -o requirements.txt  # for deployment bundles
+
+# Need the heavier analytics stack locally?
+poetry install --with analytics
 
 # Install pre-commit hooks for automatic code quality checks
 poetry run pre-commit install
