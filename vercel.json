@@ -6,7 +6,8 @@
       "use": "@vercel/python"
     }
   ],
-  "installCommand": "pip install poetry && poetry self add poetry-plugin-export && poetry export --without-hashes -f requirements.txt -o requirements.txt && pip install -r requirements.txt",
+  "buildCommand": "bash buildfiles.sh",
+  "installCommand": "pip install -r requirements.txt",
   "routes": [
     {
       "src": "/api/(.*)",
