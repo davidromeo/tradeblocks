@@ -1880,12 +1880,14 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "requests" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
+analytics = [
+    { name = "scikit-learn" },
+    { name = "scipy" },
+]
 dev = [
     { name = "bandit" },
     { name = "black" },
@@ -1903,6 +1905,8 @@ dev = [
     { name = "rich" },
     { name = "ruff" },
     { name = "safety" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "types-python-dateutil" },
     { name = "types-requests" },
     { name = "watchdog" },
@@ -1939,14 +1943,16 @@ requires-dist = [
     { name = "rich", marker = "extra == 'dev'", specifier = "==13.7.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.7.0" },
     { name = "safety", marker = "extra == 'dev'", specifier = "==3.2.7" },
-    { name = "scikit-learn", specifier = "==1.5.2" },
-    { name = "scipy", specifier = "==1.14.1" },
+    { name = "scikit-learn", marker = "extra == 'analytics'", specifier = "==1.5.2" },
+    { name = "scikit-learn", marker = "extra == 'dev'", specifier = "==1.5.2" },
+    { name = "scipy", marker = "extra == 'analytics'", specifier = "==1.14.1" },
+    { name = "scipy", marker = "extra == 'dev'", specifier = "==1.14.1" },
     { name = "types-python-dateutil", marker = "extra == 'dev'", specifier = "==2.9.0.20240906" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = "==2.32.0.20240905" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.32.0" },
     { name = "watchdog", marker = "extra == 'dev'", specifier = "==5.0.3" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["analytics", "dev"]
 
 [[package]]
 name = "traitlets"

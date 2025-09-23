@@ -48,8 +48,6 @@ itsdangerous==2.2.0
     # via flask
 jinja2==3.1.6
     # via flask
-joblib==1.5.2
-    # via scikit-learn
 markupsafe==3.0.2
     # via
     #   flask
@@ -61,8 +59,6 @@ numpy==1.26.4
     # via
     #   tradeblocks (pyproject.toml)
     #   pandas
-    #   scikit-learn
-    #   scipy
 packaging==25.0
     # via plotly
 pandas==2.2.3
@@ -95,12 +91,6 @@ requests==2.32.3
     #   dash
 retrying==1.4.2
     # via dash
-scikit-learn==1.5.2
-    # via tradeblocks (pyproject.toml)
-scipy==1.14.1
-    # via
-    #   tradeblocks (pyproject.toml)
-    #   scikit-learn
 setuptools==80.9.0
     # via dash
 six==1.17.0
@@ -111,8 +101,6 @@ starlette==0.38.6
     # via fastapi
 tenacity==9.1.2
     # via plotly
-threadpoolctl==3.6.0
-    # via scikit-learn
 typing-extensions==4.15.0
     # via
     #   anyio

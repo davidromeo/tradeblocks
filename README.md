@@ -48,6 +48,8 @@ source .venv/bin/activate
 ```
 
 > **Deployment tip:** before pushing to Vercel, refresh the lock-derived requirements with `uv pip compile pyproject.toml --output-file requirements.txt` so the build can use the standard pip workflow.
+>
+> **Need SciPy / scikit-learn?** Install the optional analytics extra locally with `uv sync --extra analytics` (already included with `--extra dev`). These heavier dependencies stay out of production so the Vercel Serverless bundle stays under the 250 MB limit.
 
 ### 2. Configuration
 
