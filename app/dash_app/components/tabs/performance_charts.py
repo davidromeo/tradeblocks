@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Optional
 
+from app.utils.placeholders import create_placeholder_figure
 from app.utils.theme import get_theme_colors, apply_theme_layout
 
 
@@ -561,25 +562,14 @@ def create_streak_distribution_chart(streak_data: Dict[str, Any], theme_data=Non
     return fig
 
 
-def create_empty_chart(message: str) -> go.Figure:
-    """Create an empty chart with a message."""
-    fig = go.Figure()
-    fig.add_annotation(
-        text=message,
-        xref="paper",
-        yref="paper",
-        x=0.5,
-        y=0.5,
-        showarrow=False,
-        font=dict(size=16, color="gray"),
+def create_empty_chart(message: str, theme_data=None) -> go.Figure:
+    """Create an empty chart with a themed placeholder message."""
+    return create_placeholder_figure(
+        message,
+        theme_data=theme_data,
+        font_size=16,
+        layout_kwargs={"height": 300, "margin": {"t": 40, "b": 40, "l": 40, "r": 40}},
     )
-    fig.update_layout(
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        height=300,
-        margin=dict(t=40, b=40, l=40, r=40),
-    )
-    return fig
 
 
 def generate_performance_charts(trades: List[Any]) -> Dict[str, Any]:

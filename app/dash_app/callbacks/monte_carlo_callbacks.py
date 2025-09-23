@@ -21,13 +21,38 @@ from app.calculations.shared import (
 )
 from app.data.models import Portfolio, Trade, MonteCarloRequest
 from app.utils.theme import get_theme_colors, apply_theme_layout
-from app.dash_app.components.tabs.risk_simulator import (
-    create_placeholder_equity_curve,
-    create_placeholder_histogram,
-    create_placeholder_drawdown,
-)
+from app.dash_app.components.tabs.risk_simulator import get_monte_carlo_placeholder_state
 
 logger = logging.getLogger(__name__)
+
+
+def build_placeholder_response(theme_data=None, cache_data=None):
+    """Return placeholder figures and metric text in callback output order."""
+
+    placeholder_state = get_monte_carlo_placeholder_state(theme_data)
+    figures = placeholder_state["figures"]
+    metrics = placeholder_state["metrics"]
+
+    return (
+        figures["equity"],
+        figures["distribution"],
+        figures["drawdown"],
+        metrics["expected_return"]["value"],
+        metrics["expected_return"]["description"],
+        metrics["var_95"]["value"],
+        metrics["var_95"]["description"],
+        metrics["prob_profit"]["value"],
+        metrics["prob_profit"]["description"],
+        metrics["max_drawdown"]["value"],
+        metrics["max_drawdown"]["description"],
+        metrics["best_case"]["value"],
+        metrics["best_case"]["description"],
+        metrics["median_case"]["value"],
+        metrics["median_case"]["description"],
+        metrics["worst_case"]["value"],
+        metrics["worst_case"]["description"],
+        cache_data,
+    )
 
 
 def register_monte_carlo_callbacks(app):
@@ -236,26 +261,7 @@ def register_monte_carlo_callbacks(app):
             logger.info(
                 "Theme changed but no cached simulation available; returning themed placeholders"
             )
-            return (
-                create_placeholder_equity_curve(theme_data),
-                create_placeholder_histogram(theme_data),
-                create_placeholder_drawdown(theme_data),
-                "--",
-                "Run simulation to see expected return",
-                "--",
-                "Run simulation to see VaR analysis",
-                "--",
-                "Run simulation to see probability metrics",
-                "--",
-                "Run simulation to see drawdown analysis",
-                "--",
-                "Run simulation to see scenario analysis",
-                "--",
-                "Run simulation to see scenario analysis",
-                "--",
-                "Run simulation to see scenario analysis",
-                None,
-            )
+            return build_placeholder_response(theme_data)
 
         if triggered_id in ["mc-scale-selector", "mc-show-paths"]:
             rebuild = rebuild_figures_from_cache(cached_data)
@@ -286,50 +292,12 @@ def register_monte_carlo_callbacks(app):
 
         # Handle reset button clicks - clear everything
         if triggered_id == "mc-reset":
-            return (
-                create_placeholder_equity_curve(theme_data),
-                create_placeholder_histogram(theme_data),
-                create_placeholder_drawdown(theme_data),
-                "--",
-                "Run simulation to see expected return",
-                "--",
-                "Run simulation to see VaR analysis",
-                "--",
-                "Run simulation to see probability metrics",
-                "--",
-                "Run simulation to see drawdown analysis",
-                "--",
-                "Run simulation to see scenario analysis",
-                "--",
-                "Run simulation to see scenario analysis",
-                "--",
-                "Run simulation to see scenario analysis",
-                None,  # Clear cache
-            )
+            return build_placeholder_response(theme_data)
 
         # Handle non-simulation triggers (return early if no data)
         if not portfolio_data:
-            # If we're not running simulation, return early
-            return (
-                create_placeholder_equity_curve(theme_data),
-                create_placeholder_histogram(theme_data),
-                create_placeholder_drawdown(theme_data),
-                "--",
-                "Waiting for simulation",
-                "--",
-                "Waiting for simulation",
-                "--",
-                "Waiting for simulation",
-                "--",
-                "Waiting for simulation",
-                "--",
-                "Waiting for simulation",
-                "--",
-                "Waiting for simulation",
-                "--",
-                "Waiting for simulation",
-                None,  # No cache
-            )
+            # If we're not running simulation, return early with placeholders
+            return build_placeholder_response(theme_data)
 
         # Check if this is actually a button click for simulation
         if triggered_id != "mc-run-simulation":
@@ -495,26 +463,23 @@ def register_monte_carlo_callbacks(app):
         except Exception as e:
             logger.error(f"Error running Monte Carlo simulation: {str(e)}")
             logger.exception("Full traceback:")  # This will log the full stack trace
-            return (
-                create_placeholder_equity_curve(theme_data),
-                create_placeholder_histogram(theme_data),
-                create_placeholder_drawdown(theme_data),
-                "Error",
-                str(e),
-                "Error",
-                str(e),
-                "Error",
-                str(e),
-                "Error",
-                str(e),
-                "Error",
-                str(e),
-                "Error",
-                str(e),
-                "Error",
-                str(e),
-                None,  # No cache on error
-            )
+            response = list(build_placeholder_response(theme_data))
+            error_message = str(e)
+
+            for value_index, desc_index in (
+                (3, 4),
+                (5, 6),
+                (7, 8),
+                (9, 10),
+                (11, 12),
+                (13, 14),
+                (15, 16),
+            ):
+                response[value_index] = "Error"
+                response[desc_index] = error_message
+
+            response[-1] = None
+            return tuple(response)
 
     @app.callback(
         [
@@ -671,7 +636,7 @@ def create_equity_curve_chart(
 
     except Exception as e:
         logger.error(f"Error creating equity curve chart: {str(e)}")
-        return create_placeholder_equity_curve()
+        return get_monte_carlo_placeholder_state(theme_data)["figures"]["equity"]
 
 
 def create_return_distribution_chart(result, theme_data=None):
@@ -734,7 +699,7 @@ def create_return_distribution_chart(result, theme_data=None):
 
     except Exception as e:
         logger.error(f"Error creating return distribution chart: {str(e)}")
-        return create_placeholder_histogram()
+        return get_monte_carlo_placeholder_state(theme_data)["figures"]["distribution"]
 
 
 def create_drawdown_analysis_chart(result, portfolio=None, theme_data=None):
@@ -824,4 +789,4 @@ def create_drawdown_analysis_chart(result, portfolio=None, theme_data=None):
 
     except Exception as e:
         logger.error(f"Error creating drawdown analysis chart: {str(e)}")
-        return create_placeholder_drawdown()
+        return get_monte_carlo_placeholder_state(theme_data)["figures"]["drawdown"]
