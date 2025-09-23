@@ -47,6 +47,8 @@ uv sync --extra dev
 source .venv/bin/activate
 ```
 
+> **Deployment tip:** before pushing to Vercel, refresh the lock-derived requirements with `uv pip compile pyproject.toml --output-file requirements.txt` so the build can use the standard pip workflow.
+
 ### 2. Configuration
 
 ```bash
