@@ -33,7 +33,6 @@ ENV/
 .env.production
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo

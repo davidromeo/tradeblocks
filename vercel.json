@@ -6,6 +6,7 @@
       "use": "@vercel/python"
     }
   ],
+  "installCommand": "pip install uv && uv sync --python 3.12 --frozen",
   "routes": [
     {
       "src": "/api/(.*)",

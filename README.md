@@ -41,10 +41,10 @@ cd tradeblocks
 # One-command setup
 ./scripts/setup.sh
 
-# Or manual setup:
-# python -m venv venv
-# source venv/bin/activate
-# pip install -r requirements.txt
+# Or manual setup with uv:
+uv python install 3.12
+uv sync --extra dev
+source .venv/bin/activate
 ```
 
 ### 2. Configuration
@@ -59,11 +59,11 @@ cp .env.example .env
 ### 3. Set Up Development Tools (Optional)
 
 ```bash
-# Install development dependencies (includes pre-commit, linting, etc.)
-pip install -r dev-requirements.txt
+# Ensure dev dependencies are installed (included in `uv sync --extra dev`)
+uv sync --extra dev
 
 # Install pre-commit hooks for automatic code quality checks
-pre-commit install
+uv run pre-commit install
 
 # Run code quality checks locally
 ./scripts/check-code.sh
@@ -79,10 +79,10 @@ pre-commit install
 ./scripts/start-dev.sh
 
 # Or manually:
-python app/main.py
+uv run python app/main.py
 
 # Or using uvicorn directly
-uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
 Navigate to `http://localhost:8000` to access the application.
@@ -129,13 +129,13 @@ TradeBlocks includes a comprehensive testing framework that allows you to test a
 3. **Run comprehensive tests** with your data:
    ```bash
    # Test all performance calculations with your data
-   PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/unit/test_performance_calculator.py -v
+   PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/unit/test_performance_calculator.py -v
 
    # Run all tests with verbose output
-   PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/ -v -s
+   PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/ -v -s
 
    # Test specific calculations
-   PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
+   PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
    ```
 
 4. **What gets tested**:
@@ -152,7 +152,7 @@ TradeBlocks includes a comprehensive testing framework that allows you to test a
 
 ### Test Output Example
 ```bash
-$ PYTHONPATH=/Users/davidromeo/Code/tradeblocks pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
+$ PYTHONPATH=/Users/davidromeo/Code/tradeblocks uv run pytest tests/unit/test_performance_calculator.py::TestPerformanceCalculator::test_real_data_performance_metrics -v -s
 
 Using real tradelog data: /path/to/tests/data/tradelog.csv
 Loaded 1,247 trades for testing
@@ -238,8 +238,7 @@ For other platforms:
 
 ```bash
 # Build and run with gunicorn (production)
-pip install gunicorn
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+uv run gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
 ## API Documentation

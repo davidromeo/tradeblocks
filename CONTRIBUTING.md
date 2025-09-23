@@ -6,7 +6,7 @@ Thank you for your interest in contributing to TradeBlocks! This document provid
 
 1. **Fork and clone the repository**
    ```bash
-   git clone https://github.com/your-username/tradeblocks.git
+   git clone https://github.com/davidromeo/tradeblocks.git
    cd tradeblocks
    ```
 
@@ -29,7 +29,7 @@ Thank you for your interest in contributing to TradeBlocks! This document provid
 
 ### 1. Before You Start
 
-- Check existing [issues](https://github.com/your-username/portfolio-analyzer/issues) and [pull requests](https://github.com/your-username/portfolio-analyzer/pulls)
+- Check existing [issues](https://github.com/davidromeo/tradeblocks/issues) and [pull requests](https://github.com/davidromeo/tradeblocks/pulls)
 - Create an issue to discuss major changes before implementing
 - Fork the repository and create a feature branch
 
@@ -274,10 +274,7 @@ When reporting issues, please include:
 ./scripts/start-dev.sh
 
 # Or directly
-python app/main.py
-
-# With Docker (if configured)
-docker-compose up
+uv run python app/main.py
 ```
 
 ## 📚 Resources
@@ -298,8 +295,8 @@ docker-compose up
 ## ❓ Getting Help
 
 - Check existing [documentation](README.md)
-- Search [existing issues](https://github.com/your-username/portfolio-analyzer/issues)
-- Join discussions in [GitHub Discussions](https://github.com/your-username/portfolio-analyzer/discussions)
+- Search [existing issues](https://github.com/davidromeo/tradeblocks/issues)
+- Join discussions in [GitHub Discussions](https://github.com/davidromeo/tradeblocks/discussions)
 - Create a new issue with detailed information
 
 ## 🏆 Recognition

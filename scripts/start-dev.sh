@@ -8,6 +8,7 @@ set -e
 echo "🚀 Starting Portfolio Analyzer development server..."
 
 # Colors for output
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -25,16 +26,20 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# Check if virtual environment is activated
-if [[ "$VIRTUAL_ENV" == "" ]]; then
-    print_warning "Virtual environment not activated. Activating..."
-    if [ -d "venv" ]; then
-        source venv/bin/activate
-        print_success "Virtual environment activated"
-    else
-        print_warning "Virtual environment not found. Run './scripts/setup.sh' first."
-        exit 1
-    fi
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Ensure uv is available
+if ! command -v uv &> /dev/null; then
+    print_error "uv not found. Install it from https://github.com/astral-sh/uv and rerun."
+    exit 1
+fi
+
+# Ensure the synchronized environment exists
+if [ ! -d ".venv" ]; then
+    print_warning ".venv not found. Run './scripts/setup.sh' or 'uv sync --extra dev' first."
+    exit 1
 fi
 
 # Set development environment variables
@@ -60,4 +65,4 @@ print_info "Press Ctrl+C to stop the server"
 print_info ""
 
 # Start the development server with hot-reload
-python app/main.py
+uv run python app/main.py

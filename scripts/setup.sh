@@ -31,58 +31,33 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if Python 3.11+ is installed
-print_status "Checking Python version..."
-if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-    print_status "Found Python $PYTHON_VERSION"
-
-    # Check if version is 3.11 or higher
-    if python3 -c 'import sys; exit(0 if sys.version_info >= (3, 11) else 1)'; then
-        print_success "Python version is compatible"
-    else
-        print_error "Python 3.11+ is required. Please upgrade Python."
-        exit 1
-    fi
-else
-    print_error "Python 3 is not installed. Please install Python 3.11+."
+# Ensure uv is installed
+print_status "Checking for uv package manager..."
+if ! command -v uv &> /dev/null; then
+    print_error "uv is not installed. Install it from https://github.com/astral-sh/uv and rerun."
     exit 1
 fi
+print_success "uv detected"
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
-    print_status "Creating virtual environment..."
-    python3 -m venv venv
-    print_success "Virtual environment created"
+# Ensure Python runtime is available via uv
+TARGET_PYTHON="3.12"
+print_status "Ensuring Python ${TARGET_PYTHON} is available..."
+if uv python find "${TARGET_PYTHON}" &> /dev/null; then
+    print_success "Python ${TARGET_PYTHON} already available"
 else
-    print_status "Virtual environment already exists"
+    print_status "Installing Python ${TARGET_PYTHON} via uv (first run only)..."
+    uv python install "${TARGET_PYTHON}"
 fi
 
-# Activate virtual environment
-print_status "Activating virtual environment..."
-source venv/bin/activate
-
-# Upgrade pip
-print_status "Upgrading pip..."
-pip install --upgrade pip
-
-# Install production dependencies
-print_status "Installing production dependencies..."
-pip install -r requirements.txt
-
-# Install development dependencies if they exist
-if [ -f "dev-requirements.txt" ]; then
-    print_status "Installing development dependencies..."
-    pip install -r dev-requirements.txt
-else
-    print_status "Installing basic development tools..."
-    pip install pytest pytest-cov black ruff mypy pre-commit ipython rich watchdog httpx
-fi
+# Synchronize dependencies (creates .venv by default)
+print_status "Syncing project dependencies (including dev tools)..."
+uv sync --python "${TARGET_PYTHON}" --extra dev --frozen
+print_success "Dependencies installed into .venv"
 
 # Setup pre-commit hooks if .pre-commit-config.yaml exists
 if [ -f ".pre-commit-config.yaml" ]; then
     print_status "Installing pre-commit hooks..."
-    pre-commit install
+    uv run --python "${TARGET_PYTHON}" --frozen pre-commit install
     print_success "Pre-commit hooks installed"
 else
     print_warning "No pre-commit configuration found, skipping pre-commit setup"
@@ -98,24 +73,13 @@ else
     print_status ".env file already exists or no template found"
 fi
 
-# Check if Docker is installed
-if command -v docker &> /dev/null; then
-    print_success "Docker is installed"
-    if command -v docker-compose &> /dev/null; then
-        print_success "Docker Compose is installed"
-    else
-        print_warning "Docker Compose not found. Install it for container development."
-    fi
-else
-    print_warning "Docker not found. Install Docker for container development."
-fi
-
 # Setup complete, ready to develop!
 
 print_success "🎉 Setup complete!"
 echo ""
 echo "Next steps:"
-echo "  1. Activate virtual environment: source venv/bin/activate"
+echo "  1. Activate virtual environment: source .venv/bin/activate"
+echo "     (or use 'uv run <command>' without activating)"
 echo "  2. Start development server: ./scripts/start-dev.sh"
 echo "  3. Open browser: http://localhost:8000"
 echo ""
