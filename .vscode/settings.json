@@ -65,5 +65,6 @@
     "**/node_modules/*/**": true,
     "**/.venv/**": true,
     "**/venv/**": true
-  }
+  },
+  "python-envs.pythonProjects": []
 }

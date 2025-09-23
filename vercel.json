@@ -6,6 +6,7 @@
       "use": "@vercel/python"
     }
   ],
+  "installCommand": "pip install uv && uv pip compile pyproject.toml --output-file requirements.txt && pip install -r requirements.txt",
   "routes": [
     {
       "src": "/api/(.*)",
