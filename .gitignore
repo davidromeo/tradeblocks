@@ -88,8 +88,3 @@ tests/data/tradelog.csv
 tests/data/dailylog.csv
 tests/data/*.csv
 !tests/data/README.md
-
-# Generated dependency exports
-requirements.txt
-requirements-dev.txt
-dev-requirements.txt
