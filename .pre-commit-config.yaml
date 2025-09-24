@@ -1,31 +1,29 @@
-# TradeBlocks Pre-commit Configuration
-# Simple, practical checks only
-
 repos:
-  # Essential file hygiene
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: trailing-whitespace
-        name: ✂️  Remove trailing whitespace
-      - id: end-of-file-fixer
-        name: 📄 Fix end of files
-      - id: check-merge-conflict
-        name: 🔀 Check for merge conflicts
-      - id: check-added-large-files
-        name: 📦 Check for large files
-        args: ['--maxkb=1000']
-
-  # Python code formatting (optional)
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
-      - id: black
-        name: 🎨 Format Python code
-        language_version: python3
-
-
-# Global configuration
-default_stages: [commit]
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.5.0
+  hooks:
+  - id: trailing-whitespace
+    name: "\u2702\uFE0F  Remove trailing whitespace"
+  - id: end-of-file-fixer
+    name: "\U0001F4C4 Fix end of files"
+  - id: check-merge-conflict
+    name: "\U0001F500 Check for merge conflicts"
+  - id: check-added-large-files
+    name: "\U0001F4E6 Check for large files"
+    args:
+    - --maxkb=1000
+- repo: https://github.com/psf/black
+  rev: 24.8.0
+  hooks:
+  - id: black
+    name: "\U0001F3A8 Format Python code"
+    language_version: python3
+- repo: local
+  hooks:
+  - id: poetry-export
+    name: Export requirements.txt
+    entry: poetry export --without-hashes -f requirements.txt -o requirements.txt
+    language: system
+    pass_filenames: false
 fail_fast: true
-minimum_pre_commit_version: '3.0.0'
+minimum_pre_commit_version: 3.0.0
