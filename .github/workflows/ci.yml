@@ -2,9 +2,9 @@ name: TradeBlocks CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   test:
@@ -14,79 +14,79 @@ jobs:
         python-version: [3.11]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Install CI tools
-      run: |
-        pip install pytest pytest-cov black ruff safety
+      - name: Install CI tools
+        run: |
+          pip install pytest pytest-cov black ruff safety
 
-    - name: Code formatting check (advisory)
-      run: |
-        black --check app/ --diff || echo "⚠️ Code formatting issues found (non-blocking)"
+      - name: Code formatting check (advisory)
+        run: |
+          black --check app/ --diff || echo "⚠️ Code formatting issues found (non-blocking)"
 
-    - name: Lint with ruff (advisory)
-      run: |
-        ruff check app/ || echo "⚠️ Linting issues found (non-blocking)"
+      - name: Lint with ruff (advisory)
+        run: |
+          ruff check app/ || echo "⚠️ Linting issues found (non-blocking)"
 
-    - name: Test import structure
-      run: |
-        python -c "from app.main import app; print('✅ App imports successfully')"
+      - name: Test import structure
+        run: |
+          python -c "from app.main import app; print('✅ App imports successfully')"
 
-    - name: Run tests (if they exist)
-      run: |
-        if [ -d "tests" ] && [ "$(ls -A tests)" ]; then
-          pytest tests/ -v --cov=app --cov-report=term-missing
-        else
-          echo "ℹ️ No tests found, skipping test execution"
-        fi
+      - name: Run tests (if they exist)
+        run: |
+          if [ -d "tests" ] && [ "$(ls -A tests)" ]; then
+            pytest tests/ -v --cov=app --cov-report=term-missing
+          else
+            echo "ℹ️ No tests found, skipping test execution"
+          fi
 
-    - name: Check requirements security (advisory)
-      run: |
-        safety check --json || echo "⚠️ Security check completed with warnings (non-blocking)"
+      - name: Check requirements security (advisory)
+        run: |
+          safety check --json || echo "⚠️ Security check completed with warnings (non-blocking)"
 
   deploy-check:
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Verify Vercel configuration
-      run: |
-        if [ -f "vercel.json" ]; then
-          echo "✅ vercel.json found"
-          cat vercel.json | python -m json.tool > /dev/null && echo "✅ vercel.json is valid JSON"
-        else
-          echo "❌ vercel.json not found"
-          exit 1
-        fi
-
-    - name: Check required files
-      run: |
-        files=("requirements.txt" "runtime.txt" "app/main.py")
-        for file in "${files[@]}"; do
-          if [ -f "$file" ]; then
-            echo "✅ $file found"
+      - name: Verify Vercel configuration
+        run: |
+          if [ -f "vercel.json" ]; then
+            echo "✅ vercel.json found"
+            cat vercel.json | python -m json.tool > /dev/null && echo "✅ vercel.json is valid JSON"
           else
-            echo "❌ $file missing"
+            echo "❌ vercel.json not found"
             exit 1
           fi
-        done
+
+      - name: Check required files
+        run: |
+          files=("requirements.txt" "app/main.py")
+          for file in "${files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✅ $file found"
+            else
+              echo "❌ $file missing"
+              exit 1
+            fi
+          done
