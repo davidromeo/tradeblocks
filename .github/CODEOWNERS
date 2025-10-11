@@ -1,0 +1,12 @@
+# TradeBlocks Code Owners
+# Global owners for all files
+* @davidromeo
+
+# Critical configuration files
+vercel.json @davidromeo
+requirements.txt @davidromeo
+.github/ @davidromeo
+
+# Core application
+app/main.py @davidromeo
+app/api/ @davidromeo

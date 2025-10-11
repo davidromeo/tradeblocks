@@ -1,0 +1,51 @@
+# General ignores
+.DS_Store
+*.pem
+
+# Node / Next.js
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+/.next/
+/out/
+/.turbo
+/.swc
+/.eslintcache
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build artifacts
+/build
+/coverage
+
+# Environment files (opt in when needed)
+.env*
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+samplefiles*
+
+# Test data files - ignore CSV files in tests/data directory
+tests/data/*.csv
+legacy/tests/data/dailylog.csv
+legacy/tests/data/tradelog.csv
+legacy/app/__pycache__/__init__.cpython-312.pyc
+legacy/app/calculations/__pycache__/__init__.cpython-312.pyc
+legacy/app/calculations/__pycache__/performance.cpython-312.pyc
+legacy/app/calculations/__pycache__/shared.cpython-312.pyc
+legacy/app/data/__pycache__/__init__.cpython-312.pyc
+legacy/app/data/__pycache__/models.cpython-312.pyc
+legacy/app/data/__pycache__/processor.cpython-312.pyc
+scripts/legacy_results.json
