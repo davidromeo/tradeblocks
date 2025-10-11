@@ -2,6 +2,7 @@
 export * from './trade'
 export * from './daily-log'
 export * from './portfolio-stats'
+export * from './strategy-alignment'
 export * from './block'
 
 // Type utilities

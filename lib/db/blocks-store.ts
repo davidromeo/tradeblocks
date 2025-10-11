@@ -118,7 +118,7 @@ export async function setActiveBlock(blockId: string): Promise<void> {
  * Delete block and all associated data
  */
 export async function deleteBlock(blockId: string): Promise<void> {
-  await withWriteTransaction([STORES.BLOCKS, STORES.TRADES, STORES.DAILY_LOGS, STORES.CALCULATIONS], async (transaction) => {
+  await withWriteTransaction([STORES.BLOCKS, STORES.TRADES, STORES.DAILY_LOGS, STORES.CALCULATIONS, STORES.REPORTING_LOGS], async (transaction) => {
     // Delete block
     const blocksStore = transaction.objectStore(STORES.BLOCKS)
     await promisifyRequest(blocksStore.delete(blockId))
@@ -157,6 +157,24 @@ export async function deleteBlock(blockId: string): Promise<void> {
         }
       }
       dailyLogsRequest.onerror = () => reject(dailyLogsRequest.error)
+    })
+
+    // Delete associated reporting trades
+    const reportingStore = transaction.objectStore(STORES.REPORTING_LOGS)
+    const reportingIndex = reportingStore.index('blockId')
+    const reportingRequest = reportingIndex.openCursor(IDBKeyRange.only(blockId))
+
+    await new Promise<void>((resolve, reject) => {
+      reportingRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result
+        if (cursor) {
+          cursor.delete()
+          cursor.continue()
+        } else {
+          resolve()
+        }
+      }
+      reportingRequest.onerror = () => reject(reportingRequest.error)
     })
 
     // Delete associated calculations

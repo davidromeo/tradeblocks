@@ -11,29 +11,22 @@ function createMockTrade(
   strategy: string = "Test Strategy"
 ): Trade {
   return {
-    id: `trade-${Math.random()}`,
     dateOpened,
     dateClosed: dateOpened,
     timeOpened: "09:30:00",
     timeClosed: "10:30:00",
-    ticker: "SPY",
+    openingPrice: 100,
+    legs: "SPY 100C/105C",
+    premium: 500,
+    closingPrice: 100 + pl / 100,
     strategy,
-    quantity: 100,
-    entryPrice: 100,
-    exitPrice: 100 + pl / 100,
+    numContracts: 1,
     pl,
-    plPercent: pl / fundsAtClose * 100,
-    commission: 1,
-    totalCommissions: 2,
     openingCommissionsFees: 1,
     closingCommissionsFees: 1,
-    tradeType: "LONG",
-    marginUsed: 10000,
-    accountBalance: fundsAtClose,
-    accountPeak: fundsAtClose,
-    capitalEfficiency: 1,
-    kelly: 0.05,
+    marginReq: 10000,
     fundsAtClose,
+    openingShortLongRatio: 1.0,
   };
 }
 

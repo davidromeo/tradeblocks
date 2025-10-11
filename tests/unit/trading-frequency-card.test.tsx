@@ -17,28 +17,22 @@ function createMockTrades(count: number, startDate: Date, endDate: Date): Trade[
     const progress = count === 1 ? 0 : i / (count - 1);
     const date = new Date(startDate.getTime() + span * progress);
     trades.push({
-      id: `trade-${i}`,
       dateOpened: date,
       dateClosed: date,
       timeOpened: "09:30:00",
       timeClosed: "10:30:00",
-      ticker: "SPY",
+      openingPrice: 100,
+      closingPrice: 101,
+      legs: "SPY 100C",
+      premium: 500,
       strategy: "Test Strategy",
-      quantity: 1,
-      entryPrice: 100,
-      exitPrice: 101,
+      numContracts: 1,
       pl: 1,
-      plPercent: 1,
-      commission: 0,
-      totalCommissions: 0,
       openingCommissionsFees: 0,
       closingCommissionsFees: 0,
-      tradeType: "LONG",
-      marginUsed: 0,
-      accountBalance: 0,
-      accountPeak: 0,
-      capitalEfficiency: 0,
-      kelly: 0,
+      fundsAtClose: 100001,
+      marginReq: 1000,
+      openingShortLongRatio: 1.0,
     });
   }
 

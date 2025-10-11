@@ -28,7 +28,6 @@ describe('TradeProcessor validateRawTradeData', () => {
       'Max Loss': '-400',
     }
 
-    // @ts-expect-error accessing private method for targeted validation
     const normalized = processor['validateRawTradeData'](row, 1)
 
     expect(normalized).not.toBeNull()
@@ -62,7 +61,6 @@ describe('TradeProcessor validateRawTradeData', () => {
       'Max Loss': '-48.65',
     }
 
-    // @ts-expect-error accessing private method for targeted validation
     const normalized = processor['validateRawTradeData'](row, 1)
 
     expect(normalized).not.toBeNull()
@@ -88,7 +86,6 @@ describe('TradeProcessor validateRawTradeData', () => {
       'Opening Short/Long Ratio': '1.23',
     }
 
-    // @ts-expect-error accessing private method for targeted validation
     const normalized = processor['validateRawTradeData'](row, 1)
 
     expect(normalized).not.toBeNull()

@@ -14,29 +14,24 @@ function createMockTrades(count: number): Trade[] {
 
   for (let i = 0; i < count; i++) {
     const tradeDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000); // Daily trades
+    const pl = Math.random() * 1000 - 500; // Random P&L between -500 and 500
     trades.push({
-      id: `trade-${i}`,
       dateOpened: tradeDate,
       dateClosed: tradeDate,
       timeOpened: "09:30:00",
       timeClosed: "10:30:00",
-      ticker: "SPY",
+      openingPrice: 100,
+      closingPrice: 100 + (Math.random() * 10 - 5), // Random P&L between -5 and 5
+      legs: "SPY 100C",
+      premium: 500,
       strategy: i % 3 === 0 ? "Strategy A" : i % 3 === 1 ? "Strategy B" : "Strategy C",
-      quantity: 100,
-      entryPrice: 100,
-      exitPrice: 100 + (Math.random() * 10 - 5), // Random P&L between -5 and 5
-      pl: Math.random() * 1000 - 500, // Random P&L between -500 and 500
-      plPercent: Math.random() * 10 - 5,
-      commission: 1,
-      totalCommissions: 2,
+      numContracts: 1,
+      pl,
       openingCommissionsFees: 1,
       closingCommissionsFees: 1,
-      tradeType: "LONG",
-      marginUsed: 10000,
-      accountBalance: 100000,
-      accountPeak: 100000,
-      capitalEfficiency: 1,
-      kelly: 0.05,
+      fundsAtClose: 100000 + pl,
+      marginReq: 10000,
+      openingShortLongRatio: 1.0,
     });
   }
 

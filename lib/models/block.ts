@@ -1,4 +1,5 @@
 import { PortfolioStats, StrategyStats, PerformanceMetrics } from './portfolio-stats'
+import { StrategyAlignment } from './strategy-alignment'
 // import { Trade } from './trade'
 // import { DailyLog } from './daily-log'
 
@@ -32,6 +33,14 @@ export interface ProcessedBlock {
     uploadedAt: Date
   }
 
+  reportingLog?: {
+    fileName: string
+    fileSize: number
+    originalRowCount: number
+    processedRowCount: number
+    uploadedAt: Date
+  }
+
   // Processing status
   processingStatus: 'pending' | 'processing' | 'completed' | 'error'
   processingError?: string
@@ -42,11 +51,19 @@ export interface ProcessedBlock {
   strategyStats?: Record<string, StrategyStats>
   performanceMetrics?: PerformanceMetrics
 
+  // Strategy alignment metadata for comparison workflows
+  strategyAlignment?: {
+    version: number
+    updatedAt: Date
+    mappings: StrategyAlignment[]
+  }
+
   // Data references (stored in IndexedDB)
   dataReferences: {
     tradesStorageKey: string  // Key for trades in IndexedDB
     dailyLogStorageKey?: string  // Key for daily log in IndexedDB
     calculationsStorageKey?: string  // Key for cached calculations
+    reportingLogStorageKey?: string  // Key for reporting log in IndexedDB
   }
 
   // Analysis configuration
@@ -78,12 +95,21 @@ export interface Block {
     rowCount: number
     fileSize: number
   }
+  reportingLog?: {
+    fileName: string
+    rowCount: number
+    fileSize: number
+  }
   stats: {
     totalPnL: number
     winRate: number
     totalTrades: number
     avgWin: number
     avgLoss: number
+  }
+  strategyAlignment?: {
+    mappings: StrategyAlignment[]
+    updatedAt: Date
   }
 }
 

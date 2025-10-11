@@ -82,6 +82,12 @@ function BlockCard({
               Daily Log ({block.dailyLog.rowCount})
             </Badge>
           )}
+          {block.reportingLog && (
+            <Badge variant="outline" className="text-xs whitespace-nowrap">
+              <List className="w-3 h-3 mr-1" />
+              Reporting Log ({block.reportingLog.rowCount})
+            </Badge>
+          )}
         </div>
 
         {/* Last Modified */}

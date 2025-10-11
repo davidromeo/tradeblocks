@@ -32,6 +32,7 @@ describe('Streak Analysis', () => {
     strategy: 'Test Strategy',
     openingCommissionsFees: 10,
     closingCommissionsFees: 10,
+    openingShortLongRatio: 1.0,
   });
 
   describe('Empty and Edge Cases', () => {

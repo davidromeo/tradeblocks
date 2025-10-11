@@ -100,3 +100,36 @@ This document explains how TradeBlocks is structured and how to work effectively
 
 For questions or larger architectural changes, start with an architecture sketch in `plans/` or open a discussion referencing the relevant modules above.
 
+## Comparison Blocks Roadmap
+
+Tracking the live-vs-reporting comparison work so we keep implementation aligned with the UX we just shipped.
+
+### Phase 1 – Strategy Alignment (done)
+- Optional reporting log upload alongside trade & daily logs.
+- Strategy mapping UI with single-select dialog, inline edit/delete, and auto-save to IndexedDB.
+- Ledger view showing mappings, coverage indicators to spot unmapped strategies.
+
+### Phase 2 – Reconciliation Analytics (in progress)
+1. **Data plumbing**
+   - Fetch aligned reporting + live trades per block (re-use `CsvTestDataLoader` + `reporting-trade-processor`).
+   - Produce normalized trade records for comparison (dates, legs, premium per contract, fees).
+2. **Pair analysis**
+   - For each aligned pair, compute totals: trade count, net P/L, average premium, commissions.
+   - Generate deltas and ratios (actual vs theoretical P/L, fill variance, timing differences).
+   - Flag missing data (trades in one source only, reporting entries with no live fill).
+3. **Aggregated metrics**
+   - Portfolio-level tiles: total delta, % explained by slippage, % by missing trades.
+   - Slippage diagnostics: scatter of premium delta vs VIX/movement; histogram of slippage.
+   - Timeline comparison: cumulative P/L overlay (live vs reporting) + variance bands.
+   - Daily impact: map deltas onto daily log drawdowns to show where discrepancies hurt/benefited equity.
+4. **Exception handling**
+   - Present unmatched items in a dedicated list with quick filters (reporting-only, live-only, stale mapping).
+   - Allow tagging/notes for follow-up.
+
+### Phase 3 – UX polish & automation (planned)
+- Suggested strategy matches (name similarity, date overlap) surfaced in the dialog.
+- Search/filter inputs for long strategy lists.
+- Export report (CSV/PDF) summarizing reconciliation per block.
+- Optional notifications when new uploads introduce mismatched strategies.
+
+Keep this section updated as we implement analytics so future contributors understand what remains.

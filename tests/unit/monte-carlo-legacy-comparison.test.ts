@@ -9,7 +9,7 @@ describe("Monte Carlo legacy comparison", () => {
       numSimulations: 1000,
       simulationLength: Math.min(252, trades.length),
       resampleMethod: "trades",
-      initialCapital: trades[0]?.fundsAtClose - trades[0]?.pl ?? 100000,
+      initialCapital: trades[0] ? trades[0].fundsAtClose - trades[0].pl : 100000,
       tradesPerYear: 125,
       randomSeed: 42,
     };

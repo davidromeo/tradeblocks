@@ -16,27 +16,22 @@ import {
  */
 function createMockTrade(overrides: Partial<Trade> = {}): Trade {
   return {
-    id: Math.random().toString(),
-    symbol: "SPY",
     strategy: "Test Strategy",
     dateOpened: new Date("2024-01-01"),
     timeOpened: "09:30:00",
     dateClosed: new Date("2024-01-02"),
     timeClosed: "15:30:00",
-    type: "Call",
-    side: "Long",
-    quantity: 1,
-    entryPrice: 100,
-    exitPrice: 110,
+    openingPrice: 100,
+    closingPrice: 110,
+    legs: "SPY 100C",
+    premium: 500,
     pl: 1000,
-    profitLoss: 1000,
-    profitLossPercent: 10,
-    netROI: 10,
-    winner: true,
+    numContracts: 1,
     openingCommissionsFees: 5,
     closingCommissionsFees: 5,
     fundsAtClose: 101000,
-    dayOfWeek: "Monday",
+    marginReq: 1000,
+    openingShortLongRatio: 1.0,
     ...overrides,
   };
 }
@@ -45,9 +40,9 @@ describe("Monte Carlo Simulation", () => {
   describe("getTradeResamplePool", () => {
     it("should return all trades when no resample window specified", () => {
       const trades = [
-        createMockTrade({ id: "1", dateOpened: new Date("2024-01-01") }),
-        createMockTrade({ id: "2", dateOpened: new Date("2024-01-02") }),
-        createMockTrade({ id: "3", dateOpened: new Date("2024-01-03") }),
+        createMockTrade({ dateOpened: new Date("2024-01-01") }),
+        createMockTrade({ dateOpened: new Date("2024-01-02") }),
+        createMockTrade({ dateOpened: new Date("2024-01-03") }),
       ];
 
       const pool = getTradeResamplePool(trades);
@@ -56,24 +51,24 @@ describe("Monte Carlo Simulation", () => {
 
     it("should return only recent N trades when resample window specified", () => {
       const trades = [
-        createMockTrade({ id: "1", dateOpened: new Date("2024-01-01") }),
-        createMockTrade({ id: "2", dateOpened: new Date("2024-01-02") }),
-        createMockTrade({ id: "3", dateOpened: new Date("2024-01-03") }),
-        createMockTrade({ id: "4", dateOpened: new Date("2024-01-04") }),
-        createMockTrade({ id: "5", dateOpened: new Date("2024-01-05") }),
+        createMockTrade({ dateOpened: new Date("2024-01-01") }),
+        createMockTrade({ dateOpened: new Date("2024-01-02") }),
+        createMockTrade({ dateOpened: new Date("2024-01-03") }),
+        createMockTrade({ dateOpened: new Date("2024-01-04") }),
+        createMockTrade({ dateOpened: new Date("2024-01-05") }),
       ];
 
       const pool = getTradeResamplePool(trades, 2);
       expect(pool).toHaveLength(2);
-      expect(pool[0].id).toBe("4");
-      expect(pool[1].id).toBe("5");
+      expect(pool[0].dateOpened).toEqual(new Date("2024-01-04"));
+      expect(pool[1].dateOpened).toEqual(new Date("2024-01-05"));
     });
 
     it("should filter by strategy", () => {
       const trades = [
-        createMockTrade({ id: "1", strategy: "Strategy A" }),
-        createMockTrade({ id: "2", strategy: "Strategy B" }),
-        createMockTrade({ id: "3", strategy: "Strategy A" }),
+        createMockTrade({ strategy: "Strategy A" }),
+        createMockTrade({ strategy: "Strategy B" }),
+        createMockTrade({ strategy: "Strategy A" }),
       ];
 
       const pool = getTradeResamplePool(trades, undefined, "Strategy A");
@@ -83,15 +78,15 @@ describe("Monte Carlo Simulation", () => {
 
     it("should sort trades by date", () => {
       const trades = [
-        createMockTrade({ id: "3", dateOpened: new Date("2024-01-03") }),
-        createMockTrade({ id: "1", dateOpened: new Date("2024-01-01") }),
-        createMockTrade({ id: "2", dateOpened: new Date("2024-01-02") }),
+        createMockTrade({ dateOpened: new Date("2024-01-03") }),
+        createMockTrade({ dateOpened: new Date("2024-01-01") }),
+        createMockTrade({ dateOpened: new Date("2024-01-02") }),
       ];
 
       const pool = getTradeResamplePool(trades);
-      expect(pool[0].id).toBe("1");
-      expect(pool[1].id).toBe("2");
-      expect(pool[2].id).toBe("3");
+      expect(pool[0].dateOpened).toEqual(new Date("2024-01-01"));
+      expect(pool[1].dateOpened).toEqual(new Date("2024-01-02"));
+      expect(pool[2].dateOpened).toEqual(new Date("2024-01-03"));
     });
   });
 
@@ -194,7 +189,6 @@ describe("Monte Carlo Simulation", () => {
     it("should run basic simulation with trade resampling", () => {
       const trades = Array.from({ length: 20 }, (_, i) =>
         createMockTrade({
-          id: `trade-${i}`,
           pl: (i % 2 === 0 ? 100 : -50) * (1 + Math.random() * 0.1),
           dateOpened: new Date(2024, 0, i + 1),
         })
@@ -224,7 +218,6 @@ describe("Monte Carlo Simulation", () => {
     it("should respect resample window parameter", () => {
       const trades = Array.from({ length: 100 }, (_, i) =>
         createMockTrade({
-          id: `trade-${i}`,
           pl: 100,
           dateOpened: new Date(2024, 0, i + 1),
         })
@@ -250,7 +243,6 @@ describe("Monte Carlo Simulation", () => {
     it("should produce reproducible results with fixed seed", () => {
       const trades = Array.from({ length: 20 }, (_, i) =>
         createMockTrade({
-          id: `trade-${i}`,
           pl: (i % 2 === 0 ? 100 : -50),
           dateOpened: new Date(2024, 0, i + 1),
         })
@@ -280,7 +272,6 @@ describe("Monte Carlo Simulation", () => {
     it("should work with daily resampling method", () => {
       const trades = Array.from({ length: 30 }, (_, i) =>
         createMockTrade({
-          id: `trade-${i}`,
           pl: 100 * (Math.random() - 0.5),
           dateOpened: new Date(2024, 0, 1 + Math.floor(i / 3)), // Multiple trades per day
         })
@@ -306,7 +297,6 @@ describe("Monte Carlo Simulation", () => {
     it("should calculate statistics correctly", () => {
       const trades = Array.from({ length: 50 }, (_, i) =>
         createMockTrade({
-          id: `trade-${i}`,
           pl: i % 2 === 0 ? 200 : -100, // 50% win rate, positive expectancy
           dateOpened: new Date(2024, 0, i + 1),
         })
@@ -347,7 +337,6 @@ describe("Monte Carlo Simulation", () => {
       const trades = [
         ...Array.from({ length: 20 }, (_, i) =>
           createMockTrade({
-            id: `a-${i}`,
             strategy: "Strategy A",
             pl: 100,
             dateOpened: new Date(2024, 0, i + 1),
@@ -355,7 +344,6 @@ describe("Monte Carlo Simulation", () => {
         ),
         ...Array.from({ length: 20 }, (_, i) =>
           createMockTrade({
-            id: `b-${i}`,
             strategy: "Strategy B",
             pl: -50,
             dateOpened: new Date(2024, 0, i + 21),
@@ -384,7 +372,6 @@ describe("Monte Carlo Simulation", () => {
     it("should calculate drawdowns correctly", () => {
       const trades = Array.from({ length: 20 }, (_, i) =>
         createMockTrade({
-          id: `trade-${i}`,
           // Create a pattern with drawdowns
           pl: i < 5 ? 100 : i < 10 ? -150 : 100,
           dateOpened: new Date(2024, 0, i + 1),
@@ -414,7 +401,6 @@ describe("Monte Carlo Simulation", () => {
     it("should measure drawdown when the first sampled trade is a loss", () => {
       const losingTrades = Array.from({ length: 30 }, (_, i) =>
         createMockTrade({
-          id: `loss-${i}`,
           pl: -250,
           dateOpened: new Date(2024, 0, i + 1),
         })
@@ -437,7 +423,6 @@ describe("Monte Carlo Simulation", () => {
     it("should compute Sharpe ratio using the current capital base", () => {
       const trades = Array.from({ length: 10 }, (_, i) =>
         createMockTrade({
-          id: `t${i}`,
           pl: i === 2 ? 1000 : i === 5 ? -500 : 0,
           dateOpened: new Date(2024, 0, i + 1),
         })
