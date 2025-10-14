@@ -20,12 +20,14 @@ export function DualEquityCurveChart({
   normalizeTo1Lot = false,
   className
 }: DualEquityCurveChartProps) {
-  const [yAxisScale, setYAxisScale] = useState<"linear" | "log">("linear")
-  const [tradeMode, setTradeMode] = useState<"matched" | "all">("matched")
-
-  // Determine which data to use
+  // Determine which data is available
   const hasMatchedData = matchedData && matchedData.length > 0
   const hasAllTradesData = allTradesData && (allTradesData.backtested.length > 0 || allTradesData.reported.length > 0)
+
+  // Default to "all" mode if no matched data, otherwise "matched"
+  const defaultMode = hasMatchedData ? "matched" : "all"
+  const [yAxisScale, setYAxisScale] = useState<"linear" | "log">("linear")
+  const [tradeMode, setTradeMode] = useState<"matched" | "all">(defaultMode)
 
   if (!hasMatchedData && !hasAllTradesData) {
     return (
@@ -146,9 +148,9 @@ export function DualEquityCurveChart({
     }
   }
 
-  // Calculate y-axis range
-  const minEquity = Math.min(...allEquityValues)
-  const maxEquity = Math.max(...allEquityValues)
+  // Calculate y-axis range (with safeguards for empty data)
+  const minEquity = allEquityValues.length > 0 ? Math.min(...allEquityValues) : -100
+  const maxEquity = allEquityValues.length > 0 ? Math.max(...allEquityValues) : 100
   const equityRange = maxEquity - minEquity
   // Use at least 10% of max absolute value as padding to avoid zero range
   const padding = equityRange > 0 ? equityRange * 0.1 : Math.max(Math.abs(maxEquity) * 0.1, 100)
