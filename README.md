@@ -10,15 +10,36 @@ TradeBlocks is a Next.js 15 analytics workspace for evaluating options trading p
 
 ## Getting Started
 1. **Prerequisites:** Node.js 20 LTS (18.18+ works) and npm.
-2. **Install dependencies:**
+
+   For debian: 
+   ```bash
+   sudo apt install nodejs npm
+   ```
+
+2. **Clone the repository and move to the tradeblocks directory:**
+   ```bash
+   git clone https://github.com/davidromeo/tradeblocks.git
+   cd tradeblocks
+   ```
+   
+3. **Install dependencies:**
    ```bash
    npm install
    ```
-3. **Run the development server:**
+4. **Run the development server:**
    ```bash
    npm run dev
    ```
-   Visit `http://localhost:3000` to open the app. The root route redirects to `/blocks` where you can manage portfolios.
+5. **Start tradeblocks:**
+
+   Open a browser of your choice and visit:
+   
+   ```bash
+   http://localhose:3000 
+   ```
+   Tips:
+   - Use http (not https).
+   - The root route redirects to `/blocks` where you can manage portfolios.
 
 ### Importing Data
 1. Navigate to **Block Management** (`/blocks`) and select **New Block**.
