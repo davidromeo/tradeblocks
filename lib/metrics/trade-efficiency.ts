@@ -1,3 +1,11 @@
+/**
+ * Trade Efficiency Metrics - FIXED VERSION
+ * 
+ * This version correctly handles DEBIT strategies (inverted iron condors)
+ * where max profit/loss values are already in dollars and should NOT
+ * be multiplied by 100.
+ */
+
 import { Trade } from '@/lib/models/trade'
 
 /**
@@ -21,6 +29,12 @@ const MARGIN_RATIO_THRESHOLD = 0.5
  */
 const SMALL_NOTIONAL_THRESHOLD = 5_000
 
+/**
+ * Maximum reasonable ratio of max profit/loss to margin requirement.
+ * If applying the multiplier would exceed this, the values are likely already in dollars.
+ */
+const MAX_REASONABLE_RATIO = 1.5
+
 function getNormalizedContractCount(trade: Trade): number {
   const contracts = typeof trade.numContracts === 'number' && isFinite(trade.numContracts)
     ? Math.abs(trade.numContracts)
@@ -29,7 +43,19 @@ function getNormalizedContractCount(trade: Trade): number {
   return contracts > 0 ? contracts : 1
 }
 
-function applyOptionMultiplierIfNeeded(total: number, trade: Trade): number {
+/**
+ * FIXED: Apply option multiplier only when appropriate
+ * 
+ * For DEBIT strategies (inverted iron condors, long options):
+ *   - Premium is negative
+ *   - Max profit/loss are already in dollars from Option Omega
+ *   - Should NOT multiply by 100
+ * 
+ * For CREDIT strategies (regular iron condors, credit spreads):
+ *   - Premium is positive
+ *   - Max profit/loss may need 100x multiplier
+ */
+function applyOptionMultiplierIfNeeded(total: number, trade: Trade, isMaxProfitLoss: boolean = false): number {
   if (!isFinite(total) || total <= 0) {
     return total
   }
@@ -38,10 +64,24 @@ function applyOptionMultiplierIfNeeded(total: number, trade: Trade): number {
     ? Math.abs(trade.marginReq)
     : undefined
 
+  // NEW: For debit strategies, max profit/loss are already in dollars
+  // Don't apply multiplier if premium is negative
+  if (isMaxProfitLoss && typeof trade.premium === 'number' && trade.premium < 0) {
+    return total
+  }
+
   if (margin && margin > 0) {
     const ratio = total / margin
     if (ratio > 0 && ratio < MARGIN_RATIO_THRESHOLD) {
-      return total * OPTION_CONTRACT_MULTIPLIER
+      const scaledTotal = total * OPTION_CONTRACT_MULTIPLIER
+      const scaledRatio = scaledTotal / margin
+      
+      // NEW: Sanity check - only apply multiplier if result is reasonable
+      // If scaled value would greatly exceed margin, original is probably correct
+      if (scaledRatio <= MAX_REASONABLE_RATIO) {
+        return scaledTotal
+      }
+      return total
     }
     return total
   }
@@ -53,7 +93,7 @@ function applyOptionMultiplierIfNeeded(total: number, trade: Trade): number {
   return total
 }
 
-function normalisePerContractValue(value: number, trade: Trade, isPremium: boolean): number {
+function normalisePerContractValue(value: number, trade: Trade, isPremium: boolean, isMaxProfitLoss: boolean = false): number {
   const contracts = getNormalizedContractCount(trade)
   let base = Math.abs(value)
 
@@ -62,7 +102,7 @@ function normalisePerContractValue(value: number, trade: Trade, isPremium: boole
   }
 
   const total = base * contracts
-  return applyOptionMultiplierIfNeeded(total, trade)
+  return applyOptionMultiplierIfNeeded(total, trade, isMaxProfitLoss)
 }
 
 export function computeTotalPremium(trade: Trade): number | undefined {
@@ -70,7 +110,7 @@ export function computeTotalPremium(trade: Trade): number | undefined {
     return undefined
   }
 
-  const total = normalisePerContractValue(Math.abs(trade.premium), trade, true)
+  const total = normalisePerContractValue(Math.abs(trade.premium), trade, true, false)
   return isFinite(total) && total > 0 ? total : undefined
 }
 
@@ -79,7 +119,8 @@ export function computeTotalMaxProfit(trade: Trade): number | undefined {
     return undefined
   }
 
-  const total = normalisePerContractValue(Math.abs(trade.maxProfit), trade, false)
+  // FIXED: Pass true to indicate this is max profit/loss value
+  const total = normalisePerContractValue(Math.abs(trade.maxProfit), trade, false, true)
   return isFinite(total) && total > 0 ? total : undefined
 }
 
@@ -88,7 +129,8 @@ export function computeTotalMaxLoss(trade: Trade): number | undefined {
     return undefined
   }
 
-  const total = normalisePerContractValue(Math.abs(trade.maxLoss), trade, false)
+  // FIXED: Pass true to indicate this is max profit/loss value  
+  const total = normalisePerContractValue(Math.abs(trade.maxLoss), trade, false, true)
   return isFinite(total) && total > 0 ? total : undefined
 }
 
