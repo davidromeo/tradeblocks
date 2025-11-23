@@ -214,7 +214,7 @@ export function StrategyBreakdownTable({
     <Card className={cn("", className)}>
       <CardHeader className="pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+          <div className="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400">
             <TrendingUp className="w-4 h-4" />
           </div>
           <CardTitle className="text-lg">Strategy Breakdown</CardTitle>

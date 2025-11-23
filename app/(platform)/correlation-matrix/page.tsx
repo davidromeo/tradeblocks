@@ -284,7 +284,7 @@ export default function CorrelationMatrixPage() {
                   <span className="text-muted-foreground">Linear relationships</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-400 font-medium">
+                  <Badge variant="outline" className="border-cyan-500 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 font-medium">
                     KENDALL/SPEARMAN
                   </Badge>
                   <span className="text-muted-foreground">Rank-based (handles outliers better)</span>
