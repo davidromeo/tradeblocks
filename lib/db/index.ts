@@ -13,7 +13,7 @@
 
 // Database configuration
 export const DB_NAME = "TradeBlocksDB";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3; // Updated for equity curves support
 
 // Object store names
 export const STORES = {
@@ -22,6 +22,7 @@ export const STORES = {
   DAILY_LOGS: "dailyLogs",
   CALCULATIONS: "calculations",
   REPORTING_LOGS: "reportingLogs",
+  EQUITY_CURVES: "equityCurves", // New store for equity curve entries
 } as const;
 
 // Index names
@@ -34,6 +35,9 @@ export const INDEXES = {
   CALCULATIONS_BY_BLOCK: "blockId",
   REPORTING_LOGS_BY_BLOCK: "blockId",
   REPORTING_LOGS_BY_STRATEGY: "strategy",
+  EQUITY_CURVES_BY_BLOCK: "blockId",
+  EQUITY_CURVES_BY_STRATEGY: "strategyName",
+  EQUITY_CURVES_BY_DATE: "date",
 } as const;
 
 /**
@@ -155,6 +159,38 @@ export async function initializeDatabase(): Promise<IDBDatabase> {
         calculationsStore.createIndex("calculatedAt", "calculatedAt", {
           unique: false,
         });
+      }
+
+      // Create equity curves store (for generic equity curve entries)
+      if (!db.objectStoreNames.contains(STORES.EQUITY_CURVES)) {
+        const equityCurvesStore = db.createObjectStore(STORES.EQUITY_CURVES, {
+          autoIncrement: true,
+        });
+        equityCurvesStore.createIndex(
+          INDEXES.EQUITY_CURVES_BY_BLOCK,
+          "blockId",
+          { unique: false }
+        );
+        equityCurvesStore.createIndex(
+          INDEXES.EQUITY_CURVES_BY_STRATEGY,
+          "strategyName",
+          { unique: false }
+        );
+        equityCurvesStore.createIndex(
+          INDEXES.EQUITY_CURVES_BY_DATE,
+          "date",
+          { unique: false }
+        );
+        equityCurvesStore.createIndex(
+          "composite_block_strategy",
+          ["blockId", "strategyName"],
+          { unique: false }
+        );
+        equityCurvesStore.createIndex(
+          "composite_block_date",
+          ["blockId", "date"],
+          { unique: false }
+        );
       }
 
       transaction.oncomplete = () => {
@@ -351,3 +387,14 @@ export {
   getTradesByBlock,
   updateTradesForBlock,
 } from "./trades-store";
+export {
+  addEquityCurveEntries,
+  deleteEquityCurvesByBlock,
+  deleteEquityCurvesByBlockAndStrategy,
+  getEquityCurveCountByBlock,
+  getEquityCurveDateRange,
+  getEquityCurvesByBlock,
+  getEquityCurvesByBlockAndStrategy,
+  getEquityCurveStrategiesByBlock,
+  updateEquityCurvesForBlock,
+} from "./equity-curves-store";
