@@ -9,11 +9,15 @@ import {
   getReportingTradesByBlock,
   getTradesByBlock,
   updateBlockStats,
+  getEquityCurvesByBlock,
+  getEquityCurveStrategiesByBlock,
 } from "../db";
-import { ProcessedBlock } from "../models/block";
+import { ProcessedBlock, GenericBlock, isGenericBlock } from "../models/block";
 import { StrategyAlignment } from "../models/strategy-alignment";
 
-export interface Block {
+// UI representation of a trade-based block
+export interface TradeBasedBlock {
+  type: 'trade-based';
   id: string;
   name: string;
   description?: string;
@@ -48,6 +52,43 @@ export interface Block {
   };
 }
 
+// UI representation of an equity curve block
+export interface EquityCurveBlock {
+  type: 'equity-curve';
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  created: Date;
+  lastModified: Date;
+  equityCurves: Array<{
+    strategyName: string;
+    fileName: string;
+    processedRowCount: number;
+    startingCapital: number;
+  }>;
+  stats: {
+    totalStrategies: number;
+    totalEntries: number;
+    dateRange?: {
+      start: Date;
+      end: Date;
+    };
+  };
+}
+
+// Union type for all block types
+export type Block = TradeBasedBlock | EquityCurveBlock;
+
+// Type guards
+export function isTradeBasedBlock(block: Block): block is TradeBasedBlock {
+  return block.type === 'trade-based';
+}
+
+export function isEquityCurveBlock(block: Block): block is EquityCurveBlock {
+  return block.type === 'equity-curve';
+}
+
 interface BlockStore {
   // State
   blocks: Block[];
@@ -70,15 +111,16 @@ interface BlockStore {
 }
 
 /**
- * Convert ProcessedBlock from DB to Block for UI
+ * Convert ProcessedBlock from DB to TradeBasedBlock for UI
  */
-function convertProcessedBlockToBlock(
+function convertProcessedBlockToTradeBasedBlock(
   processedBlock: ProcessedBlock,
   tradeCount: number,
   dailyLogCount: number,
   reportingLogCount: number
-): Block {
+): TradeBasedBlock {
   return {
+    type: 'trade-based',
     id: processedBlock.id,
     name: processedBlock.name || "Unnamed Block",
     description: processedBlock.description,
@@ -120,6 +162,42 @@ function convertProcessedBlockToBlock(
   };
 }
 
+/**
+ * Convert GenericBlock from DB to EquityCurveBlock for UI
+ */
+async function convertGenericBlockToEquityCurveBlock(
+  genericBlock: GenericBlock
+): Promise<EquityCurveBlock> {
+  // Get all equity curve entries to calculate stats
+  const entries = await getEquityCurvesByBlock(genericBlock.id);
+
+  // Calculate date range if we have entries
+  let dateRange: { start: Date; end: Date } | undefined;
+  if (entries.length > 0) {
+    const dates = entries.map(e => e.date).sort((a, b) => a.getTime() - b.getTime());
+    dateRange = {
+      start: dates[0],
+      end: dates[dates.length - 1],
+    };
+  }
+
+  return {
+    type: 'equity-curve',
+    id: genericBlock.id,
+    name: genericBlock.name || "Unnamed Block",
+    description: genericBlock.description,
+    isActive: false, // Will be set by active block logic
+    created: genericBlock.created,
+    lastModified: genericBlock.lastModified,
+    equityCurves: genericBlock.equityCurves || [],
+    stats: {
+      totalStrategies: genericBlock.equityCurves?.length || 0,
+      totalEntries: entries.length,
+      dateRange,
+    },
+  };
+}
+
 export const useBlockStore = create<BlockStore>((set, get) => ({
   // Initialize with empty state
   blocks: [],
@@ -145,57 +223,65 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
         "tradeblocks-active-block-id"
       );
 
-      const processedBlocks = await getAllBlocks();
+      const allBlocks = await getAllBlocks();
       const blocks: Block[] = [];
 
-      // Convert each ProcessedBlock to Block with trade/daily log counts
-      for (const processedBlock of processedBlocks) {
+      // Convert each block to the appropriate UI type
+      for (const dbBlock of allBlocks) {
         try {
-          const [trades, dailyLogs, reportingTrades] = await Promise.all([
-            getTradesByBlock(processedBlock.id),
-            getDailyLogsByBlock(processedBlock.id),
-            getReportingTradesByBlock(processedBlock.id),
-          ]);
+          let block: Block;
 
-          // Calculate stats from trades
-          const stats =
-            trades.length > 0
-              ? {
-                  totalPnL: trades.reduce((sum, trade) => sum + trade.pl, 0),
-                  winRate:
-                    (trades.filter((t) => t.pl > 0).length / trades.length) *
-                    100,
-                  totalTrades: trades.length,
-                  avgWin:
-                    trades.filter((t) => t.pl > 0).length > 0
-                      ? trades
-                          .filter((t) => t.pl > 0)
-                          .reduce((sum, t) => sum + t.pl, 0) /
-                        trades.filter((t) => t.pl > 0).length
-                      : 0,
-                  avgLoss:
-                    trades.filter((t) => t.pl < 0).length > 0
-                      ? trades
-                          .filter((t) => t.pl < 0)
-                          .reduce((sum, t) => sum + t.pl, 0) /
-                        trades.filter((t) => t.pl < 0).length
-                      : 0,
-                }
-              : {
-                  totalPnL: 0,
-                  winRate: 0,
-                  totalTrades: 0,
-                  avgWin: 0,
-                  avgLoss: 0,
-                };
+          if (isGenericBlock(dbBlock)) {
+            // Convert Generic Block (equity curve)
+            block = await convertGenericBlockToEquityCurveBlock(dbBlock);
+          } else {
+            // Convert Processed Block (trade-based)
+            const [trades, dailyLogs, reportingTrades] = await Promise.all([
+              getTradesByBlock(dbBlock.id),
+              getDailyLogsByBlock(dbBlock.id),
+              getReportingTradesByBlock(dbBlock.id),
+            ]);
 
-          const block = convertProcessedBlockToBlock(
-            processedBlock,
-            trades.length,
-            dailyLogs.length,
-            reportingTrades.length
-          );
-          block.stats = stats;
+            // Calculate stats from trades
+            const stats =
+              trades.length > 0
+                ? {
+                    totalPnL: trades.reduce((sum, trade) => sum + trade.pl, 0),
+                    winRate:
+                      (trades.filter((t) => t.pl > 0).length / trades.length) *
+                      100,
+                    totalTrades: trades.length,
+                    avgWin:
+                      trades.filter((t) => t.pl > 0).length > 0
+                        ? trades
+                            .filter((t) => t.pl > 0)
+                            .reduce((sum, t) => sum + t.pl, 0) /
+                          trades.filter((t) => t.pl > 0).length
+                        : 0,
+                    avgLoss:
+                      trades.filter((t) => t.pl < 0).length > 0
+                        ? trades
+                            .filter((t) => t.pl < 0)
+                            .reduce((sum, t) => sum + t.pl, 0) /
+                          trades.filter((t) => t.pl < 0).length
+                        : 0,
+                  }
+                : {
+                    totalPnL: 0,
+                    winRate: 0,
+                    totalTrades: 0,
+                    avgWin: 0,
+                    avgLoss: 0,
+                  };
+
+            block = convertProcessedBlockToTradeBasedBlock(
+              dbBlock as ProcessedBlock,
+              trades.length,
+              dailyLogs.length,
+              reportingTrades.length
+            );
+            block.stats = stats;
+          }
 
           // Mark as active if this was the previously active block
           block.isActive = block.id === savedActiveBlockId;
@@ -203,7 +289,7 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
           blocks.push(block);
         } catch (blockError) {
           console.error(
-            `Failed to load block ${processedBlock.id}:`,
+            `Failed to load block ${dbBlock.id}:`,
             blockError
           );
           // Continue loading other blocks instead of failing completely
@@ -366,53 +452,61 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
 
   refreshBlock: async (id: string) => {
     try {
-      const processedBlock = await getBlock(id);
-      if (!processedBlock) return;
+      const dbBlock = await getBlock(id);
+      if (!dbBlock) return;
 
-      const [trades, dailyLogs, reportingTrades] = await Promise.all([
-        getTradesByBlock(id),
-        getDailyLogsByBlock(id),
-        getReportingTradesByBlock(id),
-      ]);
+      let updatedBlock: Block;
 
-      // Calculate fresh stats
-      const stats =
-        trades.length > 0
-          ? {
-              totalPnL: trades.reduce((sum, trade) => sum + trade.pl, 0),
-              winRate:
-                (trades.filter((t) => t.pl > 0).length / trades.length) * 100,
-              totalTrades: trades.length,
-              avgWin:
-                trades.filter((t) => t.pl > 0).length > 0
-                  ? trades
-                      .filter((t) => t.pl > 0)
-                      .reduce((sum, t) => sum + t.pl, 0) /
-                    trades.filter((t) => t.pl > 0).length
-                  : 0,
-              avgLoss:
-                trades.filter((t) => t.pl < 0).length > 0
-                  ? trades
-                      .filter((t) => t.pl < 0)
-                      .reduce((sum, t) => sum + t.pl, 0) /
-                    trades.filter((t) => t.pl < 0).length
-                  : 0,
-            }
-          : {
-              totalPnL: 0,
-              winRate: 0,
-              totalTrades: 0,
-              avgWin: 0,
-              avgLoss: 0,
-            };
+      if (isGenericBlock(dbBlock)) {
+        // Refresh Generic Block (equity curve)
+        updatedBlock = await convertGenericBlockToEquityCurveBlock(dbBlock);
+      } else {
+        // Refresh Processed Block (trade-based)
+        const [trades, dailyLogs, reportingTrades] = await Promise.all([
+          getTradesByBlock(id),
+          getDailyLogsByBlock(id),
+          getReportingTradesByBlock(id),
+        ]);
 
-      const updatedBlock = convertProcessedBlockToBlock(
-        processedBlock,
-        trades.length,
-        dailyLogs.length,
-        reportingTrades.length
-      );
-      updatedBlock.stats = stats;
+        // Calculate fresh stats
+        const stats =
+          trades.length > 0
+            ? {
+                totalPnL: trades.reduce((sum, trade) => sum + trade.pl, 0),
+                winRate:
+                  (trades.filter((t) => t.pl > 0).length / trades.length) * 100,
+                totalTrades: trades.length,
+                avgWin:
+                  trades.filter((t) => t.pl > 0).length > 0
+                    ? trades
+                        .filter((t) => t.pl > 0)
+                        .reduce((sum, t) => sum + t.pl, 0) /
+                      trades.filter((t) => t.pl > 0).length
+                    : 0,
+                avgLoss:
+                  trades.filter((t) => t.pl < 0).length > 0
+                    ? trades
+                        .filter((t) => t.pl < 0)
+                        .reduce((sum, t) => sum + t.pl, 0) /
+                      trades.filter((t) => t.pl < 0).length
+                    : 0,
+              }
+            : {
+                totalPnL: 0,
+                winRate: 0,
+                totalTrades: 0,
+                avgWin: 0,
+                avgLoss: 0,
+              };
+
+        updatedBlock = convertProcessedBlockToTradeBasedBlock(
+          dbBlock as ProcessedBlock,
+          trades.length,
+          dailyLogs.length,
+          reportingTrades.length
+        );
+        updatedBlock.stats = stats;
+      }
 
       // Update in store
       set((state) => ({
@@ -436,70 +530,77 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
       set({ error: null });
 
       // Get the block and its data
-      const processedBlock = await getBlock(id);
-      if (!processedBlock) {
+      const dbBlock = await getBlock(id);
+      if (!dbBlock) {
         throw new Error("Block not found");
       }
 
-      const [trades, dailyLogs, reportingTrades] = await Promise.all([
-        getTradesByBlock(id),
-        getDailyLogsByBlock(id),
-        getReportingTradesByBlock(id),
-      ]);
+      if (isGenericBlock(dbBlock)) {
+        // For equity curve blocks, just refresh the data
+        console.log("Refreshing equity curve block data");
+        await get().refreshBlock(id);
+      } else {
+        // For trade-based blocks, recalculate all stats
+        const [trades, dailyLogs, reportingTrades] = await Promise.all([
+          getTradesByBlock(id),
+          getDailyLogsByBlock(id),
+          getReportingTradesByBlock(id),
+        ]);
 
-      console.log(
-        `Recalculating stats for ${trades.length} trades and ${dailyLogs.length} daily logs`
-      );
+        console.log(
+          `Recalculating stats for ${trades.length} trades and ${dailyLogs.length} daily logs`
+        );
 
-      // Recalculate all stats using the current calculation engine
-      const calculator = new PortfolioStatsCalculator({
-        riskFreeRate: processedBlock.analysisConfig?.riskFreeRate || 2.0,
-      });
+        // Recalculate all stats using the current calculation engine
+        const calculator = new PortfolioStatsCalculator({
+          riskFreeRate: dbBlock.analysisConfig?.riskFreeRate || 2.0,
+        });
 
-      const portfolioStats = calculator.calculatePortfolioStats(
-        trades,
-        dailyLogs
-      );
-      const strategyStats = calculator.calculateStrategyStats(trades);
+        const portfolioStats = calculator.calculatePortfolioStats(
+          trades,
+          dailyLogs
+        );
+        const strategyStats = calculator.calculateStrategyStats(trades);
 
-      // Update ProcessedBlock stats in database
-      await updateBlockStats(id, portfolioStats, strategyStats);
+        // Update ProcessedBlock stats in database
+        await updateBlockStats(id, portfolioStats, strategyStats);
 
-      // Update lastModified timestamp
-      await dbUpdateBlock(id, { lastModified: new Date() });
+        // Update lastModified timestamp
+        await dbUpdateBlock(id, { lastModified: new Date() });
 
-      // Calculate basic stats for the UI (Block interface)
-      const basicStats = {
-        totalPnL: portfolioStats.totalPl,
-        winRate: portfolioStats.winRate * 100, // Convert to percentage for Block interface
-        totalTrades: portfolioStats.totalTrades,
-        avgWin: portfolioStats.avgWin,
-        avgLoss: portfolioStats.avgLoss,
-      };
+        // Calculate basic stats for the UI (Block interface)
+        const basicStats = {
+          totalPnL: portfolioStats.totalPl,
+          winRate: portfolioStats.winRate * 100, // Convert to percentage for Block interface
+          totalTrades: portfolioStats.totalTrades,
+          avgWin: portfolioStats.avgWin,
+          avgLoss: portfolioStats.avgLoss,
+        };
 
-      // Create updated block for store
-      const updatedBlock = convertProcessedBlockToBlock(
-        processedBlock,
-        trades.length,
-        dailyLogs.length,
-        reportingTrades.length
-      );
-      updatedBlock.stats = basicStats;
-      updatedBlock.lastModified = new Date();
+        // Create updated block for store
+        const updatedBlock = convertProcessedBlockToTradeBasedBlock(
+          dbBlock as ProcessedBlock,
+          trades.length,
+          dailyLogs.length,
+          reportingTrades.length
+        );
+        updatedBlock.stats = basicStats;
+        updatedBlock.lastModified = new Date();
 
-      // Update in store
-      set((state) => ({
-        blocks: state.blocks.map((block) =>
-          block.id === id
-            ? { ...updatedBlock, isActive: block.isActive }
-            : block
-        ),
-      }));
+        // Update in store
+        set((state) => ({
+          blocks: state.blocks.map((block) =>
+            block.id === id
+              ? { ...updatedBlock, isActive: block.isActive }
+              : block
+          ),
+        }));
 
-      console.log(
-        "Block recalculation completed successfully. Initial capital:",
-        portfolioStats.initialCapital
-      );
+        console.log(
+          "Block recalculation completed successfully. Initial capital:",
+          portfolioStats.initialCapital
+        );
+      }
     } catch (error) {
       console.error("Failed to recalculate block:", error);
       set({

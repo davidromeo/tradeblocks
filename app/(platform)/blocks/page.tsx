@@ -13,8 +13,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useBlockStore, type Block } from "@/lib/stores/block-store";
-import { Activity, Calendar, ChevronDown, Download, FileSpreadsheet, Grid3X3, Info, List, Plus, Search, RotateCcw } from "lucide-react";
+import { useBlockStore, type Block, isTradeBasedBlock, isEquityCurveBlock } from "@/lib/stores/block-store";
+import { Activity, Calendar, ChevronDown, Download, FileSpreadsheet, Grid3X3, Info, List, Plus, Search, RotateCcw, TrendingUp } from "lucide-react";
 import React, { useState } from "react";
 
 function BlockCard({
@@ -65,9 +65,22 @@ function BlockCard({
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <CardTitle className="text-lg font-semibold leading-tight">
-              {block.name}
-            </CardTitle>
+            <div className="flex items-center gap-2 mb-1">
+              <CardTitle className="text-lg font-semibold leading-tight">
+                {block.name}
+              </CardTitle>
+              {isTradeBasedBlock(block) ? (
+                <Badge variant="outline" className="text-xs border-cyan-500 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400">
+                  <Activity className="w-3 h-3 mr-1" />
+                  Trade-Based
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-400">
+                  <TrendingUp className="w-3 h-3 mr-1" />
+                  Equity Curve
+                </Badge>
+              )}
+            </div>
             {block.description && (
               <p className="text-sm text-muted-foreground mt-1">
                 {block.description}
@@ -80,21 +93,43 @@ function BlockCard({
       <CardContent className="space-y-4">
         {/* File Indicators */}
         <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary" className="text-xs whitespace-nowrap">
-            <Activity className="w-3 h-3 mr-1" />
-            Trade Log ({block.tradeLog.rowCount})
-          </Badge>
-          {block.dailyLog && (
-            <Badge variant="outline" className="text-xs whitespace-nowrap">
-              <Calendar className="w-3 h-3 mr-1" />
-              Daily Log ({block.dailyLog.rowCount})
-            </Badge>
+          {isTradeBasedBlock(block) && (
+            <>
+              <Badge variant="secondary" className="text-xs whitespace-nowrap">
+                <Activity className="w-3 h-3 mr-1" />
+                Trade Log ({block.tradeLog.rowCount})
+              </Badge>
+              {block.dailyLog && (
+                <Badge variant="outline" className="text-xs whitespace-nowrap">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  Daily Log ({block.dailyLog.rowCount})
+                </Badge>
+              )}
+              {block.reportingLog && (
+                <Badge variant="outline" className="text-xs whitespace-nowrap">
+                  <List className="w-3 h-3 mr-1" />
+                  Reporting Log ({block.reportingLog.rowCount})
+                </Badge>
+              )}
+            </>
           )}
-          {block.reportingLog && (
-            <Badge variant="outline" className="text-xs whitespace-nowrap">
-              <List className="w-3 h-3 mr-1" />
-              Reporting Log ({block.reportingLog.rowCount})
-            </Badge>
+          {isEquityCurveBlock(block) && (
+            <>
+              <Badge variant="secondary" className="text-xs whitespace-nowrap">
+                <FileSpreadsheet className="w-3 h-3 mr-1" />
+                {block.stats.totalStrategies} {block.stats.totalStrategies === 1 ? 'Strategy' : 'Strategies'}
+              </Badge>
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                <TrendingUp className="w-3 h-3 mr-1" />
+                {block.stats.totalEntries} Entries
+              </Badge>
+              {block.stats.dateRange && (
+                <Badge variant="outline" className="text-xs whitespace-nowrap">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  {formatDate(block.stats.dateRange.start)} - {formatDate(block.stats.dateRange.end)}
+                </Badge>
+              )}
+            </>
           )}
         </div>
 
@@ -186,6 +221,17 @@ function BlockRow({
           {block.isActive && (
             <Badge variant="default" className="text-xs">ACTIVE</Badge>
           )}
+          {isTradeBasedBlock(block) ? (
+            <Badge variant="outline" className="text-xs border-cyan-500 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400">
+              <Activity className="w-3 h-3 mr-1" />
+              Trade-Based
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-400">
+              <TrendingUp className="w-3 h-3 mr-1" />
+              Equity Curve
+            </Badge>
+          )}
         </div>
         {block.description && (
           <p className="text-sm text-muted-foreground truncate mt-0.5">
@@ -196,21 +242,37 @@ function BlockRow({
 
       {/* File Indicators */}
       <div className="hidden md:flex items-center gap-2">
-        <Badge variant="secondary" className="text-xs whitespace-nowrap">
-          <Activity className="w-3 h-3 mr-1" />
-          {block.tradeLog.rowCount}
-        </Badge>
-        {block.dailyLog && (
-          <Badge variant="outline" className="text-xs whitespace-nowrap">
-            <Calendar className="w-3 h-3 mr-1" />
-            {block.dailyLog.rowCount}
-          </Badge>
+        {isTradeBasedBlock(block) && (
+          <>
+            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+              <Activity className="w-3 h-3 mr-1" />
+              {block.tradeLog.rowCount}
+            </Badge>
+            {block.dailyLog && (
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                <Calendar className="w-3 h-3 mr-1" />
+                {block.dailyLog.rowCount}
+              </Badge>
+            )}
+            {block.reportingLog && (
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                <List className="w-3 h-3 mr-1" />
+                {block.reportingLog.rowCount}
+              </Badge>
+            )}
+          </>
         )}
-        {block.reportingLog && (
-          <Badge variant="outline" className="text-xs whitespace-nowrap">
-            <List className="w-3 h-3 mr-1" />
-            {block.reportingLog.rowCount}
-          </Badge>
+        {isEquityCurveBlock(block) && (
+          <>
+            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+              <FileSpreadsheet className="w-3 h-3 mr-1" />
+              {block.stats.totalStrategies} {block.stats.totalStrategies === 1 ? 'Strategy' : 'Strategies'}
+            </Badge>
+            <Badge variant="outline" className="text-xs whitespace-nowrap">
+              <TrendingUp className="w-3 h-3 mr-1" />
+              {block.stats.totalEntries} Entries
+            </Badge>
+          </>
         )}
       </div>
 
