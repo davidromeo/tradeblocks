@@ -1,6 +1,7 @@
 "use client";
 
 import { BlockDialog } from "@/components/block-dialog";
+import { EquityCurveUploadDialog } from "@/components/equity-curve-upload-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,10 +10,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useBlockStore, type Block } from "@/lib/stores/block-store";
-import { Activity, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw } from "lucide-react";
+import { Activity, Calendar, ChevronDown, Download, FileSpreadsheet, Grid3X3, Info, List, Plus, Search, RotateCcw } from "lucide-react";
 import React, { useState } from "react";
 
 function BlockCard({
@@ -262,6 +264,7 @@ export default function BlockManagementPage() {
   const error = useBlockStore(state => state.error);
   const loadBlocks = useBlockStore(state => state.loadBlocks);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
+  const [isEquityCurveDialogOpen, setIsEquityCurveDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"new" | "edit">("new");
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -283,6 +286,15 @@ export default function BlockManagementPage() {
     setDialogMode("new");
     setSelectedBlock(null);
     setIsBlockDialogOpen(true);
+  };
+
+  const handleNewEquityCurveBlock = () => {
+    setIsEquityCurveDialogOpen(true);
+  };
+
+  const handleEquityCurveSuccess = (blockId: string) => {
+    // Reload blocks to show the new generic block
+    loadBlocks();
   };
 
   const handleEditBlock = (block: Block) => {
@@ -363,10 +375,36 @@ export default function BlockManagementPage() {
           >
             <List className="w-4 h-4" />
           </Button>
-          <Button onClick={handleNewBlock}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Block
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                New Block
+                <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem onClick={handleNewBlock}>
+                <Activity className="w-4 h-4 mr-2" />
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">Trade-Based Block</span>
+                  <span className="text-xs text-muted-foreground">
+                    Upload Option Omega trade logs
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleNewEquityCurveBlock}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">Equity Curve Block</span>
+                  <span className="text-xs text-muted-foreground">
+                    Upload generic equity curve CSV
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -502,6 +540,12 @@ export default function BlockManagementPage() {
         onOpenChange={setIsBlockDialogOpen}
         mode={dialogMode}
         block={selectedBlock}
+      />
+
+      <EquityCurveUploadDialog
+        open={isEquityCurveDialogOpen}
+        onOpenChange={setIsEquityCurveDialogOpen}
+        onSuccess={handleEquityCurveSuccess}
       />
     </div>
   );
