@@ -11,8 +11,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useBlockStore, type Block } from "@/lib/stores/block-store";
-import { Activity, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw } from "lucide-react";
+import { Activity, AlertTriangle, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
 import React, { useState } from "react";
 
 function BlockCard({
@@ -259,13 +269,15 @@ const MINIMAL_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium
 export default function BlockManagementPage() {
   const blocks = useBlockStore(state => state.blocks);
   const isInitialized = useBlockStore(state => state.isInitialized);
+  const isStuck = useBlockStore(state => state.isStuck);
   const error = useBlockStore(state => state.error);
-  const loadBlocks = useBlockStore(state => state.loadBlocks);
+  const clearAllData = useBlockStore(state => state.clearAllData);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"new" | "edit">("new");
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // No need for useEffect here since AppSidebar handles loading
 
@@ -383,18 +395,42 @@ export default function BlockManagementPage() {
           </span>
         </div>
 
-        {error && (
+        {(error || isStuck) && (
           <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <p className="text-red-900 dark:text-red-100 font-medium">Error loading blocks</p>
-            <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => loadBlocks()}
-              className="mt-2"
-            >
-              Retry
-            </Button>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-red-900 dark:text-red-100 font-medium">
+                  {isStuck ? "Loading appears stuck" : "Error loading blocks"}
+                </p>
+                <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+                  {isStuck
+                    ? "The database may be corrupted or taking too long. You can try reloading or clearing all data."
+                    : error}
+                </p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Reset state and retry
+                      window.location.reload();
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reload Page
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowClearConfirm(true)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear Data & Reload
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -503,6 +539,28 @@ export default function BlockManagementPage() {
         mode={dialogMode}
         block={selectedBlock}
       />
+
+      {/* Confirmation dialog for clearing all data */}
+      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear All Data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all your trading blocks and analyses.
+              You can re-import your data from Option Omega after clearing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={clearAllData}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear & Reload
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

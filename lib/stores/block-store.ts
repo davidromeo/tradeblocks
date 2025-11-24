@@ -53,6 +53,7 @@ interface BlockStore {
   activeBlockId: string | null;
   isLoading: boolean;
   isInitialized: boolean;
+  isStuck: boolean;
   error: string | null;
 
   // Actions
@@ -66,6 +67,7 @@ interface BlockStore {
   deleteBlock: (id: string) => Promise<void>;
   refreshBlock: (id: string) => Promise<void>;
   recalculateBlock: (id: string) => Promise<void>;
+  clearAllData: () => Promise<void>;
 }
 
 /**
@@ -119,12 +121,16 @@ function convertProcessedBlockToBlock(
   };
 }
 
+// Timeout for detecting stuck loading state (30 seconds)
+const LOAD_TIMEOUT_MS = 30000;
+
 export const useBlockStore = create<BlockStore>((set, get) => ({
   // Initialize with empty state
   blocks: [],
   activeBlockId: null,
   isLoading: false,
   isInitialized: false,
+  isStuck: false,
   error: null,
 
   // Load blocks from IndexedDB
@@ -136,9 +142,15 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
       return;
     }
 
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, isStuck: false });
 
-    try {
+    // Create timeout promise for stuck detection
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("LOAD_TIMEOUT")), LOAD_TIMEOUT_MS);
+    });
+
+    // Main loading logic wrapped in a promise for racing
+    const loadingPromise = (async () => {
       // Restore active block ID from localStorage
       const savedActiveBlockId = localStorage.getItem(
         "tradeblocks-active-block-id"
@@ -222,13 +234,27 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
           : null;
 
       set({ blocks, activeBlockId, isLoading: false, isInitialized: true });
+    })();
+
+    try {
+      await Promise.race([loadingPromise, timeoutPromise]);
     } catch (error) {
       console.error("Failed to load blocks:", error);
-      set({
-        error: error instanceof Error ? error.message : "Failed to load blocks",
-        isLoading: false,
-        isInitialized: true,
-      });
+
+      // Check if this was a timeout
+      if (error instanceof Error && error.message === "LOAD_TIMEOUT") {
+        set({
+          isStuck: true,
+          isLoading: false,
+          isInitialized: true,
+        });
+      } else {
+        set({
+          error: error instanceof Error ? error.message : "Failed to load blocks",
+          isLoading: false,
+          isInitialized: true,
+        });
+      }
     }
   },
 
@@ -521,6 +547,20 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
             ? error.message
             : "Failed to recalculate block",
       });
+    }
+  },
+
+  // Clear all data and reload (for recovery from corrupted state)
+  clearAllData: async () => {
+    try {
+      const { deleteDatabase } = await import("../db");
+      await deleteDatabase();
+      localStorage.removeItem("tradeblocks-active-block-id");
+      window.location.reload();
+    } catch (error) {
+      console.error("Failed to clear database:", error);
+      // Even if delete fails, try to reload - user can try again
+      window.location.reload();
     }
   },
 }));
