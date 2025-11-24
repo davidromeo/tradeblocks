@@ -1,5 +1,6 @@
 "use client";
 
+import { NoActiveBlock } from "@/components/no-active-block";
 import { MarginChart } from "@/components/position-sizing/margin-chart";
 import { MarginStatisticsTable } from "@/components/position-sizing/margin-statistics-table";
 import { PortfolioSummary } from "@/components/position-sizing/portfolio-summary";
@@ -431,20 +432,7 @@ export default function PositionSizingPage() {
   // Empty state
   if (!activeBlockId) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Position Sizing</h1>
-          <p className="text-muted-foreground">
-            Optimize capital allocation using Kelly criterion
-          </p>
-        </div>
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">
-            No active block selected. Please select or create a block to run
-            position sizing analysis.
-          </p>
-        </Card>
-      </div>
+      <NoActiveBlock description="Please select a block from the sidebar to run position sizing analysis." />
     );
   }
 

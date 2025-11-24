@@ -3,6 +3,7 @@
 import { MetricCard } from "@/components/metric-card";
 import { MetricSection } from "@/components/metric-section";
 import { MultiSelect } from "@/components/multi-select";
+import { NoActiveBlock } from "@/components/no-active-block";
 import { StrategyBreakdownTable } from "@/components/strategy-breakdown-table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -370,17 +371,7 @@ export default function BlockStatsPage() {
   // Show message if no active block
   if (!activeBlock) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center max-w-md">
-          <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">
-            No Active Block Selected
-          </h3>
-          <p className="text-muted-foreground mb-4">
-            Please select a block from the sidebar to view its statistics.
-          </p>
-        </div>
-      </div>
+      <NoActiveBlock description="Please select a block from the sidebar to view its statistics." />
     );
   }
 

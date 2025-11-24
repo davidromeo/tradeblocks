@@ -1,6 +1,7 @@
 "use client";
 
 import { MatchReviewDialog } from "@/components/match-review-dialog";
+import { NoActiveBlock } from "@/components/no-active-block";
 import { ReconciliationMetrics } from "@/components/reconciliation-charts/ReconciliationMetrics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -313,11 +314,13 @@ export default function ComparisonBlocksPage() {
     setMatchDialogAlignmentId(alignmentId);
   };
 
-  const activeMatchAlignment = matchDialogAlignmentId
-    ? comparisonData?.alignments.find(
-        (alignment) => alignment.alignmentId === matchDialogAlignmentId
-      ) ?? null
-    : null;
+  // Memoize to keep stable reference during loading/refreshes
+  const activeMatchAlignment = useMemo(() => {
+    if (!matchDialogAlignmentId) return null;
+    return comparisonData?.alignments.find(
+      (alignment) => alignment.alignmentId === matchDialogAlignmentId
+    ) ?? null;
+  }, [matchDialogAlignmentId, comparisonData?.alignments]);
 
   const summaryRows = useMemo(() => {
     // Only show comparison data if it matches the current block
@@ -460,7 +463,7 @@ export default function ComparisonBlocksPage() {
     if (activeBlockId) {
       await refreshComparison(activeBlockId, nextAlignments, normalizeTo1Lot);
     }
-    setMatchDialogAlignmentId(null);
+    // Keep the dialog open so the user can navigate back to sessions
   };
 
   const persistAlignments = async (nextAlignments: StrategyAlignment[]) => {
@@ -573,17 +576,7 @@ export default function ComparisonBlocksPage() {
 
   if (!activeBlock) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Card className="max-w-md text-center">
-          <CardHeader>
-            <CardTitle>No Active Block Selected</CardTitle>
-            <CardDescription>
-              Choose a block from the sidebar to align reporting strategies with
-              live trades.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
+      <NoActiveBlock description="Choose a block from the sidebar to align reporting strategies with live trades." />
     );
   }
 
