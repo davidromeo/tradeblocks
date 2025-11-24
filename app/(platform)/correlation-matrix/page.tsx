@@ -1,5 +1,6 @@
 "use client";
 
+import { NoActiveBlock } from "@/components/no-active-block";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -246,14 +247,7 @@ export default function CorrelationMatrixPage() {
 
   if (!activeBlockId) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-2">
-          <p className="text-muted-foreground">No active block selected</p>
-          <p className="text-sm text-muted-foreground">
-            Please activate a block from the Block Management page
-          </p>
-        </div>
-      </div>
+      <NoActiveBlock description="Please select a block from the sidebar to view strategy correlations." />
     );
   }
 

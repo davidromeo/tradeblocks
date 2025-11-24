@@ -26,7 +26,7 @@ import type { TradePair } from "@/lib/models/strategy-alignment";
 import type { NormalizedTrade } from "@/lib/services/trade-reconciliation";
 import type { AlignedTradeSet } from "@/lib/stores/comparison-store";
 import { cn } from "@/lib/utils";
-import { AlertCircle, ArrowLeft, CheckCircle2, Link2, RotateCcw, Unlock } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Link2, Loader2, RotateCcw, Unlock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 interface MatchReviewDialogProps {
@@ -107,16 +107,34 @@ export function MatchReviewDialog({
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [sessionFilter, setSessionFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'last7' | 'last30' | 'last90'>('all');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Track the alignment ID to detect when we switch to a different strategy comparison
   const alignmentIdRef = useRef<string | null>(null);
+  // Track if we just saved to skip the next alignment update
+  const justSavedRef = useRef(false);
+  // Keep a stable alignment reference during saves to prevent flashing
+  const stableAlignmentRef = useRef<AlignedTradeSet | null>(null);
+
+  // Use stable alignment during save to prevent flash
+  const stableAlignment = isSaving && stableAlignmentRef.current
+    ? stableAlignmentRef.current
+    : alignment;
 
   useEffect(() => {
     if (alignment && open) {
+      // Skip state reset if we just saved - alignment data will match our local state
+      if (justSavedRef.current) {
+        justSavedRef.current = false;
+        setIsSaving(false);
+        stableAlignmentRef.current = null; // Clear stable ref after save completes
+        return;
+      }
+
       // Build pairs from the session data
       // Use the isPaired flag to distinguish actual pairs from unmatched trades
       // that happen to be displayed side-by-side
-      const loadedPairs: TradePair[] = [];
+      const newLoadedPairs: TradePair[] = [];
 
       alignment.sessions.forEach((session) => {
         session.items.forEach((item) => {
@@ -125,7 +143,7 @@ export function MatchReviewDialog({
           if (item.isPaired && item.backtested && item.reported) {
             const isAuto = item.autoBacktested && item.autoReported;
 
-            loadedPairs.push({
+            newLoadedPairs.push({
               backtestedId: item.backtested.id,
               reportedId: item.reported.id,
               manual: !isAuto,
@@ -134,8 +152,8 @@ export function MatchReviewDialog({
         });
       });
 
-      setConfirmedPairs(loadedPairs);
-      setLoadedPairs(loadedPairs); // Track what was originally loaded
+      setConfirmedPairs(newLoadedPairs);
+      setLoadedPairs(newLoadedPairs); // Track what was originally loaded
       setSelectedBacktested(null);
       setSelectedReported(null);
 
@@ -192,10 +210,10 @@ export function MatchReviewDialog({
   };
 
   const handleResetToAuto = () => {
-    if (!alignment || !selectedSession) return;
+    if (!stableAlignment || !selectedSession) return;
 
     const sessionBacktestedIds = new Set(
-      alignment.backtestedTrades
+      stableAlignment.backtestedTrades
         .filter((trade) => trade.session === selectedSession)
         .map((trade) => trade.id)
     );
@@ -212,12 +230,12 @@ export function MatchReviewDialog({
   };
 
   const confirmResetToAuto = () => {
-    if (!alignment || !selectedSession) return;
+    if (!stableAlignment || !selectedSession) return;
 
-    const sessionBacktestedTrades = alignment.backtestedTrades.filter(
+    const sessionBacktestedTrades = stableAlignment.backtestedTrades.filter(
       (trade) => trade.session === selectedSession
     );
-    const sessionReportedTrades = alignment.reportedTrades.filter(
+    const sessionReportedTrades = stableAlignment.reportedTrades.filter(
       (trade) => trade.session === selectedSession
     );
 
@@ -226,7 +244,7 @@ export function MatchReviewDialog({
       sessionReportedTrades
     );
     const backtestedLookup = new Map(
-      alignment.backtestedTrades.map((trade) => [trade.id, trade])
+      stableAlignment.backtestedTrades.map((trade) => [trade.id, trade])
     );
 
     setConfirmedPairs((prev) => {
@@ -255,6 +273,10 @@ export function MatchReviewDialog({
   };
 
   const handleSave = () => {
+    // Store current alignment to prevent flash during refresh
+    stableAlignmentRef.current = alignment;
+    setIsSaving(true);
+    justSavedRef.current = true;
     onSave(confirmedPairs);
     setLoadedPairs(confirmedPairs); // Update loaded pairs after save
   };
@@ -267,7 +289,7 @@ export function MatchReviewDialog({
     }
   };
 
-  if (!alignment) {
+  if (!stableAlignment) {
     return (
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="max-w-4xl">
@@ -283,18 +305,18 @@ export function MatchReviewDialog({
   }
 
   // Calculate session stats
-  const sessionStats: SessionStats[] = alignment.sessions.map((sessionMatch) => {
+  const sessionStats: SessionStats[] = stableAlignment.sessions.map((sessionMatch) => {
     const pairedIds = new Set(
       confirmedPairs
         .filter((pair) => {
-          const bt = alignment.backtestedTrades.find(t => t.id === pair.backtestedId);
+          const bt = stableAlignment.backtestedTrades.find(t => t.id === pair.backtestedId);
           return bt?.session === sessionMatch.session;
         })
         .flatMap(p => [p.backtestedId, p.reportedId])
     );
 
-    const sessionBacktested = alignment.backtestedTrades.filter(t => t.session === sessionMatch.session);
-    const sessionReported = alignment.reportedTrades.filter(t => t.session === sessionMatch.session);
+    const sessionBacktested = stableAlignment.backtestedTrades.filter(t => t.session === sessionMatch.session);
+    const sessionReported = stableAlignment.reportedTrades.filter(t => t.session === sessionMatch.session);
 
     const unmatchedBT = sessionBacktested.filter(t => !pairedIds.has(t.id)).length;
     const unmatchedRPT = sessionReported.filter(t => !pairedIds.has(t.id)).length;
@@ -333,7 +355,7 @@ export function MatchReviewDialog({
                   Backtested:
                 </span>
                 <span className="font-semibold text-foreground">
-                  {alignment.backtestedStrategy}
+                  {stableAlignment.backtestedStrategy}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -341,7 +363,7 @@ export function MatchReviewDialog({
                   Reported:
                 </span>
                 <span className="font-semibold text-foreground">
-                  {alignment.reportedStrategy}
+                  {stableAlignment.reportedStrategy}
                 </span>
               </div>
             </div>
@@ -548,16 +570,16 @@ export function MatchReviewDialog({
   }
 
   // Session detail view - filter trades to selected session
-  const sessionBacktestedTrades = alignment.backtestedTrades.filter(
+  const sessionBacktestedTrades = stableAlignment.backtestedTrades.filter(
     (trade) => trade.session === selectedSession
   );
-  const sessionReportedTrades = alignment.reportedTrades.filter(
+  const sessionReportedTrades = stableAlignment.reportedTrades.filter(
     (trade) => trade.session === selectedSession
   );
 
   // Get paired trade IDs for this session
   const sessionPairs = confirmedPairs.filter((pair) => {
-    const bt = alignment.backtestedTrades.find(t => t.id === pair.backtestedId);
+    const bt = stableAlignment.backtestedTrades.find(t => t.id === pair.backtestedId);
     return bt?.session === selectedSession;
   });
 
@@ -574,10 +596,10 @@ export function MatchReviewDialog({
 
   // Build trade lookup maps (still need full alignment for lookups)
   const backtestedById = new Map(
-    alignment.backtestedTrades.map((t) => [t.id, t])
+    stableAlignment.backtestedTrades.map((t) => [t.id, t])
   );
   const reportedById = new Map(
-    alignment.reportedTrades.map((t) => [t.id, t])
+    stableAlignment.reportedTrades.map((t) => [t.id, t])
   );
 
   const canCreatePair = selectedBacktested && selectedReported;
@@ -608,7 +630,10 @@ export function MatchReviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="h-[90vh] w-[calc(100vw-4rem)] !max-w-[calc(100vw-4rem)] flex flex-col">
+      <DialogContent
+        className="h-[90vh] w-[calc(100vw-4rem)] !max-w-[calc(100vw-4rem)] flex flex-col"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
             <Button
@@ -630,7 +655,7 @@ export function MatchReviewDialog({
                 Backtested:
               </span>
               <span className="font-semibold text-foreground">
-                {alignment.backtestedStrategy}
+                {stableAlignment.backtestedStrategy}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -638,7 +663,7 @@ export function MatchReviewDialog({
                 Reported:
               </span>
               <span className="font-semibold text-foreground">
-                {alignment.reportedStrategy}
+                {stableAlignment.reportedStrategy}
               </span>
             </div>
             {normalizeTo1Lot && (
@@ -845,14 +870,23 @@ export function MatchReviewDialog({
               type="button"
               variant="outline"
               onClick={handleBackToSessions}
+              disabled={isSaving}
             >
               Back to Sessions
             </Button>
             <Button
               type="button"
               onClick={handleSave}
+              disabled={isSaving}
             >
-              Save Pairs
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Pairs"
+              )}
             </Button>
           </div>
         </DialogFooter>

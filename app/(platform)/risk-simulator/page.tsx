@@ -1,6 +1,7 @@
 "use client";
 
 import { MultiSelect } from "@/components/multi-select";
+import { NoActiveBlock } from "@/components/no-active-block";
 import {
   DrawdownDistributionChart,
   ReturnDistributionChart,
@@ -363,20 +364,7 @@ export default function RiskSimulatorPage() {
 
   if (!activeBlockId) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Risk Simulator</h1>
-          <p className="text-muted-foreground">
-            Monte Carlo projections using your actual trading history
-          </p>
-        </div>
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">
-            No active block selected. Please select or create a block to run
-            simulations.
-          </p>
-        </Card>
-      </div>
+      <NoActiveBlock description="Please select a block from the sidebar to run Monte Carlo simulations." />
     );
   }
 
