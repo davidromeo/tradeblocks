@@ -144,9 +144,10 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
 
     set({ isLoading: true, error: null, isStuck: false });
 
-    // Create timeout promise for stuck detection
+    // Create timeout for stuck detection
+    const timeoutRef: { id: ReturnType<typeof setTimeout> | null } = { id: null };
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("LOAD_TIMEOUT")), LOAD_TIMEOUT_MS);
+      timeoutRef.id = setTimeout(() => reject(new Error("LOAD_TIMEOUT")), LOAD_TIMEOUT_MS);
     });
 
     // Main loading logic wrapped in a promise for racing
@@ -238,7 +239,11 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
 
     try {
       await Promise.race([loadingPromise, timeoutPromise]);
+      // Clear timeout on success to prevent unhandled rejection
+      if (timeoutRef.id) clearTimeout(timeoutRef.id);
     } catch (error) {
+      // Clear timeout to prevent duplicate errors
+      if (timeoutRef.id) clearTimeout(timeoutRef.id);
       console.error("Failed to load blocks:", error);
 
       // Check if this was a timeout
