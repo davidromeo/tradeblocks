@@ -558,9 +558,40 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
   // Clear all data and reload (for recovery from corrupted state)
   clearAllData: async () => {
     try {
+      // Delete the main TradeBlocksDB
       const { deleteDatabase } = await import("../db");
       await deleteDatabase();
-      localStorage.removeItem("tradeblocks-active-block-id");
+
+      // Also delete the cache database if it exists
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const req = indexedDB.deleteDatabase("tradeblocks-cache");
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+          req.onblocked = () => resolve(); // Continue even if blocked
+        });
+      } catch {
+        // Ignore cache deletion errors
+      }
+
+      // Clear all tradeblocks-related localStorage entries
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.startsWith("tradeblocks-") ||
+          key.startsWith("block-stats:") ||
+          key.startsWith("comparison:") ||
+          key.startsWith("performance:") ||
+          key.startsWith("current-") ||
+          key.startsWith("daily-log-") ||
+          key.startsWith("portfolio-")
+        )) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
       window.location.reload();
     } catch (error) {
       console.error("Failed to clear database:", error);
