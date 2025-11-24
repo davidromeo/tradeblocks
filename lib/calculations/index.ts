@@ -6,6 +6,7 @@
 
 export * from './portfolio-stats'
 export * from './performance'
+export * from './walk-forward-analyzer'
 
 // Re-export types for convenience
 export * from '../models/portfolio-stats'

@@ -38,7 +38,7 @@ yarn-error.log*
 samplefiles*
 
 # Test data files - ignore CSV files in tests/data directory
-tests/data/*.csv
+# tests/data/*.csv
 legacy/tests/data/dailylog.csv
 legacy/tests/data/tradelog.csv
 legacy/app/__pycache__/__init__.cpython-312.pyc
@@ -50,3 +50,8 @@ legacy/app/data/__pycache__/models.cpython-312.pyc
 legacy/app/data/__pycache__/processor.cpython-312.pyc
 scripts/legacy_results.json
 8-10-DC.csv
+tests/data/dailylog.csv
+tests/data/strategy-trade-log.csv
+tests/data/tradelog.csv
+2025-Since-2017 (2).csv
+walk-forward-summary (2).json

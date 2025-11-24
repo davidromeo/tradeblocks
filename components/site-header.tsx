@@ -41,6 +41,10 @@ const routeMeta: Record<
     title: "Comparison Blocks",
     description: "Align and compare backtested vs reported trade data.",
   },
+  "/walk-forward": {
+    title: "Walk-Forward Analysis",
+    description: "Validate performance across shifting regimes with rolling IS/OOS windows.",
+  },
   "/settings": {
     title: "Settings",
     description:

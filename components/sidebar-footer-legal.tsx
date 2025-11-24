@@ -1,10 +1,11 @@
 "use client";
 
-import { AlertTriangle, Github, ShieldQuestion, Sparkles } from "lucide-react";
+import { AlertTriangle, Github, ShieldQuestion } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useIsMobile } from "@/hooks/use-mobile";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,82 +45,124 @@ const disclaimerSections = [
 ];
 
 export function SidebarFooterLegal() {
+  const isMobile = useIsMobile();
+
+  // Shared dialog content
+  const dialogContent = (
+    <DialogContent className="max-h-[80vh] overflow-y-auto border-none bg-gradient-to-b from-background to-muted/40 p-0 sm:max-w-2xl">
+      <DialogTitle className="sr-only">Full Disclaimer</DialogTitle>
+      <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card p-6 shadow-2xl sm:p-8">
+        <DialogHeader className="gap-2 text-left">
+          <div className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden />
+            Important Disclaimer
+          </div>
+          <DialogDescription className="flex items-center gap-2 text-sm text-muted-foreground">
+            Please read before building your analytics
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-5 text-sm leading-relaxed text-foreground">
+          {disclaimerSections.map((section) => (
+            <section key={section.title} className="space-y-1.5">
+              <h3 className={`text-base font-semibold ${section.accent}`}>
+                {section.title}
+              </h3>
+              <p>{section.body}</p>
+            </section>
+          ))}
+        </div>
+        <div className="flex items-center justify-center gap-2 rounded-2xl bg-muted px-4 py-3 text-sm font-semibold italic text-muted-foreground">
+          <ShieldQuestion className="h-4 w-4" aria-hidden />
+          Remember: TradeBlocks builds insights, not investment advice.
+        </div>
+        {/* Attribution links in dialog for mobile */}
+        {isMobile && (
+          <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border/40 pt-4 text-[0.7rem] text-muted-foreground">
+            <Link
+              href="https://ninjata.co/"
+              target="_blank"
+              className="inline-flex items-center gap-1 font-medium text-primary transition hover:text-primary/80"
+            >
+              Inspired by NinjaTaco
+              <Image
+                src="/ninjataco-tribute.png"
+                alt="NinjaTaco"
+                width={16}
+                height={16}
+                className="opacity-80"
+              />
+            </Link>
+            <span className="text-muted-foreground/50">•</span>
+            <Link
+              href="https://github.com/davidromeo/tradeblocks"
+              target="_blank"
+              className="inline-flex items-center gap-1 transition hover:text-foreground"
+            >
+              <Github className="h-3.5 w-3.5" aria-hidden />
+              <span className="font-medium">GitHub</span>
+            </Link>
+          </div>
+        )}
+      </div>
+    </DialogContent>
+  );
+
+  // Mobile compact version - minimal footer that stays fixed at bottom
+  if (isMobile) {
+    return (
+      <div className="border-t border-sidebar-border/80 px-3 py-2">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto w-full justify-center gap-1.5 px-2 py-1.5 text-[0.65rem] text-muted-foreground hover:text-foreground"
+            >
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+              <span>Disclaimer</span>
+            </Button>
+          </DialogTrigger>
+          {dialogContent}
+        </Dialog>
+      </div>
+    );
+  }
+
+  // Desktop compact version
   return (
-    <div className="space-y-4 border-t border-sidebar-border/80 px-3 pb-6 pt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
-      <Alert className="gap-2">
-        <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden />
-        <div className="space-y-1">
-          <AlertTitle className="text-xs uppercase tracking-wide text-muted-foreground">
-            Important Notice
-          </AlertTitle>
-          <AlertDescription className="text-[0.72rem] text-foreground">
-            Educational use only • Not financial advice • Trading involves risk
-          </AlertDescription>
+    <div className="space-y-2.5 border-t border-sidebar-border/80 px-3 pb-4 pt-3 text-[0.72rem] leading-relaxed text-muted-foreground">
+      <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="text-[0.7rem] leading-tight text-foreground">
+            Educational use only • Not financial advice
+          </p>
           <Dialog>
             <DialogTrigger asChild>
               <Button
                 variant="link"
                 size="sm"
-                className="h-auto p-0 text-[0.72rem] font-medium text-primary"
+                className="h-auto w-fit p-0 text-[0.68rem] font-medium text-primary"
               >
-                Full Disclaimer
+                Full Disclaimer →
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[80vh] overflow-y-auto border-none bg-gradient-to-b from-background to-muted/40 p-0 sm:max-w-2xl">
-              <DialogTitle className="sr-only">Full Disclaimer</DialogTitle>
-              <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card p-6 shadow-2xl sm:p-8">
-                <DialogHeader className="gap-2 text-left">
-                  <div className="flex items-center gap-2 text-base font-semibold text-foreground">
-                    <AlertTriangle
-                      className="h-5 w-5 text-amber-500"
-                      aria-hidden
-                    />
-                    Important Disclaimer
-                  </div>
-                  <DialogDescription className="flex items-center gap-2 text-sm text-muted-foreground">
-                    Please read before building your analytics
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-5 text-sm leading-relaxed text-foreground">
-                  {disclaimerSections.map((section) => (
-                    <section key={section.title} className="space-y-1.5">
-                      <h3
-                        className={`text-base font-semibold ${section.accent}`}
-                      >
-                        {section.title}
-                      </h3>
-                      <p>{section.body}</p>
-                    </section>
-                  ))}
-                </div>
-                <div className="flex items-center justify-center gap-2 rounded-2xl bg-muted px-4 py-3 text-sm font-semibold italic text-muted-foreground">
-                  <ShieldQuestion className="h-4 w-4" aria-hidden />
-                  Remember: TradeBlocks builds insights, not investment advice.
-                </div>
-              </div>
-            </DialogContent>
+            {dialogContent}
           </Dialog>
         </div>
-      </Alert>
-      <p className="inline-flex items-center gap-1 text-[0.68rem] italic text-muted-foreground">
-        <Sparkles
-          className="h-3.5 w-3.5 text-muted-foreground/70"
-          aria-hidden
-        />
-        TradeBlocks builds insights, not investment advice.
-      </p>
-      <div className="flex flex-wrap items-center gap-2 text-[0.7rem] text-muted-foreground">
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-[0.68rem] text-muted-foreground">
         <Link
           href="https://ninjata.co/"
           target="_blank"
           className="inline-flex items-center gap-1 font-medium text-primary transition hover:text-primary/80"
         >
-          Inspired by NinjaTaco
+          NinjaTaco
           <Image
             src="/ninjataco-tribute.png"
             alt="NinjaTaco"
-            width={16}
-            height={16}
+            width={14}
+            height={14}
             className="opacity-80"
           />
         </Link>
@@ -129,7 +172,7 @@ export function SidebarFooterLegal() {
           target="_blank"
           className="inline-flex items-center gap-1 transition hover:text-foreground"
         >
-          <Github className="h-3.5 w-3.5" aria-hidden />
+          <Github className="h-3 w-3" aria-hidden />
           <span className="font-medium">GitHub</span>
         </Link>
       </div>

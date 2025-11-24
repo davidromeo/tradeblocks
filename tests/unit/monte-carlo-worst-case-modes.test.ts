@@ -345,7 +345,7 @@ describe("Worst-case modes comprehensive testing", () => {
 
   describe("Worst-case percentage calculation accuracy", () => {
     it("should create correct number of synthetic trades per strategy", () => {
-      const smallDataset: Trade[] = Array.from({ length: 20 }, (_, i) =>
+      const smallDataset: Trade[] = Array.from({ length: 20 }, () =>
         createTrade({
           pl: 100,
           marginReq: 1000,

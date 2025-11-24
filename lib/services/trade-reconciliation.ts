@@ -368,8 +368,8 @@ function normalizeBacktestedTrade(trade: Trade): NormalizedTrade {
 function normalizeReportedTrade(trade: ReportingTrade): NormalizedTrade {
   const dateOpened = new Date(trade.dateOpened)
   const contracts = trade.numContracts || 1
-  const premiumPerContract = trade.initialPremium
-  const totalPremium = premiumPerContract * contracts
+  const totalPremium = trade.initialPremium
+  const premiumPerContract = contracts !== 0 ? totalPremium / contracts : totalPremium
 
   return {
     id: buildTradeId(trade.strategy, dateOpened, undefined, contracts, trade.pl),

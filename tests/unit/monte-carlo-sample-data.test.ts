@@ -1,6 +1,9 @@
-import { CsvTestDataLoader } from "../data/csv-loader";
-import { runMonteCarloSimulation, type MonteCarloParams } from "@/lib/calculations/monte-carlo";
+import {
+  runMonteCarloSimulation,
+  type MonteCarloParams,
+} from "@/lib/calculations/monte-carlo";
 import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+import { CsvTestDataLoader } from "../data/csv-loader";
 
 /**
  * Integration test that runs the Monte Carlo simulator against the real CSV sample data.
@@ -13,7 +16,8 @@ describe("Monte Carlo Simulation (sample data)", () => {
     expect(testData.sources.trades).toBe("csv");
     const { trades } = testData;
 
-    const initialCapital = PortfolioStatsCalculator.calculateInitialCapital(trades);
+    const initialCapital =
+      PortfolioStatsCalculator.calculateInitialCapital(trades);
 
     const params: MonteCarloParams = {
       numSimulations: 200,

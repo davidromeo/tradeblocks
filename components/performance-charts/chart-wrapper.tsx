@@ -16,8 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { HelpCircle } from "lucide-react";
 import { useTheme } from "next-themes";
-import type { Config, Data, Layout } from "plotly.js";
-import React, { Suspense, useEffect, useRef } from "react";
+import type { Config, Data, Layout, PlotlyHTMLElement } from "plotly.js";
+import React, { Suspense, useCallback, useEffect, useRef } from "react";
 
 declare global {
   interface Window {
@@ -76,31 +76,66 @@ export function ChartWrapper({
   config,
   onInitialized,
   onUpdate,
-  style = { width: "100%", height: "100%" },
+  style,
 }: ChartWrapperProps) {
   const { theme } = useTheme();
   const plotRef = useRef<HTMLDivElement>(null);
+  const graphDivRef = useRef<PlotlyHTMLElement | null>(null);
   const chartId = `chart-${title
     .toLowerCase()
     .replace(/\s+/g, "-")}-${Math.random().toString(36).substring(2, 11)}`;
 
+  const triggerResize = useCallback(() => {
+    const div = graphDivRef.current;
+    if (
+      typeof window === "undefined" ||
+      !window.Plotly ||
+      !div ||
+      !div.isConnected ||
+      // offsetParent will be null when hidden (e.g., inactive tab or collapsed)
+      div.offsetParent === null
+    ) {
+      return;
+    }
+
+    try {
+      // Plotly.resize may return void or a promise depending on version; we safely ignore the return.
+      void window.Plotly.Plots.resize(div);
+    } catch (error) {
+      console.warn("Failed to resize chart:", error);
+    }
+  }, []);
+
+  const mergedStyle = React.useMemo<React.CSSProperties>(() => {
+    return {
+      width: "100%",
+      height: 360,
+      maxWidth: "100%",
+      ...style,
+    };
+  }, [style]);
+
+  const containerStyle = React.useMemo<React.CSSProperties>(() => {
+    const height = mergedStyle.height;
+
+    return {
+      minHeight:
+        typeof height === "number" || typeof height === "string"
+          ? height
+          : 320,
+    };
+  }, [mergedStyle.height]);
+
   // Handle manual resize when container changes
   useEffect(() => {
     const handleResize = () => {
-      try {
-        // Use global Plotly if available (react-plotly.js makes it available)
-        if (typeof window !== "undefined" && window.Plotly) {
-          window.Plotly.Plots.resize(chartId);
-        }
-      } catch (error) {
-        console.warn("Failed to resize chart:", error);
-      }
+      // Debounce resize calls to avoid thrashing Plotly resize
+      setTimeout(triggerResize, 50);
     };
 
     // Set up ResizeObserver to detect container size changes
     const resizeObserver = new ResizeObserver(() => {
-      // Debounce resize calls
-      setTimeout(handleResize, 50);
+      handleResize();
     });
 
     if (plotRef.current) {
@@ -110,24 +145,40 @@ export function ChartWrapper({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [chartId]);
+  }, [triggerResize]);
 
   // Also resize when theme changes (can affect layout)
   useEffect(() => {
-    const handleResize = () => {
-      try {
-        if (typeof window !== "undefined" && window.Plotly) {
-          window.Plotly.Plots.resize(chartId);
-        }
-      } catch (error) {
-        console.warn("Failed to resize chart on theme change:", error);
-      }
-    };
-
     // Small delay to ensure theme changes are applied
-    const timeoutId = setTimeout(handleResize, 150);
+    const timeoutId = setTimeout(triggerResize, 150);
     return () => clearTimeout(timeoutId);
-  }, [theme, chartId]);
+  }, [theme, triggerResize]);
+
+  // Force a resize whenever the upstream data/layout objects change.
+  // This catches cases like switching run history, where the container size
+  // stays the same but Plotly needs to recompute its internal view box.
+  useEffect(() => {
+    const timeoutId = setTimeout(triggerResize, 0);
+    return () => clearTimeout(timeoutId);
+  }, [data, layout, triggerResize]);
+
+  const handleInitialized = useCallback(
+    (figure: Readonly<unknown>, graphDiv: Readonly<HTMLElement>) => {
+      graphDivRef.current = graphDiv as PlotlyHTMLElement | null;
+      triggerResize();
+      onInitialized?.(figure);
+    },
+    [onInitialized, triggerResize]
+  );
+
+  const handleUpdate = useCallback(
+    (figure: Readonly<unknown>, graphDiv: Readonly<HTMLElement>) => {
+      graphDivRef.current = graphDiv as PlotlyHTMLElement | null;
+      triggerResize();
+      onUpdate?.(figure);
+    },
+    [onUpdate, triggerResize]
+  );
 
   // Enhanced layout with theme support
   const themedLayout = React.useMemo(() => {
@@ -268,7 +319,7 @@ export function ChartWrapper({
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div ref={plotRef} className="relative min-h-[300px]">
+        <div ref={plotRef} className="relative" style={containerStyle}>
           {contentOverlay && (
             <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
               <div className="pointer-events-auto">{contentOverlay}</div>
@@ -280,18 +331,16 @@ export function ChartWrapper({
               data={data}
               layout={themedLayout}
               config={enhancedConfig as unknown as Parameters<typeof Plot>[0]['config']}
-              onInitialized={onInitialized}
-              onUpdate={onUpdate}
-              style={style}
+              onInitialized={handleInitialized}
+              onUpdate={handleUpdate}
+              style={mergedStyle}
               className="w-full h-full"
               useResizeHandler={true}
             />
           </Suspense>
         </div>
         {footer && (
-          <div className="mt-4">
-            {footer}
-          </div>
+          <div className="mt-4">{footer}</div>
         )}
       </CardContent>
     </Card>

@@ -8,6 +8,7 @@ import {
   IconReportAnalytics,
   IconRouteSquare,
   IconStack2,
+  IconTimelineEvent,
 } from "@tabler/icons-react";
 import { Blocks } from "lucide-react";
 import Link from "next/link";
@@ -62,6 +63,12 @@ const navData = {
       icon: IconChartHistogram,
     },
     {
+      title: "Walk-Forward",
+      href: "/walk-forward",
+      icon: IconTimelineEvent,
+      badge: "Beta",
+    },
+    {
       title: "Comparison Blocks",
       href: "/comparison-blocks",
       icon: IconLink,
@@ -112,8 +119,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="relative">
         <NavMain items={navData.navMain} />
+        {/* Scroll indicator - subtle gradient fade at bottom */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-sidebar to-transparent" />
       </SidebarContent>
       {hasActiveBlock && activeBlock && (
         <SidebarActiveBlocks activeBlock={activeBlock} />

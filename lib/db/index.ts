@@ -13,7 +13,7 @@
 
 // Database configuration
 export const DB_NAME = "TradeBlocksDB";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 // Object store names
 export const STORES = {
@@ -22,6 +22,7 @@ export const STORES = {
   DAILY_LOGS: "dailyLogs",
   CALCULATIONS: "calculations",
   REPORTING_LOGS: "reportingLogs",
+  WALK_FORWARD: "walkForwardAnalyses",
 } as const;
 
 // Index names
@@ -34,6 +35,7 @@ export const INDEXES = {
   CALCULATIONS_BY_BLOCK: "blockId",
   REPORTING_LOGS_BY_BLOCK: "blockId",
   REPORTING_LOGS_BY_STRATEGY: "strategy",
+  WALK_FORWARD_BY_BLOCK: "blockId",
 } as const;
 
 /**
@@ -155,6 +157,17 @@ export async function initializeDatabase(): Promise<IDBDatabase> {
         calculationsStore.createIndex("calculatedAt", "calculatedAt", {
           unique: false,
         });
+      }
+
+      // Create walk-forward analysis store
+      if (!db.objectStoreNames.contains(STORES.WALK_FORWARD)) {
+        const walkForwardStore = db.createObjectStore(STORES.WALK_FORWARD, {
+          keyPath: "id",
+        });
+        walkForwardStore.createIndex(INDEXES.WALK_FORWARD_BY_BLOCK, "blockId", {
+          unique: false,
+        });
+        walkForwardStore.createIndex("createdAt", "createdAt", { unique: false });
       }
 
       transaction.oncomplete = () => {
@@ -352,3 +365,10 @@ export {
   getTradesByBlockWithOptions,
   updateTradesForBlock,
 } from "./trades-store";
+export {
+  saveWalkForwardAnalysis,
+  getWalkForwardAnalysis,
+  getWalkForwardAnalysesByBlock,
+  deleteWalkForwardAnalysis,
+  deleteWalkForwardAnalysesByBlock,
+} from "./walk-forward-store";

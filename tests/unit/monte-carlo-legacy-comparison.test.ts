@@ -1,15 +1,20 @@
+import {
+  runMonteCarloSimulation,
+  type MonteCarloParams,
+} from "@/lib/calculations/monte-carlo";
 import { CsvTestDataLoader } from "../data/csv-loader";
-import { runMonteCarloSimulation, type MonteCarloParams } from "@/lib/calculations/monte-carlo";
 
 describe("Monte Carlo legacy comparison", () => {
- it("prints stats for legacy parameter set", async () => {
+  it("prints stats for legacy parameter set", async () => {
     const { trades } = await CsvTestDataLoader.loadTestData();
 
     const params: MonteCarloParams = {
       numSimulations: 1000,
       simulationLength: Math.min(252, trades.length),
       resampleMethod: "trades",
-      initialCapital: trades[0] ? trades[0].fundsAtClose - trades[0].pl : 100000,
+      initialCapital: trades[0]
+        ? trades[0].fundsAtClose - trades[0].pl
+        : 100000,
       tradesPerYear: 125,
       randomSeed: 42,
     };
