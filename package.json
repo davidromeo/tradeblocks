@@ -11,7 +11,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:portfolio": "jest portfolio-stats",
-    "prepare": "husky"
+    "prepare": "husky",
+    "gpt:context": "repomix --style markdown --compress --output gpt/codebase-context.md"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

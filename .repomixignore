@@ -1,0 +1,41 @@
+# UI boilerplate (shadcn components)
+components/ui/
+
+# All tests
+tests/
+
+# Build/config files
+.next/
+node_modules/
+*.config.*
+tsconfig.json
+components.json
+postcss.config.mjs
+
+# Local/dev settings
+.claude/
+.github/
+.husky/
+.editorconfig
+.npmrc
+
+# Planning/issue docs (not needed for user-facing GPT)
+github-issues/
+docs/
+gpt/
+*-issue.md
+
+# Other noise
+public/
+coverage/
+*.lock
+*.json
+
+# Root files
+.gitignore
+.repomixignore
+CLAUDE.md
+LICENSE
+next-env.d.ts
+package.json
+README.md
