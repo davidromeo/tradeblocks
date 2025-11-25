@@ -46,7 +46,13 @@ import {
 import { DailyLogEntry } from "@/lib/models/daily-log";
 import { Trade } from "@/lib/models/trade";
 import { useBlockStore } from "@/lib/stores/block-store";
-import { AlertCircle, HelpCircle, Play } from "lucide-react";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
+import { AlertCircle, Download, HelpCircle, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 interface RunConfig {
@@ -71,7 +77,8 @@ const normalizeKellyValue = (value: number): number => {
 };
 
 export default function PositionSizingPage() {
-  const { activeBlockId } = useBlockStore();
+  const { activeBlockId, blocks } = useBlockStore();
+  const activeBlock = blocks.find((b) => b.id === activeBlockId);
 
   // State
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -427,6 +434,130 @@ export default function PositionSizingPage() {
 
     setPortfolioKellyPct(normalized);
     setPortfolioKellyInput(normalized.toString());
+  };
+
+  // Export functions
+  const exportAsJson = () => {
+    if (!results || !activeBlock) return;
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      block: {
+        id: activeBlock.id,
+        name: activeBlock.name,
+      },
+      configuration: {
+        startingCapital: results.config.startingCapital,
+        portfolioKellyPct: results.config.portfolioKellyPct,
+        marginMode,
+        strategyKellyMultipliers: lastRunConfig?.kellyValues || {},
+      },
+      portfolioSummary: {
+        kellyPercent: results.portfolioMetrics.percent,
+        normalizedKellyPercent: results.portfolioMetrics.normalizedKellyPct,
+        winRate: results.portfolioMetrics.winRate,
+        winLossRatio: results.portfolioMetrics.payoffRatio,
+        tradeCount: trades.length,
+        weightedAppliedPct: results.weightedAppliedPct,
+        appliedCapital: results.appliedCapital,
+        portfolioMaxMarginPct: results.portfolioMaxMarginPct,
+      },
+      strategyAnalysis: results.strategyAnalysis.map((s) => ({
+        name: s.name,
+        tradeCount: s.tradeCount,
+        kellyPercent: s.kellyMetrics.percent,
+        normalizedKellyPercent: s.kellyMetrics.normalizedKellyPct,
+        winRate: s.kellyMetrics.winRate,
+        winLossRatio: s.kellyMetrics.payoffRatio,
+        inputPct: s.inputPct,
+        appliedPct: s.appliedPct,
+        maxMarginPct: s.maxMarginPct,
+        allocationPct: s.allocationPct,
+        allocationDollars: s.allocationDollars,
+      })),
+      marginTimeline: {
+        dates: results.marginTimeline.dates,
+        portfolioPct: results.marginTimeline.portfolioPct,
+        byStrategy: Object.fromEntries(results.marginTimeline.strategyPct),
+      },
+    };
+
+    downloadJson(
+      exportData,
+      generateExportFilename(activeBlock.name, "position-sizing", "json")
+    );
+  };
+
+  const exportAsCsv = () => {
+    if (!results || !activeBlock) return;
+
+    const lines: string[] = [];
+
+    // Metadata
+    lines.push("# Position Sizing Export");
+    lines.push(toCsvRow(["Block", activeBlock.name]));
+    lines.push(toCsvRow(["Exported", new Date().toISOString()]));
+    lines.push(toCsvRow(["Starting Capital", results.config.startingCapital]));
+    lines.push(toCsvRow(["Portfolio Kelly %", results.config.portfolioKellyPct]));
+    lines.push(toCsvRow(["Margin Mode", marginMode]));
+    lines.push("");
+
+    // Portfolio Summary
+    lines.push("# Portfolio Summary");
+    lines.push(toCsvRow(["Metric", "Value"]));
+    lines.push(toCsvRow(["Kelly %", results.portfolioMetrics.percent?.toFixed(2) ?? "N/A"]));
+    lines.push(
+      toCsvRow(["Normalized Kelly %", results.portfolioMetrics.normalizedKellyPct?.toFixed(2) ?? "N/A"])
+    );
+    lines.push(
+      toCsvRow(["Win Rate", `${((results.portfolioMetrics.winRate ?? 0) * 100).toFixed(2)}%`])
+    );
+    lines.push(
+      toCsvRow(["Win/Loss Ratio", results.portfolioMetrics.payoffRatio?.toFixed(2) ?? "N/A"])
+    );
+    lines.push(toCsvRow(["Trade Count", trades.length]));
+    lines.push(toCsvRow(["Weighted Applied %", results.weightedAppliedPct.toFixed(2)]));
+    lines.push(toCsvRow(["Applied Capital", `$${results.appliedCapital.toFixed(2)}`]));
+    lines.push(toCsvRow(["Portfolio Max Margin %", results.portfolioMaxMarginPct.toFixed(2)]));
+    lines.push("");
+
+    // Strategy Analysis
+    lines.push("# Strategy Analysis");
+    lines.push(
+      toCsvRow([
+        "Strategy",
+        "Trades",
+        "Kelly %",
+        "Normalized Kelly %",
+        "Win Rate",
+        "Input %",
+        "Applied %",
+        "Max Margin %",
+        "Allocation %",
+        "Allocation $",
+      ])
+    );
+    for (const s of results.strategyAnalysis) {
+      lines.push(
+        toCsvRow([
+          s.name,
+          s.tradeCount,
+          s.kellyMetrics.percent?.toFixed(2) ?? "N/A",
+          s.kellyMetrics.normalizedKellyPct?.toFixed(2) ?? "N/A",
+          `${((s.kellyMetrics.winRate ?? 0) * 100).toFixed(2)}%`,
+          s.inputPct,
+          s.appliedPct.toFixed(2),
+          s.maxMarginPct.toFixed(2),
+          s.allocationPct.toFixed(2),
+          s.allocationDollars.toFixed(2),
+        ])
+      );
+    }
+
+    downloadCsv(
+      lines,
+      generateExportFilename(activeBlock.name, "position-sizing", "csv")
+    );
   };
 
   // Empty state
@@ -804,6 +935,24 @@ export default function PositionSizingPage() {
               <Button onClick={runAllocation} className="ml-auto gap-2">
                 <Play className="h-4 w-4" />
                 Run Allocation
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportAsCsv}
+                disabled={!results}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportAsJson}
+                disabled={!results}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                JSON
               </Button>
             </div>
           </div>

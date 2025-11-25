@@ -46,6 +46,11 @@ import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
 import { cn } from "@/lib/utils";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+} from "@/lib/utils/export-helpers";
 
 const TARGET_LABELS: Record<WalkForwardOptimizationTarget, string> = {
   netPl: "Net Profit",
@@ -301,22 +306,22 @@ export default function WalkForwardPage() {
   const periodCount = results?.results.periods.length ?? 0;
 
   const handleExport = (format: "csv" | "json") => {
+    if (!activeBlock) return;
     const payload =
       format === "csv" ? exportResultsAsCsv() : exportResultsAsJson();
     if (!payload) return;
 
-    const blob = new Blob([payload], {
-      type: format === "csv" ? "text/csv;charset=utf-8;" : "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download =
-      format === "csv"
-        ? "walk-forward-summary.csv"
-        : "walk-forward-summary.json";
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const filename = generateExportFilename(
+      activeBlock.name,
+      "walk-forward",
+      format
+    );
+
+    if (format === "csv") {
+      downloadCsv(payload.split("\n"), filename);
+    } else {
+      downloadJson(JSON.parse(payload), filename);
+    }
   };
 
   if (!isInitialized || blockIsLoading) {

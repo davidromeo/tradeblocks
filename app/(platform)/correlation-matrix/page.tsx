@@ -31,6 +31,12 @@ import { getBlock, getTradesByBlockWithOptions } from "@/lib/db";
 import { Trade } from "@/lib/models/trade";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { truncateStrategyName } from "@/lib/utils";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
 import { Download, HelpCircle, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { Data, Layout } from "plotly.js";
@@ -210,32 +216,58 @@ export default function CorrelationMatrixPage() {
   );
 
   const handleDownloadCsv = useCallback(() => {
-    if (!correlationMatrix) {
+    if (!correlationMatrix || !activeBlock) {
       return;
     }
 
-    const csv = buildCorrelationCsv(correlationMatrix, {
-      blockName: activeBlock?.name ?? "n/a",
+    const lines = buildCorrelationCsvLines(correlationMatrix, {
+      blockName: activeBlock.name,
       method,
       alignment,
       normalization,
       dateBasis,
     });
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const filename = `correlation-${method}-${new Date()
-      .toISOString()
-      .split("T")[0]}.csv`;
+    downloadCsv(
+      lines,
+      generateExportFilename(activeBlock.name, "correlation", "csv")
+    );
+  }, [correlationMatrix, method, alignment, normalization, dateBasis, activeBlock]);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, [correlationMatrix, method, alignment, normalization, dateBasis, activeBlock?.name]);
+  const handleDownloadJson = useCallback(() => {
+    if (!correlationMatrix || !activeBlock) {
+      return;
+    }
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      block: {
+        id: activeBlock.id,
+        name: activeBlock.name,
+      },
+      settings: {
+        method,
+        alignment,
+        normalization,
+        dateBasis,
+      },
+      strategies: correlationMatrix.strategies,
+      correlationMatrix: correlationMatrix.correlationData,
+      analytics: analytics
+        ? {
+            strongest: analytics.strongest,
+            weakest: analytics.weakest,
+            averageCorrelation: analytics.averageCorrelation,
+            strategyCount: analytics.strategyCount,
+          }
+        : null,
+    };
+
+    downloadJson(
+      exportData,
+      generateExportFilename(activeBlock.name, "correlation", "json")
+    );
+  }, [correlationMatrix, analytics, method, alignment, normalization, dateBasis, activeBlock]);
 
   if (loading) {
     return (
@@ -506,16 +538,26 @@ export default function CorrelationMatrixPage() {
         layout={layout}
         style={{ height: "600px" }}
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleDownloadCsv}
-            disabled={!correlationMatrix}
-          >
-            <Download className="h-4 w-4" />
-            Download CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadCsv}
+              disabled={!correlationMatrix}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadJson}
+              disabled={!correlationMatrix}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              JSON
+            </Button>
+          </div>
         }
       />
 
@@ -598,42 +640,33 @@ interface CsvMeta {
   dateBasis: string;
 }
 
-function buildCorrelationCsv(
+function buildCorrelationCsvLines(
   matrix: CorrelationMatrix,
   meta: CsvMeta
-): string {
-  const rows: string[] = [];
-  const addRow = (values: (string | number)[]) => {
-    rows.push(values.map(escapeCsvValue).join(","));
-  };
+): string[] {
+  const lines: string[] = [];
 
-  addRow(["Generated At", new Date().toISOString()]);
-  addRow(["Block", meta.blockName]);
-  addRow(["Method", meta.method]);
-  addRow(["Alignment", meta.alignment]);
-  addRow(["Return Basis", meta.normalization]);
-  addRow(["Date Basis", meta.dateBasis]);
-  addRow(["Strategy Count", matrix.strategies.length]);
+  lines.push(toCsvRow(["Generated At", new Date().toISOString()]));
+  lines.push(toCsvRow(["Block", meta.blockName]));
+  lines.push(toCsvRow(["Method", meta.method]));
+  lines.push(toCsvRow(["Alignment", meta.alignment]));
+  lines.push(toCsvRow(["Return Basis", meta.normalization]));
+  lines.push(toCsvRow(["Date Basis", meta.dateBasis]));
+  lines.push(toCsvRow(["Strategy Count", matrix.strategies.length]));
 
-  rows.push("");
+  lines.push("");
 
-  addRow(["Strategy", ...matrix.strategies]);
+  lines.push(toCsvRow(["Strategy", ...matrix.strategies]));
   matrix.correlationData.forEach((row, index) => {
-    addRow([
-      matrix.strategies[index],
-      ...row.map((value) => value.toFixed(6)),
-    ]);
+    lines.push(
+      toCsvRow([
+        matrix.strategies[index],
+        ...row.map((value) => value.toFixed(6)),
+      ])
+    );
   });
 
-  return rows.join("\n");
-}
-
-function escapeCsvValue(value: string | number): string {
-  const stringValue = String(value ?? "");
-  if (/[",\n]/.test(stringValue)) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-  return stringValue;
+  return lines;
 }
 
 interface AnalyticsContextArgs {

@@ -121,6 +121,7 @@ components/
   nav-user.tsx
   no-active-block.tsx
   page-placeholder.tsx
+  performance-export-dialog.tsx
   sidebar-active-blocks.tsx
   sidebar-footer-legal.tsx
   site-header.tsx
@@ -181,6 +182,8 @@ lib/
   utils/
     combine-leg-groups.ts
     csv-headers.ts
+    export-helpers.ts
+    performance-export.ts
     performance-helpers.ts
     time-conversions.ts
     trade-frequency.ts
@@ -329,6 +332,30 @@ interface EquityCurveChartProps {
 if (value) updateChartSettings(
 ⋮----
 updateChartSettings(
+```
+
+## File: components/performance-charts/holding-duration-chart.tsx
+```typescript
+import { useMemo } from 'react'
+import type { Layout, PlotData } from 'plotly.js'
+import { ChartWrapper } from './chart-wrapper'
+import { usePerformanceStore } from '@/lib/stores/performance-store'
+⋮----
+interface HoldingDurationChartProps {
+  className?: string
+}
+```
+
+## File: components/performance-charts/margin-utilization-chart.tsx
+```typescript
+import { useMemo } from 'react'
+import type { Layout, PlotData } from 'plotly.js'
+import { ChartWrapper } from './chart-wrapper'
+import { usePerformanceStore } from '@/lib/stores/performance-store'
+⋮----
+interface MarginUtilizationChartProps {
+  className?: string
+}
 ```
 
 ## File: components/performance-charts/performance-metrics.tsx
@@ -527,6 +554,64 @@ color: "#10b981", // green
 // Use at least 10% of max absolute value as padding to avoid zero range
 ⋮----
 // Build description
+```
+
+## File: components/reconciliation-charts/ReconciliationMetrics.tsx
+```typescript
+import { MetricCard } from "@/components/metric-card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { calculateDualEquityCurves, calculateSeparateEquityCurves, MatchedPair } from "@/lib/calculations/reconciliation-stats"
+import { AlignedTradeSet, AlignmentMetrics } from "@/lib/services/trade-reconciliation"
+import { cn } from "@/lib/utils"
+import { DualEquityCurveChart } from "./DualEquityCurveChart"
+import { SlippageDistributionChart, computeSlippageDistribution } from "./SlippageDistributionChart"
+⋮----
+interface ReconciliationMetricsProps {
+  metrics: AlignmentMetrics
+  alignment: AlignedTradeSet // Need full alignment to calculate session-based match rate
+  normalizeTo1Lot?: boolean
+  className?: string
+}
+⋮----
+alignment: AlignedTradeSet // Need full alignment to calculate session-based match rate
+⋮----
+// Calculate session-based match rate (more accurate than trade-based)
+⋮----
+// Calculate derived metrics
+⋮----
+const formatCurrency = (value: number) => new Intl.NumberFormat("en-US",
+⋮----
+// Compute matched pairs for equity curve
+⋮----
+// Sort pairs by date for equity curve
+⋮----
+// Calculate separate equity curves for all trades (matched + unmatched)
+⋮----
+{/* Match Quality & Trade Counts - Compact Grid */}
+⋮----
+{/* Match Rate - Larger span */}
+⋮----
+{/* Title */}
+⋮----
+{/* Value */}
+⋮----
+{/* Subtitle */}
+⋮----
+{/* Backtested Trades */}
+⋮----
+{/* Reported Trades */}
+⋮----
+{/* Unmatched Sessions */}
+⋮----
+{/* Performance Delta Metrics */}
+⋮----
+{/* Statistical Significance Card */}
+⋮----
+{/* Key Stats */}
+⋮----
+{/* Confidence Interval */}
+⋮----
+{/* Correlation Card */}
 ```
 
 ## File: components/reconciliation-charts/SlippageDistributionChart.tsx
@@ -1119,6 +1204,54 @@ interface PagePlaceholderProps {
   actionLabel?: string
   onActionClick?: () => void
 }
+```
+
+## File: components/performance-export-dialog.tsx
+```typescript
+import { FileJson, FileSpreadsheet } from "lucide-react";
+import { useState } from "react";
+⋮----
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { PerformanceData } from "@/lib/stores/performance-store";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+} from "@/lib/utils/export-helpers";
+import {
+  CHART_EXPORTS,
+  exportMultipleCharts,
+  getChartExportsByTab,
+  getMultipleChartsJson,
+} from "@/lib/utils/performance-export";
+⋮----
+interface PerformanceExportDialogProps {
+  data: PerformanceData;
+  blockName: string;
+}
+⋮----
+const toggleChart = (chartId: string) =>
+⋮----
+const selectAll = () =>
+⋮----
+const clearAll = () =>
+⋮----
+const handleExportSelectedCsv = () =>
+⋮----
+const handleExportSelectedJson = () =>
+⋮----
+checked=
 ```
 
 ## File: components/strategy-breakdown-table.tsx
@@ -3826,6 +3959,146 @@ export function assertRequiredHeaders(
 ): void
 ```
 
+## File: lib/utils/export-helpers.ts
+```typescript
+/**
+ * Utility functions for exporting data as CSV and JSON
+ */
+⋮----
+/**
+ * Escapes a value for safe CSV inclusion.
+ * - Wraps in quotes if value contains comma, quote, or newline
+ * - Doubles any existing quotes
+ */
+export function escapeCsvValue(value: unknown): string
+⋮----
+// If the value contains comma, quote, or newline, wrap in quotes and escape internal quotes
+⋮----
+/**
+ * Joins an array of values into a CSV row, properly escaping each value
+ */
+export function toCsvRow(values: unknown[]): string
+⋮----
+/**
+ * Creates and triggers a file download
+ */
+export function downloadFile(
+  content: string,
+  filename: string,
+  mimeType: string
+): void
+⋮----
+/**
+ * Downloads data as a JSON file
+ */
+export function downloadJson(data: unknown, filename: string): void
+⋮----
+/**
+ * Downloads lines as a CSV file
+ */
+export function downloadCsv(lines: string[], filename: string): void
+⋮----
+/**
+ * Sanitizes a block name for use in filenames
+ * Replaces spaces and special characters with hyphens
+ */
+export function sanitizeFilename(name: string): string
+⋮----
+/**
+ * Generates a filename with the current date
+ */
+export function generateExportFilename(
+  blockName: string,
+  suffix: string,
+  extension: "json" | "csv"
+): string
+```
+
+## File: lib/utils/performance-export.ts
+```typescript
+/**
+ * Performance chart export utilities
+ * Each export function generates CSV content for a specific chart's raw data
+ */
+⋮----
+import { PerformanceData } from "@/lib/stores/performance-store";
+import { toCsvRow } from "./export-helpers";
+⋮----
+export interface ChartExportConfig {
+  id: string;
+  name: string;
+  description: string;
+  tab: "Overview" | "Returns Analysis" | "Risk & Margin" | "Trade Efficiency" | "Excursion Analysis";
+  exportFn: (data: PerformanceData) => string[];
+}
+⋮----
+/**
+ * All available chart exports organized by tab
+ */
+⋮----
+// Overview Tab
+⋮----
+// Win streaks
+⋮----
+// Loss streaks
+⋮----
+// Statistics
+⋮----
+// Returns Analysis Tab
+⋮----
+// Monthly returns percent
+⋮----
+// Add summary statistics
+⋮----
+// Risk & Margin Tab
+⋮----
+// Trade Efficiency Tab
+⋮----
+// Excursion Analysis Tab
+⋮----
+// Add distribution summary
+⋮----
+/**
+ * Get chart exports grouped by tab
+ */
+export function getChartExportsByTab(): Record<string, ChartExportConfig[]>
+⋮----
+/**
+ * Export multiple charts as a combined CSV
+ */
+export function exportMultipleCharts(
+  data: PerformanceData,
+  chartIds: string[]
+): string[]
+⋮----
+lines.push(""); // Separator between charts
+lines.push(""); // Extra line for readability
+⋮----
+/**
+ * Export a single chart by ID as CSV
+ */
+export function exportSingleChart(
+  data: PerformanceData,
+  chartId: string
+): string[] | null
+⋮----
+/**
+ * Get raw JSON data for a single chart
+ */
+export function getChartJsonData(
+  data: PerformanceData,
+  chartId: string
+): Record<string, unknown> | null
+⋮----
+/**
+ * Get JSON data for multiple charts
+ */
+export function getMultipleChartsJson(
+  data: PerformanceData,
+  chartIds: string[]
+): Record<string, unknown>
+```
+
 ## File: lib/utils/time-conversions.ts
 ```typescript
 /**
@@ -3930,30 +4203,6 @@ import { ChartWrapper } from './chart-wrapper'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
 ⋮----
 interface ExitReasonChartProps {
-  className?: string
-}
-```
-
-## File: components/performance-charts/holding-duration-chart.tsx
-```typescript
-import { useMemo } from 'react'
-import type { Layout, PlotData } from 'plotly.js'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-⋮----
-interface HoldingDurationChartProps {
-  className?: string
-}
-```
-
-## File: components/performance-charts/margin-utilization-chart.tsx
-```typescript
-import { useMemo } from 'react'
-import type { Layout, PlotData } from 'plotly.js'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-⋮----
-interface MarginUtilizationChartProps {
   className?: string
 }
 ```
@@ -4100,6 +4349,45 @@ type ViewMode = 'dollars' | 'percent'
 if (value) setViewMode(value as ViewMode)
 ```
 
+## File: components/performance-charts/vix-regime-chart.tsx
+```typescript
+import { useMemo } from 'react'
+import type { Layout, PlotData } from 'plotly.js'
+import { ChartWrapper } from './chart-wrapper'
+import { usePerformanceStore } from '@/lib/stores/performance-store'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+⋮----
+interface VixRegimeChartProps {
+  className?: string
+}
+⋮----
+/**
+ * Volatility regimes derived from long-run VIX observations.
+ * - Low volatility: VIX ≤ 18 (below long-term average of ~19)
+ * - Medium volatility: 18 < VIX ≤ 25 (historically elevated)
+ * - High volatility: VIX > 25 (stress conditions)
+ */
+⋮----
+const bubbleSize = (pl: number) =>
+⋮----
+const buildTrace = (entries: typeof openingEntries, isOpening: boolean): Partial<PlotData> => (
+⋮----
+const buildSummary = (entries: typeof openingEntries, axisSuffix: '' | '2') =>
+⋮----
+const regimeShapes = (forOpening: boolean): Layout['shapes'] =>
+⋮----
+// Create title annotations for each subplot
+⋮----
+// Add a horizontal divider line between the two charts
+```
+
 ## File: components/position-sizing/margin-chart.tsx
 ```typescript
 /**
@@ -4191,64 +4479,6 @@ interface StrategyResultsProps {
 {/* Average win/loss */}
 ⋮----
 {/* Allocation guidance */}
-```
-
-## File: components/reconciliation-charts/ReconciliationMetrics.tsx
-```typescript
-import { MetricCard } from "@/components/metric-card"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { calculateDualEquityCurves, calculateSeparateEquityCurves, MatchedPair } from "@/lib/calculations/reconciliation-stats"
-import { AlignedTradeSet, AlignmentMetrics } from "@/lib/services/trade-reconciliation"
-import { cn } from "@/lib/utils"
-import { DualEquityCurveChart } from "./DualEquityCurveChart"
-import { SlippageDistributionChart, computeSlippageDistribution } from "./SlippageDistributionChart"
-⋮----
-interface ReconciliationMetricsProps {
-  metrics: AlignmentMetrics
-  alignment: AlignedTradeSet // Need full alignment to calculate session-based match rate
-  normalizeTo1Lot?: boolean
-  className?: string
-}
-⋮----
-alignment: AlignedTradeSet // Need full alignment to calculate session-based match rate
-⋮----
-// Calculate session-based match rate (more accurate than trade-based)
-⋮----
-// Calculate derived metrics
-⋮----
-const formatCurrency = (value: number) => new Intl.NumberFormat("en-US",
-⋮----
-// Compute matched pairs for equity curve
-⋮----
-// Sort pairs by date for equity curve
-⋮----
-// Calculate separate equity curves for all trades (matched + unmatched)
-⋮----
-{/* Match Quality & Trade Counts - Compact Grid */}
-⋮----
-{/* Match Rate - Larger span */}
-⋮----
-{/* Title */}
-⋮----
-{/* Value */}
-⋮----
-{/* Subtitle */}
-⋮----
-{/* Backtested Trades */}
-⋮----
-{/* Reported Trades */}
-⋮----
-{/* Unmatched Sessions */}
-⋮----
-{/* Performance Delta Metrics */}
-⋮----
-{/* Statistical Significance Card */}
-⋮----
-{/* Key Stats */}
-⋮----
-{/* Confidence Interval */}
-⋮----
-{/* Correlation Card */}
 ```
 
 ## File: components/risk-simulator/statistics-cards.tsx
@@ -5638,7 +5868,13 @@ import { StrategyAlignment } from "@/lib/models/strategy-alignment";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { useComparisonStore } from "@/lib/stores/comparison-store";
 import { cn } from "@/lib/utils";
-import { Check, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
+import { Check, Download, Loader2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 ⋮----
 interface SelectableStrategy {
@@ -5664,6 +5900,17 @@ const handleOpenMatchDialog = (alignmentId: string) =>
 ⋮----
 // Only count as matched if isPaired is true (actual pair from matchResult.pairs)
 // Items with both trades but isPaired=false are just unmatched trades displayed together
+⋮----
+// Export functions
+const exportAsJson = () =>
+⋮----
+const exportAsCsv = () =>
+⋮----
+// Metadata
+⋮----
+// Summary
+⋮----
+// Per-alignment metrics
 ⋮----
 const handleSaveMatchOverrides = async (
     alignmentId: string,
@@ -5749,45 +5996,6 @@ tickformat: '%b %d', // e.g. "Jan 01"
 showlegend: false, // Legend is redundant with color coding and tooltip
 ⋮----
 function EmptyState(
-```
-
-## File: components/performance-charts/vix-regime-chart.tsx
-```typescript
-import { useMemo } from 'react'
-import type { Layout, PlotData } from 'plotly.js'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-⋮----
-interface VixRegimeChartProps {
-  className?: string
-}
-⋮----
-/**
- * Volatility regimes derived from long-run VIX observations.
- * - Low volatility: VIX ≤ 18 (below long-term average of ~19)
- * - Medium volatility: 18 < VIX ≤ 25 (historically elevated)
- * - High volatility: VIX > 25 (stress conditions)
- */
-⋮----
-const bubbleSize = (pl: number) =>
-⋮----
-const buildTrace = (entries: typeof openingEntries, isOpening: boolean): Partial<PlotData> => (
-⋮----
-const buildSummary = (entries: typeof openingEntries, axisSuffix: '' | '2') =>
-⋮----
-const regimeShapes = (forOpening: boolean): Layout['shapes'] =>
-⋮----
-// Create title annotations for each subplot
-⋮----
-// Add a horizontal divider line between the two charts
 ```
 
 ## File: components/match-review-dialog.tsx
@@ -6959,6 +7167,7 @@ import {
   WalkForwardParameterRanges,
   WalkForwardProgressEvent,
 } from '@/lib/models/walk-forward'
+import { toCsvRow } from '@/lib/utils/export-helpers'
 ⋮----
 type WalkForwardPresetKey = 'conservative' | 'moderate' | 'aggressive'
 ⋮----
@@ -6991,8 +7200,6 @@ interface WalkForwardStore {
 }
 ⋮----
 function generateId(): string
-⋮----
-function toCsvRow(values: Array<string | number>): string
 ⋮----
 function buildCsvFromAnalysis(analysis: WalkForwardAnalysis | null): string | null
 ⋮----
@@ -8015,13 +8222,21 @@ import { Trade } from "@/lib/models/trade";
 import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
 import { useBlockStore } from "@/lib/stores/block-store";
 import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
+import {
   AlertTriangle,
   BarChart3,
   Calendar,
+  Download,
   Gauge,
   Target,
   TrendingUp,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 ⋮----
 // Strategy options will be dynamically generated from trades
@@ -8072,6 +8287,19 @@ const getAvgHoldingPeriodHours = () =>
 const getAvgContracts = () =>
 ⋮----
 const getStrategyOptions = () =>
+⋮----
+// Export functions
+const buildExportData = () =>
+⋮----
+const exportAsJson = () =>
+⋮----
+const exportAsCsv = () =>
+⋮----
+// Metadata section
+⋮----
+// Portfolio Stats section
+⋮----
+// Strategy Breakdown section
 ⋮----
 // Show loading state
 ⋮----
@@ -8148,7 +8376,13 @@ import {
 import { DailyLogEntry } from "@/lib/models/daily-log";
 import { Trade } from "@/lib/models/trade";
 import { useBlockStore } from "@/lib/stores/block-store";
-import { AlertCircle, HelpCircle, Play } from "lucide-react";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
+import { AlertCircle, Download, HelpCircle, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 ⋮----
 interface RunConfig {
@@ -8217,6 +8451,17 @@ const handlePortfolioKellyInputChange = (value: string) =>
 // Update numeric state eagerly so pending-change detection stays responsive
 ⋮----
 const commitPortfolioKellyInput = () =>
+⋮----
+// Export functions
+const exportAsJson = () =>
+⋮----
+const exportAsCsv = () =>
+⋮----
+// Metadata
+⋮----
+// Portfolio Summary
+⋮----
+// Strategy Analysis
 ⋮----
 // Empty state
 ⋮----
@@ -8926,6 +9171,12 @@ import { getBlock, getTradesByBlockWithOptions } from "@/lib/db";
 import { Trade } from "@/lib/models/trade";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { truncateStrategyName } from "@/lib/utils";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
 import { Download, HelpCircle, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { Data, Layout } from "plotly.js";
@@ -8981,8 +9232,6 @@ onValueChange=
 {/* Heatmap */}
 ⋮----
 {/* Quick Analysis */}
-⋮----
-const addRow = (values: (string | number)[]) =>
 ```
 
 ## File: app/(platform)/walk-forward/page.tsx
@@ -9033,6 +9282,11 @@ import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
 import { cn } from "@/lib/utils";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+} from "@/lib/utils/export-helpers";
 ⋮----
 function formatDate(date: Date): string
 ⋮----
@@ -9179,8 +9433,14 @@ import {
   timeToTrades,
   type TimeUnit,
 } from "@/lib/utils/time-conversions";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
 import { estimateTradesPerYear } from "@/lib/utils/trade-frequency";
-import { HelpCircle, Loader2, Play, RotateCcw } from "lucide-react";
+import { Download, HelpCircle, Loader2, Play, RotateCcw } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import type { Data } from "plotly.js";
@@ -9252,6 +9512,17 @@ historicalInitialCapital, // Only set when simulating a subset of strategies
 strategy: undefined, // We pre-filter trades instead
 ⋮----
 const resetSimulation = () =>
+⋮----
+// Export functions
+const exportAsJson = () =>
+⋮----
+const exportAsCsv = () =>
+⋮----
+// Metadata section
+⋮----
+// Statistics section
+⋮----
+// Percentile trajectories (cumulative returns as decimals, e.g., 0.50 = 50% return)
 ⋮----
 {/* Trading Frequency Card */}
 ⋮----
@@ -9327,6 +9598,103 @@ const toPortfolioValue = (arr: number[])
 // Median line
 ⋮----
 // Initial capital line
+```
+
+## File: app/(platform)/performance-blocks/page.tsx
+```typescript
+import { useBlockStore } from "@/lib/stores/block-store";
+import { usePerformanceStore } from "@/lib/stores/performance-store";
+import { format } from "date-fns";
+import {
+  AlertTriangle,
+  BarChart3,
+  CalendarIcon,
+  Gauge,
+  Loader2,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { DateRange } from "react-day-picker";
+⋮----
+// Chart Components
+import { DayOfWeekChart } from "@/components/performance-charts/day-of-week-chart";
+import { DrawdownChart } from "@/components/performance-charts/drawdown-chart";
+import { EquityCurveChart } from "@/components/performance-charts/equity-curve-chart";
+import { ExitReasonChart } from "@/components/performance-charts/exit-reason-chart";
+import { HoldingDurationChart } from "@/components/performance-charts/holding-duration-chart";
+import { MarginUtilizationChart } from "@/components/performance-charts/margin-utilization-chart";
+import { MFEMAEScatterChart } from "@/components/performance-charts/mfe-mae-scatter-chart";
+import { MonthlyReturnsChart } from "@/components/performance-charts/monthly-returns-chart";
+import { GroupedLegOutcomesChart } from "@/components/performance-charts/paired-leg-outcomes-chart";
+import { PremiumEfficiencyChart } from "@/components/performance-charts/premium-efficiency-chart";
+import { ReturnDistributionChart } from "@/components/performance-charts/return-distribution-chart";
+import { RiskEvolutionChart } from "@/components/performance-charts/risk-evolution-chart";
+import { RollingMetricsChart } from "@/components/performance-charts/rolling-metrics-chart";
+import { ROMTimelineChart } from "@/components/performance-charts/rom-timeline-chart";
+import { TradeSequenceChart } from "@/components/performance-charts/trade-sequence-chart";
+import { VixRegimeChart } from "@/components/performance-charts/vix-regime-chart";
+import { WinLossStreaksChart } from "@/components/performance-charts/win-loss-streaks-chart";
+⋮----
+// UI Components
+import { MultiSelect } from "@/components/multi-select";
+import { NoActiveBlock } from "@/components/no-active-block";
+import { PerformanceExportDialog } from "@/components/performance-export-dialog";
+import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { SizingModeToggle } from "@/components/sizing-mode-toggle";
+⋮----
+// Block store
+⋮----
+// Performance store
+⋮----
+// Local state for date range picker
+⋮----
+// Handle date range changes
+const handleDateRangeChange = (newDateRange: DateRange | undefined) =>
+⋮----
+// Initialize blocks if needed
+⋮----
+// Fetch performance data when active block changes
+⋮----
+// Helper functions
+const getStrategyOptions = () =>
+⋮----
+// Show loading state
+⋮----
+// Show message if no active block
+⋮----
+// Show loading state for performance data
+⋮----
+// Show error state
+⋮----
+// Show empty state if no data
+⋮----
+{/* Controls */}
+⋮----
+
+⋮----
+{/* Tabbed Interface */}
+⋮----
+{/* Tab 1: Overview */}
+⋮----
+{/* Tab 2: Returns Analysis */}
+⋮----
+{/* Tab 3: Risk & Margin */}
+⋮----
+{/* Tab 4: Trade Efficiency */}
+⋮----
+{/* Additional efficiency metrics can go here */}
+⋮----
+{/* Tab 5: Excursion Analysis */}
 ```
 
 ## File: lib/services/performance-snapshot.ts
@@ -9516,102 +9884,6 @@ function calculateMarginUtilization(trades: Trade[])
 function calculateExitReasonBreakdown(trades: Trade[])
 ⋮----
 function calculateHoldingPeriods(trades: Trade[])
-```
-
-## File: app/(platform)/performance-blocks/page.tsx
-```typescript
-import { useBlockStore } from "@/lib/stores/block-store";
-import { usePerformanceStore } from "@/lib/stores/performance-store";
-import { format } from "date-fns";
-import {
-  AlertTriangle,
-  BarChart3,
-  CalendarIcon,
-  Gauge,
-  Loader2,
-  TrendingUp,
-  Zap,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import { DateRange } from "react-day-picker";
-⋮----
-// Chart Components
-import { DayOfWeekChart } from "@/components/performance-charts/day-of-week-chart";
-import { DrawdownChart } from "@/components/performance-charts/drawdown-chart";
-import { EquityCurveChart } from "@/components/performance-charts/equity-curve-chart";
-import { ExitReasonChart } from "@/components/performance-charts/exit-reason-chart";
-import { HoldingDurationChart } from "@/components/performance-charts/holding-duration-chart";
-import { MarginUtilizationChart } from "@/components/performance-charts/margin-utilization-chart";
-import { MFEMAEScatterChart } from "@/components/performance-charts/mfe-mae-scatter-chart";
-import { MonthlyReturnsChart } from "@/components/performance-charts/monthly-returns-chart";
-import { GroupedLegOutcomesChart } from "@/components/performance-charts/paired-leg-outcomes-chart";
-import { PremiumEfficiencyChart } from "@/components/performance-charts/premium-efficiency-chart";
-import { ReturnDistributionChart } from "@/components/performance-charts/return-distribution-chart";
-import { RiskEvolutionChart } from "@/components/performance-charts/risk-evolution-chart";
-import { RollingMetricsChart } from "@/components/performance-charts/rolling-metrics-chart";
-import { ROMTimelineChart } from "@/components/performance-charts/rom-timeline-chart";
-import { TradeSequenceChart } from "@/components/performance-charts/trade-sequence-chart";
-import { VixRegimeChart } from "@/components/performance-charts/vix-regime-chart";
-import { WinLossStreaksChart } from "@/components/performance-charts/win-loss-streaks-chart";
-⋮----
-// UI Components
-import { MultiSelect } from "@/components/multi-select";
-import { NoActiveBlock } from "@/components/no-active-block";
-import { Button } from "@/components/ui/button";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
-import { SizingModeToggle } from "@/components/sizing-mode-toggle";
-⋮----
-// Block store
-⋮----
-// Performance store
-⋮----
-// Local state for date range picker
-⋮----
-// Handle date range changes
-const handleDateRangeChange = (newDateRange: DateRange | undefined) =>
-⋮----
-// Initialize blocks if needed
-⋮----
-// Fetch performance data when active block changes
-⋮----
-// Helper functions
-const getStrategyOptions = () =>
-⋮----
-// Show loading state
-⋮----
-// Show message if no active block
-⋮----
-// Show loading state for performance data
-⋮----
-// Show error state
-⋮----
-// Show empty state if no data
-⋮----
-{/* Controls */}
-⋮----
-
-⋮----
-{/* Tabbed Interface */}
-⋮----
-{/* Tab 1: Overview */}
-⋮----
-{/* Tab 2: Returns Analysis */}
-⋮----
-{/* Tab 3: Risk & Margin */}
-⋮----
-{/* Tab 4: Trade Efficiency */}
-⋮----
-{/* Additional efficiency metrics can go here */}
-⋮----
-{/* Tab 5: Excursion Analysis */}
 ```
 
 ## File: components/performance-charts/mfe-mae-scatter-chart.tsx
