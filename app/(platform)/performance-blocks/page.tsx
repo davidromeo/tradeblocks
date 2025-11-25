@@ -37,6 +37,7 @@ import { WinLossStreaksChart } from "@/components/performance-charts/win-loss-st
 // UI Components
 import { MultiSelect } from "@/components/multi-select";
 import { NoActiveBlock } from "@/components/no-active-block";
+import { PerformanceExportDialog } from "@/components/performance-export-dialog";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Label } from "@/components/ui/label";
@@ -257,6 +258,9 @@ export default function PerformanceBlocksPage() {
           onCheckedChange={setNormalizeTo1Lot}
           title="Normalize to 1-lot"
         />
+        <div className="ml-auto">
+          <PerformanceExportDialog data={data} blockName={activeBlock.name} />
+        </div>
       </div>
 
       {/* Tabbed Interface */}

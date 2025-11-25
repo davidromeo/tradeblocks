@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertTriangle, Github, ShieldQuestion } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -30,7 +29,7 @@ const disclaimerSections = [
   {
     title: "Software & Technical Limitations",
     body: "Like all software, TradeBlocks may contain errors, bugs, or unexpected behaviors. Our algorithms make assumptions that may not align with your specific trading circumstances. Historical performance analysis cannot predict future market outcomes.",
-    accent: "text-secondary-foreground",
+    accent: "text-secondary",
   },
   {
     title: "Financial Risk Acknowledgment",
@@ -78,20 +77,18 @@ export function SidebarFooterLegal() {
         {/* Attribution links in dialog for mobile */}
         {isMobile && (
           <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border/40 pt-4 text-[0.7rem] text-muted-foreground">
-            <Link
-              href="https://ninjata.co/"
+            <a
+              href="https://www.buymeacoffee.com/davidromeo"
               target="_blank"
-              className="inline-flex items-center gap-1 font-medium text-primary transition hover:text-primary/80"
+              rel="noopener noreferrer"
             >
-              Inspired by NinjaTaco
-              <Image
-                src="/ninjataco-tribute.png"
-                alt="NinjaTaco"
-                width={16}
-                height={16}
-                className="opacity-80"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+                alt="Buy Me A Coffee"
+                className="h-8 w-auto"
               />
-            </Link>
+            </a>
             <span className="text-muted-foreground/50">•</span>
             <Link
               href="https://github.com/davidromeo/tradeblocks"
@@ -132,7 +129,10 @@ export function SidebarFooterLegal() {
   return (
     <div className="space-y-2.5 border-t border-sidebar-border/80 px-3 pb-4 pt-3 text-[0.72rem] leading-relaxed text-muted-foreground">
       <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2">
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
+        <AlertTriangle
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500"
+          aria-hidden
+        />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="text-[0.7rem] leading-tight text-foreground">
             Educational use only • Not financial advice
@@ -151,28 +151,26 @@ export function SidebarFooterLegal() {
           </Dialog>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-[0.68rem] text-muted-foreground">
-        <Link
-          href="https://ninjata.co/"
+      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+        <a
+          href="https://www.buymeacoffee.com/davidromeo"
           target="_blank"
-          className="inline-flex items-center gap-1 font-medium text-primary transition hover:text-primary/80"
+          rel="noopener noreferrer"
         >
-          NinjaTaco
-          <Image
-            src="/ninjataco-tribute.png"
-            alt="NinjaTaco"
-            width={14}
-            height={14}
-            className="opacity-80"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+            alt="Buy Me A Coffee"
+            className="h-8 w-auto"
           />
-        </Link>
+        </a>
         <span className="text-muted-foreground/50">•</span>
         <Link
           href="https://github.com/davidromeo/tradeblocks"
           target="_blank"
-          className="inline-flex items-center gap-1 transition hover:text-foreground"
+          className="inline-flex items-center gap-1.5 transition hover:text-foreground"
         >
-          <Github className="h-3 w-3" aria-hidden />
+          <Github className="h-4 w-4" aria-hidden />
           <span className="font-medium">GitHub</span>
         </Link>
       </div>

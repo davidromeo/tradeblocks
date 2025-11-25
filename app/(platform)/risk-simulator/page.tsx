@@ -52,8 +52,14 @@ import {
   timeToTrades,
   type TimeUnit,
 } from "@/lib/utils/time-conversions";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
 import { estimateTradesPerYear } from "@/lib/utils/trade-frequency";
-import { HelpCircle, Loader2, Play, RotateCcw } from "lucide-react";
+import { Download, HelpCircle, Loader2, Play, RotateCcw } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import type { Data } from "plotly.js";
@@ -62,7 +68,8 @@ import { useEffect, useMemo, useState } from "react";
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 export default function RiskSimulatorPage() {
-  const { activeBlockId } = useBlockStore();
+  const { activeBlockId, blocks } = useBlockStore();
+  const activeBlock = blocks.find((b) => b.id === activeBlockId);
 
   // Simulation parameters
   const [numSimulations, setNumSimulations] = useState(1000);
@@ -360,6 +367,226 @@ export default function RiskSimulatorPage() {
   const resetSimulation = () => {
     setResult(null);
     setError(null);
+  };
+
+  // Export functions
+  const exportAsJson = () => {
+    if (!result || !activeBlock) return;
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      block: {
+        id: activeBlock.id,
+        name: activeBlock.name,
+      },
+      parameters: {
+        numSimulations: result.parameters.numSimulations,
+        simulationLength: result.parameters.simulationLength,
+        resampleWindow: result.parameters.resampleWindow,
+        resampleMethod: result.parameters.resampleMethod,
+        initialCapital: result.parameters.initialCapital,
+        tradesPerYear: result.parameters.tradesPerYear,
+        randomSeed: result.parameters.randomSeed,
+        normalizeTo1Lot: result.parameters.normalizeTo1Lot,
+        worstCaseEnabled: result.parameters.worstCaseEnabled,
+        worstCasePercentage: result.parameters.worstCasePercentage,
+        worstCaseMode: result.parameters.worstCaseMode,
+        worstCaseBasedOn: result.parameters.worstCaseBasedOn,
+        worstCaseSizing: result.parameters.worstCaseSizing,
+      },
+      percentiles: {
+        steps: result.percentiles.steps,
+        p5: result.percentiles.p5,
+        p25: result.percentiles.p25,
+        p50: result.percentiles.p50,
+        p75: result.percentiles.p75,
+        p95: result.percentiles.p95,
+      },
+      statistics: {
+        meanFinalValue: result.statistics.meanFinalValue,
+        medianFinalValue: result.statistics.medianFinalValue,
+        stdFinalValue: result.statistics.stdFinalValue,
+        meanTotalReturn: result.statistics.meanTotalReturn,
+        medianTotalReturn: result.statistics.medianTotalReturn,
+        meanAnnualizedReturn: result.statistics.meanAnnualizedReturn,
+        medianAnnualizedReturn: result.statistics.medianAnnualizedReturn,
+        meanMaxDrawdown: result.statistics.meanMaxDrawdown,
+        medianMaxDrawdown: result.statistics.medianMaxDrawdown,
+        meanSharpeRatio: result.statistics.meanSharpeRatio,
+        probabilityOfProfit: result.statistics.probabilityOfProfit,
+        valueAtRisk: result.statistics.valueAtRisk,
+      },
+      actualResamplePoolSize: result.actualResamplePoolSize,
+      selectedStrategies:
+        selectedStrategies.length > 0 ? selectedStrategies : "all",
+    };
+
+    downloadJson(
+      exportData,
+      generateExportFilename(activeBlock.name, "monte-carlo", "json")
+    );
+  };
+
+  const exportAsCsv = () => {
+    if (!result || !activeBlock) return;
+
+    const lines: string[] = [];
+
+    // Metadata section
+    lines.push("# Monte Carlo Simulation Export");
+    lines.push(toCsvRow(["Block", activeBlock.name]));
+    lines.push(toCsvRow(["Exported At", new Date().toISOString()]));
+    lines.push(
+      toCsvRow(["Number of Simulations", result.parameters.numSimulations])
+    );
+    lines.push(
+      toCsvRow([
+        "Simulation Length (trades)",
+        result.parameters.simulationLength,
+      ])
+    );
+    lines.push(toCsvRow(["Resample Method", result.parameters.resampleMethod]));
+    lines.push(
+      toCsvRow(["Initial Capital", `$${result.parameters.initialCapital}`])
+    );
+    lines.push(toCsvRow(["Trades Per Year", result.parameters.tradesPerYear]));
+    lines.push(
+      toCsvRow(["Random Seed", result.parameters.randomSeed ?? "none"])
+    );
+    lines.push(
+      toCsvRow(["Normalize to 1-Lot", result.parameters.normalizeTo1Lot])
+    );
+    lines.push(
+      toCsvRow(["Worst-Case Enabled", result.parameters.worstCaseEnabled])
+    );
+    if (result.parameters.worstCaseEnabled) {
+      lines.push(
+        toCsvRow([
+          "Worst-Case Percentage",
+          `${result.parameters.worstCasePercentage}%`,
+        ])
+      );
+      lines.push(
+        toCsvRow(["Worst-Case Mode", result.parameters.worstCaseMode])
+      );
+    }
+    lines.push(
+      toCsvRow([
+        "Selected Strategies",
+        selectedStrategies.length > 0 ? selectedStrategies.join("; ") : "All",
+      ])
+    );
+    lines.push("");
+
+    // Statistics section
+    lines.push("# Summary Statistics");
+    lines.push("Metric,Value");
+    lines.push(
+      toCsvRow([
+        "Mean Final Value",
+        `$${result.statistics.meanFinalValue.toFixed(2)}`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Median Final Value",
+        `$${result.statistics.medianFinalValue.toFixed(2)}`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Std Dev Final Value",
+        `$${result.statistics.stdFinalValue.toFixed(2)}`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Mean Total Return",
+        `${result.statistics.meanTotalReturn.toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Median Total Return",
+        `${result.statistics.medianTotalReturn.toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Mean Annualized Return",
+        `${result.statistics.meanAnnualizedReturn.toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Median Annualized Return",
+        `${result.statistics.medianAnnualizedReturn.toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Mean Max Drawdown",
+        `${result.statistics.meanMaxDrawdown.toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Median Max Drawdown",
+        `${result.statistics.medianMaxDrawdown.toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Mean Sharpe Ratio",
+        result.statistics.meanSharpeRatio.toFixed(2),
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "Probability of Profit",
+        `${(result.statistics.probabilityOfProfit * 100).toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "VaR (5th percentile)",
+        `${(result.statistics.valueAtRisk.p5 * 100).toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "VaR (10th percentile)",
+        `${(result.statistics.valueAtRisk.p10 * 100).toFixed(2)}%`,
+      ])
+    );
+    lines.push(
+      toCsvRow([
+        "VaR (25th percentile)",
+        `${(result.statistics.valueAtRisk.p25 * 100).toFixed(2)}%`,
+      ])
+    );
+    lines.push("");
+
+    // Percentile trajectories (cumulative returns as decimals, e.g., 0.50 = 50% return)
+    lines.push("# Percentile Trajectories (Cumulative Returns)");
+    lines.push("Trade #,P5 Return,P25 Return,P50 Return (Median),P75 Return,P95 Return");
+    for (let i = 0; i < result.percentiles.steps.length; i++) {
+      lines.push(
+        toCsvRow([
+          result.percentiles.steps[i],
+          result.percentiles.p5[i].toFixed(2),
+          result.percentiles.p25[i].toFixed(2),
+          result.percentiles.p50[i].toFixed(2),
+          result.percentiles.p75[i].toFixed(2),
+          result.percentiles.p95[i].toFixed(2),
+        ])
+      );
+    }
+
+    downloadCsv(
+      lines,
+      generateExportFilename(activeBlock.name, "monte-carlo", "csv")
+    );
   };
 
   if (!activeBlockId) {
@@ -1401,6 +1628,26 @@ export default function RiskSimulatorPage() {
               <RotateCcw className="h-4 w-4" />
               Reset
             </Button>
+            <div className="ml-auto flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportAsCsv}
+                disabled={!result}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportAsJson}
+                disabled={!result}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                JSON
+              </Button>
+            </div>
           </div>
 
           {error && (

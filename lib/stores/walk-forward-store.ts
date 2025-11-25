@@ -7,6 +7,7 @@ import {
   WalkForwardParameterRanges,
   WalkForwardProgressEvent,
 } from '@/lib/models/walk-forward'
+import { toCsvRow } from '@/lib/utils/export-helpers'
 
 type WalkForwardPresetKey = 'conservative' | 'moderate' | 'aggressive'
 
@@ -113,21 +114,6 @@ function generateId(): string {
   return `walk-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function toCsvRow(values: Array<string | number>): string {
-  return values
-    .map((value) => {
-      if (typeof value === 'number') {
-        if (Number.isFinite(value)) {
-          return value.toString()
-        }
-        return ''
-      }
-      if (value === null || value === undefined) return ''
-      const stringValue = value.toString()
-      return stringValue.includes(',') ? `"${stringValue}"` : stringValue
-    })
-    .join(',')
-}
 
 function buildCsvFromAnalysis(analysis: WalkForwardAnalysis | null): string | null {
   if (!analysis) return null
