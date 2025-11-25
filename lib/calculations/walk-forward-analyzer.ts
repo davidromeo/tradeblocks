@@ -397,15 +397,18 @@ export class WalkForwardAnalyzer {
 
       runningEquity += scaledPl
 
+      // Only include fields used by PortfolioStatsCalculator to reduce object copy overhead
       return {
-        ...trade,
         pl: scaledPl,
-        numContracts: (trade.numContracts || 0) * scale,
-        marginReq: (trade.marginReq || 0) * Math.abs(scale),
+        dateOpened: trade.dateOpened,
+        timeOpened: trade.timeOpened,
+        dateClosed: trade.dateClosed,
+        timeClosed: trade.timeClosed,
         fundsAtClose: runningEquity,
         openingCommissionsFees: trade.openingCommissionsFees * Math.abs(scale),
         closingCommissionsFees: trade.closingCommissionsFees * Math.abs(scale),
-      }
+        strategy: trade.strategy,
+      } as Trade
     })
   }
 
