@@ -32,8 +32,7 @@ import {
   SnapshotChartData,
 } from "@/lib/services/performance-snapshot";
 import { useBlockStore } from "@/lib/stores/block-store";
-import { PerformanceData } from "@/lib/stores/performance-store";
-import { downloadJson } from "@/lib/utils/export-helpers";
+import { downloadJson, generateExportFilename } from "@/lib/utils/export-helpers";
 import {
   CHART_EXPORTS,
   getChartExportsByTab,
@@ -207,13 +206,13 @@ export default function AssistantPage() {
       // Export performance charts
       if (selectedCharts.size > 0 && chartData) {
         exportData.performanceCharts = getMultipleChartsJson(
-          chartData as PerformanceData,
+          chartData,
           Array.from(selectedCharts)
         );
       }
 
       // Download the combined export
-      const filename = `${activeBlock.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-gpt-export.json`;
+      const filename = generateExportFilename(activeBlock.name, "gpt-export", "json");
       downloadJson(exportData, filename);
     } catch (error) {
       console.error("Export failed:", error);

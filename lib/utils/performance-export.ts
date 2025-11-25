@@ -3,7 +3,7 @@
  * Each export function generates CSV content for a specific chart's raw data
  */
 
-import { PerformanceData } from "@/lib/stores/performance-store";
+import { SnapshotChartData } from "@/lib/services/performance-snapshot";
 import { toCsvRow } from "./export-helpers";
 
 export interface ChartExportConfig {
@@ -11,7 +11,7 @@ export interface ChartExportConfig {
   name: string;
   description: string;
   tab: "Overview" | "Returns Analysis" | "Risk & Margin" | "Trade Efficiency" | "Excursion Analysis";
-  exportFn: (data: PerformanceData) => string[];
+  exportFn: (data: SnapshotChartData) => string[];
 }
 
 /**
@@ -434,7 +434,7 @@ export function getChartExportsByTab(): Record<string, ChartExportConfig[]> {
  * Export multiple charts as a combined CSV
  */
 export function exportMultipleCharts(
-  data: PerformanceData,
+  data: SnapshotChartData,
   chartIds: string[]
 ): string[] {
   const lines: string[] = [];
@@ -456,7 +456,7 @@ export function exportMultipleCharts(
  * Export a single chart by ID as CSV
  */
 export function exportSingleChart(
-  data: PerformanceData,
+  data: SnapshotChartData,
   chartId: string
 ): string[] | null {
   const chart = CHART_EXPORTS.find((c) => c.id === chartId);
@@ -468,10 +468,10 @@ export function exportSingleChart(
  * Get raw JSON data for a single chart
  */
 export function getChartJsonData(
-  data: PerformanceData,
+  data: SnapshotChartData,
   chartId: string
 ): Record<string, unknown> | null {
-  const jsonExporters: Record<string, (data: PerformanceData) => Record<string, unknown>> = {
+  const jsonExporters: Record<string, (data: SnapshotChartData) => Record<string, unknown>> = {
     "equity-curve": (d) => ({
       chartName: "Equity Curve",
       data: d.equityCurve,
@@ -566,7 +566,7 @@ export function getChartJsonData(
  * Get JSON data for multiple charts
  */
 export function getMultipleChartsJson(
-  data: PerformanceData,
+  data: SnapshotChartData,
   chartIds: string[]
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {

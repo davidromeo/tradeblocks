@@ -48,7 +48,7 @@ import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
 import { cn } from "@/lib/utils";
 import {
   downloadCsv,
-  downloadJson,
+  downloadFile,
   generateExportFilename,
 } from "@/lib/utils/export-helpers";
 
@@ -320,7 +320,8 @@ export default function WalkForwardPage() {
     if (format === "csv") {
       downloadCsv(payload.split("\n"), filename);
     } else {
-      downloadJson(JSON.parse(payload), filename);
+      // payload is already a JSON string from exportResultsAsJson
+      downloadFile(payload, filename, "application/json");
     }
   };
 
