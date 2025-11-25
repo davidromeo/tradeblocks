@@ -6,11 +6,21 @@
 import { SnapshotChartData } from "@/lib/services/performance-snapshot";
 import { toCsvRow } from "./export-helpers";
 
+export const TAB_ORDER = [
+  "Overview",
+  "Returns Analysis",
+  "Risk & Margin",
+  "Trade Efficiency",
+  "Excursion Analysis",
+] as const;
+
+export type ChartTab = (typeof TAB_ORDER)[number];
+
 export interface ChartExportConfig {
   id: string;
   name: string;
   description: string;
-  tab: "Overview" | "Returns Analysis" | "Risk & Margin" | "Trade Efficiency" | "Excursion Analysis";
+  tab: ChartTab;
   exportFn: (data: SnapshotChartData) => string[];
 }
 
