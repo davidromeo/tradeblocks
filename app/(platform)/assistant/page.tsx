@@ -38,19 +38,11 @@ import {
   CHART_EXPORTS,
   getChartExportsByTab,
   getMultipleChartsJson,
+  TAB_ORDER,
 } from "@/lib/utils/performance-export";
 
 const GPT_URL =
   "https://chatgpt.com/g/g-6919e4fab91c8191a77967240ab4f3e8-tradeblocks-assistant";
-
-const TAB_ORDER = [
-  "Overview",
-  "Returns Analysis",
-  "Risk & Margin",
-  "Trade Efficiency",
-  "Excursion Analysis",
-] as const;
-
 export default function AssistantPage() {
   const [includeBlockStats, setIncludeBlockStats] = useState(true);
   const [selectedCharts, setSelectedCharts] = useState<Set<string>>(
