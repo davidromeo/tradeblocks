@@ -19,7 +19,7 @@ const DEFAULT_MIN_IN_SAMPLE_TRADES = 10
 const DEFAULT_MIN_OUT_SAMPLE_TRADES = 3
 const DEFAULT_FIXED_FRACTION_PCT = 2
 const MAX_PARAMETER_COMBINATIONS = 20000
-const YIELD_EVERY = 250
+const YIELD_EVERY = 50
 
 interface AnalyzeOptions {
   trades: Trade[]
@@ -44,8 +44,23 @@ interface CombinationIterator {
 }
 
 export class WalkForwardAnalyzer {
+  // Cache for trade timestamps to avoid repeated Date parsing
+  private tradeTimestampCache = new Map<Trade, number>()
+
+  private getTradeTimestamp(trade: Trade): number {
+    let ts = this.tradeTimestampCache.get(trade)
+    if (ts === undefined) {
+      ts = new Date(trade.dateOpened).getTime()
+      this.tradeTimestampCache.set(trade, ts)
+    }
+    return ts
+  }
+
   async analyze(options: AnalyzeOptions): Promise<WalkForwardComputation> {
     this.ensureValidConfig(options.config)
+
+    // Clear cache for new analysis
+    this.tradeTimestampCache.clear()
 
     const sortedTrades = this.sortTrades(options.trades)
     const calculator = new PortfolioStatsCalculator()
@@ -236,8 +251,8 @@ export class WalkForwardAnalyzer {
 
   private sortTrades(trades: Trade[]): Trade[] {
     return [...trades].sort((a, b) => {
-      const dateA = new Date(a.dateOpened).getTime()
-      const dateB = new Date(b.dateOpened).getTime()
+      const dateA = this.getTradeTimestamp(a)
+      const dateB = this.getTradeTimestamp(b)
       if (dateA !== dateB) return dateA - dateB
       return (a.timeOpened || '').localeCompare(b.timeOpened || '')
     })
@@ -248,7 +263,7 @@ export class WalkForwardAnalyzer {
     // Add full day to end date to include all trades on that day regardless of time
     const endMs = end.getTime() + DAY_MS - 1
     return trades.filter((trade) => {
-      const tradeDate = new Date(trade.dateOpened).getTime()
+      const tradeDate = this.getTradeTimestamp(trade)
       return tradeDate >= startMs && tradeDate <= endMs
     })
   }
@@ -372,11 +387,10 @@ export class WalkForwardAnalyzer {
     const positionMultiplier = this.calculatePositionMultiplier(params, baseline)
     const strategyWeights = this.buildStrategyWeights(params)
 
-    const orderedTrades = this.sortTrades(trades)
-
+    // trades are already sorted from filterTrades() which preserves sortedTrades order
     let runningEquity = initialCapital
 
-    return orderedTrades.map((trade) => {
+    return trades.map((trade) => {
       const strategyWeight = strategyWeights[this.normalizeStrategyKey(trade.strategy)] ?? 1
       const scale = positionMultiplier * strategyWeight
       const scaledPl = trade.pl * scale
@@ -460,9 +474,8 @@ export class WalkForwardAnalyzer {
     let maxLosses = 0
     let currentLosses = 0
 
-    const orderedTrades = this.sortTrades(trades)
-
-    orderedTrades.forEach((trade) => {
+    // trades are already sorted from applyScenario()
+    trades.forEach((trade) => {
       if (trade.pl < 0) {
         currentLosses++
         maxLosses = Math.max(maxLosses, currentLosses)
