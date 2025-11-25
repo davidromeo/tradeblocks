@@ -7,6 +7,7 @@ import {
   IconLink,
   IconReportAnalytics,
   IconRouteSquare,
+  IconSparkles,
   IconStack2,
   IconTimelineEvent,
 } from "@tabler/icons-react";
@@ -73,6 +74,12 @@ const navData = {
       href: "/comparison-blocks",
       icon: IconLink,
       badge: "Beta",
+    },
+    {
+      title: "TradeBlocks Assistant",
+      href: "/assistant",
+      icon: IconSparkles,
+      badge: "New",
     },
   ],
 };
