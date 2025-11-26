@@ -111,11 +111,20 @@ export default function BlockStatsPage() {
     if (!activeBlock) {
       setTrades([]);
       setDailyLogs([]);
+      setFilteredTrades([]);
+      setPortfolioStats(null);
+      setStrategyStats({});
       setDataError(null);
       return;
     }
 
     const fetchData = async () => {
+      // Clear previous block data to avoid showing stale charts while loading
+      setTrades([]);
+      setDailyLogs([]);
+      setFilteredTrades([]);
+      setPortfolioStats(null);
+      setStrategyStats({});
       setIsLoadingData(true);
       setDataError(null);
 
