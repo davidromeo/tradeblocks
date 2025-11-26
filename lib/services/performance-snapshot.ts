@@ -297,14 +297,19 @@ export async function processChartData(
 
   checkCancelled(signal)
 
-  const mfeMaeStats = calculateMFEMAEStats(mfeMaeData)
+  const mfeMaeStats = await calculateMFEMAEStats(mfeMaeData, signal)
 
   // Yield after MFE/MAE stats
   checkCancelled(signal)
-  onProgress?.({ step: 'Finalizing', percent: 95 })
+  onProgress?.({ step: 'Finalizing (distributions)', percent: 95 })
   await yieldToMain()
 
   const mfeMaeDistribution = await createExcursionDistributionAsync(mfeMaeData, 10, signal)
+
+  // Yield after distributions to let UI paint before returning large object
+  checkCancelled(signal)
+  onProgress?.({ step: 'Finalizing (packaging)', percent: 98 })
+  await yieldToMain()
 
   return {
     equityCurve,
