@@ -41,7 +41,7 @@ export function useProgressDialog() {
     update,
     finish,
     cancel,
-    get signal() {
+    get signal(): AbortSignal | undefined {
       return abortRef.current?.signal
     },
   }

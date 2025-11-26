@@ -21,6 +21,9 @@ import {
 } from "./combined-trades-cache";
 import { deletePerformanceSnapshotCache } from "./performance-snapshot-cache";
 
+// Track in-flight combined cache writes to avoid redundant work when multiple callers miss the cache simultaneously.
+const combinedCacheInflight = new Map<string, Promise<void>>();
+
 /**
  * Extended trade with block association
  */
@@ -118,13 +121,26 @@ export async function getTradesByBlockWithOptions(
   });
   const combined = combineAllLegGroups(tradesWithoutBlockId);
 
-  // Store in cache for future use (fire and forget)
-  storeCombinedTradesCache(blockId, combined).catch((err) => {
-    console.warn("Failed to cache combined trades:", err);
-  });
+  queueCombinedTradesCache(blockId, combined);
 
   // Add blockId back to combined trades
   return combined.map((trade) => ({ ...trade, blockId }));
+}
+
+function queueCombinedTradesCache(blockId: string, combinedTrades: CombinedTrade[]) {
+  if (combinedCacheInflight.has(blockId)) {
+    return;
+  }
+
+  const task = storeCombinedTradesCache(blockId, combinedTrades)
+    .catch((err) => {
+      console.warn("Failed to cache combined trades:", err);
+    })
+    .finally(() => {
+      combinedCacheInflight.delete(blockId);
+    });
+
+  combinedCacheInflight.set(blockId, task);
 }
 
 /**

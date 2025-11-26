@@ -21,7 +21,7 @@ function createMockTrade(overrides: Partial<Trade> = {}): Trade {
     openingPrice: 4500,
     legs: "CALL 4500",
     premium: 100,
-    premiumPrecision: "dollars",
+    premiumPrecision: 2,
     closingPrice: 50,
     dateClosed: new Date("2024-01-20"),
     timeClosed: "15:00:00",
@@ -250,7 +250,7 @@ describe("Performance Snapshot Cache", () => {
 
       let cached = await getPerformanceSnapshotCache(blockId);
       expect(cached!.filteredTrades).toHaveLength(1);
-      // netPl accounts for commissions: 100 - (2 * 1 trade) = 98
+      // netPl accounts for commissions: 100 - (1 opening + 1 closing fee) = 98
       expect(cached!.portfolioStats.netPl).toBeCloseTo(98, 2);
 
       // Second snapshot with two trades

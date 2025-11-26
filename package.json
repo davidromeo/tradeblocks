@@ -11,6 +11,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:portfolio": "jest portfolio-stats",
+    "clean": "rm -rf .next .turbo .swc node_modules/.cache",
+    "clean:all": "rm -rf .next .turbo .swc node_modules",
+    "rebuild": "npm run clean:all && npm install && npm run build",
     "prepare": "husky",
     "gpt:context": "repomix --style markdown --compress --output gpt/codebase-context.md"
   },

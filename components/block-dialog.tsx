@@ -1111,6 +1111,9 @@ export function BlockDialog({
             if (err instanceof Error && err.name === "AbortError") {
               // User cancelled - skip caching, save still succeeds
               console.log("Pre-calculation cancelled by user");
+              toast.info(
+                "Block created, but pre-calculation was cancelled. You can recalculate later for faster page loads."
+              );
             } else {
               throw err;
             }

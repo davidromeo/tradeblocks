@@ -502,7 +502,8 @@ export async function createExcursionDistributionAsync(
 
   // Adapt bucket size to avoid generating an extreme number of buckets
   // which can hang the main thread and blow up memory for outlier values.
-  const MAX_BUCKETS = 5000
+  // Keep bucket count practical for both computation and chart rendering
+  const MAX_BUCKETS = 500
   let effectiveBucketSize = bucketSize
   let numBuckets = Math.max(1, Math.ceil(maxValue / effectiveBucketSize))
 

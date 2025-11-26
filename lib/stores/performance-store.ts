@@ -144,10 +144,11 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
       } = await import('@/lib/db')
 
       // Fetch block to get analysis config
-      const block = await getBlock(blockId)
-      const combineLegGroups = block?.analysisConfig?.combineLegGroups ?? false
+  const block = await getBlock(blockId)
+  const combineLegGroups = block?.analysisConfig?.combineLegGroups ?? false
 
   const state = get()
+  const riskFreeRate = 2.0
 
   // Check if we can use cached snapshot (default view with no filters)
   const isDefaultView =
@@ -155,7 +156,7 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
     !state.dateRange.to &&
     state.selectedStrategies.length === 0 &&
     !state.normalizeTo1Lot &&
-    Number.isFinite(2.0) // explicit parity with block-stats page default
+    riskFreeRate === 2.0 // explicit parity with block-stats page default
 
   if (isDefaultView) {
         const cachedSnapshot = await getPerformanceSnapshotCache(blockId)

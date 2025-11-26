@@ -915,7 +915,7 @@ async function calculateRollingMetrics(trades: Trade[], signal?: AbortSignal) {
       volatility
     })
 
-    // Slide window: remove oldest, add newest (if not at end)
+    // Slide window to the next position (skip on final iteration—there is no next window to build)
     if (i < trades.length - 1) {
       const oldPl = plValues[i - windowSize + 1]
       const newPl = plValues[i + 1]
