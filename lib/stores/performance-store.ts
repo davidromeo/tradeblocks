@@ -147,16 +147,17 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
       const block = await getBlock(blockId)
       const combineLegGroups = block?.analysisConfig?.combineLegGroups ?? false
 
-      const state = get()
+  const state = get()
 
-      // Check if we can use cached snapshot (default view with no filters)
-      const isDefaultView =
-        !state.dateRange.from &&
-        !state.dateRange.to &&
-        state.selectedStrategies.length === 0 &&
-        !state.normalizeTo1Lot
+  // Check if we can use cached snapshot (default view with no filters)
+  const isDefaultView =
+    !state.dateRange.from &&
+    !state.dateRange.to &&
+    state.selectedStrategies.length === 0 &&
+    !state.normalizeTo1Lot &&
+    Number.isFinite(2.0) // explicit parity with block-stats page default
 
-      if (isDefaultView) {
+  if (isDefaultView) {
         const cachedSnapshot = await getPerformanceSnapshotCache(blockId)
         if (cachedSnapshot) {
           // Use cached data - much faster!

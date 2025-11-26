@@ -128,7 +128,7 @@ export default function BlockStatsPage() {
         // Only use cache if we're using default settings (no filters, default risk-free rate, no normalization)
         const isDefaultView =
           selectedStrategies.length === 0 &&
-          riskFreeRate === "2" &&
+          (parseFloat(riskFreeRate) || 2.0) === 2.0 &&
           !normalizeTo1Lot;
 
         if (isDefaultView) {
