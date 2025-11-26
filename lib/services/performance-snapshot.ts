@@ -8,15 +8,16 @@ import {
   EfficiencyBasis
 } from '@/lib/metrics/trade-efficiency'
 import {
-  calculateMFEMAEData,
+  calculateMFEMAEDataAsync,
   calculateMFEMAEStats,
-  createExcursionDistribution,
+  createExcursionDistributionAsync,
   type MFEMAEDataPoint,
   type MFEMAEStats,
   type DistributionBucket,
   type NormalizationBasis
 } from '@/lib/calculations/mfe-mae'
 import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
+import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
 
 export interface SnapshotDateRange {
   from?: Date
@@ -28,12 +29,19 @@ export interface SnapshotFilters {
   strategies?: string[]
 }
 
+export interface SnapshotProgress {
+  step: string
+  percent: number
+}
+
 interface SnapshotOptions {
   trades: Trade[]
   dailyLogs?: DailyLogEntry[]
   filters?: SnapshotFilters
   riskFreeRate?: number
   normalizeTo1Lot?: boolean
+  onProgress?: (progress: SnapshotProgress) => void
+  signal?: AbortSignal
 }
 
 export interface SnapshotChartData {
@@ -87,10 +95,16 @@ export interface PerformanceSnapshot {
 }
 
 export async function buildPerformanceSnapshot(options: SnapshotOptions): Promise<PerformanceSnapshot> {
+  const { onProgress, signal } = options
   const normalizeTo1Lot = Boolean(options.normalizeTo1Lot)
   const riskFreeRate = typeof options.riskFreeRate === 'number' ? options.riskFreeRate : 2.0
   const strategies = options.filters?.strategies?.length ? options.filters?.strategies : undefined
   const dateRange = options.filters?.dateRange
+
+  // Check for cancellation at start
+  checkCancelled(signal)
+  onProgress?.({ step: 'Filtering trades', percent: 5 })
+  await yieldToMain()
 
   // When filtering by strategy or normalizing, the `fundsAtClose` values from individual trades
   // represent the entire account balance and include performance from trades outside the current filter.
@@ -107,6 +121,10 @@ export async function buildPerformanceSnapshot(options: SnapshotOptions): Promis
     : options.dailyLogs
       ? [...options.dailyLogs]
       : undefined
+
+  // Yield after copying large arrays
+  checkCancelled(signal)
+  await yieldToMain()
 
   if (dateRange?.from || dateRange?.to) {
     filteredTrades = filteredTrades.filter(trade => {
@@ -134,6 +152,10 @@ export async function buildPerformanceSnapshot(options: SnapshotOptions): Promis
     filteredDailyLogs = undefined
   }
 
+  checkCancelled(signal)
+  onProgress?.({ step: 'Calculating portfolio stats', percent: 10 })
+  await yieldToMain()
+
   const calculator = new PortfolioStatsCalculator({ riskFreeRate })
   const portfolioStats = calculator.calculatePortfolioStats(
     filteredTrades,
@@ -141,7 +163,15 @@ export async function buildPerformanceSnapshot(options: SnapshotOptions): Promis
     Boolean(strategies && strategies.length > 0)
   )
 
-  const chartData = await processChartData(filteredTrades, filteredDailyLogs, { useFundsAtClose })
+  // Yield after heavy portfolio stats calculation
+  checkCancelled(signal)
+  await yieldToMain()
+
+  onProgress?.({ step: 'Building charts', percent: 20 })
+
+  const chartData = await processChartData(filteredTrades, filteredDailyLogs, { useFundsAtClose, onProgress, signal })
+
+  onProgress?.({ step: 'Complete', percent: 100 })
 
   return {
     filteredTrades,
@@ -154,11 +184,31 @@ export async function buildPerformanceSnapshot(options: SnapshotOptions): Promis
 export async function processChartData(
   trades: Trade[],
   dailyLogs?: DailyLogEntry[],
-  options?: { useFundsAtClose?: boolean }
+  options?: {
+    useFundsAtClose?: boolean
+    onProgress?: (progress: SnapshotProgress) => void
+    signal?: AbortSignal
+  }
 ): Promise<SnapshotChartData> {
+  const { onProgress, signal } = options ?? {}
+
+  checkCancelled(signal)
+  onProgress?.({ step: 'Building equity curve', percent: 25 })
+  await yieldToMain()
+
   const { equityCurve, drawdownData } = buildEquityAndDrawdown(trades, dailyLogs, options?.useFundsAtClose)
 
+  // Yield after equity curve (can be heavy with many trades/logs)
+  checkCancelled(signal)
+  await yieldToMain()
+
+  onProgress?.({ step: 'Calculating day of week stats', percent: 30 })
+
   const dayOfWeekData = calculateDayOfWeekData(trades)
+
+  // Yield after day of week
+  checkCancelled(signal)
+  await yieldToMain()
 
   const returnDistribution = trades
     .filter(trade => trade.marginReq && trade.marginReq > 0)
@@ -166,8 +216,23 @@ export async function processChartData(
 
   const streakData = calculateStreakData(trades)
 
+  // Yield after streak data
+  checkCancelled(signal)
+  await yieldToMain()
+
+  onProgress?.({ step: 'Computing monthly returns', percent: 40 })
+
   const monthlyReturns = calculateMonthlyReturns(trades)
+
+  // Yield after monthly returns
+  checkCancelled(signal)
+  await yieldToMain()
+
   const monthlyReturnsPercent = calculateMonthlyReturnsPercent(trades, dailyLogs)
+
+  // Yield after monthly returns percent
+  checkCancelled(signal)
+  await yieldToMain()
 
   const tradeSequence = trades.map((trade, index) => ({
     tradeNumber: index + 1,
@@ -176,6 +241,11 @@ export async function processChartData(
     date: new Date(trade.dateOpened).toISOString()
   }))
 
+  // Yield after trade sequence
+  checkCancelled(signal)
+  onProgress?.({ step: 'Calculating rolling metrics', percent: 50 })
+  await yieldToMain()
+
   const romTimeline = trades
     .filter(trade => trade.marginReq && trade.marginReq > 0)
     .map(trade => ({
@@ -183,18 +253,63 @@ export async function processChartData(
       rom: (trade.pl / trade.marginReq!) * 100
     }))
 
-  const rollingMetrics = calculateRollingMetrics(trades)
+  // Rolling metrics is O(n * windowSize) - most expensive calculation
+  const rollingMetrics = await calculateRollingMetrics(trades, signal)
+
+  checkCancelled(signal)
+  onProgress?.({ step: 'Analyzing volatility regimes', percent: 70 })
+  await yieldToMain()
 
   const volatilityRegimes = calculateVolatilityRegimes(trades)
+
+  // Yield after volatility regimes
+  checkCancelled(signal)
+  await yieldToMain()
+
   const premiumEfficiency = calculatePremiumEfficiency(trades)
+
+  // Yield after premium efficiency
+  checkCancelled(signal)
+  onProgress?.({ step: 'Computing margin utilization', percent: 80 })
+  await yieldToMain()
+
   const marginUtilization = calculateMarginUtilization(trades)
+
+  // Yield after margin utilization
+  checkCancelled(signal)
+  await yieldToMain()
+
   const exitReasonBreakdown = calculateExitReasonBreakdown(trades)
+
+  // Yield after exit reason breakdown
+  checkCancelled(signal)
+  await yieldToMain()
+
   const holdingPeriods = calculateHoldingPeriods(trades)
 
-  // MFE/MAE excursion analysis
-  const mfeMaeData = calculateMFEMAEData(trades)
-  const mfeMaeStats = calculateMFEMAEStats(mfeMaeData)
-  const mfeMaeDistribution = createExcursionDistribution(mfeMaeData, 10)
+  // Yield after holding periods
+  checkCancelled(signal)
+  onProgress?.({ step: 'Calculating MFE/MAE analysis', percent: 90 })
+  await yieldToMain()
+
+  // MFE/MAE excursion analysis (async to yield during processing)
+  const mfeMaeData = await calculateMFEMAEDataAsync(trades, signal)
+
+  checkCancelled(signal)
+
+  const mfeMaeStats = await calculateMFEMAEStats(mfeMaeData, signal)
+
+  // Yield after MFE/MAE stats
+  checkCancelled(signal)
+  onProgress?.({ step: 'Finalizing (distributions)', percent: 95 })
+  await yieldToMain()
+
+  const mfeMaeDistribution = await createExcursionDistributionAsync(mfeMaeData, 10, signal)
+
+  // Yield after distributions to let UI paint before returning large object
+  checkCancelled(signal)
+  onProgress?.({ step: 'Finalizing (packaging)', percent: 98 })
+  await yieldToMain()
 
   return {
     equityCurve,
@@ -737,33 +852,92 @@ function calculateMonthlyReturnsPercentFromTrades(
   return monthlyReturnsPercent
 }
 
-function calculateRollingMetrics(trades: Trade[]) {
+async function calculateRollingMetrics(trades: Trade[], signal?: AbortSignal) {
   const windowSize = 30
   const metrics: SnapshotChartData['rollingMetrics'] = []
 
+  if (trades.length < windowSize) {
+    return metrics
+  }
+
+  // Use sliding window approach to avoid repeated array operations
+  // Pre-extract P&L values for faster access
+  const plValues = trades.map(t => t.pl)
+
+  // Initialize window state
+  let windowSum = 0
+  let windowWins = 0
+  let windowPositiveSum = 0
+  let windowNegativeSum = 0
+
+  // Initialize first window
+  for (let i = 0; i < windowSize; i++) {
+    const pl = plValues[i]
+    windowSum += pl
+    if (pl > 0) {
+      windowWins++
+      windowPositiveSum += pl
+    } else if (pl < 0) {
+      windowNegativeSum += Math.abs(pl)
+    }
+  }
+
+  // Process each position using sliding window
   for (let i = windowSize - 1; i < trades.length; i++) {
-    const windowTrades = trades.slice(i - windowSize + 1, i + 1)
-    const wins = windowTrades.filter(t => t.pl > 0).length
-    const winRate = wins / windowTrades.length
+    // Yield every 100 iterations to keep UI responsive
+    if (i % 100 === 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
 
-    const returns = windowTrades.map(t => t.pl)
-    const avgReturn = returns.reduce((a, b) => a + b) / returns.length
-    const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / returns.length
-    const volatility = Math.sqrt(variance)
+    // Calculate metrics for current window
+    const winRate = windowWins / windowSize
+    const avgReturn = windowSum / windowSize
 
-    const positiveReturns = returns.filter(r => r > 0).reduce((a, b) => a + b, 0)
-    const negativeReturns = Math.abs(returns.filter(r => r < 0).reduce((a, b) => a + b, 0))
-    const profitFactor = negativeReturns > 0 ? positiveReturns / negativeReturns : positiveReturns > 0 ? 999 : 0
+    // Calculate variance (need to iterate for this, but only over window)
+    let varianceSum = 0
+    for (let j = i - windowSize + 1; j <= i; j++) {
+      varianceSum += Math.pow(plValues[j] - avgReturn, 2)
+    }
+    const volatility = Math.sqrt(varianceSum / windowSize)
 
-    const sharpeRatio = volatility > 0 ? (avgReturn - 0) / volatility : 0
+    const profitFactor = windowNegativeSum > 0
+      ? windowPositiveSum / windowNegativeSum
+      : windowPositiveSum > 0 ? 999 : 0
+
+    const sharpeRatio = volatility > 0 ? avgReturn / volatility : 0
 
     metrics.push({
-      date: new Date(windowTrades[windowTrades.length - 1].dateOpened).toISOString(),
+      date: new Date(trades[i].dateOpened).toISOString(),
       winRate: winRate * 100,
       sharpeRatio,
       profitFactor,
       volatility
     })
+
+    // Slide window to the next position (skip on final iteration—there is no next window to build)
+    if (i < trades.length - 1) {
+      const oldPl = plValues[i - windowSize + 1]
+      const newPl = plValues[i + 1]
+
+      // Remove old value
+      windowSum -= oldPl
+      if (oldPl > 0) {
+        windowWins--
+        windowPositiveSum -= oldPl
+      } else if (oldPl < 0) {
+        windowNegativeSum -= Math.abs(oldPl)
+      }
+
+      // Add new value
+      windowSum += newPl
+      if (newPl > 0) {
+        windowWins++
+        windowPositiveSum += newPl
+      } else if (newPl < 0) {
+        windowNegativeSum += Math.abs(newPl)
+      }
+    }
   }
 
   return metrics

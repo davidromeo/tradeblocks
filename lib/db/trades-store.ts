@@ -14,6 +14,15 @@ import {
   withReadTransaction,
   withWriteTransaction,
 } from "./index";
+import {
+  deleteCombinedTradesCache,
+  getCombinedTradesCache,
+  storeCombinedTradesCache,
+} from "./combined-trades-cache";
+import { deletePerformanceSnapshotCache } from "./performance-snapshot-cache";
+
+// Track in-flight combined cache writes to avoid redundant work when multiple callers miss the cache simultaneously.
+const combinedCacheInflight = new Map<string, Promise<void>>();
 
 /**
  * Extended trade with block association
@@ -43,6 +52,10 @@ export async function addTrades(
 
     await Promise.all(promises);
   });
+
+  // Invalidate caches since trades changed
+  await deleteCombinedTradesCache(blockId);
+  await deletePerformanceSnapshotCache(blockId);
 }
 
 /**
@@ -71,21 +84,36 @@ export async function getTradesByBlock(
 /**
  * Get all trades for a block with optional leg group combining
  *
+ * Uses cached combined trades when available for better performance.
+ * Falls back to on-demand calculation if cache is missing.
+ *
  * @param blockId - Block ID to fetch trades for
- * @param combineLegGroups - Whether to combine trades with same entry timestamp
+ * @param options.combineLegGroups - Whether to combine trades with same entry timestamp
+ * @param options.skipCache - Force recalculation (bypass cache)
  * @returns Array of trades (combined or raw)
  */
 export async function getTradesByBlockWithOptions(
   blockId: string,
-  options: { combineLegGroups?: boolean } = {}
+  options: { combineLegGroups?: boolean; skipCache?: boolean } = {}
 ): Promise<(StoredTrade | (CombinedTrade & { blockId: string }))[]> {
+  // If combining is enabled, check cache FIRST before fetching raw trades
+  // This avoids the expensive raw trade fetch when we have cached data
+  if (options.combineLegGroups && !options.skipCache) {
+    const cachedTrades = await getCombinedTradesCache(blockId);
+    if (cachedTrades) {
+      // Add blockId back to cached trades
+      return cachedTrades.map((trade) => ({ ...trade, blockId }));
+    }
+  }
+
+  // Fetch raw trades (only if not combining, or cache miss)
   const trades = await getTradesByBlock(blockId);
 
   if (!options.combineLegGroups) {
     return trades;
   }
 
-  // Remove blockId temporarily for combining, then add it back
+  // Cache miss: calculate combined trades on-demand
   const tradesWithoutBlockId = trades.map((storedTrade) => {
     const { blockId: _ignored, ...trade } = storedTrade;
     void _ignored;
@@ -93,8 +121,26 @@ export async function getTradesByBlockWithOptions(
   });
   const combined = combineAllLegGroups(tradesWithoutBlockId);
 
+  queueCombinedTradesCache(blockId, combined);
+
   // Add blockId back to combined trades
   return combined.map((trade) => ({ ...trade, blockId }));
+}
+
+function queueCombinedTradesCache(blockId: string, combinedTrades: CombinedTrade[]) {
+  if (combinedCacheInflight.has(blockId)) {
+    return;
+  }
+
+  const task = storeCombinedTradesCache(blockId, combinedTrades)
+    .catch((err) => {
+      console.warn("Failed to cache combined trades:", err);
+    })
+    .finally(() => {
+      combinedCacheInflight.delete(blockId);
+    });
+
+  combinedCacheInflight.set(blockId, task);
 }
 
 /**
@@ -182,6 +228,10 @@ export async function deleteTradesByBlock(blockId: string): Promise<void> {
       request.onerror = () => reject(request.error);
     });
   });
+
+  // Invalidate caches since trades changed
+  await deleteCombinedTradesCache(blockId);
+  await deletePerformanceSnapshotCache(blockId);
 }
 
 /**
@@ -218,6 +268,10 @@ export async function updateTradesForBlock(
 
     await Promise.all(promises);
   });
+
+  // Invalidate caches since trades changed
+  await deleteCombinedTradesCache(blockId);
+  await deletePerformanceSnapshotCache(blockId);
 }
 
 /**

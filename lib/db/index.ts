@@ -372,3 +372,17 @@ export {
   deleteWalkForwardAnalysis,
   deleteWalkForwardAnalysesByBlock,
 } from "./walk-forward-store";
+export {
+  storeCombinedTradesCache,
+  getCombinedTradesCache,
+  deleteCombinedTradesCache,
+  hasCombinedTradesCache,
+  invalidateBlockCaches,
+} from "./combined-trades-cache";
+export {
+  storePerformanceSnapshotCache,
+  getPerformanceSnapshotCache,
+  deletePerformanceSnapshotCache,
+  hasPerformanceSnapshotCache,
+} from "./performance-snapshot-cache";
+export type { CachedPerformanceSnapshot } from "./performance-snapshot-cache";

@@ -14,6 +14,7 @@ import {
   getBlock,
   getDailyLogsByBlock,
   getTradesByBlockWithOptions,
+  getPerformanceSnapshotCache,
 } from "@/lib/db";
 import {
   calculatePremiumEfficiencyPercent,
@@ -105,6 +106,7 @@ export default function BlockStatsPage() {
   }, [activeBlock?.id, normalizeTo1Lot]);
 
   // Fetch trades and daily logs when active block changes
+  // Uses cached performance snapshot for instant load when available
   useEffect(() => {
     if (!activeBlock) {
       setTrades([]);
@@ -122,6 +124,33 @@ export default function BlockStatsPage() {
         const combineLegGroups =
           processedBlock?.analysisConfig?.combineLegGroups ?? false;
 
+        // Check for cached snapshot first (for instant load with default settings)
+        // Only use cache if we're using default settings (no filters, default risk-free rate, no normalization)
+        const isDefaultView =
+          selectedStrategies.length === 0 &&
+          (parseFloat(riskFreeRate) || 2.0) === 2.0 &&
+          !normalizeTo1Lot;
+
+        if (isDefaultView) {
+          const cachedSnapshot = await getPerformanceSnapshotCache(activeBlock.id);
+          if (cachedSnapshot) {
+            // Use cached data directly - much faster!
+            setTrades(cachedSnapshot.filteredTrades);
+            setDailyLogs(cachedSnapshot.filteredDailyLogs);
+            setFilteredTrades(cachedSnapshot.filteredTrades);
+            setPortfolioStats(cachedSnapshot.portfolioStats);
+
+            // Calculate strategy stats from cached trades
+            const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 });
+            const strategies = calculator.calculateStrategyStats(cachedSnapshot.filteredTrades);
+            setStrategyStats(strategies);
+
+            setIsLoadingData(false);
+            return;
+          }
+        }
+
+        // Cache miss or filters applied - fetch data normally
         const [blockTrades, blockDailyLogs] = await Promise.all([
           getTradesByBlockWithOptions(activeBlock.id, { combineLegGroups }),
           getDailyLogsByBlock(activeBlock.id),

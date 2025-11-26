@@ -139,31 +139,68 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
         getTradesByBlockWithOptions,
         getTradesByBlock,
         getDailyLogsByBlock,
-        getBlock
+        getBlock,
+        getPerformanceSnapshotCache
       } = await import('@/lib/db')
 
       // Fetch block to get analysis config
-      const block = await getBlock(blockId)
-      const combineLegGroups = block?.analysisConfig?.combineLegGroups ?? false
+  const block = await getBlock(blockId)
+  const combineLegGroups = block?.analysisConfig?.combineLegGroups ?? false
 
+  const state = get()
+  const riskFreeRate = 2.0
+
+  // Check if we can use cached snapshot (default view with no filters)
+  const isDefaultView =
+    !state.dateRange.from &&
+    !state.dateRange.to &&
+    state.selectedStrategies.length === 0 &&
+    !state.normalizeTo1Lot &&
+    riskFreeRate === 2.0 // explicit parity with block-stats page default
+
+  if (isDefaultView) {
+        const cachedSnapshot = await getPerformanceSnapshotCache(blockId)
+        if (cachedSnapshot) {
+          // Use cached data - much faster!
+          // Still need raw trades for groupedLegOutcomes
+          const rawTrades = await getTradesByBlock(blockId)
+          const groupedLegOutcomes = deriveGroupedLegOutcomes(rawTrades)
+
+          set({
+            data: {
+              trades: cachedSnapshot.filteredTrades,
+              allTrades: cachedSnapshot.filteredTrades,
+              allRawTrades: rawTrades,
+              dailyLogs: cachedSnapshot.filteredDailyLogs,
+              allDailyLogs: cachedSnapshot.filteredDailyLogs,
+              portfolioStats: cachedSnapshot.portfolioStats,
+              groupedLegOutcomes,
+              ...cachedSnapshot.chartData
+            },
+            isLoading: false
+          })
+          return
+        }
+      }
+
+      // Cache miss or filters applied - compute normally
       const rawTrades = await getTradesByBlock(blockId)
       const trades = combineLegGroups
         ? await getTradesByBlockWithOptions(blockId, { combineLegGroups })
         : rawTrades
       const dailyLogs = await getDailyLogsByBlock(blockId)
 
-      const state = get()
-      const normalizedStrategies = normalizeStrategyFilter(state.selectedStrategies, trades)
-      const filters = buildSnapshotFilters(state.dateRange, normalizedStrategies)
+      const updatedNormalizedStrategies = normalizeStrategyFilter(state.selectedStrategies, trades)
+      const updatedFilters = buildSnapshotFilters(state.dateRange, updatedNormalizedStrategies)
       const snapshot = await buildPerformanceSnapshot({
         trades,
         dailyLogs,
-        filters,
+        filters: updatedFilters,
         riskFreeRate: 2.0,
         normalizeTo1Lot: state.normalizeTo1Lot
       })
 
-      const filteredRawTrades = filterTradesForSnapshot(rawTrades, filters)
+      const filteredRawTrades = filterTradesForSnapshot(rawTrades, updatedFilters)
       const groupedLegOutcomes = deriveGroupedLegOutcomes(filteredRawTrades)
 
       set({

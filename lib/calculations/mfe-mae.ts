@@ -1,5 +1,6 @@
 import { Trade } from '@/lib/models/trade'
 import { computeTotalMaxProfit, computeTotalMaxLoss, computeTotalPremium, type EfficiencyBasis } from '@/lib/metrics/trade-efficiency'
+import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
 
 export type NormalizationBasis = 'premium' | 'margin'
 export const NORMALIZATION_BASES: NormalizationBasis[] = ['premium', 'margin']
@@ -236,30 +237,133 @@ export function calculateMFEMAEData(trades: Trade[]): MFEMAEDataPoint[] {
 }
 
 /**
+ * Async version of calculateMFEMAEData with yielding for large datasets
+ */
+export async function calculateMFEMAEDataAsync(
+  trades: Trade[],
+  signal?: AbortSignal
+): Promise<MFEMAEDataPoint[]> {
+  const dataPoints: MFEMAEDataPoint[] = []
+
+  for (let i = 0; i < trades.length; i++) {
+    const point = calculateTradeExcursionMetrics(trades[i], i + 1)
+    if (point) {
+      dataPoints.push(point)
+    }
+
+    // Yield every 100 trades to keep UI responsive
+    if (i % 100 === 0 && i > 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+  }
+
+  return dataPoints
+}
+
+/**
  * Calculates aggregate statistics from MFE/MAE data points
  */
-export function calculateMFEMAEStats(dataPoints: MFEMAEDataPoint[]): Partial<Record<NormalizationBasis, MFEMAEStats>> {
+export async function calculateMFEMAEStats(
+  dataPoints: MFEMAEDataPoint[],
+  signal?: AbortSignal
+): Promise<Partial<Record<NormalizationBasis, MFEMAEStats>>> {
   if (dataPoints.length === 0) {
     return {}
   }
 
-  const withProfitCapture = dataPoints.filter(d => d.profitCapturePercent !== undefined)
-  const winners = withProfitCapture.filter(d => d.isWinner)
-  const losers = withProfitCapture.filter(d => !d.isWinner)
-  const withExcursionRatio = dataPoints.filter(d => d.excursionRatio !== undefined)
+  checkCancelled(signal)
+  await yieldToMain()
 
-  const globalAvgProfitCapture = withProfitCapture.length > 0
-    ? withProfitCapture.reduce((sum, d) => sum + (d.profitCapturePercent || 0), 0) / withProfitCapture.length
-    : 0
-  const globalWinnerAvgProfitCapture = winners.length > 0
-    ? winners.reduce((sum, d) => sum + (d.profitCapturePercent || 0), 0) / winners.length
-    : 0
-  const globalLoserAvgProfitCapture = losers.length > 0
-    ? losers.reduce((sum, d) => sum + (d.profitCapturePercent || 0), 0) / losers.length
-    : 0
-  const globalAvgExcursionRatio = withExcursionRatio.length > 0
-    ? withExcursionRatio.reduce((sum, d) => sum + (d.excursionRatio || 0), 0) / withExcursionRatio.length
-    : 0
+  type BasisAggregate = {
+    count: number
+    mfeSum: number
+    maeSum: number
+    tradesWithMFE: number
+    tradesWithMAE: number
+    mfePercents: number[]
+    maePercents: number[]
+  }
+
+  const basisAggregates: Record<NormalizationBasis, BasisAggregate> = {
+    premium: {
+      count: 0,
+      mfeSum: 0,
+      maeSum: 0,
+      tradesWithMFE: 0,
+      tradesWithMAE: 0,
+      mfePercents: [],
+      maePercents: []
+    },
+    margin: {
+      count: 0,
+      mfeSum: 0,
+      maeSum: 0,
+      tradesWithMFE: 0,
+      tradesWithMAE: 0,
+      mfePercents: [],
+      maePercents: []
+    }
+  }
+
+  let profitCaptureSum = 0
+  let profitCaptureCount = 0
+  let winnerProfitCaptureSum = 0
+  let winnerCount = 0
+  let loserProfitCaptureSum = 0
+  let loserCount = 0
+  let excursionRatioSum = 0
+  let excursionRatioCount = 0
+
+  for (let i = 0; i < dataPoints.length; i++) {
+    const point = dataPoints[i]
+
+    if (typeof point.profitCapturePercent === 'number') {
+      profitCaptureSum += point.profitCapturePercent
+      profitCaptureCount++
+
+      if (point.isWinner) {
+        winnerProfitCaptureSum += point.profitCapturePercent
+        winnerCount++
+      } else {
+        loserProfitCaptureSum += point.profitCapturePercent
+        loserCount++
+      }
+    }
+
+    if (typeof point.excursionRatio === 'number') {
+      excursionRatioSum += point.excursionRatio
+      excursionRatioCount++
+    }
+
+    for (const basis of NORMALIZATION_BASES) {
+      const metrics = point.normalizedBy?.[basis]
+      if (!metrics) continue
+
+      const aggregate = basisAggregates[basis]
+      aggregate.count++
+      aggregate.mfeSum += metrics.mfePercent
+      aggregate.maeSum += metrics.maePercent
+      aggregate.mfePercents.push(metrics.mfePercent)
+      aggregate.maePercents.push(metrics.maePercent)
+
+      if (point.mfe > 0) {
+        aggregate.tradesWithMFE++
+      }
+      if (point.mae > 0) {
+        aggregate.tradesWithMAE++
+      }
+    }
+
+    // Yield every 200 items to keep UI responsive during large runs
+    if (i > 0 && i % 200 === 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+  }
+
+  checkCancelled(signal)
+  await yieldToMain()
 
   const median = (values: number[]): number => {
     if (values.length === 0) return 0
@@ -270,39 +374,37 @@ export function calculateMFEMAEStats(dataPoints: MFEMAEDataPoint[]): Partial<Rec
       : sorted[mid]
   }
 
+  const globalAvgProfitCapture = profitCaptureCount > 0 ? profitCaptureSum / profitCaptureCount : 0
+  const globalWinnerAvgProfitCapture = winnerCount > 0 ? winnerProfitCaptureSum / winnerCount : 0
+  const globalLoserAvgProfitCapture = loserCount > 0 ? loserProfitCaptureSum / loserCount : 0
+  const globalAvgExcursionRatio = excursionRatioCount > 0 ? excursionRatioSum / excursionRatioCount : 0
+
   const results: Partial<Record<NormalizationBasis, MFEMAEStats>> = {}
 
-  NORMALIZATION_BASES.forEach(basis => {
-    const pointsWithBasis = dataPoints.filter(point => point.normalizedBy?.[basis])
-    if (pointsWithBasis.length === 0) {
-      return
+  for (const basis of NORMALIZATION_BASES) {
+    const aggregate = basisAggregates[basis]
+    if (aggregate.count === 0) {
+      continue
     }
 
-    const normalizedMetrics = pointsWithBasis.map(point => point.normalizedBy![basis]!)
-    const mfePercents = normalizedMetrics.map(metrics => metrics.mfePercent)
-    const maePercents = normalizedMetrics.map(metrics => metrics.maePercent)
-
-    const withMFE = pointsWithBasis.filter(d => d.mfe > 0)
-    const withMAE = pointsWithBasis.filter(d => d.mae > 0)
-
     results[basis] = {
-      avgMFEPercent: mfePercents.length > 0
-        ? mfePercents.reduce((sum, value) => sum + value, 0) / mfePercents.length
-        : 0,
-      avgMAEPercent: maePercents.length > 0
-        ? maePercents.reduce((sum, value) => sum + value, 0) / maePercents.length
-        : 0,
+      avgMFEPercent: aggregate.mfeSum / aggregate.count,
+      avgMAEPercent: aggregate.maeSum / aggregate.count,
       avgProfitCapturePercent: globalAvgProfitCapture,
       avgExcursionRatio: globalAvgExcursionRatio,
       winnerAvgProfitCapture: globalWinnerAvgProfitCapture,
       loserAvgProfitCapture: globalLoserAvgProfitCapture,
-      medianMFEPercent: median(mfePercents),
-      medianMAEPercent: median(maePercents),
-      totalTrades: pointsWithBasis.length,
-      tradesWithMFE: withMFE.length,
-      tradesWithMAE: withMAE.length,
+      medianMFEPercent: median(aggregate.mfePercents),
+      medianMAEPercent: median(aggregate.maePercents),
+      totalTrades: aggregate.count,
+      tradesWithMFE: aggregate.tradesWithMFE,
+      tradesWithMAE: aggregate.tradesWithMAE
     }
-  })
+
+    // Yield between basis computations in case arrays are large
+    checkCancelled(signal)
+    await yieldToMain()
+  }
 
   return results
 }
@@ -342,6 +444,128 @@ export function createExcursionDistribution(
       bucket: `${rangeStart}-${rangeEnd}%`,
       mfeCount,
       maeCount,
+      range: [rangeStart, rangeEnd]
+    })
+  }
+
+  return buckets
+}
+
+/**
+ * Async version of createExcursionDistribution with yielding for large datasets
+ * Uses O(n) single-pass bucketing instead of O(n*buckets) repeated filtering
+ */
+export async function createExcursionDistributionAsync(
+  dataPoints: MFEMAEDataPoint[],
+  bucketSize: number = 10,
+  signal?: AbortSignal
+): Promise<DistributionBucket[]> {
+  if (dataPoints.length === 0) {
+    return []
+  }
+
+  checkCancelled(signal)
+  await yieldToMain()
+
+  // First pass: collect values and find maxima
+  let maxMfe = 0
+  let maxMae = 0
+  const mfeValues: number[] = []
+  const maeValues: number[] = []
+
+  for (let i = 0; i < dataPoints.length; i++) {
+    const d = dataPoints[i]
+
+    if (d.mfePercent !== undefined) {
+      const value = d.mfePercent
+      maxMfe = Math.max(maxMfe, value)
+      mfeValues.push(value)
+    }
+
+    if (d.maePercent !== undefined) {
+      const value = d.maePercent
+      maxMae = Math.max(maxMae, value)
+      maeValues.push(value)
+    }
+
+    // Yield every 200 items to keep UI responsive
+    if (i % 200 === 0 && i > 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+  }
+
+  const maxValue = Math.max(maxMfe, maxMae)
+  if (maxValue === 0) {
+    return []
+  }
+
+  // Adapt bucket size to avoid generating an extreme number of buckets
+  // which can hang the main thread and blow up memory for outlier values.
+  // Keep bucket count practical for both computation and chart rendering
+  const MAX_BUCKETS = 500
+  let effectiveBucketSize = bucketSize
+  let numBuckets = Math.max(1, Math.ceil(maxValue / effectiveBucketSize))
+
+  if (numBuckets > MAX_BUCKETS) {
+    effectiveBucketSize = maxValue / MAX_BUCKETS
+    numBuckets = MAX_BUCKETS
+  }
+
+  checkCancelled(signal)
+  await yieldToMain()
+
+  // Second pass: bucket counts using the (possibly adjusted) bucket size
+  const mfeBucketCounts = new Array<number>(numBuckets).fill(0)
+  const maeBucketCounts = new Array<number>(numBuckets).fill(0)
+
+  const clampIndex = (value: number) => {
+    const idx = Math.floor(value / effectiveBucketSize)
+    // Ensure edge values fall into last bucket
+    return Math.min(numBuckets - 1, Math.max(0, idx))
+  }
+
+  let processed = 0
+
+  for (const value of mfeValues) {
+    mfeBucketCounts[clampIndex(value)]++
+    processed++
+    if (processed % 500 === 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+  }
+
+  for (const value of maeValues) {
+    maeBucketCounts[clampIndex(value)]++
+    processed++
+    if (processed % 500 === 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+  }
+
+  // Yield after bucketing to allow paint before building output array
+  checkCancelled(signal)
+  await yieldToMain()
+
+  const buckets: DistributionBucket[] = []
+
+  // Build buckets from pre-computed counts (very fast, no filtering needed)
+  for (let i = 0; i < numBuckets; i++) {
+    // Yield occasionally when bucket counts are large to keep UI responsive
+    if (i > 0 && i % 1000 === 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+
+    const rangeStart = i * effectiveBucketSize
+    const rangeEnd = (i + 1) * effectiveBucketSize
+
+    buckets.push({
+      bucket: `${rangeStart.toFixed(2)}-${rangeEnd.toFixed(2)}%`,
+      mfeCount: mfeBucketCounts[i] || 0,
+      maeCount: maeBucketCounts[i] || 0,
       range: [rangeStart, rangeEnd]
     })
   }
