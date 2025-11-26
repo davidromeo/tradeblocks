@@ -104,11 +104,12 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ProgressDialog } from "@/components/progress-dialog";
 import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
 import { waitForRender } from "@/lib/utils/async-helpers";
+import { useProgressDialog } from "@/hooks/use-progress-dialog";
 
 interface Block {
   id: string;
@@ -225,18 +226,11 @@ export function BlockDialog({
   const [pendingTradeResult, setPendingTradeResult] =
     useState<TradeProcessingResult | null>(null);
 
-  // Progress dialog state for pre-calculation
-  const [progressState, setProgressState] = useState<{
-    open: boolean;
-    step: string;
-    percent: number;
-  } | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
+  // Shared progress dialog controller (handles abort + clamped percent)
+  const progress = useProgressDialog();
   const handleCancelCalculation = useCallback(() => {
-    abortControllerRef.current?.abort();
-    setProgressState(null);
-  }, []);
+    progress.cancel();
+  }, [progress]);
 
   interface ProcessFilesResult {
     preview: PreviewData;
@@ -1064,9 +1058,8 @@ export function BlockDialog({
         // Pre-calculate and cache performance snapshot for instant page loads
         if (processedPreview.trades?.trades.length) {
           // Show progress dialog BEFORE any heavy computation
-          abortControllerRef.current = new AbortController();
           setIsProcessing(false); // Hide old processing UI
-          setProgressState({ open: true, step: "Starting...", percent: 0 });
+          const signal = progress.start("Starting...", 0);
 
           // Allow React to render the dialog before starting computation
           await waitForRender();
@@ -1079,15 +1072,14 @@ export function BlockDialog({
               const combinedTrades = await combineAllLegGroupsAsync(
                 processedPreview.trades.trades,
                 {
-                  onProgress: (progress) => {
+                  onProgress: (p) => {
                     // Scale combine progress to 0-30%
-                    setProgressState({
-                      open: true,
-                      step: `Combining: ${progress.step}`,
-                      percent: Math.floor(progress.percent * 0.3),
-                    });
+                    progress.update(
+                      `Combining: ${p.step}`,
+                      Math.floor(p.percent * 0.3)
+                    );
                   },
-                  signal: abortControllerRef.current.signal,
+                  signal,
                 }
               );
               await storeCombinedTradesCache(newBlock.id, combinedTrades);
@@ -1100,24 +1092,19 @@ export function BlockDialog({
               dailyLogs: processedPreview.dailyLogs?.entries,
               riskFreeRate: 2.0,
               normalizeTo1Lot: false,
-              onProgress: (progress: SnapshotProgress) => {
+              onProgress: (p: SnapshotProgress) => {
                 const basePercent = combineLegGroups ? 30 : 0;
                 const scale = combineLegGroups ? 0.65 : 0.95;
-                setProgressState({
-                  open: true,
-                  step: progress.step,
-                  percent: basePercent + Math.floor(progress.percent * scale),
-                });
+                progress.update(
+                  p.step,
+                  basePercent + Math.floor(p.percent * scale)
+                );
               },
-              signal: abortControllerRef.current.signal,
+              signal,
             });
 
             // Store to cache (95-100%)
-            setProgressState({
-              open: true,
-              step: "Saving to cache...",
-              percent: 96,
-            });
+            progress.update("Saving to cache...", 96);
             await waitForRender();
             await storePerformanceSnapshotCache(newBlock.id, snapshot);
           } catch (err) {
@@ -1128,7 +1115,7 @@ export function BlockDialog({
               throw err;
             }
           } finally {
-            setProgressState(null);
+            progress.finish();
             setIsProcessing(true); // Restore for remaining operations
           }
         }
@@ -1326,9 +1313,8 @@ export function BlockDialog({
               const existingDailyLogs = await getDailyLogsByBlock(block.id);
 
               // Show progress dialog BEFORE any heavy computation
-              abortControllerRef.current = new AbortController();
               setIsProcessing(false); // Hide old processing UI
-              setProgressState({ open: true, step: "Starting...", percent: 0 });
+              const signal = progress.start("Starting...", 0);
 
               // Allow React to render the dialog before starting computation
               await waitForRender();
@@ -1338,15 +1324,14 @@ export function BlockDialog({
                 const combinedTrades = await combineAllLegGroupsAsync(
                   existingTrades,
                   {
-                    onProgress: (progress) => {
+                    onProgress: (p) => {
                       // Scale combine progress to 0-30%
-                      setProgressState({
-                        open: true,
-                        step: `Combining: ${progress.step}`,
-                        percent: Math.floor(progress.percent * 0.3),
-                      });
+                      progress.update(
+                        `Combining: ${p.step}`,
+                        Math.floor(p.percent * 0.3)
+                      );
                     },
-                    signal: abortControllerRef.current.signal,
+                    signal,
                   }
                 );
                 await storeCombinedTradesCache(block.id, combinedTrades);
@@ -1357,23 +1342,18 @@ export function BlockDialog({
                   dailyLogs: existingDailyLogs,
                   riskFreeRate: 2.0,
                   normalizeTo1Lot: false,
-                  onProgress: (progress: SnapshotProgress) => {
+                  onProgress: (p: SnapshotProgress) => {
                     // Scale snapshot progress to 30-95%
-                    setProgressState({
-                      open: true,
-                      step: progress.step,
-                      percent: 30 + Math.floor(progress.percent * 0.65),
-                    });
+                    progress.update(
+                      p.step,
+                      30 + Math.floor(p.percent * 0.65)
+                    );
                   },
-                  signal: abortControllerRef.current.signal,
+                  signal,
                 });
 
                 // Store to cache (95-100%)
-                setProgressState({
-                  open: true,
-                  step: "Saving to cache...",
-                  percent: 96,
-                });
+                progress.update("Saving to cache...", 96);
                 await waitForRender();
                 await storePerformanceSnapshotCache(block.id, snapshot);
               } catch (err) {
@@ -1383,7 +1363,7 @@ export function BlockDialog({
                   throw err;
                 }
               } finally {
-                setProgressState(null);
+                progress.finish();
                 setIsProcessing(true); // Restore for remaining operations
               }
             }
@@ -1396,9 +1376,8 @@ export function BlockDialog({
               const existingDailyLogs = await getDailyLogsByBlock(block.id);
 
               // Use progress dialog for pre-calculation
-              abortControllerRef.current = new AbortController();
               setIsProcessing(false); // Hide old processing UI
-              setProgressState({ open: true, step: "Starting...", percent: 0 });
+              const signal = progress.start("Starting...", 0);
 
               // Allow React to render the dialog before starting computation
               await waitForRender();
@@ -1409,23 +1388,18 @@ export function BlockDialog({
                   dailyLogs: existingDailyLogs,
                   riskFreeRate: 2.0,
                   normalizeTo1Lot: false,
-                  onProgress: (progress: SnapshotProgress) => {
+                  onProgress: (p: SnapshotProgress) => {
                     // Scale to 0-95%
-                    setProgressState({
-                      open: true,
-                      step: progress.step,
-                      percent: Math.floor(progress.percent * 0.95),
-                    });
+                    progress.update(
+                      p.step,
+                      Math.floor(p.percent * 0.95)
+                    );
                   },
-                  signal: abortControllerRef.current.signal,
+                  signal,
                 });
 
                 // Store to cache (95-100%)
-                setProgressState({
-                  open: true,
-                  step: "Saving to cache...",
-                  percent: 96,
-                });
+                progress.update("Saving to cache...", 96);
                 await waitForRender();
                 await storePerformanceSnapshotCache(block.id, snapshot);
               } catch (err) {
@@ -1435,7 +1409,7 @@ export function BlockDialog({
                   throw err;
                 }
               } finally {
-                setProgressState(null);
+                progress.finish();
                 setIsProcessing(true); // Restore for remaining operations
               }
             }
@@ -1493,23 +1467,18 @@ export function BlockDialog({
           // Update combined trades cache if setting is enabled
           if (combineLegGroups) {
             // Show progress dialog for combining (this can freeze UI with large files)
-            abortControllerRef.current = new AbortController();
             setIsProcessing(false); // Hide old processing UI
-            setProgressState({ open: true, step: "Starting...", percent: 0 });
+            const signal = progress.start("Starting...", 0);
             await waitForRender();
 
             try {
               const combinedTrades = await combineAllLegGroupsAsync(
                 processedData.trades.trades,
                 {
-                  onProgress: (progress) => {
-                    setProgressState({
-                      open: true,
-                      step: `Combining: ${progress.step}`,
-                      percent: progress.percent,
-                    });
+                  onProgress: (p) => {
+                    progress.update(`Combining: ${p.step}`, p.percent);
                   },
-                  signal: abortControllerRef.current.signal,
+                  signal,
                 }
               );
               await storeCombinedTradesCache(block.id, combinedTrades);
@@ -1520,7 +1489,7 @@ export function BlockDialog({
                 throw err;
               }
             } finally {
-              setProgressState(null);
+              progress.finish();
               setIsProcessing(true); // Restore for remaining operations
             }
           } else {
@@ -1623,9 +1592,8 @@ export function BlockDialog({
 
             if (trades.length > 0) {
               // Use progress dialog for pre-calculation
-              abortControllerRef.current = new AbortController();
               setIsProcessing(false); // Hide old processing UI
-              setProgressState({ open: true, step: "Starting...", percent: 0 });
+              const signal = progress.start("Starting...", 0);
 
               // Allow React to render the dialog before starting computation
               await waitForRender();
@@ -1636,23 +1604,18 @@ export function BlockDialog({
                   dailyLogs,
                   riskFreeRate: 2.0,
                   normalizeTo1Lot: false,
-                  onProgress: (progress: SnapshotProgress) => {
+                  onProgress: (p: SnapshotProgress) => {
                     // Scale to 0-95%
-                    setProgressState({
-                      open: true,
-                      step: progress.step,
-                      percent: Math.floor(progress.percent * 0.95),
-                    });
+                    progress.update(
+                      p.step,
+                      Math.floor(p.percent * 0.95)
+                    );
                   },
-                  signal: abortControllerRef.current.signal,
+                  signal,
                 });
 
                 // Store to cache (95-100%)
-                setProgressState({
-                  open: true,
-                  step: "Saving to cache...",
-                  percent: 96,
-                });
+                progress.update("Saving to cache...", 96);
                 await waitForRender();
                 await storePerformanceSnapshotCache(block.id, snapshot);
               } catch (err) {
@@ -1662,7 +1625,7 @@ export function BlockDialog({
                   throw err;
                 }
               } finally {
-                setProgressState(null);
+                progress.finish();
                 setIsProcessing(true); // Restore for remaining operations
               }
             } else {
@@ -2323,10 +2286,10 @@ export function BlockDialog({
 
       {/* Progress dialog for pre-calculation */}
       <ProgressDialog
-        open={progressState?.open ?? false}
+        open={progress.state?.open ?? false}
         title="Pre-calculating Statistics"
-        step={progressState?.step ?? ""}
-        percent={progressState?.percent ?? 0}
+        step={progress.state?.step ?? ""}
+        percent={progress.state?.percent ?? 0}
         onCancel={handleCancelCalculation}
       />
     </>

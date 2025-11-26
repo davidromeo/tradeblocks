@@ -23,10 +23,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useBlockStore, type Block } from "@/lib/stores/block-store";
 import { Activity, AlertTriangle, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { ProgressDialog } from "@/components/progress-dialog";
 import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
 import { waitForRender } from "@/lib/utils/async-helpers";
+import { useProgressDialog } from "@/hooks/use-progress-dialog";
 
 function BlockCard({
   block,
@@ -38,12 +39,7 @@ function BlockCard({
   const setActiveBlock = useBlockStore(state => state.setActiveBlock);
   const recalculateBlock = useBlockStore(state => state.recalculateBlock);
   const [isRecalculating, setIsRecalculating] = useState(false);
-  const [progressState, setProgressState] = useState<{
-    open: boolean;
-    step: string;
-    percent: number;
-  } | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const progress = useProgressDialog();
 
   const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("en-US", {
@@ -53,15 +49,13 @@ function BlockCard({
     }).format(date);
 
   const handleCancelCalculation = useCallback(() => {
-    abortControllerRef.current?.abort();
-    setProgressState(null);
+    progress.cancel();
     setIsRecalculating(false);
-  }, []);
+  }, [progress]);
 
   const handleRecalculate = async () => {
     setIsRecalculating(true);
-    abortControllerRef.current = new AbortController();
-    setProgressState({ open: true, step: "Starting...", percent: 0 });
+    const signal = progress.start("Starting...", 0);
 
     // Allow React to render the dialog before starting computation
     await waitForRender();
@@ -69,14 +63,10 @@ function BlockCard({
     try {
       await recalculateBlock(
         block.id,
-        (progress: SnapshotProgress) => {
-          setProgressState({
-            open: true,
-            step: progress.step,
-            percent: progress.percent,
-          });
+        (p: SnapshotProgress) => {
+          progress.update(p.step, p.percent);
         },
-        abortControllerRef.current.signal
+        signal
       );
 
       // If this block is active, also refresh the performance store
@@ -91,7 +81,7 @@ function BlockCard({
         console.error('Failed to recalculate block:', error);
       }
     } finally {
-      setProgressState(null);
+      progress.finish();
       setIsRecalculating(false);
     }
   };
@@ -182,10 +172,10 @@ function BlockCard({
 
       {/* Progress dialog for recalculation */}
       <ProgressDialog
-        open={progressState?.open ?? false}
+        open={progress.state?.open ?? false}
         title="Recalculating Statistics"
-        step={progressState?.step ?? ""}
-        percent={progressState?.percent ?? 0}
+        step={progress.state?.step ?? ""}
+        percent={progress.state?.percent ?? 0}
         onCancel={handleCancelCalculation}
       />
     </Card>
@@ -202,12 +192,7 @@ function BlockRow({
   const setActiveBlock = useBlockStore(state => state.setActiveBlock);
   const recalculateBlock = useBlockStore(state => state.recalculateBlock);
   const [isRecalculating, setIsRecalculating] = useState(false);
-  const [progressState, setProgressState] = useState<{
-    open: boolean;
-    step: string;
-    percent: number;
-  } | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const progress = useProgressDialog();
 
   const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("en-US", {
@@ -217,15 +202,13 @@ function BlockRow({
     }).format(date);
 
   const handleCancelCalculation = useCallback(() => {
-    abortControllerRef.current?.abort();
-    setProgressState(null);
+    progress.cancel();
     setIsRecalculating(false);
-  }, []);
+  }, [progress]);
 
   const handleRecalculate = async () => {
     setIsRecalculating(true);
-    abortControllerRef.current = new AbortController();
-    setProgressState({ open: true, step: "Starting...", percent: 0 });
+    const signal = progress.start("Starting...", 0);
 
     // Allow React to render the dialog before starting computation
     await waitForRender();
@@ -233,14 +216,10 @@ function BlockRow({
     try {
       await recalculateBlock(
         block.id,
-        (progress: SnapshotProgress) => {
-          setProgressState({
-            open: true,
-            step: progress.step,
-            percent: progress.percent,
-          });
+        (p: SnapshotProgress) => {
+          progress.update(p.step, p.percent);
         },
-        abortControllerRef.current.signal
+        signal
       );
 
       if (block.isActive) {
@@ -254,7 +233,7 @@ function BlockRow({
         console.error('Failed to recalculate block:', error);
       }
     } finally {
-      setProgressState(null);
+      progress.finish();
       setIsRecalculating(false);
     }
   };
@@ -335,10 +314,10 @@ function BlockRow({
 
       {/* Progress dialog for recalculation */}
       <ProgressDialog
-        open={progressState?.open ?? false}
+        open={progress.state?.open ?? false}
         title="Recalculating Statistics"
-        step={progressState?.step ?? ""}
-        percent={progressState?.percent ?? 0}
+        step={progress.state?.step ?? ""}
+        percent={progress.state?.percent ?? 0}
         onCancel={handleCancelCalculation}
       />
     </div>
