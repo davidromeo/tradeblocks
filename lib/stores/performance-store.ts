@@ -132,7 +132,8 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
   },
 
   fetchPerformanceData: async (blockId: string) => {
-    set({ isLoading: true, error: null })
+    // Clear existing data to avoid showing the previous block's charts while loading the new one
+    set({ isLoading: true, error: null, data: null })
 
     try {
       const {
