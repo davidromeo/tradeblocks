@@ -11,6 +11,13 @@ if (!global.indexedDB) {
   global.indexedDB = new IDBFactory();
 }
 
+// Polyfill structuredClone for Node.js environments that don't have it
+if (typeof global.structuredClone === 'undefined') {
+  global.structuredClone = <T>(obj: T): T => {
+    return JSON.parse(JSON.stringify(obj));
+  };
+}
+
 // Mock console.log for cleaner test output (optional - can be commented out for debugging)
 global.console = {
   ...console,

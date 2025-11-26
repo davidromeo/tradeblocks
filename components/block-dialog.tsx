@@ -45,6 +45,16 @@ import {
   updateReportingTradesForBlock,
   updateTradesForBlock,
 } from "@/lib/db";
+import {
+  storeCombinedTradesCache,
+  deleteCombinedTradesCache,
+} from "@/lib/db/combined-trades-cache";
+import {
+  storePerformanceSnapshotCache,
+  deletePerformanceSnapshotCache,
+} from "@/lib/db/performance-snapshot-cache";
+import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
+import { combineAllLegGroupsAsync } from "@/lib/utils/combine-leg-groups";
 import { REQUIRED_DAILY_LOG_COLUMNS } from "@/lib/models/daily-log";
 import {
   REPORTING_TRADE_COLUMN_ALIASES,
@@ -54,6 +64,7 @@ import type { StrategyAlignment } from "@/lib/models/strategy-alignment";
 import {
   REQUIRED_TRADE_COLUMNS,
   TRADE_COLUMN_ALIASES,
+  type Trade,
 } from "@/lib/models/trade";
 import {
   DailyLogProcessingProgress,
@@ -93,8 +104,11 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ProgressDialog } from "@/components/progress-dialog";
+import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
+import { waitForRender } from "@/lib/utils/async-helpers";
 
 interface Block {
   id: string;
@@ -210,6 +224,19 @@ export function BlockDialog({
   const [strategyOverride, setStrategyOverride] = useState("");
   const [pendingTradeResult, setPendingTradeResult] =
     useState<TradeProcessingResult | null>(null);
+
+  // Progress dialog state for pre-calculation
+  const [progressState, setProgressState] = useState<{
+    open: boolean;
+    step: string;
+    percent: number;
+  } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelCalculation = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setProgressState(null);
+  }, []);
 
   interface ProcessFilesResult {
     preview: PreviewData;
@@ -1034,6 +1061,78 @@ export function BlockDialog({
           );
         }
 
+        // Pre-calculate and cache performance snapshot for instant page loads
+        if (processedPreview.trades?.trades.length) {
+          // Show progress dialog BEFORE any heavy computation
+          abortControllerRef.current = new AbortController();
+          setIsProcessing(false); // Hide old processing UI
+          setProgressState({ open: true, step: "Starting...", percent: 0 });
+
+          // Allow React to render the dialog before starting computation
+          await waitForRender();
+
+          try {
+            let tradesToUse: Trade[] = processedPreview.trades.trades;
+
+            // If combining leg groups, do it with progress tracking
+            if (combineLegGroups) {
+              const combinedTrades = await combineAllLegGroupsAsync(
+                processedPreview.trades.trades,
+                {
+                  onProgress: (progress) => {
+                    // Scale combine progress to 0-30%
+                    setProgressState({
+                      open: true,
+                      step: `Combining: ${progress.step}`,
+                      percent: Math.floor(progress.percent * 0.3),
+                    });
+                  },
+                  signal: abortControllerRef.current.signal,
+                }
+              );
+              await storeCombinedTradesCache(newBlock.id, combinedTrades);
+              tradesToUse = combinedTrades;
+            }
+
+            // Build performance snapshot (30-95% if combining, 0-95% if not)
+            const snapshot = await buildPerformanceSnapshot({
+              trades: tradesToUse,
+              dailyLogs: processedPreview.dailyLogs?.entries,
+              riskFreeRate: 2.0,
+              normalizeTo1Lot: false,
+              onProgress: (progress: SnapshotProgress) => {
+                const basePercent = combineLegGroups ? 30 : 0;
+                const scale = combineLegGroups ? 0.65 : 0.95;
+                setProgressState({
+                  open: true,
+                  step: progress.step,
+                  percent: basePercent + Math.floor(progress.percent * scale),
+                });
+              },
+              signal: abortControllerRef.current.signal,
+            });
+
+            // Store to cache (95-100%)
+            setProgressState({
+              open: true,
+              step: "Saving to cache...",
+              percent: 96,
+            });
+            await waitForRender();
+            await storePerformanceSnapshotCache(newBlock.id, snapshot);
+          } catch (err) {
+            if (err instanceof Error && err.name === "AbortError") {
+              // User cancelled - skip caching, save still succeeds
+              console.log("Pre-calculation cancelled by user");
+            } else {
+              throw err;
+            }
+          } finally {
+            setProgressState(null);
+            setIsProcessing(true); // Restore for remaining operations
+          }
+        }
+
         // Calculate block stats for store
         const trades = processedPreview.trades?.trades || [];
         const blockStats = {
@@ -1216,6 +1315,131 @@ export function BlockDialog({
           };
           // Clear cache since combining affects calculations
           calculationOrchestrator.clearCache(block.id);
+
+          // Handle combined trades cache based on new setting
+          const { getTradesByBlock, getDailyLogsByBlock } = await import("@/lib/db");
+          const existingTrades = await getTradesByBlock(block.id);
+
+          if (combineLegGroups) {
+            // Enabling: pre-calculate and cache combined trades
+            if (existingTrades.length > 0) {
+              const existingDailyLogs = await getDailyLogsByBlock(block.id);
+
+              // Show progress dialog BEFORE any heavy computation
+              abortControllerRef.current = new AbortController();
+              setIsProcessing(false); // Hide old processing UI
+              setProgressState({ open: true, step: "Starting...", percent: 0 });
+
+              // Allow React to render the dialog before starting computation
+              await waitForRender();
+
+              try {
+                // Combine leg groups with progress (this was freezing UI before)
+                const combinedTrades = await combineAllLegGroupsAsync(
+                  existingTrades,
+                  {
+                    onProgress: (progress) => {
+                      // Scale combine progress to 0-30%
+                      setProgressState({
+                        open: true,
+                        step: `Combining: ${progress.step}`,
+                        percent: Math.floor(progress.percent * 0.3),
+                      });
+                    },
+                    signal: abortControllerRef.current.signal,
+                  }
+                );
+                await storeCombinedTradesCache(block.id, combinedTrades);
+
+                // Build performance snapshot (30-95%)
+                const snapshot = await buildPerformanceSnapshot({
+                  trades: combinedTrades,
+                  dailyLogs: existingDailyLogs,
+                  riskFreeRate: 2.0,
+                  normalizeTo1Lot: false,
+                  onProgress: (progress: SnapshotProgress) => {
+                    // Scale snapshot progress to 30-95%
+                    setProgressState({
+                      open: true,
+                      step: progress.step,
+                      percent: 30 + Math.floor(progress.percent * 0.65),
+                    });
+                  },
+                  signal: abortControllerRef.current.signal,
+                });
+
+                // Store to cache (95-100%)
+                setProgressState({
+                  open: true,
+                  step: "Saving to cache...",
+                  percent: 96,
+                });
+                await waitForRender();
+                await storePerformanceSnapshotCache(block.id, snapshot);
+              } catch (err) {
+                if (err instanceof Error && err.name === "AbortError") {
+                  console.log("Pre-calculation cancelled by user");
+                } else {
+                  throw err;
+                }
+              } finally {
+                setProgressState(null);
+                setIsProcessing(true); // Restore for remaining operations
+              }
+            }
+          } else {
+            // Disabling: delete the cached combined trades
+            await deleteCombinedTradesCache(block.id);
+
+            // Rebuild performance snapshot with raw trades
+            if (existingTrades.length > 0) {
+              const existingDailyLogs = await getDailyLogsByBlock(block.id);
+
+              // Use progress dialog for pre-calculation
+              abortControllerRef.current = new AbortController();
+              setIsProcessing(false); // Hide old processing UI
+              setProgressState({ open: true, step: "Starting...", percent: 0 });
+
+              // Allow React to render the dialog before starting computation
+              await waitForRender();
+
+              try {
+                const snapshot = await buildPerformanceSnapshot({
+                  trades: existingTrades,
+                  dailyLogs: existingDailyLogs,
+                  riskFreeRate: 2.0,
+                  normalizeTo1Lot: false,
+                  onProgress: (progress: SnapshotProgress) => {
+                    // Scale to 0-95%
+                    setProgressState({
+                      open: true,
+                      step: progress.step,
+                      percent: Math.floor(progress.percent * 0.95),
+                    });
+                  },
+                  signal: abortControllerRef.current.signal,
+                });
+
+                // Store to cache (95-100%)
+                setProgressState({
+                  open: true,
+                  step: "Saving to cache...",
+                  percent: 96,
+                });
+                await waitForRender();
+                await storePerformanceSnapshotCache(block.id, snapshot);
+              } catch (err) {
+                if (err instanceof Error && err.name === "AbortError") {
+                  console.log("Pre-calculation cancelled by user");
+                } else {
+                  throw err;
+                }
+              } finally {
+                setProgressState(null);
+                setIsProcessing(true); // Restore for remaining operations
+              }
+            }
+          }
         }
 
         // Track if we need to clear caches/comparison data
@@ -1265,6 +1489,44 @@ export function BlockDialog({
 
           // Save trades to IndexedDB (replace all existing trades)
           await updateTradesForBlock(block.id, processedData.trades.trades);
+
+          // Update combined trades cache if setting is enabled
+          if (combineLegGroups) {
+            // Show progress dialog for combining (this can freeze UI with large files)
+            abortControllerRef.current = new AbortController();
+            setIsProcessing(false); // Hide old processing UI
+            setProgressState({ open: true, step: "Starting...", percent: 0 });
+            await waitForRender();
+
+            try {
+              const combinedTrades = await combineAllLegGroupsAsync(
+                processedData.trades.trades,
+                {
+                  onProgress: (progress) => {
+                    setProgressState({
+                      open: true,
+                      step: `Combining: ${progress.step}`,
+                      percent: progress.percent,
+                    });
+                  },
+                  signal: abortControllerRef.current.signal,
+                }
+              );
+              await storeCombinedTradesCache(block.id, combinedTrades);
+            } catch (err) {
+              if (err instanceof Error && err.name === "AbortError") {
+                console.log("Combine leg groups cancelled by user");
+              } else {
+                throw err;
+              }
+            } finally {
+              setProgressState(null);
+              setIsProcessing(true); // Restore for remaining operations
+            }
+          } else {
+            // Ensure cache is cleared if trades were updated
+            await deleteCombinedTradesCache(block.id);
+          }
         }
 
         if (dailyLog.file && processedData?.dailyLogs) {
@@ -1350,6 +1612,64 @@ export function BlockDialog({
         // Clear calculation cache when any files are replaced or removed
         if (filesChanged) {
           calculationOrchestrator.clearCache(block.id);
+
+          // Rebuild performance snapshot cache with updated data
+          // Skip if we already rebuilt due to combineLegGroups change
+          if (combineLegGroups === currentCombineLegGroups) {
+            const { getTradesByBlockWithOptions, getDailyLogsByBlock } = await import("@/lib/db");
+
+            const trades = await getTradesByBlockWithOptions(block.id, { combineLegGroups });
+            const dailyLogs = await getDailyLogsByBlock(block.id);
+
+            if (trades.length > 0) {
+              // Use progress dialog for pre-calculation
+              abortControllerRef.current = new AbortController();
+              setIsProcessing(false); // Hide old processing UI
+              setProgressState({ open: true, step: "Starting...", percent: 0 });
+
+              // Allow React to render the dialog before starting computation
+              await waitForRender();
+
+              try {
+                const snapshot = await buildPerformanceSnapshot({
+                  trades,
+                  dailyLogs,
+                  riskFreeRate: 2.0,
+                  normalizeTo1Lot: false,
+                  onProgress: (progress: SnapshotProgress) => {
+                    // Scale to 0-95%
+                    setProgressState({
+                      open: true,
+                      step: progress.step,
+                      percent: Math.floor(progress.percent * 0.95),
+                    });
+                  },
+                  signal: abortControllerRef.current.signal,
+                });
+
+                // Store to cache (95-100%)
+                setProgressState({
+                  open: true,
+                  step: "Saving to cache...",
+                  percent: 96,
+                });
+                await waitForRender();
+                await storePerformanceSnapshotCache(block.id, snapshot);
+              } catch (err) {
+                if (err instanceof Error && err.name === "AbortError") {
+                  console.log("Pre-calculation cancelled by user");
+                } else {
+                  throw err;
+                }
+              } finally {
+                setProgressState(null);
+                setIsProcessing(true); // Restore for remaining operations
+              }
+            } else {
+              // No trades, delete the cache
+              await deletePerformanceSnapshotCache(block.id);
+            }
+          }
         }
 
         // Refresh the block to get updated stats from IndexedDB
@@ -2000,6 +2320,15 @@ export function BlockDialog({
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {/* Progress dialog for pre-calculation */}
+      <ProgressDialog
+        open={progressState?.open ?? false}
+        title="Pre-calculating Statistics"
+        step={progressState?.step ?? ""}
+        percent={progressState?.percent ?? 0}
+        onCancel={handleCancelCalculation}
+      />
     </>
   );
 }

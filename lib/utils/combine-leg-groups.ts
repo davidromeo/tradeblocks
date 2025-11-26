@@ -9,6 +9,7 @@
  */
 
 import { Trade } from '../models/trade'
+import { yieldToMain, checkCancelled } from './async-helpers'
 
 /**
  * Key used to group trades that were opened at the same time
@@ -223,6 +224,16 @@ export function combineLegGroup(trades: Trade[]): CombinedTrade {
   return combined
 }
 
+export interface CombineLegGroupsProgress {
+  step: string
+  percent: number
+}
+
+export interface CombineLegGroupsOptions {
+  onProgress?: (progress: CombineLegGroupsProgress) => void
+  signal?: AbortSignal
+}
+
 /**
  * Process all trades and combine leg groups that share the same entry timestamp
  *
@@ -244,6 +255,62 @@ export function combineAllLegGroups(trades: Trade[]): CombinedTrade[] {
     if (dateCompare !== 0) return dateCompare
     return a.timeOpened.localeCompare(b.timeOpened)
   })
+
+  return combinedTrades
+}
+
+/**
+ * Async version of combineAllLegGroups with progress reporting and cancellation support
+ * Use this for large datasets to keep UI responsive
+ *
+ * @param trades - Array of trades to process
+ * @param options - Progress callback and abort signal
+ * @returns Array of trades with leg groups combined
+ */
+export async function combineAllLegGroupsAsync(
+  trades: Trade[],
+  options?: CombineLegGroupsOptions
+): Promise<CombinedTrade[]> {
+  const { onProgress, signal } = options ?? {}
+
+  checkCancelled(signal)
+  onProgress?.({ step: 'Grouping trades by entry', percent: 0 })
+  await yieldToMain()
+
+  const groups = groupTradesByEntry(trades)
+  const combinedTrades: CombinedTrade[] = []
+  const totalGroups = groups.size
+  let processedGroups = 0
+
+  checkCancelled(signal)
+  onProgress?.({ step: 'Combining leg groups', percent: 10 })
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  for (const [_, groupTrades] of groups) {
+    combinedTrades.push(combineLegGroup(groupTrades))
+    processedGroups++
+
+    // Yield every 100 groups to keep UI responsive
+    if (processedGroups % 100 === 0) {
+      checkCancelled(signal)
+      const percent = 10 + Math.floor((processedGroups / totalGroups) * 70)
+      onProgress?.({ step: `Combining leg groups (${processedGroups}/${totalGroups})`, percent })
+      await yieldToMain()
+    }
+  }
+
+  checkCancelled(signal)
+  onProgress?.({ step: 'Sorting combined trades', percent: 85 })
+  await yieldToMain()
+
+  // Sort by date/time to maintain chronological order
+  combinedTrades.sort((a, b) => {
+    const dateCompare = a.dateOpened.getTime() - b.dateOpened.getTime()
+    if (dateCompare !== 0) return dateCompare
+    return a.timeOpened.localeCompare(b.timeOpened)
+  })
+
+  onProgress?.({ step: 'Complete', percent: 100 })
 
   return combinedTrades
 }

@@ -8,7 +8,9 @@ import {
   getDailyLogsByBlock,
   getReportingTradesByBlock,
   updateBlockStats,
+  storePerformanceSnapshotCache,
 } from "../db";
+import { buildPerformanceSnapshot, SnapshotProgress } from "../services/performance-snapshot";
 import { ProcessedBlock } from "../models/block";
 import { StrategyAlignment } from "../models/strategy-alignment";
 
@@ -66,7 +68,11 @@ interface BlockStore {
   updateBlock: (id: string, updates: Partial<Block>) => Promise<void>;
   deleteBlock: (id: string) => Promise<void>;
   refreshBlock: (id: string) => Promise<void>;
-  recalculateBlock: (id: string) => Promise<void>;
+  recalculateBlock: (
+    id: string,
+    onProgress?: (progress: SnapshotProgress) => void,
+    signal?: AbortSignal
+  ) => Promise<void>;
   clearAllData: () => Promise<void>;
 }
 
@@ -470,7 +476,11 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
     }
   },
 
-  recalculateBlock: async (id: string) => {
+  recalculateBlock: async (
+    id: string,
+    onProgress?: (progress: SnapshotProgress) => void,
+    signal?: AbortSignal
+  ) => {
     try {
       console.log("Recalculating block:", id);
       set({ error: null });
@@ -508,6 +518,19 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
 
       // Update ProcessedBlock stats in database
       await updateBlockStats(id, portfolioStats, strategyStats);
+
+      // Build and cache performance snapshot for instant page loads
+      console.log("Building performance snapshot cache...");
+      const snapshot = await buildPerformanceSnapshot({
+        trades,
+        dailyLogs,
+        riskFreeRate: processedBlock.analysisConfig?.riskFreeRate || 2.0,
+        normalizeTo1Lot: false,
+        onProgress,
+        signal,
+      });
+      await storePerformanceSnapshotCache(id, snapshot);
+      console.log("Performance snapshot cached successfully");
 
       // Update lastModified timestamp
       await dbUpdateBlock(id, { lastModified: new Date() });

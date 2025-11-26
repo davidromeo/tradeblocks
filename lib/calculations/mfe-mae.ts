@@ -1,5 +1,6 @@
 import { Trade } from '@/lib/models/trade'
 import { computeTotalMaxProfit, computeTotalMaxLoss, computeTotalPremium, type EfficiencyBasis } from '@/lib/metrics/trade-efficiency'
+import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
 
 export type NormalizationBasis = 'premium' | 'margin'
 export const NORMALIZATION_BASES: NormalizationBasis[] = ['premium', 'margin']
@@ -236,6 +237,31 @@ export function calculateMFEMAEData(trades: Trade[]): MFEMAEDataPoint[] {
 }
 
 /**
+ * Async version of calculateMFEMAEData with yielding for large datasets
+ */
+export async function calculateMFEMAEDataAsync(
+  trades: Trade[],
+  signal?: AbortSignal
+): Promise<MFEMAEDataPoint[]> {
+  const dataPoints: MFEMAEDataPoint[] = []
+
+  for (let i = 0; i < trades.length; i++) {
+    const point = calculateTradeExcursionMetrics(trades[i], i + 1)
+    if (point) {
+      dataPoints.push(point)
+    }
+
+    // Yield every 100 trades to keep UI responsive
+    if (i % 100 === 0 && i > 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+  }
+
+  return dataPoints
+}
+
+/**
  * Calculates aggregate statistics from MFE/MAE data points
  */
 export function calculateMFEMAEStats(dataPoints: MFEMAEDataPoint[]): Partial<Record<NormalizationBasis, MFEMAEStats>> {
@@ -342,6 +368,77 @@ export function createExcursionDistribution(
       bucket: `${rangeStart}-${rangeEnd}%`,
       mfeCount,
       maeCount,
+      range: [rangeStart, rangeEnd]
+    })
+  }
+
+  return buckets
+}
+
+/**
+ * Async version of createExcursionDistribution with yielding for large datasets
+ * Uses O(n) single-pass bucketing instead of O(n*buckets) repeated filtering
+ */
+export async function createExcursionDistributionAsync(
+  dataPoints: MFEMAEDataPoint[],
+  bucketSize: number = 10,
+  signal?: AbortSignal
+): Promise<DistributionBucket[]> {
+  if (dataPoints.length === 0) {
+    return []
+  }
+
+  checkCancelled(signal)
+  await yieldToMain()
+
+  // First pass: find max value and count values in a single iteration
+  let maxMfe = 0
+  let maxMae = 0
+  const mfeBucketCounts: Map<number, number> = new Map()
+  const maeBucketCounts: Map<number, number> = new Map()
+
+  for (let i = 0; i < dataPoints.length; i++) {
+    const d = dataPoints[i]
+
+    if (d.mfePercent !== undefined) {
+      maxMfe = Math.max(maxMfe, d.mfePercent)
+      const bucketIndex = Math.floor(d.mfePercent / bucketSize)
+      mfeBucketCounts.set(bucketIndex, (mfeBucketCounts.get(bucketIndex) || 0) + 1)
+    }
+
+    if (d.maePercent !== undefined) {
+      maxMae = Math.max(maxMae, d.maePercent)
+      const bucketIndex = Math.floor(d.maePercent / bucketSize)
+      maeBucketCounts.set(bucketIndex, (maeBucketCounts.get(bucketIndex) || 0) + 1)
+    }
+
+    // Yield every 200 items to keep UI responsive
+    if (i % 200 === 0 && i > 0) {
+      checkCancelled(signal)
+      await yieldToMain()
+    }
+  }
+
+  const maxValue = Math.max(maxMfe, maxMae)
+  if (maxValue === 0) {
+    return []
+  }
+
+  checkCancelled(signal)
+  await yieldToMain()
+
+  const numBuckets = Math.max(1, Math.ceil(maxValue / bucketSize))
+  const buckets: DistributionBucket[] = []
+
+  // Build buckets from pre-computed counts (very fast, no filtering needed)
+  for (let i = 0; i < numBuckets; i++) {
+    const rangeStart = i * bucketSize
+    const rangeEnd = (i + 1) * bucketSize
+
+    buckets.push({
+      bucket: `${rangeStart}-${rangeEnd}%`,
+      mfeCount: mfeBucketCounts.get(i) || 0,
+      maeCount: maeBucketCounts.get(i) || 0,
       range: [rangeStart, rangeEnd]
     })
   }
