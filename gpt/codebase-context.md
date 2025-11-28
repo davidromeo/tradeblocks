@@ -39,6 +39,8 @@ The content is organized as follows:
 ```
 app/
   (platform)/
+    assistant/
+      page.tsx
     block-stats/
       page.tsx
     blocks/
@@ -122,6 +124,7 @@ components/
   no-active-block.tsx
   page-placeholder.tsx
   performance-export-dialog.tsx
+  progress-dialog.tsx
   sidebar-active-blocks.tsx
   sidebar-footer-legal.tsx
   site-header.tsx
@@ -130,6 +133,7 @@ components/
   theme-provider.tsx
 hooks/
   use-mobile.ts
+  use-progress-dialog.ts
 lib/
   calculations/
     correlation.ts
@@ -146,8 +150,10 @@ lib/
     walk-forward-analyzer.ts
   db/
     blocks-store.ts
+    combined-trades-cache.ts
     daily-logs-store.ts
     index.ts
+    performance-snapshot-cache.ts
     reporting-logs-store.ts
     trades-store.ts
     walk-forward-store.ts
@@ -180,6 +186,7 @@ lib/
     performance-store.ts
     walk-forward-store.ts
   utils/
+    async-helpers.ts
     combine-leg-groups.ts
     csv-headers.ts
     export-helpers.ts
@@ -334,6 +341,22 @@ if (value) updateChartSettings(
 updateChartSettings(
 ```
 
+## File: components/performance-charts/excursion-distribution-chart.tsx
+```typescript
+import React, { useMemo } from 'react'
+import { ChartWrapper } from './chart-wrapper'
+import { usePerformanceStore } from '@/lib/stores/performance-store'
+import type { Layout, PlotData } from 'plotly.js'
+⋮----
+interface ExcursionDistributionChartProps {
+  className?: string
+}
+⋮----
+// MFE histogram
+⋮----
+// MAE histogram
+```
+
 ## File: components/performance-charts/holding-duration-chart.tsx
 ```typescript
 import { useMemo } from 'react'
@@ -356,6 +379,41 @@ import { usePerformanceStore } from '@/lib/stores/performance-store'
 interface MarginUtilizationChartProps {
   className?: string
 }
+```
+
+## File: components/performance-charts/performance-filters.tsx
+```typescript
+import { MultiSelect } from "@/components/multi-select";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { usePerformanceStore } from "@/lib/stores/performance-store";
+import { Calendar, Filter } from "lucide-react";
+import { useMemo } from "react";
+⋮----
+interface PerformanceFiltersProps {
+  className?: string;
+}
+⋮----
+// Generate strategy options from trade data
+⋮----
+const handleDateRangeChange = (preset: string) =>
+⋮----
+const getFilterSummary = () =>
+⋮----
+{/* Date Range Selector */}
+⋮----
+{/* Strategy Filter */}
+⋮----
+{/* Filter Summary */}
+⋮----
+{/* Trade Count */}
 ```
 
 ## File: components/performance-charts/performance-metrics.tsx
@@ -392,6 +450,28 @@ const worstMonth = portfolioStats.totalPl < 0 ? '-$122,400' : 'N/A' // Placehold
 const avgTradeDuration = trades.length > 0 ? '1.5 days' : 'N/A' // Placeholder
 ⋮----
 {/* Additional metrics row */}
+```
+
+## File: components/performance-charts/premium-efficiency-chart.tsx
+```typescript
+import { useMemo } from 'react'
+import type { Layout, PlotData } from 'plotly.js'
+import { ChartWrapper } from './chart-wrapper'
+import { usePerformanceStore } from '@/lib/stores/performance-store'
+⋮----
+interface PremiumEfficiencyChartProps {
+  className?: string
+}
+⋮----
+// Calculate gross P/L (before commissions) and net P/L (after commissions)
+⋮----
+// Calculate summary stats
+⋮----
+// Gross P/L bars (before commissions)
+⋮----
+// Net P/L line (after commissions)
+⋮----
+const formatCurrency = (value: number)
 ```
 
 ## File: components/performance-charts/return-distribution-chart.tsx
@@ -454,6 +534,77 @@ interface RollingMetricsChartProps {
 }
 ⋮----
 type MetricType = 'win_rate' | 'profit_factor' | 'sharpe'
+```
+
+## File: components/performance-charts/rom-timeline-chart.tsx
+```typescript
+import React, { useMemo, useState } from 'react'
+import { ChartWrapper } from './chart-wrapper'
+import { usePerformanceStore } from '@/lib/stores/performance-store'
+import type { Layout, PlotData } from 'plotly.js'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+⋮----
+interface ROMTimelineChartProps {
+  className?: string
+}
+⋮----
+// ROM scatter plot
+⋮----
+// Moving average overlay
+⋮----
+// Only display MA if we have enough data points for a full window
+⋮----
+// Start from the first point where we have a full window
+⋮----
+// Calculate mean ROM
+⋮----
+// Add mean line as a trace (not a shape) so it can be toggled via legend
+```
+
+## File: components/performance-charts/vix-regime-chart.tsx
+```typescript
+import { useMemo } from 'react'
+import type { Layout, PlotData } from 'plotly.js'
+import { ChartWrapper } from './chart-wrapper'
+import { usePerformanceStore } from '@/lib/stores/performance-store'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+⋮----
+interface VixRegimeChartProps {
+  className?: string
+}
+⋮----
+/**
+ * Volatility regimes derived from long-run VIX observations.
+ * - Low volatility: VIX ≤ 18 (below long-term average of ~19)
+ * - Medium volatility: 18 < VIX ≤ 25 (historically elevated)
+ * - High volatility: VIX > 25 (stress conditions)
+ */
+⋮----
+const bubbleSize = (pl: number) =>
+⋮----
+const buildTrace = (entries: typeof openingEntries, isOpening: boolean): Partial<PlotData> => (
+⋮----
+const buildSummary = (entries: typeof openingEntries, axisSuffix: '' | '2') =>
+⋮----
+const regimeShapes = (forOpening: boolean): Layout['shapes'] =>
+⋮----
+// Create title annotations for each subplot
+⋮----
+// Add a horizontal divider line between the two charts
 ```
 
 ## File: components/performance-charts/win-loss-streaks-chart.tsx
@@ -719,6 +870,62 @@ const toPercent = (arr: number[])
 // Percentile lines
 ⋮----
 // Zero line
+```
+
+## File: components/risk-simulator/statistics-cards.tsx
+```typescript
+import { Card } from "@/components/ui/card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import type { MonteCarloResult } from "@/lib/calculations/monte-carlo";
+import {
+  AlertOctagon,
+  HelpCircle,
+  Percent,
+  Star,
+  Target,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
+⋮----
+interface StatisticsCardsProps {
+  result: MonteCarloResult;
+}
+⋮----
+export function StatisticsCards(
+⋮----
+// Calculate annualized return
+⋮----
+// Use the final timestep of the 95th percentile equity curve for best-case return
+⋮----
+// Calculate drawdown percentiles
+⋮----
+{/* Key Metrics - Top Row */}
+⋮----
+{/* Expected Return */}
+⋮----
+{/* Probability of Profit */}
+⋮----
+{/* Expected Drawdown */}
+⋮----
+{/* Return Scenarios */}
+⋮----
+{/* Best Case */}
+⋮----
+{/* Most Likely */}
+⋮----
+{/* Worst Case */}
+⋮----
+{/* Drawdown Scenarios */}
+⋮----
+{/* Best Case Drawdown (P5 - mild) */}
+⋮----
+{/* Typical Drawdown (P50) */}
+⋮----
+{/* Worst Case Drawdown (P95 - severe) */}
 ```
 
 ## File: components/risk-simulator/trading-frequency-card.tsx
@@ -1204,54 +1411,6 @@ interface PagePlaceholderProps {
   actionLabel?: string
   onActionClick?: () => void
 }
-```
-
-## File: components/performance-export-dialog.tsx
-```typescript
-import { FileJson, FileSpreadsheet } from "lucide-react";
-import { useState } from "react";
-⋮----
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { PerformanceData } from "@/lib/stores/performance-store";
-import {
-  downloadCsv,
-  downloadJson,
-  generateExportFilename,
-} from "@/lib/utils/export-helpers";
-import {
-  CHART_EXPORTS,
-  exportMultipleCharts,
-  getChartExportsByTab,
-  getMultipleChartsJson,
-} from "@/lib/utils/performance-export";
-⋮----
-interface PerformanceExportDialogProps {
-  data: PerformanceData;
-  blockName: string;
-}
-⋮----
-const toggleChart = (chartId: string) =>
-⋮----
-const selectAll = () =>
-⋮----
-const clearAll = () =>
-⋮----
-const handleExportSelectedCsv = () =>
-⋮----
-const handleExportSelectedJson = () =>
-⋮----
-checked=
 ```
 
 ## File: components/strategy-breakdown-table.tsx
@@ -2640,6 +2799,66 @@ export async function deleteReportingTradesByBlock(blockId: string): Promise<voi
 export async function updateReportingTradesForBlock(blockId: string, trades: ReportingTrade[]): Promise<void>
 ```
 
+## File: lib/metrics/trade-efficiency.ts
+```typescript
+import { Trade } from '@/lib/models/trade'
+⋮----
+/**
+ * Standard options multiplier used to convert per-contract values into notional dollars.
+ * Equity and index option contracts typically control 100 shares, so premium/max profit
+ * values need to be scaled by 100 to reflect the total economic exposure.
+ */
+⋮----
+/**
+ * Margin-to-notional ratio threshold that indicates a trade is lightly margined.
+ * When gross notional is less than 50% of the posted margin requirement we treat
+ * the trade as an option-style structure and apply the contract multiplier.
+ */
+⋮----
+/**
+ * Notional dollar threshold under which trades are considered "small". These trades
+ * likely represent single-lot option structures, so we apply the option multiplier
+ * even if there is no explicit margin requirement to compare against.
+ */
+⋮----
+function getNormalizedContractCount(trade: Trade): number
+⋮----
+function applyOptionMultiplierIfNeeded(total: number, trade: Trade): number
+⋮----
+function normalisePerContractValue(value: number, trade: Trade, isPremium: boolean): number
+⋮----
+export function computeTotalPremium(trade: Trade): number | undefined
+⋮----
+export function computeTotalMaxProfit(trade: Trade): number | undefined
+⋮----
+export function computeTotalMaxLoss(trade: Trade): number | undefined
+⋮----
+export type EfficiencyBasis = 'premium' | 'maxProfit' | 'margin' | 'unknown'
+⋮----
+export interface PremiumEfficiencyResult {
+  percentage?: number
+  denominator?: number
+  basis: EfficiencyBasis
+}
+⋮----
+/**
+ * Calculates a trade's premium efficiency percentage.
+ *
+ * The function searches for the most appropriate denominator to express trade performance:
+ * 1. Total premium collected (preferred when available)
+ * 2. Total maximum profit
+ * 3. Margin requirement
+ *
+ * Once a denominator is selected, it normalizes the trade's P/L against that value to
+ * compute an efficiency percentage. If no denominator can be derived or the resulting
+ * ratio is not finite, only the basis is reported.
+ *
+ * @param trade Trade record including premium, max profit, margin requirement, and P/L.
+ * @returns Object describing the efficiency percentage, denominator, and basis used.
+ */
+export function calculatePremiumEfficiencyPercent(trade: Trade): PremiumEfficiencyResult
+```
+
 ## File: lib/models/daily-log.ts
 ```typescript
 /**
@@ -3959,146 +4178,6 @@ export function assertRequiredHeaders(
 ): void
 ```
 
-## File: lib/utils/export-helpers.ts
-```typescript
-/**
- * Utility functions for exporting data as CSV and JSON
- */
-⋮----
-/**
- * Escapes a value for safe CSV inclusion.
- * - Wraps in quotes if value contains comma, quote, or newline
- * - Doubles any existing quotes
- */
-export function escapeCsvValue(value: unknown): string
-⋮----
-// If the value contains comma, quote, or newline, wrap in quotes and escape internal quotes
-⋮----
-/**
- * Joins an array of values into a CSV row, properly escaping each value
- */
-export function toCsvRow(values: unknown[]): string
-⋮----
-/**
- * Creates and triggers a file download
- */
-export function downloadFile(
-  content: string,
-  filename: string,
-  mimeType: string
-): void
-⋮----
-/**
- * Downloads data as a JSON file
- */
-export function downloadJson(data: unknown, filename: string): void
-⋮----
-/**
- * Downloads lines as a CSV file
- */
-export function downloadCsv(lines: string[], filename: string): void
-⋮----
-/**
- * Sanitizes a block name for use in filenames
- * Replaces spaces and special characters with hyphens
- */
-export function sanitizeFilename(name: string): string
-⋮----
-/**
- * Generates a filename with the current date
- */
-export function generateExportFilename(
-  blockName: string,
-  suffix: string,
-  extension: "json" | "csv"
-): string
-```
-
-## File: lib/utils/performance-export.ts
-```typescript
-/**
- * Performance chart export utilities
- * Each export function generates CSV content for a specific chart's raw data
- */
-⋮----
-import { PerformanceData } from "@/lib/stores/performance-store";
-import { toCsvRow } from "./export-helpers";
-⋮----
-export interface ChartExportConfig {
-  id: string;
-  name: string;
-  description: string;
-  tab: "Overview" | "Returns Analysis" | "Risk & Margin" | "Trade Efficiency" | "Excursion Analysis";
-  exportFn: (data: PerformanceData) => string[];
-}
-⋮----
-/**
- * All available chart exports organized by tab
- */
-⋮----
-// Overview Tab
-⋮----
-// Win streaks
-⋮----
-// Loss streaks
-⋮----
-// Statistics
-⋮----
-// Returns Analysis Tab
-⋮----
-// Monthly returns percent
-⋮----
-// Add summary statistics
-⋮----
-// Risk & Margin Tab
-⋮----
-// Trade Efficiency Tab
-⋮----
-// Excursion Analysis Tab
-⋮----
-// Add distribution summary
-⋮----
-/**
- * Get chart exports grouped by tab
- */
-export function getChartExportsByTab(): Record<string, ChartExportConfig[]>
-⋮----
-/**
- * Export multiple charts as a combined CSV
- */
-export function exportMultipleCharts(
-  data: PerformanceData,
-  chartIds: string[]
-): string[]
-⋮----
-lines.push(""); // Separator between charts
-lines.push(""); // Extra line for readability
-⋮----
-/**
- * Export a single chart by ID as CSV
- */
-export function exportSingleChart(
-  data: PerformanceData,
-  chartId: string
-): string[] | null
-⋮----
-/**
- * Get raw JSON data for a single chart
- */
-export function getChartJsonData(
-  data: PerformanceData,
-  chartId: string
-): Record<string, unknown> | null
-⋮----
-/**
- * Get JSON data for multiple charts
- */
-export function getMultipleChartsJson(
-  data: PerformanceData,
-  chartIds: string[]
-): Record<string, unknown>
-```
-
 ## File: lib/utils/time-conversions.ts
 ```typescript
 /**
@@ -4172,6 +4251,22 @@ return 75; // Use last 75% for smaller datasets
 return 100; // Use all trades for very small datasets
 ```
 
+## File: lib/utils/trade-frequency.ts
+```typescript
+import { Trade } from "@/lib/models/trade";
+⋮----
+/**
+ * Estimate annual trade frequency from a sample of trades.
+ *
+ * Ensures realistic pacing for strategy-filtered simulations where the global
+ * portfolio frequency would otherwise overstate the number of opportunities.
+ */
+export function estimateTradesPerYear(
+  sampleTrades: Trade[],
+  fallback: number
+): number
+```
+
 ## File: components/performance-charts/day-of-week-chart.tsx
 ```typescript
 import React, { useMemo, useState } from 'react'
@@ -4236,95 +4331,6 @@ b: 80, // More bottom margin for angled labels
 if (value) setViewMode(value as ViewMode)
 ```
 
-## File: components/performance-charts/performance-filters.tsx
-```typescript
-import { MultiSelect } from "@/components/multi-select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { usePerformanceStore } from "@/lib/stores/performance-store";
-import { Calendar, Filter } from "lucide-react";
-import { useMemo } from "react";
-⋮----
-interface PerformanceFiltersProps {
-  className?: string;
-}
-⋮----
-// Generate strategy options from trade data
-⋮----
-const handleDateRangeChange = (preset: string) =>
-⋮----
-const getFilterSummary = () =>
-⋮----
-{/* Date Range Selector */}
-⋮----
-{/* Strategy Filter */}
-⋮----
-{/* Filter Summary */}
-⋮----
-{/* Trade Count */}
-```
-
-## File: components/performance-charts/premium-efficiency-chart.tsx
-```typescript
-import { useMemo } from 'react'
-import type { Layout, PlotData } from 'plotly.js'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-⋮----
-interface PremiumEfficiencyChartProps {
-  className?: string
-}
-⋮----
-// Calculate gross P/L (before commissions) and net P/L (after commissions)
-⋮----
-// Calculate summary stats
-⋮----
-// Gross P/L bars (before commissions)
-⋮----
-// Net P/L line (after commissions)
-⋮----
-const formatCurrency = (value: number)
-```
-
-## File: components/performance-charts/rom-timeline-chart.tsx
-```typescript
-import React, { useMemo, useState } from 'react'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-import type { Layout, PlotData } from 'plotly.js'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-⋮----
-interface ROMTimelineChartProps {
-  className?: string
-}
-⋮----
-// ROM scatter plot
-⋮----
-// Moving average overlay
-⋮----
-// Only display MA if we have enough data points for a full window
-⋮----
-// Start from the first point where we have a full window
-⋮----
-// Calculate mean ROM
-⋮----
-// Add mean line as a trace (not a shape) so it can be toggled via legend
-```
-
 ## File: components/performance-charts/trade-sequence-chart.tsx
 ```typescript
 import React, { useMemo, useState } from 'react'
@@ -4347,45 +4353,6 @@ type ViewMode = 'dollars' | 'percent'
 // Calculate linear regression (y = mx + b)
 ⋮----
 if (value) setViewMode(value as ViewMode)
-```
-
-## File: components/performance-charts/vix-regime-chart.tsx
-```typescript
-import { useMemo } from 'react'
-import type { Layout, PlotData } from 'plotly.js'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-⋮----
-interface VixRegimeChartProps {
-  className?: string
-}
-⋮----
-/**
- * Volatility regimes derived from long-run VIX observations.
- * - Low volatility: VIX ≤ 18 (below long-term average of ~19)
- * - Medium volatility: 18 < VIX ≤ 25 (historically elevated)
- * - High volatility: VIX > 25 (stress conditions)
- */
-⋮----
-const bubbleSize = (pl: number) =>
-⋮----
-const buildTrace = (entries: typeof openingEntries, isOpening: boolean): Partial<PlotData> => (
-⋮----
-const buildSummary = (entries: typeof openingEntries, axisSuffix: '' | '2') =>
-⋮----
-const regimeShapes = (forOpening: boolean): Layout['shapes'] =>
-⋮----
-// Create title annotations for each subplot
-⋮----
-// Add a horizontal divider line between the two charts
 ```
 
 ## File: components/position-sizing/margin-chart.tsx
@@ -4481,62 +4448,6 @@ interface StrategyResultsProps {
 {/* Allocation guidance */}
 ```
 
-## File: components/risk-simulator/statistics-cards.tsx
-```typescript
-import { Card } from "@/components/ui/card";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import type { MonteCarloResult } from "@/lib/calculations/monte-carlo";
-import {
-  AlertOctagon,
-  HelpCircle,
-  Percent,
-  Star,
-  Target,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react";
-⋮----
-interface StatisticsCardsProps {
-  result: MonteCarloResult;
-}
-⋮----
-export function StatisticsCards(
-⋮----
-// Calculate annualized return
-⋮----
-// Use the final timestep of the 95th percentile equity curve for best-case return
-⋮----
-// Calculate drawdown percentiles
-⋮----
-{/* Key Metrics - Top Row */}
-⋮----
-{/* Expected Return */}
-⋮----
-{/* Probability of Profit */}
-⋮----
-{/* Expected Drawdown */}
-⋮----
-{/* Return Scenarios */}
-⋮----
-{/* Best Case */}
-⋮----
-{/* Most Likely */}
-⋮----
-{/* Worst Case */}
-⋮----
-{/* Drawdown Scenarios */}
-⋮----
-{/* Best Case Drawdown (P5 - mild) */}
-⋮----
-{/* Typical Drawdown (P50) */}
-⋮----
-{/* Worst Case Drawdown (P95 - severe) */}
-```
-
 ## File: components/walk-forward/robustness-metrics.tsx
 ```typescript
 import { MetricCard } from "@/components/metric-card"
@@ -4578,312 +4489,6 @@ interface RunSwitcherProps {
 const pills = history.slice(0, 12) // keep top section light; full list in drawer
 ```
 
-## File: components/block-dialog.tsx
-```typescript
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { calculationOrchestrator } from "@/lib/calculations";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
-import {
-  addDailyLogEntries,
-  addReportingTrades,
-  addTrades,
-  createBlock,
-  getBlock,
-  deleteReportingTradesByBlock,
-  updateDailyLogsForBlock,
-  updateBlock as updateProcessedBlock,
-  updateReportingTradesForBlock,
-  updateTradesForBlock,
-} from "@/lib/db";
-import { REQUIRED_DAILY_LOG_COLUMNS } from "@/lib/models/daily-log";
-import {
-  REPORTING_TRADE_COLUMN_ALIASES,
-  REQUIRED_REPORTING_TRADE_COLUMNS,
-} from "@/lib/models/reporting-trade";
-import type { StrategyAlignment } from "@/lib/models/strategy-alignment";
-import {
-  REQUIRED_TRADE_COLUMNS,
-  TRADE_COLUMN_ALIASES,
-} from "@/lib/models/trade";
-import {
-  DailyLogProcessingProgress,
-  DailyLogProcessingResult,
-  DailyLogProcessor,
-} from "@/lib/processing/daily-log-processor";
-import {
-  ReportingTradeProcessingProgress,
-  ReportingTradeProcessingResult,
-  ReportingTradeProcessor,
-} from "@/lib/processing/reporting-trade-processor";
-import {
-  TradeProcessingProgress,
-  TradeProcessingResult,
-  TradeProcessor,
-} from "@/lib/processing/trade-processor";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { useComparisonStore } from "@/lib/stores/comparison-store";
-import { cn } from "@/lib/utils";
-import {
-  findMissingHeaders,
-  normalizeHeaders,
-  parseCsvLine,
-} from "@/lib/utils/csv-headers";
-import {
-  Activity,
-  AlertCircle,
-  BarChart3,
-  Calendar,
-  CheckCircle,
-  Info,
-  List,
-  Loader2,
-  Plus,
-  Save,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-⋮----
-interface Block {
-  id: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
-  created: Date;
-  lastModified: Date;
-  tradeLog: {
-    fileName: string;
-    rowCount: number;
-    fileSize: number;
-  };
-  dailyLog?: {
-    fileName: string;
-    rowCount: number;
-    fileSize: number;
-  };
-  reportingLog?: {
-    fileName: string;
-    rowCount: number;
-    fileSize: number;
-  };
-  stats: {
-    totalPnL: number;
-    winRate: number;
-    totalTrades: number;
-    avgWin: number;
-    avgLoss: number;
-  };
-  strategyAlignment?: {
-    mappings: StrategyAlignment[];
-    updatedAt: Date;
-  };
-  tags?: string[];
-  color?: string;
-}
-⋮----
-interface FileUploadState {
-  file: File | null;
-  status:
-    | "empty"
-    | "dragover"
-    | "uploaded"
-    | "error"
-    | "existing"
-    | "processing";
-  error?: string;
-  existingFileName?: string;
-  existingRowCount?: number;
-  progress?: number;
-  processedData?: {
-    rowCount: number;
-    dateRange?: { start: Date | null; end: Date | null };
-    strategies?: string[];
-    stats?: {
-      processingTimeMs: number;
-      strategies: string[];
-      dateRange: { start: Date | null; end: Date | null };
-      totalPL: number;
-    };
-  };
-  requiresStrategyName?: boolean;
-}
-⋮----
-type UploadType = "trade" | "daily" | "reporting";
-⋮----
-interface BlockDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  mode: "new" | "edit";
-  block?: Block | null;
-}
-⋮----
-type PreviewData = {
-    trades?: TradeProcessingResult;
-    dailyLogs?: DailyLogProcessingResult;
-    reporting?: ReportingTradeProcessingResult;
-    initialCapital?: number;
-  };
-⋮----
-interface ProcessFilesResult {
-    preview: PreviewData;
-    missingStrategies: number;
-  }
-⋮----
-// Reset form when dialog opens/closes or mode changes
-⋮----
-// Reset when closing
-⋮----
-// Pre-populate for edit mode
-⋮----
-// Load combineLegGroups setting from ProcessedBlock
-⋮----
-// Reset for new mode
-⋮----
-// Clear preview data when a new trade file is selected
-⋮----
-// Validate file type
-⋮----
-// Clear preview data when a new trade file is selected
-⋮----
-// Reset the input value to allow re-selecting the same file
-⋮----
-// Reset the input value to allow re-selecting the same file
-⋮----
-const formatFileSize = (bytes: number) =>
-⋮----
-const processFiles = async (): Promise<ProcessFilesResult | null> =>
-⋮----
-// Process trade log
-⋮----
-// Process daily log if provided
-⋮----
-strategies: [], // Daily logs don't have strategies
-⋮----
-// Calculate initial capital
-⋮----
-// Calculate initial capital from trades only
-⋮----
-const handleSubmit = async () =>
-⋮----
-// Process files if new files were uploaded
-⋮----
-// Check if we need to process: either no preview exists OR the file changed
-⋮----
-if (!result) return; // Processing failed
-⋮----
-// In edit mode, process files if they were uploaded but not yet processed
-⋮----
-if (!result) return; // Processing failed
-⋮----
-// Create new block with processed data
-⋮----
-// Create block metadata
-⋮----
-// Save to IndexedDB
-⋮----
-// Add trades
-⋮----
-// Add daily log entries if present
-⋮----
-// Calculate block stats for store
-⋮----
-// Add to Zustand store
-⋮----
-id: newBlock.id, // Use the actual ID from IndexedDB
-⋮----
-// Update existing block
-⋮----
-// Ensure we process the daily log if it was uploaded without running the full pipeline
-⋮----
-// Ensure we process the reporting log if it was uploaded without running the full pipeline
-⋮----
-// Get current block to check if combineLegGroups changed
-⋮----
-// Update analysisConfig if combineLegGroups changed
-⋮----
-// Clear cache since combining affects calculations
-⋮----
-// Track if we need to clear caches/comparison data
-⋮----
-// Save trades to IndexedDB (replace all existing trades)
-⋮----
-// Save daily log entries to IndexedDB (replace all existing entries)
-⋮----
-// User cleared the daily log
-⋮----
-// Clear comparison data since reporting trades changed
-⋮----
-// Clear comparison data since reporting log was removed
-⋮----
-// Clear calculation cache when any files are replaced or removed
-⋮----
-// Refresh the block to get updated stats from IndexedDB
-⋮----
-const handleDelete = async () =>
-⋮----
-// Delete from IndexedDB and update store
-⋮----
-// Close dialogs
-⋮----
-const getDialogTitle = ()
-const getDialogDescription = ()
-⋮----
-const getSubmitButtonText = ()
-const getSubmitButtonIcon = ()
-⋮----
-onDrop=
-⋮----
-onChange=
-⋮----
-
-⋮----
-{/* Block Details */}
-⋮----
-{/* File Uploads */}
-⋮----
-{/* Processing Status */}
-⋮----
-{/* Errors */}
-⋮----
-{/* Options */}
-⋮----
-setSetAsActive(checked === true)
-⋮----
-{/* Combine Leg Groups toggle */}
-```
-
 ## File: components/no-active-block.tsx
 ```typescript
 import { AlertTriangle } from "lucide-react";
@@ -4898,6 +4503,54 @@ interface NoActiveBlockProps {
 export function NoActiveBlock({
   description = "Please select a block from the sidebar to continue.",
 }: NoActiveBlockProps)
+```
+
+## File: components/performance-export-dialog.tsx
+```typescript
+import { FileJson, FileSpreadsheet } from "lucide-react";
+import { useState } from "react";
+⋮----
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { PerformanceData } from "@/lib/stores/performance-store";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+} from "@/lib/utils/export-helpers";
+import {
+  CHART_EXPORTS,
+  exportMultipleCharts,
+  getChartExportsByTab,
+  getMultipleChartsJson,
+} from "@/lib/utils/performance-export";
+⋮----
+interface PerformanceExportDialogProps {
+  data: PerformanceData;
+  blockName: string;
+}
+⋮----
+const toggleChart = (chartId: string) =>
+⋮----
+const selectAll = () =>
+⋮----
+const clearAll = () =>
+⋮----
+const handleExportSelectedCsv = () =>
+⋮----
+const handleExportSelectedJson = () =>
+⋮----
+checked=
 ```
 
 ## File: components/sidebar-active-blocks.tsx
@@ -4926,33 +4579,6 @@ const formatDate = (date: Date) =>
 // Mobile compact version - just block name and switch button
 ⋮----
 // Desktop full version
-```
-
-## File: components/sidebar-footer-legal.tsx
-```typescript
-import { AlertTriangle, Github, ShieldQuestion } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-⋮----
-import { useIsMobile } from "@/hooks/use-mobile";
-⋮----
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { DialogTitle } from "@radix-ui/react-dialog";
-⋮----
-// Shared dialog content
-⋮----
-{/* Attribution links in dialog for mobile */}
-⋮----
-// Mobile compact version - minimal footer that stays fixed at bottom
-⋮----
-// Desktop compact version
 ```
 
 ## File: components/site-header.tsx
@@ -5056,17 +4682,16 @@ import { DailyLogEntry } from '../models/daily-log'
 import { AnalysisConfig } from '../models/portfolio-stats'
 ```
 
-## File: lib/db/trades-store.ts
+## File: lib/db/combined-trades-cache.ts
 ```typescript
 /**
- * Trades Store - CRUD operations for trade data
+ * Combined Trades Cache
+ *
+ * Caches pre-calculated combined leg group trades in IndexedDB
+ * to avoid expensive recalculation on every page load.
  */
 ⋮----
-import { Trade } from "../models/trade";
-import {
-  combineAllLegGroups,
-  CombinedTrade,
-} from "../utils/combine-leg-groups";
+import { CombinedTrade } from "../utils/combine-leg-groups";
 import {
   INDEXES,
   promisifyRequest,
@@ -5076,138 +4701,175 @@ import {
 } from "./index";
 ⋮----
 /**
- * Extended trade with block association
+ * Cache entry for combined trades
  */
-export interface StoredTrade extends Trade {
+interface CombinedTradesCache {
+  id: string; // Format: `combined_trades_${blockId}`
   blockId: string;
-  id?: number; // Auto-generated by IndexedDB
+  calculationType: "combined_trades";
+  trades: CombinedTrade[];
+  tradeCount: number;
+  calculatedAt: Date;
 }
 ⋮----
-id?: number; // Auto-generated by IndexedDB
+id: string; // Format: `combined_trades_${blockId}`
 ⋮----
 /**
- * Add trades for a block (batch operation)
+ * Generate the cache ID for a block
  */
-export async function addTrades(
+function getCacheId(blockId: string): string
+⋮----
+/**
+ * Store pre-calculated combined trades for a block
+ */
+export async function storeCombinedTradesCache(
   blockId: string,
-  trades: Trade[]
+  combinedTrades: CombinedTrade[]
 ): Promise<void>
 ⋮----
-// Use Promise.all for better performance with large datasets
-⋮----
 /**
- * Get all trades for a block
+ * Get cached combined trades for a block
+ * Returns null if cache doesn't exist
  */
-export async function getTradesByBlock(
+export async function getCombinedTradesCache(
   blockId: string
-): Promise<StoredTrade[]>
+): Promise<CombinedTrade[] | null>
 ⋮----
-// Sort by date opened (chronological order)
-⋮----
-// If same date, sort by time
+// Restore Date objects that were serialized
 ⋮----
 /**
- * Get all trades for a block with optional leg group combining
- *
- * @param blockId - Block ID to fetch trades for
- * @param combineLegGroups - Whether to combine trades with same entry timestamp
- * @returns Array of trades (combined or raw)
+ * Delete cached combined trades for a block
  */
-export async function getTradesByBlockWithOptions(
-  blockId: string,
-  options: { combineLegGroups?: boolean } = {}
-): Promise<(StoredTrade | (CombinedTrade &
-⋮----
-// Remove blockId temporarily for combining, then add it back
-⋮----
-// Add blockId back to combined trades
-⋮----
-/**
- * Get trades by date range for a block
- */
-export async function getTradesByDateRange(
-  blockId: string,
-  startDate: Date,
-  endDate: Date
-): Promise<StoredTrade[]>
-⋮----
-// Create compound key range [blockId, startDate] to [blockId, endDate]
-⋮----
-/**
- * Get trades by strategy for a block
- */
-export async function getTradesByStrategy(
-  blockId: string,
-  strategy: string
-): Promise<StoredTrade[]>
-⋮----
-// Filter by strategy (IndexedDB doesn't support compound queries easily)
-⋮----
-/**
- * Get unique strategies for a block
- */
-export async function getStrategiesByBlock(blockId: string): Promise<string[]>
-⋮----
-/**
- * Get trade count by block
- */
-export async function getTradeCountByBlock(blockId: string): Promise<number>
-⋮----
-/**
- * Delete all trades for a block
- */
-export async function deleteTradesByBlock(blockId: string): Promise<void>
-⋮----
-/**
- * Update trades for a block (replace all)
- */
-export async function updateTradesForBlock(
-  blockId: string,
-  trades: Trade[]
+export async function deleteCombinedTradesCache(
+  blockId: string
 ): Promise<void>
 ⋮----
-// First delete existing trades
-⋮----
-// Then add new trades
+// Check if entry exists before trying to delete
 ⋮----
 /**
- * Get trade statistics for a block (aggregated)
+ * Check if combined trades cache exists for a block
  */
-export async function getTradeStatistics(blockId: string): Promise<
-⋮----
-// Get date range
-⋮----
-// Get unique strategies
+export async function hasCombinedTradesCache(
+  blockId: string
+): Promise<boolean>
 ⋮----
 /**
- * Search trades by text (strategy, legs, reason for close)
+ * Invalidate all calculation caches for a block
+ * (including combined trades cache)
  */
-export async function searchTrades(
+export async function invalidateBlockCaches(blockId: string): Promise<void>
+```
+
+## File: lib/db/performance-snapshot-cache.ts
+```typescript
+/**
+ * Performance Snapshot Cache
+ *
+ * Caches pre-calculated performance snapshots in IndexedDB
+ * to avoid expensive recalculation on every page load.
+ */
+⋮----
+import { PortfolioStats } from "../models/portfolio-stats";
+import { Trade } from "../models/trade";
+import { DailyLogEntry } from "../models/daily-log";
+import { SnapshotChartData } from "../services/performance-snapshot";
+import {
+  promisifyRequest,
+  STORES,
+  withReadTransaction,
+  withWriteTransaction,
+} from "./index";
+⋮----
+/**
+ * Cache entry for performance snapshot
+ */
+interface PerformanceSnapshotCache {
+  id: string; // Format: `performance_snapshot_${blockId}`
+  blockId: string;
+  calculationType: "performance_snapshot";
+  portfolioStats: PortfolioStats;
+  chartData: SnapshotChartData;
+  filteredTrades: Trade[];
+  filteredDailyLogs: DailyLogEntry[];
+  calculatedAt: Date;
+}
+⋮----
+id: string; // Format: `performance_snapshot_${blockId}`
+⋮----
+/**
+ * Public interface for cached snapshot data
+ */
+export interface CachedPerformanceSnapshot {
+  portfolioStats: PortfolioStats;
+  chartData: SnapshotChartData;
+  filteredTrades: Trade[];
+  filteredDailyLogs: DailyLogEntry[];
+  calculatedAt: Date;
+}
+⋮----
+/**
+ * Generate the cache ID for a block
+ */
+function getCacheId(blockId: string): string
+⋮----
+/**
+ * Store pre-calculated performance snapshot for a block
+ */
+export async function storePerformanceSnapshotCache(
   blockId: string,
-  query: string
-): Promise<StoredTrade[]>
+  snapshot: {
+    portfolioStats: PortfolioStats;
+    chartData: SnapshotChartData;
+    filteredTrades: Trade[];
+    filteredDailyLogs: DailyLogEntry[];
+  }
+): Promise<void>
 ⋮----
 /**
- * Get trades with pagination
+ * Restore Date objects from serialized cache data
  */
-export async function getTradesPage(
-  blockId: string,
-  offset: number,
-  limit: number
-): Promise<
+function restoreDates<T extends { dateOpened?: Date | string; dateClosed?: Date | string | null }>(
+  items: T[]
+): T[]
 ⋮----
 /**
- * Export trades to CSV format (for backup/analysis)
+ * Restore Date objects in daily logs
  */
-export async function exportTradesToCSV(blockId: string): Promise<string>
+function restoreDailyLogDates(logs: DailyLogEntry[]): DailyLogEntry[]
 ⋮----
-// CSV headers
+/**
+ * Restore Date objects in chart data
+ */
+function restoreChartDataDates(chartData: SnapshotChartData): SnapshotChartData
 ⋮----
-// Convert trades to CSV rows
+// Most chart data uses ISO string dates, which is fine
+// Only restore where Date objects are expected
 ⋮----
-// Format dateOpened - handle both Date objects and strings
+/**
+ * Get cached performance snapshot for a block
+ * Returns null if cache doesn't exist
+ */
+export async function getPerformanceSnapshotCache(
+  blockId: string
+): Promise<CachedPerformanceSnapshot | null>
 ⋮----
-// Combine headers and rows
+// Restore Date objects that were serialized
+⋮----
+/**
+ * Delete cached performance snapshot for a block
+ */
+export async function deletePerformanceSnapshotCache(
+  blockId: string
+): Promise<void>
+⋮----
+// Check if entry exists before trying to delete
+⋮----
+/**
+ * Check if performance snapshot cache exists for a block
+ */
+export async function hasPerformanceSnapshotCache(
+  blockId: string
+): Promise<boolean>
 ```
 
 ## File: lib/db/walk-forward-store.ts
@@ -5224,66 +4886,6 @@ export async function getWalkForwardAnalysesByBlock(blockId: string): Promise<Wa
 export async function deleteWalkForwardAnalysis(id: string): Promise<void>
 ⋮----
 export async function deleteWalkForwardAnalysesByBlock(blockId: string): Promise<void>
-```
-
-## File: lib/metrics/trade-efficiency.ts
-```typescript
-import { Trade } from '@/lib/models/trade'
-⋮----
-/**
- * Standard options multiplier used to convert per-contract values into notional dollars.
- * Equity and index option contracts typically control 100 shares, so premium/max profit
- * values need to be scaled by 100 to reflect the total economic exposure.
- */
-⋮----
-/**
- * Margin-to-notional ratio threshold that indicates a trade is lightly margined.
- * When gross notional is less than 50% of the posted margin requirement we treat
- * the trade as an option-style structure and apply the contract multiplier.
- */
-⋮----
-/**
- * Notional dollar threshold under which trades are considered "small". These trades
- * likely represent single-lot option structures, so we apply the option multiplier
- * even if there is no explicit margin requirement to compare against.
- */
-⋮----
-function getNormalizedContractCount(trade: Trade): number
-⋮----
-function applyOptionMultiplierIfNeeded(total: number, trade: Trade): number
-⋮----
-function normalisePerContractValue(value: number, trade: Trade, isPremium: boolean): number
-⋮----
-export function computeTotalPremium(trade: Trade): number | undefined
-⋮----
-export function computeTotalMaxProfit(trade: Trade): number | undefined
-⋮----
-export function computeTotalMaxLoss(trade: Trade): number | undefined
-⋮----
-export type EfficiencyBasis = 'premium' | 'maxProfit' | 'margin' | 'unknown'
-⋮----
-export interface PremiumEfficiencyResult {
-  percentage?: number
-  denominator?: number
-  basis: EfficiencyBasis
-}
-⋮----
-/**
- * Calculates a trade's premium efficiency percentage.
- *
- * The function searches for the most appropriate denominator to express trade performance:
- * 1. Total premium collected (preferred when available)
- * 2. Total maximum profit
- * 3. Margin requirement
- *
- * Once a denominator is selected, it normalizes the trade's P/L against that value to
- * compute an efficiency percentage. If no denominator can be derived or the resulting
- * ratio is not finite, only the basis is reported.
- *
- * @param trade Trade record including premium, max profit, margin requirement, and P/L.
- * @returns Object describing the efficiency percentage, denominator, and basis used.
- */
-export function calculatePremiumEfficiencyPercent(trade: Trade): PremiumEfficiencyResult
 ```
 
 ## File: lib/models/block.ts
@@ -5740,6 +5342,97 @@ export interface WalkForwardComputation {
 }
 ```
 
+## File: lib/utils/async-helpers.ts
+```typescript
+/**
+ * Async Helper Utilities
+ *
+ * Shared utilities for async operations that need to yield to the main thread
+ * to keep the UI responsive during expensive computations.
+ */
+⋮----
+/**
+ * Delay in milliseconds before starting computation to allow React to render
+ */
+⋮----
+/**
+ * Yield control to the main thread to prevent UI freezing.
+ * Uses setTimeout(0) to create a macrotask break, allowing the browser
+ * to process pending UI updates and repaints between chunks of work.
+ *
+ * Note: scheduler.yield() and requestIdleCallback don't reliably allow
+ * repaints, so we use setTimeout which guarantees a macrotask boundary.
+ */
+export async function yieldToMain(): Promise<void>
+⋮----
+/**
+ * Check if the operation has been cancelled via AbortSignal.
+ * Throws AbortError if cancelled.
+ */
+export function checkCancelled(signal?: AbortSignal): void
+⋮----
+/**
+ * Wait for React to render before starting computation.
+ * This ensures progress dialogs are visible before heavy work begins.
+ */
+export async function waitForRender(): Promise<void>
+```
+
+## File: lib/utils/export-helpers.ts
+```typescript
+/**
+ * Utility functions for exporting data as CSV and JSON
+ */
+⋮----
+/**
+ * Escapes a value for safe CSV inclusion.
+ * - Wraps in quotes if value contains comma, quote, or newline
+ * - Doubles any existing quotes
+ */
+export function escapeCsvValue(value: unknown): string
+⋮----
+// If the value contains comma, quote, or newline, wrap in quotes and escape internal quotes
+⋮----
+/**
+ * Joins an array of values into a CSV row, properly escaping each value
+ */
+export function toCsvRow(values: unknown[]): string
+⋮----
+/**
+ * Creates and triggers a file download
+ */
+export function downloadFile(
+  content: string,
+  filename: string,
+  mimeType: string
+): void
+⋮----
+/**
+ * Downloads data as a JSON file
+ */
+export function downloadJson(data: unknown, filename: string): void
+⋮----
+/**
+ * Downloads lines as a CSV file
+ */
+export function downloadCsv(lines: string[], filename: string): void
+⋮----
+/**
+ * Sanitizes a block name for use in filenames
+ * Replaces spaces and special characters with hyphens
+ */
+export function sanitizeFilename(name: string): string
+⋮----
+/**
+ * Generates a filename with the current date
+ */
+export function generateExportFilename(
+  blockName: string,
+  suffix: string,
+  extension: "json" | "csv"
+): string
+```
+
 ## File: lib/utils/performance-helpers.ts
 ```typescript
 import { Trade } from '@/lib/models/trade'
@@ -5822,143 +5515,6 @@ export function truncateStrategyName(
   strategyName: string,
   maxLength: number = 40
 ): string
-```
-
-## File: app/(platform)/comparison-blocks/page.tsx
-```typescript
-import { MatchReviewDialog } from "@/components/match-review-dialog";
-import { NoActiveBlock } from "@/components/no-active-block";
-import { ReconciliationMetrics } from "@/components/reconciliation-charts/ReconciliationMetrics";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  getBlock,
-  getReportingTradesByBlock,
-  getTradesByBlockWithOptions,
-  updateBlock as updateProcessedBlock,
-} from "@/lib/db";
-import { StrategyAlignment } from "@/lib/models/strategy-alignment";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { useComparisonStore } from "@/lib/stores/comparison-store";
-import { cn } from "@/lib/utils";
-import {
-  downloadCsv,
-  downloadJson,
-  generateExportFilename,
-  toCsvRow,
-} from "@/lib/utils/export-helpers";
-import { Check, Download, Loader2, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-⋮----
-interface SelectableStrategy {
-  name: string;
-  count: number;
-  totalPl: number;
-}
-⋮----
-function buildStrategySummary(
-  strategies: string[],
-  values: { strategy: string; pl: number }[]
-): SelectableStrategy[]
-⋮----
-// Clear alignments immediately to prevent stale data
-⋮----
-const load = async () =>
-⋮----
-const handleOpenMatchDialog = (alignmentId: string) =>
-⋮----
-// Memoize to keep stable reference during loading/refreshes
-⋮----
-// Only show comparison data if it matches the current block
-⋮----
-// Only count as matched if isPaired is true (actual pair from matchResult.pairs)
-// Items with both trades but isPaired=false are just unmatched trades displayed together
-⋮----
-// Export functions
-const exportAsJson = () =>
-⋮----
-const exportAsCsv = () =>
-⋮----
-// Metadata
-⋮----
-// Summary
-⋮----
-// Per-alignment metrics
-⋮----
-const handleSaveMatchOverrides = async (
-    alignmentId: string,
-    tradePairs: import("@/lib/models/strategy-alignment").TradePair[]
-) =>
-⋮----
-// selectedBacktestedIds and selectedReportedIds should contain ALL trades
-// to ensure they're included in stats calculations.
-// The tradePairs array is the authoritative source for what's actually paired.
-// The isPaired flag in session items distinguishes real pairs from unmatched trades.
-⋮----
-// Refresh comparison with the new alignments
-⋮----
-// Keep the dialog open so the user can navigate back to sessions
-⋮----
-const persistAlignments = async (nextAlignments: StrategyAlignment[]) =>
-⋮----
-const resetDialogState = () =>
-⋮----
-const openCreateDialog = () =>
-⋮----
-const openEditDialog = (mapping: StrategyAlignment) =>
-⋮----
-const handleDialogClose = (open: boolean) =>
-⋮----
-const removeMapping = async (id: string) =>
-⋮----
-const upsertMapping = async () =>
-⋮----
-{/* Statistical Analysis Section - Show detailed metrics for selected alignment */}
-⋮----
-{/* Reconciliation Metrics Dashboard */}
-```
-
-## File: components/performance-charts/excursion-distribution-chart.tsx
-```typescript
-import React, { useMemo } from 'react'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-import type { Layout, PlotData } from 'plotly.js'
-⋮----
-interface ExcursionDistributionChartProps {
-  className?: string
-}
-⋮----
-// MFE histogram
-⋮----
-// MAE histogram
 ```
 
 ## File: components/performance-charts/paired-leg-outcomes-chart.tsx
@@ -6643,258 +6199,77 @@ const getWidthConstraints = () =>
 getPopoverAnimationClass(),
 ```
 
-## File: lib/calculations/walk-forward-analyzer.ts
+## File: components/progress-dialog.tsx
 ```typescript
-import { Trade } from '../models/trade'
-import { DailyLogEntry } from '../models/daily-log'
 import {
-  WalkForwardConfig,
-  WalkForwardComputation,
-  WalkForwardParameterRanges,
-  WalkForwardPeriodResult,
-  WalkForwardProgressEvent,
-  WalkForwardResults,
-  WalkForwardSummary,
-  WalkForwardWindow,
-} from '../models/walk-forward'
-import { PortfolioStatsCalculator } from './portfolio-stats'
-import { calculateKellyMetrics } from './kelly'
-import { PortfolioStats } from '../models/portfolio-stats'
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 ⋮----
-interface AnalyzeOptions {
-  trades: Trade[]
-  /**
-   * Daily portfolio logs. Reserved for future use to enable more accurate
-   * equity curve calculations during walk-forward periods. Currently unused.
-   */
-  dailyLogs?: DailyLogEntry[]
-  config: WalkForwardConfig
-  signal?: AbortSignal
-  onProgress?: (event: WalkForwardProgressEvent) => void
+interface ProgressDialogProps {
+  open: boolean
+  title: string
+  step: string
+  percent: number
+  onCancel?: () => void
+  cancelLabel?: string
+  hideCancel?: boolean
 }
 ⋮----
-/**
-   * Daily portfolio logs. Reserved for future use to enable more accurate
-   * equity curve calculations during walk-forward periods. Currently unused.
-   */
-⋮----
-interface ScalingBaseline {
-  baseKellyFraction: number
-  avgContracts: number
-}
-⋮----
-interface CombinationIterator {
-  values: Array<Record<string, number>>
-  count: number
-}
-⋮----
-export class WalkForwardAnalyzer
-⋮----
-async analyze(options: AnalyzeOptions): Promise<WalkForwardComputation>
-⋮----
-private ensureValidConfig(config: WalkForwardConfig): void
-⋮----
-private sortTrades(trades: Trade[]): Trade[]
-⋮----
-private filterTrades(trades: Trade[], start: Date, end: Date): Trade[]
-⋮----
-// Add full day to end date to include all trades on that day regardless of time
-⋮----
-private buildWindows(trades: Trade[], config: WalkForwardConfig): WalkForwardWindow[]
-⋮----
-private floorToUTCDate(date: Date): Date
-⋮----
-private buildCombinationIterator(parameterRanges: WalkForwardParameterRanges): CombinationIterator
-⋮----
-const recurse = (index: number, current: Record<string, number>) =>
-⋮----
-private buildRangeValues(min: number, max: number, step: number): number[]
-⋮----
-private buildScalingBaseline(trades: Trade[]): ScalingBaseline
-⋮----
-private applyScenario(
-    trades: Trade[],
-    params: Record<string, number>,
-    baseline: ScalingBaseline,
-    initialCapitalOverride?: number
-): Trade[]
-⋮----
-private calculatePositionMultiplier(params: Record<string, number>, baseline: ScalingBaseline): number
-⋮----
-private buildStrategyWeights(params: Record<string, number>): Record<string, number>
-⋮----
-private normalizeStrategyKey(strategy?: string): string
-⋮----
-private isRiskAcceptable(
-    params: Record<string, number>,
-    stats: PortfolioStats,
-    scaledTrades: Trade[]
-): boolean
-⋮----
-private calculateMaxConsecutiveLosses(trades: Trade[]): number
-⋮----
-private calculateMaxDailyLossPct(trades: Trade[], initialCapital: number): number
-⋮----
-private normalizeDateKey(date: Date | string): string
-⋮----
-private getTargetMetricValue(stats: PortfolioStats, target: WalkForwardConfig['optimizationTarget']): number
-⋮----
-private async yieldToEventLoop(): Promise<void>
-⋮----
-private throwIfAborted(signal?: AbortSignal): void
-⋮----
-private buildResults(
-    periods: WalkForwardPeriodResult[],
-    config: WalkForwardConfig,
-    totalPeriods: number,
-    totalParameterTests: number,
-    analyzedTrades: number,
-    startedAt: Date,
-    completedAt: Date = new Date(),
-    skippedPeriods = 0
-): WalkForwardResults
-⋮----
-private calculateSummary(periods: WalkForwardPeriodResult[]): WalkForwardSummary
-⋮----
-private calculateParameterStability(periods: WalkForwardPeriodResult[]): number
-⋮----
-// Normalize by mean to avoid requiring parameter ranges here
-⋮----
-private calculateConsistencyScore(periods: WalkForwardPeriodResult[]): number
-⋮----
-private calculateAveragePerformanceDelta(periods: WalkForwardPeriodResult[]): number
-⋮----
-private calculateRobustnessScore(summary: WalkForwardSummary, consistencyScore: number): number
-⋮----
-private normalize(value: number, min: number, max: number): number
+// Clamp and normalize percent so we never render >100 or negatives
 ```
 
-## File: lib/db/index.ts
+## File: components/sidebar-footer-legal.tsx
 ```typescript
-/**
- * IndexedDB Database Service for TradeBlocks
- *
- * Manages the client-side database for storing blocks, trades, and daily logs.
- * Uses a versioned schema with migration support.
- */
+import { AlertTriangle, Github, ShieldQuestion } from "lucide-react";
+import Link from "next/link";
 ⋮----
-// Types imported for reference (commented out to avoid unused warnings)
-// import { ProcessedBlock } from '../models/block'
-// import { Trade } from '../models/trade'
-// import { DailyLogEntry } from '../models/daily-log'
-// import { PortfolioStats, StrategyStats, PerformanceMetrics } from '../models/portfolio-stats'
+import { useIsMobile } from "@/hooks/use-mobile";
 ⋮----
-// Database configuration
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { DialogTitle } from "@radix-ui/react-dialog";
 ⋮----
-// Object store names
+// Shared dialog content
 ⋮----
-// Index names
+{/* Attribution links in dialog for mobile */}
 ⋮----
-/**
- * Database instance singleton
- */
+{/* eslint-disable-next-line @next/next/no-img-element */}
 ⋮----
-/**
- * Initialize the IndexedDB database
- */
-export async function initializeDatabase(): Promise<IDBDatabase>
+// Mobile compact version - minimal footer that stays fixed at bottom
 ⋮----
-// Create blocks store
+// Desktop compact version
 ⋮----
-// Create trades store
+{/* eslint-disable-next-line @next/next/no-img-element */}
+```
+
+## File: hooks/use-progress-dialog.ts
+```typescript
+import { useRef, useState, useCallback } from "react"
 ⋮----
-// Create daily logs store
-⋮----
-// Create reporting logs store
-⋮----
-// Create calculations store (for cached computations)
-⋮----
-// Create walk-forward analysis store
+type ProgressState = { open: boolean; step: string; percent: number }
 ⋮----
 /**
- * Get database instance (initialize if needed)
+ * Shared helper for long-running tasks that need a progress dialog and cancellation.
+ * Manages AbortController lifecycle, clamping percent, and common state wiring.
  */
-export async function getDatabase(): Promise<IDBDatabase>
+export function useProgressDialog()
 ⋮----
-/**
- * Close database connection
- */
-export function closeDatabase(): void
+// Abort any in-flight work before starting a new one
 ⋮----
-/**
- * Delete the entire database (for testing/reset)
- */
-export async function deleteDatabase(): Promise<void>
-⋮----
-/**
- * Transaction helper for read operations
- */
-export async function withReadTransaction<T>(
-  stores: string | string[],
-  callback: (transaction: IDBTransaction) => Promise<T>
-): Promise<T>
-⋮----
-/**
- * Transaction helper for write operations
- */
-export async function withWriteTransaction<T>(
-  stores: string | string[],
-  callback: (transaction: IDBTransaction) => Promise<T>
-): Promise<T>
-⋮----
-/**
- * Generic helper for promisifying IDBRequest
- */
-export function promisifyRequest<T>(request: IDBRequest<T>): Promise<T>
-⋮----
-/**
- * Storage quota management
- */
-export interface StorageInfo {
-  quota: number;
-  usage: number;
-  available: number;
-  persistent: boolean;
-}
-⋮----
-/**
- * Get storage quota information
- */
-export async function getStorageInfo(): Promise<StorageInfo>
-⋮----
-// Fallback for browsers without storage API
-⋮----
-/**
- * Request persistent storage
- */
-export async function requestPersistentStorage(): Promise<boolean>
-⋮----
-/**
- * Database error types
- */
-export class DatabaseError extends Error
-⋮----
-constructor(
-    message: string,
-    public readonly operation: string,
-    public readonly store?: string,
-    public readonly cause?: Error
-)
-⋮----
-export class QuotaExceededError extends DatabaseError
-⋮----
-constructor(operation: string, store?: string)
-⋮----
-export class TransactionError extends DatabaseError
-⋮----
-constructor(
-    message: string,
-    operation: string,
-    store?: string,
-    cause?: Error
-)
-⋮----
-// Re-export functions from individual stores
+get signal(): AbortSignal | undefined
 ```
 
 ## File: lib/services/trade-reconciliation.ts
@@ -7156,210 +6531,302 @@ function groupByStrategy(trades: NormalizedTrade[]): Map<string, NormalizedTrade
 function groupBySession(trades: NormalizedTrade[]): Map<string, NormalizedTrade[]>
 ```
 
-## File: lib/stores/walk-forward-store.ts
+## File: app/(platform)/blocks/page.tsx
 ```typescript
-import { create } from 'zustand'
-import { WalkForwardAnalyzer } from '@/lib/calculations/walk-forward-analyzer'
+import { BlockDialog } from "@/components/block-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
-  WalkForwardAnalysis,
-  WalkForwardConfig,
-  WalkForwardParameterRangeTuple,
-  WalkForwardParameterRanges,
-  WalkForwardProgressEvent,
-} from '@/lib/models/walk-forward'
-import { toCsvRow } from '@/lib/utils/export-helpers'
-⋮----
-type WalkForwardPresetKey = 'conservative' | 'moderate' | 'aggressive'
-⋮----
-interface WalkForwardPreset {
-  label: string
-  description: string
-  config: Partial<Omit<WalkForwardConfig, 'parameterRanges'>>
-  parameterRanges?: Partial<WalkForwardParameterRanges>
-}
-⋮----
-interface WalkForwardStore {
-  config: WalkForwardConfig
-  isRunning: boolean
-  progress: WalkForwardProgressEvent | null
-  error: string | null
-  results: WalkForwardAnalysis | null
-  history: WalkForwardAnalysis[]
-  presets: Record<WalkForwardPresetKey, WalkForwardPreset>
-  runAnalysis: (blockId: string) => Promise<void>
-  cancelAnalysis: () => void
-  loadHistory: (blockId: string) => Promise<void>
-  updateConfig: (config: Partial<Omit<WalkForwardConfig, 'parameterRanges'>>) => void
-  setParameterRange: (key: string, range: WalkForwardParameterRangeTuple) => void
-  applyPreset: (preset: WalkForwardPresetKey) => void
-  clearResults: () => void
-  exportResultsAsJson: () => string | null
-  exportResultsAsCsv: () => string | null
-  selectAnalysis: (analysisId: string) => void
-  deleteAnalysis: (analysisId: string) => Promise<void>
-}
-⋮----
-function generateId(): string
-⋮----
-function buildCsvFromAnalysis(analysis: WalkForwardAnalysis | null): string | null
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useBlockStore, type Block } from "@/lib/stores/block-store";
+import { Activity, AlertTriangle, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
+import React, { useCallback, useState } from "react";
+import { ProgressDialog } from "@/components/progress-dialog";
+import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
+import { waitForRender } from "@/lib/utils/async-helpers";
+import { useProgressDialog } from "@/hooks/use-progress-dialog";
 ⋮----
 const formatDate = (date: Date)
+⋮----
+const handleRecalculate = async () =>
+⋮----
+// Allow React to render the dialog before starting computation
+⋮----
+// If this block is active, also refresh the performance store
+⋮----
+{/* File Indicators */}
+⋮----
+{/* Last Modified */}
+⋮----
+{/* Actions */}
+⋮----
+{/* Progress dialog for recalculation */}
+⋮----
+// Allow React to render the dialog before starting computation
+⋮----
+{/* Name and Description */}
+⋮----
+{/* File Indicators */}
+⋮----
+{/* Last Modified */}
+⋮----
+
+⋮----
+{/* Actions */}
+⋮----
+{/* Progress dialog for recalculation */}
+⋮----
+// Reset state and retry
+⋮----
+{/* Loading skeleton */}
+⋮----
+{/* Confirmation dialog for clearing all data */}
 ```
 
-## File: lib/utils/combine-leg-groups.ts
+## File: app/(platform)/comparison-blocks/page.tsx
 ```typescript
-/**
- * Leg Group Combining Utility
- *
- * For MEIC (Multiple Entry Iron Condor) and similar strategies where the backtester
- * creates separate trade records for each leg group (e.g., calls and puts) that were
- * opened simultaneously but may have different exit conditions/times.
- *
- * This utility groups trades by entry timestamp and combines them into single trade records.
- */
+import { MatchReviewDialog } from "@/components/match-review-dialog";
+import { NoActiveBlock } from "@/components/no-active-block";
+import { ReconciliationMetrics } from "@/components/reconciliation-charts/ReconciliationMetrics";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  getBlock,
+  getReportingTradesByBlock,
+  getTradesByBlockWithOptions,
+  updateBlock as updateProcessedBlock,
+} from "@/lib/db";
+import { StrategyAlignment } from "@/lib/models/strategy-alignment";
+import { useBlockStore } from "@/lib/stores/block-store";
+import { useComparisonStore } from "@/lib/stores/comparison-store";
+import { cn } from "@/lib/utils";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
+import { Check, Download, Loader2, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 ⋮----
-import { Trade } from '../models/trade'
-⋮----
-/**
- * Key used to group trades that were opened at the same time
- */
-export interface TradeGroupKey {
-  dateOpened: string // ISO date string
-  timeOpened: string
-  strategy: string
+interface SelectableStrategy {
+  name: string;
+  count: number;
+  totalPl: number;
 }
 ⋮----
-dateOpened: string // ISO date string
+function buildStrategySummary(
+  strategies: string[],
+  values: { strategy: string; pl: number }[]
+): SelectableStrategy[]
 ⋮----
-/**
- * Result of combining multiple leg groups into a single trade
- */
-export interface CombinedTrade extends Trade {
-  originalTradeCount: number // Number of trades that were combined
-  combinedLegs: string[] // Array of leg strings from each trade
-}
+// Clear alignments immediately to prevent stale data
 ⋮----
-originalTradeCount: number // Number of trades that were combined
-combinedLegs: string[] // Array of leg strings from each trade
+const load = async () =>
 ⋮----
-/**
- * Generate a unique key for grouping trades by entry timestamp
- */
-function generateGroupKey(trade: Trade): string
+const handleOpenMatchDialog = (alignmentId: string) =>
 ⋮----
-/**
- * Parse a group key back into its components
- * (Not currently used but kept for future API compatibility)
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function parseGroupKey(key: string): TradeGroupKey
+// Memoize to keep stable reference during loading/refreshes
 ⋮----
-/**
- * Group trades by their entry timestamp (date + time + strategy)
- * Returns a map where the key is the group identifier and value is array of trades
- */
-export function groupTradesByEntry(trades: Trade[]): Map<string, Trade[]>
+// Only show comparison data if it matches the current block
 ⋮----
-/**
- * Combine a group of trades that were opened at the same time into a single trade record
- *
- * Rules for combining:
- * - Opening fields: Use first trade's values (they should be identical)
- * - Closing fields: Use the last closing time among all trades
- * - Premium: Sum of all premiums
- * - P/L: Sum of all P/Ls
- * - Commissions: Sum of all commissions
- * - Margin: Use the maximum margin requirement
- * - Contracts: Sum of all contracts
- * - Legs: Concatenate all leg descriptions
- * - Closing price: Use weighted average based on premiums
- * - Funds at close: Use final funds from last closed trade
- */
-export function combineLegGroup(trades: Trade[]): CombinedTrade
+// Only count as matched if isPaired is true (actual pair from matchResult.pairs)
+// Items with both trades but isPaired=false are just unmatched trades displayed together
 ⋮----
-// Sort trades by closing time (or use original order if not closed)
+// Export functions
+const exportAsJson = () =>
 ⋮----
-// Secondary sort by time if dates are equal
+const exportAsCsv = () =>
 ⋮----
-// Use first trade as template (opening info should be identical)
+// Metadata
 ⋮----
-// Aggregate numeric values
+// Summary
 ⋮----
-// Use the contract size of the first leg to represent the "Strategy Unit Size"
-// e.g. A 10-lot Iron Condor has 4 legs of 10 contracts.
-// We want the combined trade to say "10 contracts" (10 ICs), not 40.
+// Per-alignment metrics
 ⋮----
-// For margin:
-// - Debit trades (totalPremium < 0): Sum margin (e.g. Straddle = Call + Put cost)
-// - Credit trades (totalPremium >= 0): Max margin (e.g. Iron Condor = Max(Call side, Put side))
+const handleSaveMatchOverrides = async (
+    alignmentId: string,
+    tradePairs: import("@/lib/models/strategy-alignment").TradePair[]
+) =>
 ⋮----
-// Calculate weighted average closing price
+// selectedBacktestedIds and selectedReportedIds should contain ALL trades
+// to ensure they're included in stats calculations.
+// The tradePairs array is the authoritative source for what's actually paired.
+// The isPaired flag in session items distinguishes real pairs from unmatched trades.
 ⋮----
-// Calculate total closing cost if all trades have it recorded
+// Refresh comparison with the new alignments
 ⋮----
-// Combine leg descriptions
+// Keep the dialog open so the user can navigate back to sessions
 ⋮----
-// Use last trade's closing information (latest exit)
+const persistAlignments = async (nextAlignments: StrategyAlignment[]) =>
 ⋮----
-// Calculate combined opening short/long ratio (weighted by premium)
+const resetDialogState = () =>
 ⋮----
-// For optional fields, use first trade's value or undefined
+const openCreateDialog = () =>
 ⋮----
-// Max profit/loss: sum if available for all trades, otherwise undefined
+const openEditDialog = (mapping: StrategyAlignment) =>
 ⋮----
-// Use margin requirement as ground truth for worst-case loss.
+const handleDialogClose = (open: boolean) =>
 ⋮----
-// Fallback: For debit trades, the max loss is at least the premium paid
+const removeMapping = async (id: string) =>
 ⋮----
-// Opening information (from first trade)
+const upsertMapping = async () =>
 ⋮----
-// Closing information (from last closed trade)
+{/* Statistical Analysis Section - Show detailed metrics for selected alignment */}
 ⋮----
-// Aggregated values
-⋮----
-// Strategy and ratios
-⋮----
-// Optional market data
-⋮----
-// Combined trade metadata
-⋮----
-/**
- * Process all trades and combine leg groups that share the same entry timestamp
- *
- * @param trades - Array of trades to process
- * @returns Array of trades with leg groups combined (single trades are preserved as-is)
- */
-export function combineAllLegGroups(trades: Trade[]): CombinedTrade[]
-⋮----
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-⋮----
-// Sort by date/time to maintain chronological order
-⋮----
-/**
- * Identify which trades would be affected by combining leg groups
- * Useful for showing users what will change before they enable the feature
- *
- * @returns Object with statistics about grouping
- */
-export function analyzeLegGroups(trades: Trade[]):
-⋮----
-groupSizeDistribution: Record<number, number> // size -> count
+{/* Reconciliation Metrics Dashboard */}
 ```
 
-## File: lib/utils/trade-frequency.ts
+## File: components/performance-charts/chart-wrapper.tsx
 ```typescript
-import { Trade } from "@/lib/models/trade";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { HelpCircle } from "lucide-react";
+import { useTheme } from "next-themes";
+import type { Config, Data, Layout, PlotlyHTMLElement } from "plotly.js";
+import React, { Suspense, useCallback, useEffect, useRef } from "react";
 ⋮----
-/**
- * Estimate annual trade frequency from a sample of trades.
- *
- * Ensures realistic pacing for strategy-filtered simulations where the global
- * portfolio frequency would otherwise overstate the number of opportunities.
- */
-export function estimateTradesPerYear(
-  sampleTrades: Trade[],
-  fallback: number
-): number
+interface Window {
+    Plotly?: typeof import("plotly.js");
+  }
+⋮----
+// Dynamic import to optimize bundle size
+⋮----
+interface TooltipContent {
+  flavor: string;
+  detailed: string;
+}
+⋮----
+interface ChartWrapperProps {
+  title: string;
+  description?: string;
+  tooltip?: TooltipContent;
+  className?: string;
+  actions?: React.ReactNode;
+  headerAddon?: React.ReactNode;
+  contentOverlay?: React.ReactNode;
+  footer?: React.ReactNode;
+  children?: React.ReactNode; // deprecated; retained for backward compatibility
+  data: Data[];
+  layout: Partial<Layout>;
+  config?: Partial<Config>;
+  onInitialized?: (figure: unknown) => void;
+  onUpdate?: (figure: unknown) => void;
+  style?: React.CSSProperties;
+}
+⋮----
+children?: React.ReactNode; // deprecated; retained for backward compatibility
+⋮----
+const ChartSkeleton = () => (
+  <div className="space-y-3">
+    <div className="space-y-2">
+      <Skeleton className="h-4 w-[200px]" />
+      <Skeleton className="h-3 w-[300px]" />
+    </div>
+    <Skeleton className="h-[300px] w-full" />
+  </div>
+);
+⋮----
+// offsetParent will be null when hidden (e.g., inactive tab or collapsed)
+⋮----
+// Plotly.resize may return void or a promise depending on version; we safely ignore the return.
+⋮----
+// Handle manual resize when container changes
+⋮----
+const handleResize = () =>
+⋮----
+// Debounce resize calls to avoid thrashing Plotly resize
+⋮----
+// Set up ResizeObserver to detect container size changes
+⋮----
+// Also resize when theme changes (can affect layout)
+⋮----
+// Small delay to ensure theme changes are applied
+⋮----
+// Force a resize whenever the upstream data/layout objects change.
+// This catches cases like switching run history, where the container size
+// stays the same but Plotly needs to recompute its internal view box.
+⋮----
+// Enhanced layout with theme support
+⋮----
+// Ensure automargin is applied after layout.xaxis spread
+⋮----
+// Ensure automargin is applied after layout.yaxis spread
+⋮----
+// Provide fallback margins in case automargin has issues
+⋮----
+t: 60, // Increased top margin to give Plotly toolbar more space
+⋮----
+l: 90, // Larger left margin as fallback for automargin issues
+⋮----
+// Enhanced config with responsive behavior
+⋮----
+{/* Header with title */}
+⋮----
+{/* Content */}
+⋮----
+{/* Flavor text */}
+⋮----
+{/* Detailed explanation */}
+⋮----
+// Utility function to create common chart configurations
+⋮----
+// Common layout configurations
 ```
 
 ## File: components/position-sizing/margin-statistics-table.tsx
@@ -7508,43 +6975,6 @@ setTimelineRange([Math.min(a, b), Math.max(a, b)]);
 setParamRange([Math.min(a, b), Math.max(a, b)]);
 ```
 
-## File: components/app-sidebar.tsx
-```typescript
-import {
-  IconChartHistogram,
-  IconGauge,
-  IconLayoutDashboard,
-  IconLink,
-  IconReportAnalytics,
-  IconRouteSquare,
-  IconStack2,
-  IconTimelineEvent,
-} from "@tabler/icons-react";
-import { Blocks } from "lucide-react";
-import Link from "next/link";
-⋮----
-import { useBlockStore } from "@/lib/stores/block-store";
-⋮----
-import { NavMain } from "@/components/nav-main";
-import { SidebarActiveBlocks } from "@/components/sidebar-active-blocks";
-import { SidebarFooterLegal } from "@/components/sidebar-footer-legal";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
-⋮----
-export function AppSidebar(
-⋮----
-// Load blocks from IndexedDB on mount
-⋮----
-{/* Scroll indicator - subtle gradient fade at bottom */}
-```
-
 ## File: lib/calculations/correlation.ts
 ```typescript
 import { Trade } from "@/lib/models/trade";
@@ -7653,64 +7083,543 @@ export function calculateCorrelationAnalytics(
 // Weakest is the most negative correlation (minimum value)
 ```
 
-## File: app/(platform)/blocks/page.tsx
+## File: lib/db/index.ts
 ```typescript
-import { BlockDialog } from "@/components/block-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useBlockStore, type Block } from "@/lib/stores/block-store";
-import { Activity, AlertTriangle, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
-import React, { useState } from "react";
+/**
+ * IndexedDB Database Service for TradeBlocks
+ *
+ * Manages the client-side database for storing blocks, trades, and daily logs.
+ * Uses a versioned schema with migration support.
+ */
 ⋮----
-const formatDate = (date: Date)
+// Types imported for reference (commented out to avoid unused warnings)
+// import { ProcessedBlock } from '../models/block'
+// import { Trade } from '../models/trade'
+// import { DailyLogEntry } from '../models/daily-log'
+// import { PortfolioStats, StrategyStats, PerformanceMetrics } from '../models/portfolio-stats'
 ⋮----
-const handleRecalculate = async () =>
+// Database configuration
 ⋮----
-// If this block is active, also refresh the performance store
+// Object store names
 ⋮----
-{/* File Indicators */}
+// Index names
 ⋮----
-{/* Last Modified */}
+/**
+ * Database instance singleton
+ */
 ⋮----
-{/* Actions */}
+/**
+ * Initialize the IndexedDB database
+ */
+export async function initializeDatabase(): Promise<IDBDatabase>
 ⋮----
-{/* Name and Description */}
+// Create blocks store
 ⋮----
-{/* File Indicators */}
+// Create trades store
 ⋮----
-{/* Last Modified */}
+// Create daily logs store
 ⋮----
-
+// Create reporting logs store
 ⋮----
-{/* Actions */}
+// Create calculations store (for cached computations)
 ⋮----
-// Reset state and retry
+// Create walk-forward analysis store
 ⋮----
-{/* Loading skeleton */}
+/**
+ * Get database instance (initialize if needed)
+ */
+export async function getDatabase(): Promise<IDBDatabase>
 ⋮----
-{/* Confirmation dialog for clearing all data */}
+/**
+ * Close database connection
+ */
+export function closeDatabase(): void
+⋮----
+/**
+ * Delete the entire database (for testing/reset)
+ */
+export async function deleteDatabase(): Promise<void>
+⋮----
+/**
+ * Transaction helper for read operations
+ */
+export async function withReadTransaction<T>(
+  stores: string | string[],
+  callback: (transaction: IDBTransaction) => Promise<T>
+): Promise<T>
+⋮----
+/**
+ * Transaction helper for write operations
+ */
+export async function withWriteTransaction<T>(
+  stores: string | string[],
+  callback: (transaction: IDBTransaction) => Promise<T>
+): Promise<T>
+⋮----
+/**
+ * Generic helper for promisifying IDBRequest
+ */
+export function promisifyRequest<T>(request: IDBRequest<T>): Promise<T>
+⋮----
+/**
+ * Storage quota management
+ */
+export interface StorageInfo {
+  quota: number;
+  usage: number;
+  available: number;
+  persistent: boolean;
+}
+⋮----
+/**
+ * Get storage quota information
+ */
+export async function getStorageInfo(): Promise<StorageInfo>
+⋮----
+// Fallback for browsers without storage API
+⋮----
+/**
+ * Request persistent storage
+ */
+export async function requestPersistentStorage(): Promise<boolean>
+⋮----
+/**
+ * Database error types
+ */
+export class DatabaseError extends Error
+⋮----
+constructor(
+    message: string,
+    public readonly operation: string,
+    public readonly store?: string,
+    public readonly cause?: Error
+)
+⋮----
+export class QuotaExceededError extends DatabaseError
+⋮----
+constructor(operation: string, store?: string)
+⋮----
+export class TransactionError extends DatabaseError
+⋮----
+constructor(
+    message: string,
+    operation: string,
+    store?: string,
+    cause?: Error
+)
+⋮----
+// Re-export functions from individual stores
 ```
 
-## File: components/performance-charts/chart-wrapper.tsx
+## File: lib/db/trades-store.ts
 ```typescript
+/**
+ * Trades Store - CRUD operations for trade data
+ */
+⋮----
+import { Trade } from "../models/trade";
+import {
+  combineAllLegGroups,
+  CombinedTrade,
+} from "../utils/combine-leg-groups";
+import {
+  INDEXES,
+  promisifyRequest,
+  STORES,
+  withReadTransaction,
+  withWriteTransaction,
+} from "./index";
+import {
+  deleteCombinedTradesCache,
+  getCombinedTradesCache,
+  storeCombinedTradesCache,
+} from "./combined-trades-cache";
+import { deletePerformanceSnapshotCache } from "./performance-snapshot-cache";
+⋮----
+// Track in-flight combined cache writes to avoid redundant work when multiple callers miss the cache simultaneously.
+⋮----
+/**
+ * Extended trade with block association
+ */
+export interface StoredTrade extends Trade {
+  blockId: string;
+  id?: number; // Auto-generated by IndexedDB
+}
+⋮----
+id?: number; // Auto-generated by IndexedDB
+⋮----
+/**
+ * Add trades for a block (batch operation)
+ */
+export async function addTrades(
+  blockId: string,
+  trades: Trade[]
+): Promise<void>
+⋮----
+// Use Promise.all for better performance with large datasets
+⋮----
+// Invalidate caches since trades changed
+⋮----
+/**
+ * Get all trades for a block
+ */
+export async function getTradesByBlock(
+  blockId: string
+): Promise<StoredTrade[]>
+⋮----
+// Sort by date opened (chronological order)
+⋮----
+// If same date, sort by time
+⋮----
+/**
+ * Get all trades for a block with optional leg group combining
+ *
+ * Uses cached combined trades when available for better performance.
+ * Falls back to on-demand calculation if cache is missing.
+ *
+ * @param blockId - Block ID to fetch trades for
+ * @param options.combineLegGroups - Whether to combine trades with same entry timestamp
+ * @param options.skipCache - Force recalculation (bypass cache)
+ * @returns Array of trades (combined or raw)
+ */
+export async function getTradesByBlockWithOptions(
+  blockId: string,
+  options: { combineLegGroups?: boolean; skipCache?: boolean } = {}
+): Promise<(StoredTrade | (CombinedTrade &
+⋮----
+// If combining is enabled, check cache FIRST before fetching raw trades
+// This avoids the expensive raw trade fetch when we have cached data
+⋮----
+// Add blockId back to cached trades
+⋮----
+// Fetch raw trades (only if not combining, or cache miss)
+⋮----
+// Cache miss: calculate combined trades on-demand
+⋮----
+// Add blockId back to combined trades
+⋮----
+function queueCombinedTradesCache(blockId: string, combinedTrades: CombinedTrade[])
+⋮----
+/**
+ * Get trades by date range for a block
+ */
+export async function getTradesByDateRange(
+  blockId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<StoredTrade[]>
+⋮----
+// Create compound key range [blockId, startDate] to [blockId, endDate]
+⋮----
+/**
+ * Get trades by strategy for a block
+ */
+export async function getTradesByStrategy(
+  blockId: string,
+  strategy: string
+): Promise<StoredTrade[]>
+⋮----
+// Filter by strategy (IndexedDB doesn't support compound queries easily)
+⋮----
+/**
+ * Get unique strategies for a block
+ */
+export async function getStrategiesByBlock(blockId: string): Promise<string[]>
+⋮----
+/**
+ * Get trade count by block
+ */
+export async function getTradeCountByBlock(blockId: string): Promise<number>
+⋮----
+/**
+ * Delete all trades for a block
+ */
+export async function deleteTradesByBlock(blockId: string): Promise<void>
+⋮----
+// Invalidate caches since trades changed
+⋮----
+/**
+ * Update trades for a block (replace all)
+ */
+export async function updateTradesForBlock(
+  blockId: string,
+  trades: Trade[]
+): Promise<void>
+⋮----
+// First delete existing trades
+⋮----
+// Then add new trades
+⋮----
+// Invalidate caches since trades changed
+⋮----
+/**
+ * Get trade statistics for a block (aggregated)
+ */
+export async function getTradeStatistics(blockId: string): Promise<
+⋮----
+// Get date range
+⋮----
+// Get unique strategies
+⋮----
+/**
+ * Search trades by text (strategy, legs, reason for close)
+ */
+export async function searchTrades(
+  blockId: string,
+  query: string
+): Promise<StoredTrade[]>
+⋮----
+/**
+ * Get trades with pagination
+ */
+export async function getTradesPage(
+  blockId: string,
+  offset: number,
+  limit: number
+): Promise<
+⋮----
+/**
+ * Export trades to CSV format (for backup/analysis)
+ */
+export async function exportTradesToCSV(blockId: string): Promise<string>
+⋮----
+// CSV headers
+⋮----
+// Convert trades to CSV rows
+⋮----
+// Format dateOpened - handle both Date objects and strings
+⋮----
+// Combine headers and rows
+```
+
+## File: lib/stores/walk-forward-store.ts
+```typescript
+import { create } from 'zustand'
+import { WalkForwardAnalyzer } from '@/lib/calculations/walk-forward-analyzer'
+import {
+  WalkForwardAnalysis,
+  WalkForwardConfig,
+  WalkForwardParameterRangeTuple,
+  WalkForwardParameterRanges,
+  WalkForwardProgressEvent,
+} from '@/lib/models/walk-forward'
+import { toCsvRow } from '@/lib/utils/export-helpers'
+⋮----
+type WalkForwardPresetKey = 'conservative' | 'moderate' | 'aggressive'
+⋮----
+interface WalkForwardPreset {
+  label: string
+  description: string
+  config: Partial<Omit<WalkForwardConfig, 'parameterRanges'>>
+  parameterRanges?: Partial<WalkForwardParameterRanges>
+}
+⋮----
+interface WalkForwardStore {
+  config: WalkForwardConfig
+  isRunning: boolean
+  progress: WalkForwardProgressEvent | null
+  error: string | null
+  results: WalkForwardAnalysis | null
+  history: WalkForwardAnalysis[]
+  presets: Record<WalkForwardPresetKey, WalkForwardPreset>
+  runAnalysis: (blockId: string) => Promise<void>
+  cancelAnalysis: () => void
+  loadHistory: (blockId: string) => Promise<void>
+  updateConfig: (config: Partial<Omit<WalkForwardConfig, 'parameterRanges'>>) => void
+  setParameterRange: (key: string, range: WalkForwardParameterRangeTuple) => void
+  applyPreset: (preset: WalkForwardPresetKey) => void
+  clearResults: () => void
+  exportResultsAsJson: () => string | null
+  exportResultsAsCsv: () => string | null
+  selectAnalysis: (analysisId: string) => void
+  deleteAnalysis: (analysisId: string) => Promise<void>
+}
+⋮----
+function generateId(): string
+⋮----
+function buildCsvFromAnalysis(analysis: WalkForwardAnalysis | null): string | null
+⋮----
+const formatDate = (date: Date)
+```
+
+## File: lib/utils/combine-leg-groups.ts
+```typescript
+/**
+ * Leg Group Combining Utility
+ *
+ * For MEIC (Multiple Entry Iron Condor) and similar strategies where the backtester
+ * creates separate trade records for each leg group (e.g., calls and puts) that were
+ * opened simultaneously but may have different exit conditions/times.
+ *
+ * This utility groups trades by entry timestamp and combines them into single trade records.
+ */
+⋮----
+import { Trade } from '../models/trade'
+import { yieldToMain, checkCancelled } from './async-helpers'
+⋮----
+/**
+ * Key used to group trades that were opened at the same time
+ */
+export interface TradeGroupKey {
+  dateOpened: string // ISO date string
+  timeOpened: string
+  strategy: string
+}
+⋮----
+dateOpened: string // ISO date string
+⋮----
+/**
+ * Result of combining multiple leg groups into a single trade
+ */
+export interface CombinedTrade extends Trade {
+  originalTradeCount: number // Number of trades that were combined
+  combinedLegs: string[] // Array of leg strings from each trade
+}
+⋮----
+originalTradeCount: number // Number of trades that were combined
+combinedLegs: string[] // Array of leg strings from each trade
+⋮----
+/**
+ * Generate a unique key for grouping trades by entry timestamp
+ */
+function generateGroupKey(trade: Trade): string
+⋮----
+/**
+ * Parse a group key back into its components
+ * (Not currently used but kept for future API compatibility)
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function parseGroupKey(key: string): TradeGroupKey
+⋮----
+/**
+ * Group trades by their entry timestamp (date + time + strategy)
+ * Returns a map where the key is the group identifier and value is array of trades
+ */
+export function groupTradesByEntry(trades: Trade[]): Map<string, Trade[]>
+⋮----
+/**
+ * Combine a group of trades that were opened at the same time into a single trade record
+ *
+ * Rules for combining:
+ * - Opening fields: Use first trade's values (they should be identical)
+ * - Closing fields: Use the last closing time among all trades
+ * - Premium: Sum of all premiums
+ * - P/L: Sum of all P/Ls
+ * - Commissions: Sum of all commissions
+ * - Margin: Use the maximum margin requirement
+ * - Contracts: Sum of all contracts
+ * - Legs: Concatenate all leg descriptions
+ * - Closing price: Use weighted average based on premiums
+ * - Funds at close: Use final funds from last closed trade
+ */
+export function combineLegGroup(trades: Trade[]): CombinedTrade
+⋮----
+// Sort trades by closing time (or use original order if not closed)
+⋮----
+// Secondary sort by time if dates are equal
+⋮----
+// Use first trade as template (opening info should be identical)
+⋮----
+// Aggregate numeric values
+⋮----
+// Use the contract size of the first leg to represent the "Strategy Unit Size"
+// e.g. A 10-lot Iron Condor has 4 legs of 10 contracts.
+// We want the combined trade to say "10 contracts" (10 ICs), not 40.
+⋮----
+// For margin:
+// - Debit trades (totalPremium < 0): Sum margin (e.g. Straddle = Call + Put cost)
+// - Credit trades (totalPremium >= 0): Max margin (e.g. Iron Condor = Max(Call side, Put side))
+⋮----
+// Calculate weighted average closing price
+⋮----
+// Calculate total closing cost if all trades have it recorded
+⋮----
+// Combine leg descriptions
+⋮----
+// Use last trade's closing information (latest exit)
+⋮----
+// Calculate combined opening short/long ratio (weighted by premium)
+⋮----
+// For optional fields, use first trade's value or undefined
+⋮----
+// Max profit/loss: sum if available for all trades, otherwise undefined
+⋮----
+// Use margin requirement as ground truth for worst-case loss.
+⋮----
+// Fallback: For debit trades, the max loss is at least the premium paid
+⋮----
+// Opening information (from first trade)
+⋮----
+// Closing information (from last closed trade)
+⋮----
+// Aggregated values
+⋮----
+// Strategy and ratios
+⋮----
+// Optional market data
+⋮----
+// Combined trade metadata
+⋮----
+export interface CombineLegGroupsProgress {
+  step: string
+  percent: number
+}
+⋮----
+export interface CombineLegGroupsOptions {
+  onProgress?: (progress: CombineLegGroupsProgress) => void
+  signal?: AbortSignal
+}
+⋮----
+/**
+ * Process all trades and combine leg groups that share the same entry timestamp
+ *
+ * @param trades - Array of trades to process
+ * @returns Array of trades with leg groups combined (single trades are preserved as-is)
+ */
+export function combineAllLegGroups(trades: Trade[]): CombinedTrade[]
+⋮----
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+⋮----
+// Sort by date/time to maintain chronological order
+⋮----
+/**
+ * Async version of combineAllLegGroups with progress reporting and cancellation support
+ * Use this for large datasets to keep UI responsive
+ *
+ * @param trades - Array of trades to process
+ * @param options - Progress callback and abort signal
+ * @returns Array of trades with leg groups combined
+ */
+export async function combineAllLegGroupsAsync(
+  trades: Trade[],
+  options?: CombineLegGroupsOptions
+): Promise<CombinedTrade[]>
+⋮----
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+⋮----
+// Yield every 100 groups to keep UI responsive
+⋮----
+// Sort by date/time to maintain chronological order
+⋮----
+/**
+ * Identify which trades would be affected by combining leg groups
+ * Useful for showing users what will change before they enable the feature
+ *
+ * @returns Object with statistics about grouping
+ */
+export function analyzeLegGroups(trades: Trade[]):
+⋮----
+groupSizeDistribution: Record<number, number> // size -> count
+```
+
+## File: app/(platform)/assistant/page.tsx
+```typescript
+import { ChevronDown, ChevronRight, ExternalLink, FileJson, Info, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+⋮----
+import { NoActiveBlock } from "@/components/no-active-block";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -7718,104 +7627,85 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { HelpCircle } from "lucide-react";
-import { useTheme } from "next-themes";
-import type { Config, Data, Layout, PlotlyHTMLElement } from "plotly.js";
-import React, { Suspense, useCallback, useEffect, useRef } from "react";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+import {
+  getBlock,
+  getDailyLogsByBlock,
+  getTradesByBlockWithOptions,
+} from "@/lib/db";
+import { PortfolioStats, StrategyStats } from "@/lib/models/portfolio-stats";
+import {
+  buildPerformanceSnapshot,
+  SnapshotChartData,
+} from "@/lib/services/performance-snapshot";
+import { useBlockStore } from "@/lib/stores/block-store";
+import { downloadJson, generateExportFilename } from "@/lib/utils/export-helpers";
+import {
+  CHART_EXPORTS,
+  getChartExportsByTab,
+  getMultipleChartsJson,
+  TAB_ORDER,
+} from "@/lib/utils/performance-export";
+import { Trade } from "@/lib/models/trade";
 ⋮----
-interface Window {
-    Plotly?: typeof import("plotly.js");
-  }
+// Block store
 ⋮----
-// Dynamic import to optimize bundle size
+// Local data state
 ⋮----
-interface TooltipContent {
-  flavor: string;
-  detailed: string;
-}
+// Load blocks if not initialized
 ⋮----
-interface ChartWrapperProps {
-  title: string;
-  description?: string;
-  tooltip?: TooltipContent;
-  className?: string;
-  actions?: React.ReactNode;
-  headerAddon?: React.ReactNode;
-  contentOverlay?: React.ReactNode;
-  footer?: React.ReactNode;
-  children?: React.ReactNode; // deprecated; retained for backward compatibility
-  data: Data[];
-  layout: Partial<Layout>;
-  config?: Partial<Config>;
-  onInitialized?: (figure: unknown) => void;
-  onUpdate?: (figure: unknown) => void;
-  style?: React.CSSProperties;
-}
+// Fetch trades and daily logs when active block changes
 ⋮----
-children?: React.ReactNode; // deprecated; retained for backward compatibility
+const fetchData = async () =>
 ⋮----
-const ChartSkeleton = () => (
-  <div className="space-y-3">
-    <div className="space-y-2">
-      <Skeleton className="h-4 w-[200px]" />
-      <Skeleton className="h-3 w-[300px]" />
-    </div>
-    <Skeleton className="h-[300px] w-full" />
-  </div>
-);
+// Calculate stats and chart data
 ⋮----
-// offsetParent will be null when hidden (e.g., inactive tab or collapsed)
+const toggleChart = (chartId: string) =>
 ⋮----
-// Plotly.resize may return void or a promise depending on version; we safely ignore the return.
+const selectAllCharts = () =>
 ⋮----
-// Handle manual resize when container changes
+const clearAllCharts = () =>
 ⋮----
-const handleResize = () =>
+const handleExportForGPT = async () =>
 ⋮----
-// Debounce resize calls to avoid thrashing Plotly resize
+// Export block stats
 ⋮----
-// Set up ResizeObserver to detect container size changes
+// Expose per-trade margin + P/L so GPT exports always carry ROM inputs
 ⋮----
-// Also resize when theme changes (can affect layout)
+// Export performance charts
 ⋮----
-// Small delay to ensure theme changes are applied
+// Download the combined export
 ⋮----
-// Force a resize whenever the upstream data/layout objects change.
-// This catches cases like switching run history, where the container size
-// stays the same but Plotly needs to recompute its internal view box.
+const openGPT = () =>
 ⋮----
-// Enhanced layout with theme support
+// Show loading state
 ⋮----
-// Ensure automargin is applied after layout.xaxis spread
+{/* Header */}
 ⋮----
-// Ensure automargin is applied after layout.yaxis spread
+{/* Main content */}
 ⋮----
-// Provide fallback margins in case automargin has issues
+{/* Left: Export panel */}
 ⋮----
-t: 60, // Increased top margin to give Plotly toolbar more space
+{/* Block Stats */}
 ⋮----
-l: 90, // Larger left margin as fallback for automargin issues
+setIncludeBlockStats(!!checked)
 ⋮----
-// Enhanced config with responsive behavior
+{/* Performance Charts - Collapsible */}
 ⋮----
-{/* Header with title */}
+checked=
 ⋮----
-{/* Content */}
+toggleChart(chart.id)
 ⋮----
-{/* Flavor text */}
+{/* Note about other exports */}
 ⋮----
-{/* Detailed explanation */}
-⋮----
-// Utility function to create common chart configurations
-⋮----
-// Common layout configurations
+{/* Right: Instructions */}
 ```
 
 ## File: components/walk-forward/period-selector.tsx
@@ -7849,170 +7739,158 @@ onChange=
 updateConfig(
 ```
 
-## File: lib/calculations/mfe-mae.ts
+## File: components/app-sidebar.tsx
 ```typescript
-import { Trade } from '@/lib/models/trade'
-import { computeTotalMaxProfit, computeTotalMaxLoss, computeTotalPremium, type EfficiencyBasis } from '@/lib/metrics/trade-efficiency'
+import {
+  IconChartHistogram,
+  IconGauge,
+  IconLayoutDashboard,
+  IconLink,
+  IconReportAnalytics,
+  IconRouteSquare,
+  IconSparkles,
+  IconStack2,
+  IconTimelineEvent,
+} from "@tabler/icons-react";
+import { Blocks } from "lucide-react";
+import Link from "next/link";
 ⋮----
-export type NormalizationBasis = 'premium' | 'margin'
+import { useBlockStore } from "@/lib/stores/block-store";
 ⋮----
-export interface NormalizedExcursionMetrics {
-  denominator: number
-  mfePercent: number
-  maePercent: number
-  plPercent: number
-}
+import { NavMain } from "@/components/nav-main";
+import { SidebarActiveBlocks } from "@/components/sidebar-active-blocks";
+import { SidebarFooterLegal } from "@/components/sidebar-footer-legal";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 ⋮----
-/**
- * Data point for a single trade's MFE/MAE metrics
- */
-export interface MFEMAEDataPoint {
-  tradeNumber: number
-  date: Date
-  strategy: string
-
-  // Raw values (normalized)
-  mfe: number // Maximum Favorable Excursion (total max profit)
-  mae: number // Maximum Adverse Excursion (total max loss)
-  pl: number // Realized P&L
-
-  // Percentage values (normalized by denominator)
-  mfePercent?: number
-  maePercent?: number
-  plPercent?: number
-
-  // Efficiency metrics
-  profitCapturePercent?: number // (pl / mfe) * 100 - what % of peak profit was captured
-  excursionRatio?: number // mfe / mae - reward-to-risk ratio
-
-  // Context
-  denominator?: number
-  basis: EfficiencyBasis
-  isWinner: boolean
-  marginReq: number
-  premium?: number
-  normalizedBy: Partial<Record<NormalizationBasis, NormalizedExcursionMetrics>>
-
-  // Trade details for tooltips
-  openingPrice: number
-  closingPrice?: number
-  numContracts: number
-  avgClosingCost?: number
-  fundsAtClose: number
-  openingCommissionsFees: number
-  closingCommissionsFees?: number
-  openingShortLongRatio: number
-  closingShortLongRatio?: number
-  openingVix?: number
-  closingVix?: number
-  gap?: number
-  movement?: number
-  maxProfit?: number
-  maxLoss?: number
-  shortLongRatioChange?: number
-  shortLongRatioChangePct?: number
-}
+export function AppSidebar(
 ⋮----
-// Raw values (normalized)
-mfe: number // Maximum Favorable Excursion (total max profit)
-mae: number // Maximum Adverse Excursion (total max loss)
-pl: number // Realized P&L
+// Load blocks from IndexedDB on mount
 ⋮----
-// Percentage values (normalized by denominator)
-⋮----
-// Efficiency metrics
-profitCapturePercent?: number // (pl / mfe) * 100 - what % of peak profit was captured
-excursionRatio?: number // mfe / mae - reward-to-risk ratio
-⋮----
-// Context
-⋮----
-// Trade details for tooltips
-⋮----
-/**
- * Aggregated MFE/MAE statistics
- */
-export interface MFEMAEStats {
-  avgMFEPercent: number
-  avgMAEPercent: number
-  avgProfitCapturePercent: number
-  avgExcursionRatio: number
-
-  winnerAvgProfitCapture: number
-  loserAvgProfitCapture: number
-
-  medianMFEPercent: number
-  medianMAEPercent: number
-
-  totalTrades: number
-  tradesWithMFE: number
-  tradesWithMAE: number
-}
-⋮----
-/**
- * Distribution bucket for histograms
- */
-export interface DistributionBucket {
-  bucket: string
-  mfeCount: number
-  maeCount: number
-  range: [number, number]
-}
-⋮----
-/**
- * Calculates MFE/MAE metrics for a single trade
- */
-export function calculateTradeExcursionMetrics(trade: Trade, tradeNumber: number): MFEMAEDataPoint | null
-⋮----
-// Skip trades without excursion data
-⋮----
-// Determine denominator for percentage calculations
-⋮----
-// Calculate percentages if we have a denominator
-⋮----
-// Profit capture: what % of max profit was actually captured
-⋮----
-// Excursion ratio: reward/risk
-⋮----
-/**
- * Processes all trades to generate MFE/MAE data points
- */
-export function calculateMFEMAEData(trades: Trade[]): MFEMAEDataPoint[]
-⋮----
-/**
- * Calculates aggregate statistics from MFE/MAE data points
- */
-export function calculateMFEMAEStats(dataPoints: MFEMAEDataPoint[]): Partial<Record<NormalizationBasis, MFEMAEStats>>
-⋮----
-const median = (values: number[]): number =>
-⋮----
-/**
- * Creates distribution buckets for histogram visualization
- */
-export function createExcursionDistribution(
-  dataPoints: MFEMAEDataPoint[],
-  bucketSize: number = 10
-): DistributionBucket[]
-⋮----
-const inBucket = (value: number)
+{/* Scroll indicator - subtle gradient fade at bottom */}
 ```
 
-## File: lib/stores/block-store.ts
+## File: components/block-dialog.tsx
 ```typescript
-import { create } from "zustand";
-import { PortfolioStatsCalculator } from "../calculations/portfolio-stats";
 import {
-  deleteBlock as dbDeleteBlock,
-  updateBlock as dbUpdateBlock,
-  getAllBlocks,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { calculationOrchestrator } from "@/lib/calculations";
+import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+import {
+  addDailyLogEntries,
+  addReportingTrades,
+  addTrades,
+  createBlock,
   getBlock,
-  getDailyLogsByBlock,
-  getReportingTradesByBlock,
-  updateBlockStats,
-} from "../db";
-import { ProcessedBlock } from "../models/block";
-import { StrategyAlignment } from "../models/strategy-alignment";
+  deleteReportingTradesByBlock,
+  updateDailyLogsForBlock,
+  updateBlock as updateProcessedBlock,
+  updateReportingTradesForBlock,
+  updateTradesForBlock,
+} from "@/lib/db";
+import {
+  storeCombinedTradesCache,
+  deleteCombinedTradesCache,
+} from "@/lib/db/combined-trades-cache";
+import {
+  storePerformanceSnapshotCache,
+  deletePerformanceSnapshotCache,
+} from "@/lib/db/performance-snapshot-cache";
+import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
+import { combineAllLegGroupsAsync } from "@/lib/utils/combine-leg-groups";
+import { REQUIRED_DAILY_LOG_COLUMNS } from "@/lib/models/daily-log";
+import {
+  REPORTING_TRADE_COLUMN_ALIASES,
+  REQUIRED_REPORTING_TRADE_COLUMNS,
+} from "@/lib/models/reporting-trade";
+import type { StrategyAlignment } from "@/lib/models/strategy-alignment";
+import {
+  REQUIRED_TRADE_COLUMNS,
+  TRADE_COLUMN_ALIASES,
+  type Trade,
+} from "@/lib/models/trade";
+import {
+  DailyLogProcessingProgress,
+  DailyLogProcessingResult,
+  DailyLogProcessor,
+} from "@/lib/processing/daily-log-processor";
+import {
+  ReportingTradeProcessingProgress,
+  ReportingTradeProcessingResult,
+  ReportingTradeProcessor,
+} from "@/lib/processing/reporting-trade-processor";
+import {
+  TradeProcessingProgress,
+  TradeProcessingResult,
+  TradeProcessor,
+} from "@/lib/processing/trade-processor";
+import { useBlockStore } from "@/lib/stores/block-store";
+import { useComparisonStore } from "@/lib/stores/comparison-store";
+import { cn } from "@/lib/utils";
+import {
+  findMissingHeaders,
+  normalizeHeaders,
+  parseCsvLine,
+} from "@/lib/utils/csv-headers";
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Calendar,
+  CheckCircle,
+  Info,
+  List,
+  Loader2,
+  Plus,
+  Save,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { ProgressDialog } from "@/components/progress-dialog";
+import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
+import { waitForRender } from "@/lib/utils/async-helpers";
+import { useProgressDialog } from "@/hooks/use-progress-dialog";
 ⋮----
-export interface Block {
+interface Block {
   id: string;
   name: string;
   description?: string;
@@ -8045,451 +7923,263 @@ export interface Block {
     mappings: StrategyAlignment[];
     updatedAt: Date;
   };
+  tags?: string[];
+  color?: string;
 }
 ⋮----
-interface BlockStore {
-  // State
-  blocks: Block[];
-  activeBlockId: string | null;
-  isLoading: boolean;
-  isInitialized: boolean;
-  isStuck: boolean;
-  error: string | null;
-
-  // Actions
-  loadBlocks: () => Promise<void>;
-  setActiveBlock: (blockId: string) => void;
-  clearActiveBlock: () => void;
-  addBlock: (
-    block: Omit<Block, "created"> | Omit<Block, "id" | "created">
-  ) => Promise<void>;
-  updateBlock: (id: string, updates: Partial<Block>) => Promise<void>;
-  deleteBlock: (id: string) => Promise<void>;
-  refreshBlock: (id: string) => Promise<void>;
-  recalculateBlock: (id: string) => Promise<void>;
-  clearAllData: () => Promise<void>;
+interface FileUploadState {
+  file: File | null;
+  status:
+    | "empty"
+    | "dragover"
+    | "uploaded"
+    | "error"
+    | "existing"
+    | "processing";
+  error?: string;
+  existingFileName?: string;
+  existingRowCount?: number;
+  progress?: number;
+  processedData?: {
+    rowCount: number;
+    dateRange?: { start: Date | null; end: Date | null };
+    strategies?: string[];
+    stats?: {
+      processingTimeMs: number;
+      strategies: string[];
+      dateRange: { start: Date | null; end: Date | null };
+      totalPL: number;
+    };
+  };
+  requiresStrategyName?: boolean;
 }
 ⋮----
-// State
-⋮----
-// Actions
-⋮----
-/**
- * Convert ProcessedBlock from DB to Block for UI
- */
-function convertProcessedBlockToBlock(
-  processedBlock: ProcessedBlock,
-  tradeCount: number,
-  dailyLogCount: number,
-  reportingLogCount: number
-): Block
-⋮----
-isActive: false, // Will be set by active block logic
-⋮----
-totalPnL: 0, // Will be calculated from trades
-⋮----
-// Timeout for detecting stuck loading state (30 seconds)
-⋮----
-// Initialize with empty state
-⋮----
-// Load blocks from IndexedDB
-⋮----
-// Prevent multiple concurrent loads
-⋮----
-// Create timeout for stuck detection
-⋮----
-// Main loading logic wrapped in a promise for racing
-⋮----
-// Restore active block ID from localStorage
-⋮----
-// Import getTradesByBlockWithOptions
-⋮----
-// Convert each ProcessedBlock to Block with trade/daily log counts
-⋮----
-// Use combineLegGroups setting from block config
-⋮----
-// Calculate stats from trades
-⋮----
-// Mark as active if this was the previously active block
-⋮----
-// Continue loading other blocks instead of failing completely
-⋮----
-// Set the active block ID if one was restored
-⋮----
-// Clear timeout on success to prevent unhandled rejection
-⋮----
-// Clear timeout to prevent duplicate errors
-⋮----
-// Check if this was a timeout
-⋮----
-// Actions
-⋮----
-// Save to localStorage for persistence
-⋮----
-// Remove from localStorage
-⋮----
-id: "id" in blockData ? blockData.id : crypto.randomUUID(), // Use provided ID or generate new one
-⋮----
-// Debug logging
-⋮----
-// Update state properly handling active block logic
-⋮----
-// If new block is active, deactivate all others and set new one as active
-⋮----
-// If new block is not active, just add it
-⋮----
-// If the new block is active, refresh it to load trades/daily logs
-⋮----
-// Use setTimeout to ensure the block is added to the state first
-⋮----
-// Update in IndexedDB
-⋮----
-// Add other updatable fields as needed
-⋮----
-// Update local state
-⋮----
-// Delete from IndexedDB
-⋮----
-// Update local state
-⋮----
-// If we deleted the active block, clear localStorage
-⋮----
-// If we deleted the active block, clear the active state
-⋮----
-// Use combineLegGroups setting from block config
-⋮----
-// Calculate fresh stats
-⋮----
-// Update in store
-⋮----
-// Get the block and its data
-⋮----
-// Use combineLegGroups setting from block config
-⋮----
-// Recalculate all stats using the current calculation engine
-⋮----
-// Update ProcessedBlock stats in database
-⋮----
-// Update lastModified timestamp
-⋮----
-// Calculate basic stats for the UI (Block interface)
-⋮----
-winRate: portfolioStats.winRate * 100, // Convert to percentage for Block interface
-⋮----
-// Create updated block for store
-⋮----
-// Update in store
-⋮----
-// Clear all data and reload (for recovery from corrupted state)
-⋮----
-// Delete the main TradeBlocksDB
-⋮----
-// Also delete the cache database if it exists
-⋮----
-req.onblocked = () => resolve(); // Continue even if blocked
-⋮----
-// Ignore cache deletion errors
-⋮----
-// Clear all tradeblocks-related localStorage entries
-⋮----
-// Even if delete fails, try to reload - user can try again
-```
-
-## File: app/(platform)/block-stats/page.tsx
-```typescript
-import { MetricCard } from "@/components/metric-card";
-import { MetricSection } from "@/components/metric-section";
-import { MultiSelect } from "@/components/multi-select";
-import { NoActiveBlock } from "@/components/no-active-block";
-import { StrategyBreakdownTable } from "@/components/strategy-breakdown-table";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { SizingModeToggle } from "@/components/sizing-mode-toggle";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
-import {
-  getBlock,
-  getDailyLogsByBlock,
-  getTradesByBlockWithOptions,
-} from "@/lib/db";
-import {
-  calculatePremiumEfficiencyPercent,
-  computeTotalPremium,
-} from "@/lib/metrics/trade-efficiency";
-import { DailyLogEntry } from "@/lib/models/daily-log";
-import { PortfolioStats, StrategyStats } from "@/lib/models/portfolio-stats";
-import { Trade } from "@/lib/models/trade";
-import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
-import { useBlockStore } from "@/lib/stores/block-store";
-import {
-  downloadCsv,
-  downloadJson,
-  generateExportFilename,
-  toCsvRow,
-} from "@/lib/utils/export-helpers";
-import {
-  AlertTriangle,
-  BarChart3,
-  Calendar,
-  Download,
-  Gauge,
-  Target,
-  TrendingUp,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-⋮----
-// Strategy options will be dynamically generated from trades
-⋮----
-// Data fetching state
-⋮----
-// Calculated metrics state
-⋮----
-// Get active block from store
-⋮----
-// Load blocks if not initialized
-⋮----
-// Fetch trades and daily logs when active block changes
-⋮----
-const fetchData = async () =>
-⋮----
-// eslint-disable-next-line react-hooks/exhaustive-deps
-⋮----
-// Calculate metrics when data or risk-free rate changes
-⋮----
-const calculateMetrics = async () =>
-⋮----
-// Use a small delay to avoid closing the popover during selection
-⋮----
-// Helper functions
-const getDateRange = () =>
-⋮----
-const getInitialCapital = () =>
-⋮----
-// Use the initial capital from portfolioStats which properly accounts for daily logs
-⋮----
-const getAvgReturnOnMargin = () =>
-⋮----
-// Calculate average return on margin from filtered trades
-⋮----
-const getStdDevOfRoM = () =>
-⋮----
-const getBestTrade = () =>
-⋮----
-const getWorstTrade = () =>
-⋮----
-const getCommissionShareOfPremium = () =>
-⋮----
-const getAvgPremiumEfficiency = () =>
-⋮----
-const getAvgHoldingPeriodHours = () =>
-⋮----
-const getAvgContracts = () =>
-⋮----
-const getStrategyOptions = () =>
-⋮----
-// Export functions
-const buildExportData = () =>
-⋮----
-const exportAsJson = () =>
-⋮----
-const exportAsCsv = () =>
-⋮----
-// Metadata section
-⋮----
-// Portfolio Stats section
-⋮----
-// Strategy Breakdown section
-⋮----
-// Show loading state
-⋮----
-// Show message if no active block
-⋮----
-// Show loading state for data
-⋮----
-// Show error state
-⋮----
-{/* Controls */}
-⋮----
-{/* Basic Overview */}
-⋮----
-
-⋮----
-{/* Return Metrics */}
-⋮----
-{/* Risk & Drawdown */}
-⋮----
-{/* Consistency Metrics */}
-⋮----
-{/* Execution Efficiency */}
-⋮----
-{/* Strategy Breakdown */}
-⋮----
-winRate: stat.winRate * 100, // Convert to percentage
-```
-
-## File: app/(platform)/position-sizing/page.tsx
-```typescript
-import { NoActiveBlock } from "@/components/no-active-block";
-import { MarginChart } from "@/components/position-sizing/margin-chart";
-import { MarginStatisticsTable } from "@/components/position-sizing/margin-statistics-table";
-import { PortfolioSummary } from "@/components/position-sizing/portfolio-summary";
-import { StrategyKellyTable } from "@/components/position-sizing/strategy-kelly-table";
-import {
-  StrategyAnalysis,
-  StrategyResults,
-} from "@/components/position-sizing/strategy-results";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import {
-  calculateKellyMetrics,
-  calculateStrategyKellyMetrics,
-} from "@/lib/calculations/kelly";
-import {
-  buildMarginTimeline,
-  calculateMaxMarginPct,
-  type MarginMode,
-} from "@/lib/calculations/margin-timeline";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
-import {
-  getBlock,
-  getDailyLogsByBlock,
-  getTradesByBlockWithOptions,
-} from "@/lib/db";
-import { DailyLogEntry } from "@/lib/models/daily-log";
-import { Trade } from "@/lib/models/trade";
-import { useBlockStore } from "@/lib/stores/block-store";
-import {
-  downloadCsv,
-  downloadJson,
-  generateExportFilename,
-  toCsvRow,
-} from "@/lib/utils/export-helpers";
-import { AlertCircle, Download, HelpCircle, Play } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-⋮----
-interface RunConfig {
-  startingCapital: number;
-  portfolioKellyPct: number;
-  marginMode: MarginMode;
-  kellyValues: Record<string, number>;
+type UploadType = "trade" | "daily" | "reporting";
+⋮----
+interface BlockDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  mode: "new" | "edit";
+  block?: Block | null;
 }
 ⋮----
-type StrategySortOption =
-  | "name-asc"
-  | "winrate-desc"
-  | "kelly-desc"
-  | "applied-desc"
-  | "capital-desc"
-  | "trades-desc";
+type PreviewData = {
+    trades?: TradeProcessingResult;
+    dailyLogs?: DailyLogProcessingResult;
+    reporting?: ReportingTradeProcessingResult;
+    initialCapital?: number;
+  };
 ⋮----
-const normalizeKellyValue = (value: number): number =>
+// Shared progress dialog controller (handles abort + clamped percent)
 ⋮----
-// State
+interface ProcessFilesResult {
+    preview: PreviewData;
+    missingStrategies: number;
+  }
 ⋮----
-// Load trades and daily log when active block changes
+// Reset form when dialog opens/closes or mode changes
 ⋮----
-const loadData = async () =>
+// Reset when closing
 ⋮----
-// Auto-detect starting capital (prefer daily log when available)
+// Pre-populate for edit mode
 ⋮----
-// Initialize all strategies as selected with 100%
+// Load combineLegGroups setting from ProcessedBlock
 ⋮----
-// Get unique strategies with trade counts
+// Reset for new mode
 ⋮----
-// Calculate results when user clicks "Run Allocation"
-const runAllocation = () =>
+// Clear preview data when a new trade file is selected
 ⋮----
-// Results calculations using the last run configuration
+// Validate file type
 ⋮----
-// Calculate portfolio-level Kelly metrics with starting capital for validation
+// Clear preview data when a new trade file is selected
 ⋮----
-// Calculate per-strategy Kelly metrics with starting capital for validation
+// Reset the input value to allow re-selecting the same file
 ⋮----
-// Get strategy names sorted by trade count
+// Reset the input value to allow re-selecting the same file
 ⋮----
-// Build margin timeline
+const formatFileSize = (bytes: number) =>
 ⋮----
-// Calculate portfolio max margin
+const processFiles = async (): Promise<ProcessFilesResult | null> =>
 ⋮----
-// Calculate strategy analysis
+// Process trade log
 ⋮----
-// Use normalized Kelly when available (more accurate for position sizing)
+// Process daily log if provided
 ⋮----
-// Apply BOTH Portfolio Kelly and Strategy Kelly multipliers
+strategies: [], // Daily logs don't have strategies
 ⋮----
-const compareByName = (a: StrategyAnalysis, b: StrategyAnalysis)
+// Calculate initial capital
 ⋮----
-// Handlers
-const handleKellyChange = (strategy: string, value: number) =>
+// Calculate initial capital from trades only
 ⋮----
-const handleSelectionChange = (strategy: string, selected: boolean) =>
+const handleSubmit = async () =>
 ⋮----
-const handleSelectAll = (selected: boolean) =>
+// Process files if new files were uploaded
 ⋮----
-const handlePortfolioKellyInputChange = (value: string) =>
+// Check if we need to process: either no preview exists OR the file changed
 ⋮----
-// Allow users to clear the field while editing
+if (!result) return; // Processing failed
 ⋮----
-// Update numeric state eagerly so pending-change detection stays responsive
+// In edit mode, process files if they were uploaded but not yet processed
 ⋮----
-const commitPortfolioKellyInput = () =>
+if (!result) return; // Processing failed
 ⋮----
-// Export functions
-const exportAsJson = () =>
+// Create new block with processed data
 ⋮----
-const exportAsCsv = () =>
+// Create block metadata
 ⋮----
-// Metadata
+// Save to IndexedDB
 ⋮----
-// Portfolio Summary
+// Add trades
 ⋮----
-// Strategy Analysis
+// Add daily log entries if present
 ⋮----
-// Empty state
+// Pre-calculate and cache performance snapshot for instant page loads
 ⋮----
-{/* How to Use This Page */}
+// Show progress dialog BEFORE any heavy computation
+setIsProcessing(false); // Hide old processing UI
 ⋮----
-{/* Configuration Card */}
+// Allow React to render the dialog before starting computation
 ⋮----
-{/* Global Settings */}
+// If combining leg groups, do it with progress tracking
 ⋮----
-onValueChange=
+// Scale combine progress to 0-30%
 ⋮----
-{/* Strategy Kelly Table */}
+// Build performance snapshot (30-95% if combining, 0-95% if not)
 ⋮----
-{/* Quick Actions */}
+// Store to cache (95-100%)
 ⋮----
-{/* Slider to set all selected strategies */}
+// User cancelled - skip caching, save still succeeds
 ⋮----
-setAllStrategiesKellyPct(normalizeKellyValue(values[0]))
+setIsProcessing(true); // Restore for remaining operations
 ⋮----
-selectedStrategies.forEach((strategy) =>
-setKellyValues((prev) => (
+// Calculate block stats for store
 ⋮----
-{/* Action buttons */}
+// Add to Zustand store
 ⋮----
-setKellyValues(resetValues);
-setAllStrategiesKellyPct(100);
+id: newBlock.id, // Use the actual ID from IndexedDB
 ⋮----
-{/* Results */}
+// Update existing block
+⋮----
+// Ensure we process the daily log if it was uploaded without running the full pipeline
+⋮----
+// Ensure we process the reporting log if it was uploaded without running the full pipeline
+⋮----
+// Get current block to check if combineLegGroups changed
+⋮----
+// Update analysisConfig if combineLegGroups changed
+⋮----
+// Clear cache since combining affects calculations
+⋮----
+// Handle combined trades cache based on new setting
+⋮----
+// Enabling: pre-calculate and cache combined trades
+⋮----
+// Show progress dialog BEFORE any heavy computation
+setIsProcessing(false); // Hide old processing UI
+⋮----
+// Allow React to render the dialog before starting computation
+⋮----
+// Combine leg groups with progress (this was freezing UI before)
+⋮----
+// Scale combine progress to 0-30%
+⋮----
+// Build performance snapshot (30-95%)
+⋮----
+// Scale snapshot progress to 30-95%
+⋮----
+// Store to cache (95-100%)
+⋮----
+setIsProcessing(true); // Restore for remaining operations
+⋮----
+// Disabling: delete the cached combined trades
+⋮----
+// Rebuild performance snapshot with raw trades
+⋮----
+// Use progress dialog for pre-calculation
+setIsProcessing(false); // Hide old processing UI
+⋮----
+// Allow React to render the dialog before starting computation
+⋮----
+// Scale to 0-95%
+⋮----
+// Store to cache (95-100%)
+⋮----
+setIsProcessing(true); // Restore for remaining operations
+⋮----
+// Track if we need to clear caches/comparison data
+⋮----
+// Save trades to IndexedDB (replace all existing trades)
+⋮----
+// Update combined trades cache if setting is enabled
+⋮----
+// Show progress dialog for combining (this can freeze UI with large files)
+setIsProcessing(false); // Hide old processing UI
+⋮----
+setIsProcessing(true); // Restore for remaining operations
+⋮----
+// Ensure cache is cleared if trades were updated
+⋮----
+// Save daily log entries to IndexedDB (replace all existing entries)
+⋮----
+// User cleared the daily log
+⋮----
+// Clear comparison data since reporting trades changed
+⋮----
+// Clear comparison data since reporting log was removed
+⋮----
+// Clear calculation cache when any files are replaced or removed
+⋮----
+// Rebuild performance snapshot cache with updated data
+// Skip if we already rebuilt due to combineLegGroups change
+⋮----
+// Use progress dialog for pre-calculation
+setIsProcessing(false); // Hide old processing UI
+⋮----
+// Allow React to render the dialog before starting computation
+⋮----
+// Scale to 0-95%
+⋮----
+// Store to cache (95-100%)
+⋮----
+setIsProcessing(true); // Restore for remaining operations
+⋮----
+// No trades, delete the cache
+⋮----
+// Refresh the block to get updated stats from IndexedDB
+⋮----
+const handleDelete = async () =>
+⋮----
+// Delete from IndexedDB and update store
+⋮----
+// Close dialogs
+⋮----
+const getDialogTitle = ()
+const getDialogDescription = ()
+⋮----
+const getSubmitButtonText = ()
+const getSubmitButtonIcon = ()
+⋮----
+onDrop=
+⋮----
+onChange=
+⋮----
+
+⋮----
+{/* Block Details */}
+⋮----
+{/* File Uploads */}
+⋮----
+{/* Processing Status */}
+⋮----
+{/* Errors */}
+⋮----
+{/* Options */}
+⋮----
+setSetAsActive(checked === true)
+⋮----
+{/* Combine Leg Groups toggle */}
+⋮----
+{/* Progress dialog for pre-calculation */}
 ```
 
 ## File: lib/calculations/monte-carlo.ts
@@ -9138,6 +8828,809 @@ function calculateStatistics(simulations: SimulationPath[]): SimulationStatistic
 // Value at Risk
 ```
 
+## File: lib/calculations/walk-forward-analyzer.ts
+```typescript
+import { Trade } from '../models/trade'
+import { DailyLogEntry } from '../models/daily-log'
+import {
+  WalkForwardConfig,
+  WalkForwardComputation,
+  WalkForwardParameterRanges,
+  WalkForwardPeriodResult,
+  WalkForwardProgressEvent,
+  WalkForwardResults,
+  WalkForwardSummary,
+  WalkForwardWindow,
+} from '../models/walk-forward'
+import { PortfolioStatsCalculator } from './portfolio-stats'
+import { calculateKellyMetrics } from './kelly'
+import { PortfolioStats } from '../models/portfolio-stats'
+⋮----
+interface AnalyzeOptions {
+  trades: Trade[]
+  /**
+   * Daily portfolio logs. Reserved for future use to enable more accurate
+   * equity curve calculations during walk-forward periods. Currently unused.
+   */
+  dailyLogs?: DailyLogEntry[]
+  config: WalkForwardConfig
+  signal?: AbortSignal
+  onProgress?: (event: WalkForwardProgressEvent) => void
+}
+⋮----
+/**
+   * Daily portfolio logs. Reserved for future use to enable more accurate
+   * equity curve calculations during walk-forward periods. Currently unused.
+   */
+⋮----
+interface ScalingBaseline {
+  baseKellyFraction: number
+  avgContracts: number
+}
+⋮----
+interface CombinationIterator {
+  values: Array<Record<string, number>>
+  count: number
+}
+⋮----
+export class WalkForwardAnalyzer
+⋮----
+// Cache for trade timestamps to avoid repeated Date parsing
+⋮----
+private getTradeTimestamp(trade: Trade): number
+⋮----
+async analyze(options: AnalyzeOptions): Promise<WalkForwardComputation>
+⋮----
+// Clear cache for new analysis
+⋮----
+private ensureValidConfig(config: WalkForwardConfig): void
+⋮----
+private sortTrades(trades: Trade[]): Trade[]
+⋮----
+private filterTrades(trades: Trade[], start: Date, end: Date): Trade[]
+⋮----
+// Add full day to end date to include all trades on that day regardless of time
+⋮----
+private buildWindows(trades: Trade[], config: WalkForwardConfig): WalkForwardWindow[]
+⋮----
+private floorToUTCDate(date: Date): Date
+⋮----
+private buildCombinationIterator(parameterRanges: WalkForwardParameterRanges): CombinationIterator
+⋮----
+const recurse = (index: number, current: Record<string, number>) =>
+⋮----
+private buildRangeValues(min: number, max: number, step: number): number[]
+⋮----
+private buildScalingBaseline(trades: Trade[]): ScalingBaseline
+⋮----
+private applyScenario(
+    trades: Trade[],
+    params: Record<string, number>,
+    baseline: ScalingBaseline,
+    initialCapitalOverride?: number
+): Trade[]
+⋮----
+// trades are already sorted from filterTrades() which preserves sortedTrades order
+⋮----
+// Only include fields used by PortfolioStatsCalculator to reduce object copy overhead
+⋮----
+private calculatePositionMultiplier(params: Record<string, number>, baseline: ScalingBaseline): number
+⋮----
+private buildStrategyWeights(params: Record<string, number>): Record<string, number>
+⋮----
+private normalizeStrategyKey(strategy?: string): string
+⋮----
+private isRiskAcceptable(
+    params: Record<string, number>,
+    stats: PortfolioStats,
+    scaledTrades: Trade[]
+): boolean
+⋮----
+private calculateMaxConsecutiveLosses(trades: Trade[]): number
+⋮----
+// trades are already sorted from applyScenario()
+⋮----
+private calculateMaxDailyLossPct(trades: Trade[], initialCapital: number): number
+⋮----
+private normalizeDateKey(date: Date | string): string
+⋮----
+private getTargetMetricValue(stats: PortfolioStats, target: WalkForwardConfig['optimizationTarget']): number
+⋮----
+private async yieldToEventLoop(): Promise<void>
+⋮----
+private throwIfAborted(signal?: AbortSignal): void
+⋮----
+private buildResults(
+    periods: WalkForwardPeriodResult[],
+    config: WalkForwardConfig,
+    totalPeriods: number,
+    totalParameterTests: number,
+    analyzedTrades: number,
+    startedAt: Date,
+    completedAt: Date = new Date(),
+    skippedPeriods = 0
+): WalkForwardResults
+⋮----
+private calculateSummary(periods: WalkForwardPeriodResult[]): WalkForwardSummary
+⋮----
+private calculateParameterStability(periods: WalkForwardPeriodResult[]): number
+⋮----
+// Normalize by mean to avoid requiring parameter ranges here
+⋮----
+private calculateConsistencyScore(periods: WalkForwardPeriodResult[]): number
+⋮----
+private calculateAveragePerformanceDelta(periods: WalkForwardPeriodResult[]): number
+⋮----
+private calculateRobustnessScore(summary: WalkForwardSummary, consistencyScore: number): number
+⋮----
+private normalize(value: number, min: number, max: number): number
+```
+
+## File: lib/utils/performance-export.ts
+```typescript
+/**
+ * Performance chart export utilities
+ * Each export function generates CSV content for a specific chart's raw data
+ */
+⋮----
+import { SnapshotChartData } from "@/lib/services/performance-snapshot";
+import { toCsvRow } from "./export-helpers";
+⋮----
+export type ChartTab = (typeof TAB_ORDER)[number];
+⋮----
+export interface ChartExportConfig {
+  id: string;
+  name: string;
+  description: string;
+  tab: ChartTab;
+  exportFn: (data: SnapshotChartData) => string[];
+}
+⋮----
+/**
+ * All available chart exports organized by tab
+ */
+⋮----
+// Overview Tab
+⋮----
+// Win streaks
+⋮----
+// Loss streaks
+⋮----
+// Statistics
+⋮----
+// Returns Analysis Tab
+⋮----
+// Monthly returns percent
+⋮----
+// Detailed inputs (includes margin) when available
+⋮----
+// Add summary statistics
+⋮----
+// Risk & Margin Tab
+⋮----
+// Trade Efficiency Tab
+⋮----
+// Excursion Analysis Tab
+⋮----
+// Add distribution summary
+⋮----
+/**
+ * Get chart exports grouped by tab
+ */
+export function getChartExportsByTab(): Record<string, ChartExportConfig[]>
+⋮----
+/**
+ * Export multiple charts as a combined CSV
+ */
+export function exportMultipleCharts(
+  data: SnapshotChartData,
+  chartIds: string[]
+): string[]
+⋮----
+lines.push(""); // Separator between charts
+lines.push(""); // Extra line for readability
+⋮----
+/**
+ * Export a single chart by ID as CSV
+ */
+export function exportSingleChart(
+  data: SnapshotChartData,
+  chartId: string
+): string[] | null
+⋮----
+/**
+ * Get raw JSON data for a single chart
+ */
+export function getChartJsonData(
+  data: SnapshotChartData,
+  chartId: string
+): Record<string, unknown> | null
+⋮----
+/**
+ * Get JSON data for multiple charts
+ */
+export function getMultipleChartsJson(
+  data: SnapshotChartData,
+  chartIds: string[]
+): Record<string, unknown>
+```
+
+## File: lib/stores/block-store.ts
+```typescript
+import { create } from "zustand";
+import { PortfolioStatsCalculator } from "../calculations/portfolio-stats";
+import {
+  deleteBlock as dbDeleteBlock,
+  updateBlock as dbUpdateBlock,
+  getAllBlocks,
+  getBlock,
+  getDailyLogsByBlock,
+  getReportingTradesByBlock,
+  updateBlockStats,
+  storePerformanceSnapshotCache,
+} from "../db";
+import { buildPerformanceSnapshot, SnapshotProgress } from "../services/performance-snapshot";
+import { ProcessedBlock } from "../models/block";
+import { StrategyAlignment } from "../models/strategy-alignment";
+⋮----
+export interface Block {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  created: Date;
+  lastModified: Date;
+  tradeLog: {
+    fileName: string;
+    rowCount: number;
+    fileSize: number;
+  };
+  dailyLog?: {
+    fileName: string;
+    rowCount: number;
+    fileSize: number;
+  };
+  reportingLog?: {
+    fileName: string;
+    rowCount: number;
+    fileSize: number;
+  };
+  stats: {
+    totalPnL: number;
+    winRate: number;
+    totalTrades: number;
+    avgWin: number;
+    avgLoss: number;
+  };
+  strategyAlignment?: {
+    mappings: StrategyAlignment[];
+    updatedAt: Date;
+  };
+}
+⋮----
+interface BlockStore {
+  // State
+  blocks: Block[];
+  activeBlockId: string | null;
+  isLoading: boolean;
+  isInitialized: boolean;
+  isStuck: boolean;
+  error: string | null;
+
+  // Actions
+  loadBlocks: () => Promise<void>;
+  setActiveBlock: (blockId: string) => void;
+  clearActiveBlock: () => void;
+  addBlock: (
+    block: Omit<Block, "created"> | Omit<Block, "id" | "created">
+  ) => Promise<void>;
+  updateBlock: (id: string, updates: Partial<Block>) => Promise<void>;
+  deleteBlock: (id: string) => Promise<void>;
+  refreshBlock: (id: string) => Promise<void>;
+  recalculateBlock: (
+    id: string,
+    onProgress?: (progress: SnapshotProgress) => void,
+    signal?: AbortSignal
+  ) => Promise<void>;
+  clearAllData: () => Promise<void>;
+}
+⋮----
+// State
+⋮----
+// Actions
+⋮----
+/**
+ * Convert ProcessedBlock from DB to Block for UI
+ */
+function convertProcessedBlockToBlock(
+  processedBlock: ProcessedBlock,
+  tradeCount: number,
+  dailyLogCount: number,
+  reportingLogCount: number
+): Block
+⋮----
+isActive: false, // Will be set by active block logic
+⋮----
+totalPnL: 0, // Will be calculated from trades
+⋮----
+// Timeout for detecting stuck loading state (30 seconds)
+⋮----
+// Initialize with empty state
+⋮----
+// Load blocks from IndexedDB
+⋮----
+// Prevent multiple concurrent loads
+⋮----
+// Create timeout for stuck detection
+⋮----
+// Main loading logic wrapped in a promise for racing
+⋮----
+// Restore active block ID from localStorage
+⋮----
+// Import getTradesByBlockWithOptions
+⋮----
+// Convert each ProcessedBlock to Block with trade/daily log counts
+⋮----
+// Use combineLegGroups setting from block config
+⋮----
+// Calculate stats from trades
+⋮----
+// Mark as active if this was the previously active block
+⋮----
+// Continue loading other blocks instead of failing completely
+⋮----
+// Set the active block ID if one was restored
+⋮----
+// Clear timeout on success to prevent unhandled rejection
+⋮----
+// Clear timeout to prevent duplicate errors
+⋮----
+// Check if this was a timeout
+⋮----
+// Actions
+⋮----
+// Save to localStorage for persistence
+⋮----
+// Remove from localStorage
+⋮----
+id: "id" in blockData ? blockData.id : crypto.randomUUID(), // Use provided ID or generate new one
+⋮----
+// Debug logging
+⋮----
+// Update state properly handling active block logic
+⋮----
+// If new block is active, deactivate all others and set new one as active
+⋮----
+// If new block is not active, just add it
+⋮----
+// If the new block is active, refresh it to load trades/daily logs
+⋮----
+// Use setTimeout to ensure the block is added to the state first
+⋮----
+// Update in IndexedDB
+⋮----
+// Add other updatable fields as needed
+⋮----
+// Update local state
+⋮----
+// Delete from IndexedDB
+⋮----
+// Update local state
+⋮----
+// If we deleted the active block, clear localStorage
+⋮----
+// If we deleted the active block, clear the active state
+⋮----
+// Use combineLegGroups setting from block config
+⋮----
+// Calculate fresh stats
+⋮----
+// Update in store
+⋮----
+// Get the block and its data
+⋮----
+// Use combineLegGroups setting from block config
+⋮----
+// Recalculate all stats using the current calculation engine
+⋮----
+// Update ProcessedBlock stats in database
+⋮----
+// Build and cache performance snapshot for instant page loads
+⋮----
+// Update lastModified timestamp
+⋮----
+// Calculate basic stats for the UI (Block interface)
+⋮----
+winRate: portfolioStats.winRate * 100, // Convert to percentage for Block interface
+⋮----
+// Create updated block for store
+⋮----
+// Update in store
+⋮----
+// Clear all data and reload (for recovery from corrupted state)
+⋮----
+// Delete the main TradeBlocksDB
+⋮----
+// Also delete the cache database if it exists
+⋮----
+req.onblocked = () => resolve(); // Continue even if blocked
+⋮----
+// Ignore cache deletion errors
+⋮----
+// Clear all tradeblocks-related localStorage entries
+⋮----
+// Even if delete fails, try to reload - user can try again
+```
+
+## File: app/(platform)/position-sizing/page.tsx
+```typescript
+import { NoActiveBlock } from "@/components/no-active-block";
+import { MarginChart } from "@/components/position-sizing/margin-chart";
+import { MarginStatisticsTable } from "@/components/position-sizing/margin-statistics-table";
+import { PortfolioSummary } from "@/components/position-sizing/portfolio-summary";
+import { StrategyKellyTable } from "@/components/position-sizing/strategy-kelly-table";
+import {
+  StrategyAnalysis,
+  StrategyResults,
+} from "@/components/position-sizing/strategy-results";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import {
+  calculateKellyMetrics,
+  calculateStrategyKellyMetrics,
+} from "@/lib/calculations/kelly";
+import {
+  buildMarginTimeline,
+  calculateMaxMarginPct,
+  type MarginMode,
+} from "@/lib/calculations/margin-timeline";
+import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+import {
+  getBlock,
+  getDailyLogsByBlock,
+  getTradesByBlockWithOptions,
+} from "@/lib/db";
+import { DailyLogEntry } from "@/lib/models/daily-log";
+import { Trade } from "@/lib/models/trade";
+import { useBlockStore } from "@/lib/stores/block-store";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
+import { AlertCircle, Download, HelpCircle, Play } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+⋮----
+interface RunConfig {
+  startingCapital: number;
+  portfolioKellyPct: number;
+  marginMode: MarginMode;
+  kellyValues: Record<string, number>;
+}
+⋮----
+type StrategySortOption =
+  | "name-asc"
+  | "winrate-desc"
+  | "kelly-desc"
+  | "applied-desc"
+  | "capital-desc"
+  | "trades-desc";
+⋮----
+const normalizeKellyValue = (value: number): number =>
+⋮----
+// State
+⋮----
+// Load trades and daily log when active block changes
+⋮----
+const loadData = async () =>
+⋮----
+// Auto-detect starting capital (prefer daily log when available)
+⋮----
+// Initialize all strategies as selected with 100%
+⋮----
+// Get unique strategies with trade counts
+⋮----
+// Calculate results when user clicks "Run Allocation"
+const runAllocation = () =>
+⋮----
+// Results calculations using the last run configuration
+⋮----
+// Calculate portfolio-level Kelly metrics with starting capital for validation
+⋮----
+// Calculate per-strategy Kelly metrics with starting capital for validation
+⋮----
+// Get strategy names sorted by trade count
+⋮----
+// Build margin timeline
+⋮----
+// Calculate portfolio max margin
+⋮----
+// Calculate strategy analysis
+⋮----
+// Use normalized Kelly when available (more accurate for position sizing)
+⋮----
+// Apply BOTH Portfolio Kelly and Strategy Kelly multipliers
+⋮----
+const compareByName = (a: StrategyAnalysis, b: StrategyAnalysis)
+⋮----
+// Handlers
+const handleKellyChange = (strategy: string, value: number) =>
+⋮----
+const handleSelectionChange = (strategy: string, selected: boolean) =>
+⋮----
+const handleSelectAll = (selected: boolean) =>
+⋮----
+const handlePortfolioKellyInputChange = (value: string) =>
+⋮----
+// Allow users to clear the field while editing
+⋮----
+// Update numeric state eagerly so pending-change detection stays responsive
+⋮----
+const commitPortfolioKellyInput = () =>
+⋮----
+// Export functions
+const exportAsJson = () =>
+⋮----
+const exportAsCsv = () =>
+⋮----
+// Metadata
+⋮----
+// Portfolio Summary
+⋮----
+// Strategy Analysis
+⋮----
+// Empty state
+⋮----
+{/* How to Use This Page */}
+⋮----
+{/* Configuration Card */}
+⋮----
+{/* Global Settings */}
+⋮----
+onValueChange=
+⋮----
+{/* Strategy Kelly Table */}
+⋮----
+{/* Quick Actions */}
+⋮----
+{/* Slider to set all selected strategies */}
+⋮----
+setAllStrategiesKellyPct(normalizeKellyValue(values[0]))
+⋮----
+selectedStrategies.forEach((strategy) =>
+setKellyValues((prev) => (
+⋮----
+{/* Action buttons */}
+⋮----
+setKellyValues(resetValues);
+setAllStrategiesKellyPct(100);
+⋮----
+{/* Results */}
+```
+
+## File: lib/calculations/mfe-mae.ts
+```typescript
+import { Trade } from '@/lib/models/trade'
+import { computeTotalMaxProfit, computeTotalMaxLoss, computeTotalPremium, type EfficiencyBasis } from '@/lib/metrics/trade-efficiency'
+import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
+⋮----
+export type NormalizationBasis = 'premium' | 'margin'
+⋮----
+export interface NormalizedExcursionMetrics {
+  denominator: number
+  mfePercent: number
+  maePercent: number
+  plPercent: number
+}
+⋮----
+/**
+ * Data point for a single trade's MFE/MAE metrics
+ */
+export interface MFEMAEDataPoint {
+  tradeNumber: number
+  date: Date
+  strategy: string
+
+  // Raw values (normalized)
+  mfe: number // Maximum Favorable Excursion (total max profit)
+  mae: number // Maximum Adverse Excursion (total max loss)
+  pl: number // Realized P&L
+
+  // Percentage values (normalized by denominator)
+  mfePercent?: number
+  maePercent?: number
+  plPercent?: number
+
+  // Efficiency metrics
+  profitCapturePercent?: number // (pl / mfe) * 100 - what % of peak profit was captured
+  excursionRatio?: number // mfe / mae - reward-to-risk ratio
+
+  // Context
+  denominator?: number
+  basis: EfficiencyBasis
+  isWinner: boolean
+  marginReq: number
+  premium?: number
+  normalizedBy: Partial<Record<NormalizationBasis, NormalizedExcursionMetrics>>
+
+  // Trade details for tooltips
+  openingPrice: number
+  closingPrice?: number
+  numContracts: number
+  avgClosingCost?: number
+  fundsAtClose: number
+  openingCommissionsFees: number
+  closingCommissionsFees?: number
+  openingShortLongRatio: number
+  closingShortLongRatio?: number
+  openingVix?: number
+  closingVix?: number
+  gap?: number
+  movement?: number
+  maxProfit?: number
+  maxLoss?: number
+  shortLongRatioChange?: number
+  shortLongRatioChangePct?: number
+}
+⋮----
+// Raw values (normalized)
+mfe: number // Maximum Favorable Excursion (total max profit)
+mae: number // Maximum Adverse Excursion (total max loss)
+pl: number // Realized P&L
+⋮----
+// Percentage values (normalized by denominator)
+⋮----
+// Efficiency metrics
+profitCapturePercent?: number // (pl / mfe) * 100 - what % of peak profit was captured
+excursionRatio?: number // mfe / mae - reward-to-risk ratio
+⋮----
+// Context
+⋮----
+// Trade details for tooltips
+⋮----
+/**
+ * Aggregated MFE/MAE statistics
+ */
+export interface MFEMAEStats {
+  avgMFEPercent: number
+  avgMAEPercent: number
+  avgProfitCapturePercent: number
+  avgExcursionRatio: number
+
+  winnerAvgProfitCapture: number
+  loserAvgProfitCapture: number
+
+  medianMFEPercent: number
+  medianMAEPercent: number
+
+  totalTrades: number
+  tradesWithMFE: number
+  tradesWithMAE: number
+}
+⋮----
+/**
+ * Distribution bucket for histograms
+ */
+export interface DistributionBucket {
+  bucket: string
+  mfeCount: number
+  maeCount: number
+  range: [number, number]
+}
+⋮----
+/**
+ * Calculates MFE/MAE metrics for a single trade
+ */
+export function calculateTradeExcursionMetrics(trade: Trade, tradeNumber: number): MFEMAEDataPoint | null
+⋮----
+// Skip trades without excursion data
+⋮----
+// Determine denominator for percentage calculations
+⋮----
+// Calculate percentages if we have a denominator
+⋮----
+// Profit capture: what % of max profit was actually captured
+⋮----
+// Excursion ratio: reward/risk
+⋮----
+/**
+ * Processes all trades to generate MFE/MAE data points
+ */
+export function calculateMFEMAEData(trades: Trade[]): MFEMAEDataPoint[]
+⋮----
+/**
+ * Async version of calculateMFEMAEData with yielding for large datasets
+ */
+export async function calculateMFEMAEDataAsync(
+  trades: Trade[],
+  signal?: AbortSignal
+): Promise<MFEMAEDataPoint[]>
+⋮----
+// Yield every 100 trades to keep UI responsive
+⋮----
+/**
+ * Calculates aggregate statistics from MFE/MAE data points
+ */
+export async function calculateMFEMAEStats(
+  dataPoints: MFEMAEDataPoint[],
+  signal?: AbortSignal
+): Promise<Partial<Record<NormalizationBasis, MFEMAEStats>>>
+⋮----
+type BasisAggregate = {
+    count: number
+    mfeSum: number
+    maeSum: number
+    tradesWithMFE: number
+    tradesWithMAE: number
+    mfePercents: number[]
+    maePercents: number[]
+  }
+⋮----
+// Yield every 200 items to keep UI responsive during large runs
+⋮----
+const median = (values: number[]): number =>
+⋮----
+// Yield between basis computations in case arrays are large
+⋮----
+/**
+ * Creates distribution buckets for histogram visualization
+ */
+export function createExcursionDistribution(
+  dataPoints: MFEMAEDataPoint[],
+  bucketSize: number = 10
+): DistributionBucket[]
+⋮----
+const inBucket = (value: number)
+⋮----
+/**
+ * Async version of createExcursionDistribution with yielding for large datasets
+ * Uses O(n) single-pass bucketing instead of O(n*buckets) repeated filtering
+ */
+export async function createExcursionDistributionAsync(
+  dataPoints: MFEMAEDataPoint[],
+  bucketSize: number = 10,
+  signal?: AbortSignal
+): Promise<DistributionBucket[]>
+⋮----
+// First pass: collect values and find maxima
+⋮----
+// Yield every 200 items to keep UI responsive
+⋮----
+// Adapt bucket size to avoid generating an extreme number of buckets
+// which can hang the main thread and blow up memory for outlier values.
+// Keep bucket count practical for both computation and chart rendering
+⋮----
+// Second pass: bucket counts using the (possibly adjusted) bucket size
+⋮----
+const clampIndex = (value: number) =>
+⋮----
+// Ensure edge values fall into last bucket
+⋮----
+// Yield after bucketing to allow paint before building output array
+⋮----
+// Build buckets from pre-computed counts (very fast, no filtering needed)
+⋮----
+// Yield occasionally when bucket counts are large to keep UI responsive
+```
+
 ## File: app/(platform)/correlation-matrix/page.tsx
 ```typescript
 import { NoActiveBlock } from "@/components/no-active-block";
@@ -9232,151 +9725,6 @@ onValueChange=
 {/* Heatmap */}
 ⋮----
 {/* Quick Analysis */}
-```
-
-## File: app/(platform)/walk-forward/page.tsx
-```typescript
-import {
-  Activity,
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  Download,
-  Loader2,
-  TrendingUp,
-} from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
-⋮----
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { WalkForwardAnalysisChart } from "@/components/walk-forward/analysis-chart";
-import { WalkForwardPeriodSelector } from "@/components/walk-forward/period-selector";
-import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics";
-import { RunSwitcher } from "@/components/walk-forward/run-switcher";
-import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
-import { cn } from "@/lib/utils";
-import {
-  downloadCsv,
-  downloadJson,
-  generateExportFilename,
-} from "@/lib/utils/export-helpers";
-⋮----
-function formatDate(date: Date): string
-⋮----
-const formatMetricValue = (value: number) =>
-⋮----
-const getEfficiencyStatus = (pct: number) =>
-⋮----
-const handleExport = (format: "csv" | "json") =>
-⋮----
-setPeriodRange([Math.min(a, b), Math.max(a, b)]);
-⋮----
-<TableCell className=
-```
-
-## File: lib/stores/performance-store.ts
-```typescript
-import { DailyLogEntry } from '@/lib/models/daily-log'
-import { PortfolioStats } from '@/lib/models/portfolio-stats'
-import { Trade } from '@/lib/models/trade'
-import {
-  buildPerformanceSnapshot,
-  SnapshotChartData,
-  SnapshotFilters
-} from '@/lib/services/performance-snapshot'
-import {
-  deriveGroupedLegOutcomes,
-  GroupedLegOutcomes
-} from '@/lib/utils/performance-helpers'
-import { create } from 'zustand'
-⋮----
-// Re-export types from helper if needed or redefine locally if they are store specific.
-// The helper exported GroupedLegOutcomes, GroupedOutcome, etc.
-⋮----
-export interface DateRange {
-  from: Date | undefined
-  to: Date | undefined
-}
-⋮----
-export interface ChartSettings {
-  equityScale: 'linear' | 'log'
-  showDrawdownAreas: boolean
-  showTrend: boolean
-  maWindow: number
-  rollingMetricType: 'win_rate' | 'sharpe' | 'profit_factor'
-}
-⋮----
-// Re-export types for consumers
-⋮----
-export interface PerformanceData extends SnapshotChartData {
-  trades: Trade[]
-  allTrades: Trade[]
-  allRawTrades: Trade[]
-  dailyLogs: DailyLogEntry[]
-  allDailyLogs: DailyLogEntry[]
-  portfolioStats: PortfolioStats | null
-  groupedLegOutcomes: GroupedLegOutcomes | null
-}
-⋮----
-interface PerformanceStore {
-  isLoading: boolean
-  error: string | null
-  dateRange: DateRange
-  selectedStrategies: string[]
-  data: PerformanceData | null
-  chartSettings: ChartSettings
-  normalizeTo1Lot: boolean
-  setDateRange: (dateRange: DateRange) => void
-  setSelectedStrategies: (strategies: string[]) => void
-  updateChartSettings: (settings: Partial<ChartSettings>) => void
-  fetchPerformanceData: (blockId: string) => Promise<void>
-  applyFilters: () => Promise<void>
-  setNormalizeTo1Lot: (value: boolean) => void
-  reset: () => void
-}
-⋮----
-function buildSnapshotFilters(dateRange: DateRange, strategies: string[]): SnapshotFilters
-⋮----
-// Selecting every available strategy should behave the same as selecting none.
-// This prevents "(Select All)" in the UI from acting like a restrictive filter
-// and keeps the output aligned with the default "All Strategies" view.
-function normalizeStrategyFilter(selected: string[], trades?: Trade[]): string[]
-⋮----
-// If the user picked every strategy we know about, drop the filter so the
-// snapshot uses the full data set (identical to the default state).
-⋮----
-// Fetch block to get analysis config
-⋮----
-// Re-export for existing unit tests that rely on chart processing helpers
-⋮----
-function filterTradesForSnapshot(trades: Trade[], filters: SnapshotFilters): Trade[]
 ```
 
 ## File: app/(platform)/risk-simulator/page.tsx
@@ -9600,6 +9948,152 @@ const toPortfolioValue = (arr: number[])
 // Initial capital line
 ```
 
+## File: app/(platform)/block-stats/page.tsx
+```typescript
+import { MetricCard } from "@/components/metric-card";
+import { MetricSection } from "@/components/metric-section";
+import { MultiSelect } from "@/components/multi-select";
+import { NoActiveBlock } from "@/components/no-active-block";
+import { StrategyBreakdownTable } from "@/components/strategy-breakdown-table";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SizingModeToggle } from "@/components/sizing-mode-toggle";
+import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+import {
+  getBlock,
+  getDailyLogsByBlock,
+  getTradesByBlockWithOptions,
+  getPerformanceSnapshotCache,
+} from "@/lib/db";
+import {
+  calculatePremiumEfficiencyPercent,
+  computeTotalPremium,
+} from "@/lib/metrics/trade-efficiency";
+import { DailyLogEntry } from "@/lib/models/daily-log";
+import { PortfolioStats, StrategyStats } from "@/lib/models/portfolio-stats";
+import { Trade } from "@/lib/models/trade";
+import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
+import { useBlockStore } from "@/lib/stores/block-store";
+import {
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@/lib/utils/export-helpers";
+import {
+  AlertTriangle,
+  BarChart3,
+  Calendar,
+  Download,
+  Gauge,
+  Target,
+  TrendingUp,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+⋮----
+// Strategy options will be dynamically generated from trades
+⋮----
+// Data fetching state
+⋮----
+// Calculated metrics state
+⋮----
+// Get active block from store
+⋮----
+// Load blocks if not initialized
+⋮----
+// Fetch trades and daily logs when active block changes
+// Uses cached performance snapshot for instant load when available
+⋮----
+const fetchData = async () =>
+⋮----
+// Clear previous block data to avoid showing stale charts while loading
+⋮----
+// Check for cached snapshot first (for instant load with default settings)
+// Only use cache if we're using default settings (no filters, default risk-free rate, no normalization)
+⋮----
+// Use cached data directly - much faster!
+⋮----
+// Calculate strategy stats from cached trades
+⋮----
+// Cache miss or filters applied - fetch data normally
+⋮----
+// eslint-disable-next-line react-hooks/exhaustive-deps
+⋮----
+// Calculate metrics when data or risk-free rate changes
+⋮----
+const calculateMetrics = async () =>
+⋮----
+// Use a small delay to avoid closing the popover during selection
+⋮----
+// Helper functions
+const getDateRange = () =>
+⋮----
+const getInitialCapital = () =>
+⋮----
+// Use the initial capital from portfolioStats which properly accounts for daily logs
+⋮----
+const getAvgReturnOnMargin = () =>
+⋮----
+// Calculate average return on margin from filtered trades
+⋮----
+const getStdDevOfRoM = () =>
+⋮----
+const getBestTrade = () =>
+⋮----
+const getWorstTrade = () =>
+⋮----
+const getCommissionShareOfPremium = () =>
+⋮----
+const getAvgPremiumEfficiency = () =>
+⋮----
+const getAvgHoldingPeriodHours = () =>
+⋮----
+const getAvgContracts = () =>
+⋮----
+const getStrategyOptions = () =>
+⋮----
+// Export functions
+const buildExportData = () =>
+⋮----
+const exportAsJson = () =>
+⋮----
+const exportAsCsv = () =>
+⋮----
+// Metadata section
+⋮----
+// Portfolio Stats section
+⋮----
+// Strategy Breakdown section
+⋮----
+// Show loading state
+⋮----
+// Show message if no active block
+⋮----
+// Show loading state for data
+⋮----
+// Show error state
+⋮----
+{/* Controls */}
+⋮----
+{/* Basic Overview */}
+⋮----
+
+⋮----
+{/* Return Metrics */}
+⋮----
+{/* Risk & Drawdown */}
+⋮----
+{/* Consistency Metrics */}
+⋮----
+{/* Execution Efficiency */}
+⋮----
+{/* Strategy Breakdown */}
+⋮----
+winRate: stat.winRate * 100, // Convert to percentage
+```
+
 ## File: app/(platform)/performance-blocks/page.tsx
 ```typescript
 import { useBlockStore } from "@/lib/stores/block-store";
@@ -9697,193 +10191,73 @@ const getStrategyOptions = () =>
 {/* Tab 5: Excursion Analysis */}
 ```
 
-## File: lib/services/performance-snapshot.ts
+## File: app/(platform)/walk-forward/page.tsx
 ```typescript
-import { Trade } from '@/lib/models/trade'
-import { DailyLogEntry } from '@/lib/models/daily-log'
-import { PortfolioStats } from '@/lib/models/portfolio-stats'
-import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
 import {
-  calculatePremiumEfficiencyPercent,
-  computeTotalPremium,
-  EfficiencyBasis
-} from '@/lib/metrics/trade-efficiency'
+  Activity,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Loader2,
+  TrendingUp,
+} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+⋮----
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
-  calculateMFEMAEData,
-  calculateMFEMAEStats,
-  createExcursionDistribution,
-  type MFEMAEDataPoint,
-  type MFEMAEStats,
-  type DistributionBucket,
-  type NormalizationBasis
-} from '@/lib/calculations/mfe-mae'
-import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { WalkForwardAnalysisChart } from "@/components/walk-forward/analysis-chart";
+import { WalkForwardPeriodSelector } from "@/components/walk-forward/period-selector";
+import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics";
+import { RunSwitcher } from "@/components/walk-forward/run-switcher";
+import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
+import { useBlockStore } from "@/lib/stores/block-store";
+import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
+import { cn } from "@/lib/utils";
+import {
+  downloadCsv,
+  downloadFile,
+  generateExportFilename,
+} from "@/lib/utils/export-helpers";
 ⋮----
-export interface SnapshotDateRange {
-  from?: Date
-  to?: Date
-}
+function formatDate(date: Date): string
 ⋮----
-export interface SnapshotFilters {
-  dateRange?: SnapshotDateRange
-  strategies?: string[]
-}
+const formatMetricValue = (value: number) =>
 ⋮----
-interface SnapshotOptions {
-  trades: Trade[]
-  dailyLogs?: DailyLogEntry[]
-  filters?: SnapshotFilters
-  riskFreeRate?: number
-  normalizeTo1Lot?: boolean
-}
+const getEfficiencyStatus = (pct: number) =>
 ⋮----
-export interface SnapshotChartData {
-  equityCurve: Array<{ date: string; equity: number; highWaterMark: number; tradeNumber: number }>
-  drawdownData: Array<{ date: string; drawdownPct: number }>
-  dayOfWeekData: Array<{ day: string; count: number; avgPl: number; avgPlPercent: number }>
-  returnDistribution: number[]
-  streakData: {
-    winDistribution: Record<number, number>
-    lossDistribution: Record<number, number>
-    statistics: {
-      maxWinStreak: number
-      maxLossStreak: number
-      avgWinStreak: number
-      avgLossStreak: number
-    }
-  }
-  monthlyReturns: Record<number, Record<number, number>>
-  monthlyReturnsPercent: Record<number, Record<number, number>>
-  tradeSequence: Array<{ tradeNumber: number; pl: number; rom: number; date: string }>
-  romTimeline: Array<{ date: string; rom: number }>
-  rollingMetrics: Array<{ date: string; winRate: number; sharpeRatio: number; profitFactor: number; volatility: number }>
-  volatilityRegimes: Array<{ date: string; openingVix?: number; closingVix?: number; pl: number; rom?: number }>
-  premiumEfficiency: Array<{
-    tradeNumber: number
-    date: string
-    pl: number
-    premium?: number
-    avgClosingCost?: number
-    maxProfit?: number
-    maxLoss?: number
-    totalCommissions?: number
-    efficiencyPct?: number
-    efficiencyDenominator?: number
-    efficiencyBasis?: EfficiencyBasis
-    totalPremium?: number
-  }>
-  marginUtilization: Array<{ date: string; marginReq: number; fundsAtClose: number; numContracts: number; pl: number }>
-  exitReasonBreakdown: Array<{ reason: string; count: number; avgPl: number; totalPl: number }>
-  holdingPeriods: Array<{ tradeNumber: number; dateOpened: string; dateClosed?: string; durationHours: number; pl: number; strategy: string }>
-  mfeMaeData: MFEMAEDataPoint[]
-  mfeMaeStats: Partial<Record<NormalizationBasis, MFEMAEStats>>
-  mfeMaeDistribution: DistributionBucket[]
-}
+const handleExport = (format: "csv" | "json") =>
 ⋮----
-export interface PerformanceSnapshot {
-  filteredTrades: Trade[]
-  filteredDailyLogs: DailyLogEntry[]
-  portfolioStats: PortfolioStats
-  chartData: SnapshotChartData
-}
+// payload is already a JSON string from exportResultsAsJson
 ⋮----
-export async function buildPerformanceSnapshot(options: SnapshotOptions): Promise<PerformanceSnapshot>
+setPeriodRange([Math.min(a, b), Math.max(a, b)]);
 ⋮----
-// When filtering by strategy or normalizing, the `fundsAtClose` values from individual trades
-// represent the entire account balance and include performance from trades outside the current filter.
-// To avoid this data leakage, we rebuild the equity curve using cumulative P&L calculations instead of the absolute `fundsAtClose` values.
-⋮----
-export async function processChartData(
-  trades: Trade[],
-  dailyLogs?: DailyLogEntry[],
-  options?: { useFundsAtClose?: boolean }
-): Promise<SnapshotChartData>
-⋮----
-// MFE/MAE excursion analysis
-⋮----
-function buildEquityAndDrawdown(
-  trades: Trade[],
-  dailyLogs?: DailyLogEntry[],
-  useFundsAtClose = true
-)
-⋮----
-// When we shouldn't trust account-level equity (e.g., strategy filters or normalization),
-// skip daily logs and rebuild from trade P&L instead of leaking other strategies.
-⋮----
-function buildEquityAndDrawdownFromDailyLogs(
-  trades: Trade[],
-  dailyLogs: DailyLogEntry[]
-)
-⋮----
-function getEquityValueFromDailyLog(entry: DailyLogEntry): number
-⋮----
-function calculateEquityCurveFromTrades(trades: Trade[], useFundsAtClose: boolean)
-⋮----
-function calculateDayOfWeekData(trades: Trade[])
-⋮----
-// Calculate percentage return (ROM) if margin is available
-⋮----
-function calculateStreakData(trades: Trade[])
-⋮----
-function calculateMonthlyReturns(trades: Trade[])
-⋮----
-function calculateMonthlyReturnsPercent(
-  trades: Trade[],
-  dailyLogs?: DailyLogEntry[]
-): Record<number, Record<number, number>>
-⋮----
-// If daily logs are available, use them for accurate balance tracking
-⋮----
-// Fallback to trade-based calculation
-⋮----
-function calculateMonthlyReturnsPercentFromDailyLogs(
-  trades: Trade[],
-  dailyLogs: DailyLogEntry[]
-): Record<number, Record<number, number>>
-⋮----
-// Pre-compute trade-based percents for fallback months without balance data
-⋮----
-// Group trades by month to get P&L per month
-⋮----
-// Get starting balance for each month from daily logs
-⋮----
-// Calculate percentage returns
-⋮----
-// Calculate percentage: (monthPL / startingBalance) * 100
-⋮----
-// Fill in zeros for months without data
-⋮----
-function calculateMonthlyReturnsPercentFromTrades(
-  trades: Trade[]
-): Record<number, Record<number, number>>
-⋮----
-// Sort trades by date
-⋮----
-// Calculate initial capital
-⋮----
-// Group trades by month
-⋮----
-// Calculate percentage returns and update running capital
-⋮----
-// Update capital for next month (compounding)
-⋮----
-// Update startingCapital for any remaining trades in future months
-⋮----
-// Fill in zeros for months without data
-⋮----
-function calculateRollingMetrics(trades: Trade[])
-⋮----
-function getFiniteNumber(value: unknown): number | undefined
-⋮----
-function calculateVolatilityRegimes(trades: Trade[])
-⋮----
-function calculatePremiumEfficiency(trades: Trade[])
-⋮----
-function calculateMarginUtilization(trades: Trade[])
-⋮----
-function calculateExitReasonBreakdown(trades: Trade[])
-⋮----
-function calculateHoldingPeriods(trades: Trade[])
+<TableCell className=
 ```
 
 ## File: components/performance-charts/mfe-mae-scatter-chart.tsx
@@ -10022,4 +10396,366 @@ interface SlrTableRow {
 {/* Preset Selector */}
 ⋮----
 {/* Axis Selectors - Always rendered but hidden when not in custom mode */}
+```
+
+## File: lib/stores/performance-store.ts
+```typescript
+import { DailyLogEntry } from '@/lib/models/daily-log'
+import { PortfolioStats } from '@/lib/models/portfolio-stats'
+import { Trade } from '@/lib/models/trade'
+import {
+  buildPerformanceSnapshot,
+  SnapshotChartData,
+  SnapshotFilters
+} from '@/lib/services/performance-snapshot'
+import {
+  deriveGroupedLegOutcomes,
+  GroupedLegOutcomes
+} from '@/lib/utils/performance-helpers'
+import { create } from 'zustand'
+⋮----
+// Re-export types from helper if needed or redefine locally if they are store specific.
+// The helper exported GroupedLegOutcomes, GroupedOutcome, etc.
+⋮----
+export interface DateRange {
+  from: Date | undefined
+  to: Date | undefined
+}
+⋮----
+export interface ChartSettings {
+  equityScale: 'linear' | 'log'
+  showDrawdownAreas: boolean
+  showTrend: boolean
+  maWindow: number
+  rollingMetricType: 'win_rate' | 'sharpe' | 'profit_factor'
+}
+⋮----
+// Re-export types for consumers
+⋮----
+export interface PerformanceData extends SnapshotChartData {
+  trades: Trade[]
+  allTrades: Trade[]
+  allRawTrades: Trade[]
+  dailyLogs: DailyLogEntry[]
+  allDailyLogs: DailyLogEntry[]
+  portfolioStats: PortfolioStats | null
+  groupedLegOutcomes: GroupedLegOutcomes | null
+}
+⋮----
+interface PerformanceStore {
+  isLoading: boolean
+  error: string | null
+  dateRange: DateRange
+  selectedStrategies: string[]
+  data: PerformanceData | null
+  chartSettings: ChartSettings
+  normalizeTo1Lot: boolean
+  setDateRange: (dateRange: DateRange) => void
+  setSelectedStrategies: (strategies: string[]) => void
+  updateChartSettings: (settings: Partial<ChartSettings>) => void
+  fetchPerformanceData: (blockId: string) => Promise<void>
+  applyFilters: () => Promise<void>
+  setNormalizeTo1Lot: (value: boolean) => void
+  reset: () => void
+}
+⋮----
+function ensureRomDetails(chartData: SnapshotChartData, trades: Trade[]): SnapshotChartData
+⋮----
+function buildSnapshotFilters(dateRange: DateRange, strategies: string[]): SnapshotFilters
+⋮----
+// Selecting every available strategy should behave the same as selecting none.
+// This prevents "(Select All)" in the UI from acting like a restrictive filter
+// and keeps the output aligned with the default "All Strategies" view.
+function normalizeStrategyFilter(selected: string[], trades?: Trade[]): string[]
+⋮----
+// If the user picked every strategy we know about, drop the filter so the
+// snapshot uses the full data set (identical to the default state).
+⋮----
+// Clear existing data to avoid showing the previous block's charts while loading the new one
+⋮----
+// Fetch block to get analysis config
+⋮----
+// Check if we can use cached snapshot (default view with no filters)
+⋮----
+riskFreeRate === 2.0 // explicit parity with block-stats page default
+⋮----
+// Use cached data - much faster!
+// Still need raw trades for groupedLegOutcomes
+⋮----
+// Cache miss or filters applied - compute normally
+⋮----
+// Re-export for existing unit tests that rely on chart processing helpers
+⋮----
+function filterTradesForSnapshot(trades: Trade[], filters: SnapshotFilters): Trade[]
+```
+
+## File: lib/services/performance-snapshot.ts
+```typescript
+import { Trade } from '@/lib/models/trade'
+import { DailyLogEntry } from '@/lib/models/daily-log'
+import { PortfolioStats } from '@/lib/models/portfolio-stats'
+import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
+import {
+  calculatePremiumEfficiencyPercent,
+  computeTotalPremium,
+  EfficiencyBasis
+} from '@/lib/metrics/trade-efficiency'
+import {
+  calculateMFEMAEDataAsync,
+  calculateMFEMAEStats,
+  createExcursionDistributionAsync,
+  type MFEMAEDataPoint,
+  type MFEMAEStats,
+  type DistributionBucket,
+  type NormalizationBasis
+} from '@/lib/calculations/mfe-mae'
+import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
+import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
+⋮----
+export interface SnapshotDateRange {
+  from?: Date
+  to?: Date
+}
+⋮----
+export interface SnapshotFilters {
+  dateRange?: SnapshotDateRange
+  strategies?: string[]
+}
+⋮----
+export interface SnapshotProgress {
+  step: string
+  percent: number
+}
+⋮----
+interface SnapshotOptions {
+  trades: Trade[]
+  dailyLogs?: DailyLogEntry[]
+  filters?: SnapshotFilters
+  riskFreeRate?: number
+  normalizeTo1Lot?: boolean
+  onProgress?: (progress: SnapshotProgress) => void
+  signal?: AbortSignal
+}
+⋮----
+export interface SnapshotChartData {
+  equityCurve: Array<{ date: string; equity: number; highWaterMark: number; tradeNumber: number }>
+  drawdownData: Array<{ date: string; drawdownPct: number }>
+  dayOfWeekData: Array<{ day: string; count: number; avgPl: number; avgPlPercent: number }>
+  returnDistribution: number[]
+  /**
+   * Per-trade inputs for ROM histogram; keeps margin context for exports/LLMs
+   */
+  returnDistributionDetails?: Array<{
+    tradeNumber: number
+    date: string
+    pl: number
+    marginReq: number
+    strategy?: string
+    rom: number
+  }>
+  streakData: {
+    winDistribution: Record<number, number>
+    lossDistribution: Record<number, number>
+    statistics: {
+      maxWinStreak: number
+      maxLossStreak: number
+      avgWinStreak: number
+      avgLossStreak: number
+    }
+  }
+  monthlyReturns: Record<number, Record<number, number>>
+  monthlyReturnsPercent: Record<number, Record<number, number>>
+  tradeSequence: Array<{ tradeNumber: number; pl: number; rom: number; date: string; marginReq?: number }>
+  romTimeline: Array<{ date: string; rom: number }>
+  rollingMetrics: Array<{ date: string; winRate: number; sharpeRatio: number; profitFactor: number; volatility: number }>
+  volatilityRegimes: Array<{ date: string; openingVix?: number; closingVix?: number; pl: number; rom?: number }>
+  premiumEfficiency: Array<{
+    tradeNumber: number
+    date: string
+    pl: number
+    premium?: number
+    avgClosingCost?: number
+    maxProfit?: number
+    maxLoss?: number
+    totalCommissions?: number
+    efficiencyPct?: number
+    efficiencyDenominator?: number
+    efficiencyBasis?: EfficiencyBasis
+    totalPremium?: number
+  }>
+  marginUtilization: Array<{ date: string; marginReq: number; fundsAtClose: number; numContracts: number; pl: number }>
+  exitReasonBreakdown: Array<{ reason: string; count: number; avgPl: number; totalPl: number }>
+  holdingPeriods: Array<{ tradeNumber: number; dateOpened: string; dateClosed?: string; durationHours: number; pl: number; strategy: string }>
+  mfeMaeData: MFEMAEDataPoint[]
+  mfeMaeStats: Partial<Record<NormalizationBasis, MFEMAEStats>>
+  mfeMaeDistribution: DistributionBucket[]
+}
+⋮----
+/**
+   * Per-trade inputs for ROM histogram; keeps margin context for exports/LLMs
+   */
+⋮----
+export interface PerformanceSnapshot {
+  filteredTrades: Trade[]
+  filteredDailyLogs: DailyLogEntry[]
+  portfolioStats: PortfolioStats
+  chartData: SnapshotChartData
+}
+⋮----
+export async function buildPerformanceSnapshot(options: SnapshotOptions): Promise<PerformanceSnapshot>
+⋮----
+// Check for cancellation at start
+⋮----
+// When filtering by strategy or normalizing, the `fundsAtClose` values from individual trades
+// represent the entire account balance and include performance from trades outside the current filter.
+// To avoid this data leakage, we rebuild the equity curve using cumulative P&L calculations instead of the absolute `fundsAtClose` values.
+⋮----
+// Yield after copying large arrays
+⋮----
+// Yield after heavy portfolio stats calculation
+⋮----
+export async function processChartData(
+  trades: Trade[],
+  dailyLogs?: DailyLogEntry[],
+  options?: {
+    useFundsAtClose?: boolean
+    onProgress?: (progress: SnapshotProgress) => void
+    signal?: AbortSignal
+  }
+): Promise<SnapshotChartData>
+⋮----
+// Yield after equity curve (can be heavy with many trades/logs)
+⋮----
+// Yield after day of week
+⋮----
+// Yield after streak data
+⋮----
+// Yield after monthly returns
+⋮----
+// Yield after monthly returns percent
+⋮----
+// Yield after trade sequence
+⋮----
+// Rolling metrics is O(n * windowSize) - most expensive calculation
+⋮----
+// Yield after volatility regimes
+⋮----
+// Yield after premium efficiency
+⋮----
+// Yield after margin utilization
+⋮----
+// Yield after exit reason breakdown
+⋮----
+// Yield after holding periods
+⋮----
+// MFE/MAE excursion analysis (async to yield during processing)
+⋮----
+// Yield after MFE/MAE stats
+⋮----
+// Yield after distributions to let UI paint before returning large object
+⋮----
+function buildEquityAndDrawdown(
+  trades: Trade[],
+  dailyLogs?: DailyLogEntry[],
+  useFundsAtClose = true
+)
+⋮----
+// When we shouldn't trust account-level equity (e.g., strategy filters or normalization),
+// skip daily logs and rebuild from trade P&L instead of leaking other strategies.
+⋮----
+function buildEquityAndDrawdownFromDailyLogs(
+  trades: Trade[],
+  dailyLogs: DailyLogEntry[]
+)
+⋮----
+function getEquityValueFromDailyLog(entry: DailyLogEntry): number
+⋮----
+function calculateEquityCurveFromTrades(trades: Trade[], useFundsAtClose: boolean)
+⋮----
+function calculateDayOfWeekData(trades: Trade[])
+⋮----
+// Calculate percentage return (ROM) if margin is available
+⋮----
+function calculateStreakData(trades: Trade[])
+⋮----
+function calculateMonthlyReturns(trades: Trade[])
+⋮----
+function calculateMonthlyReturnsPercent(
+  trades: Trade[],
+  dailyLogs?: DailyLogEntry[]
+): Record<number, Record<number, number>>
+⋮----
+// If daily logs are available, use them for accurate balance tracking
+⋮----
+// Fallback to trade-based calculation
+⋮----
+function calculateMonthlyReturnsPercentFromDailyLogs(
+  trades: Trade[],
+  dailyLogs: DailyLogEntry[]
+): Record<number, Record<number, number>>
+⋮----
+// Pre-compute trade-based percents for fallback months without balance data
+⋮----
+// Group trades by month to get P&L per month
+⋮----
+// Get starting balance for each month from daily logs
+⋮----
+// Calculate percentage returns
+⋮----
+// Calculate percentage: (monthPL / startingBalance) * 100
+⋮----
+// Fill in zeros for months without data
+⋮----
+function calculateMonthlyReturnsPercentFromTrades(
+  trades: Trade[]
+): Record<number, Record<number, number>>
+⋮----
+// Sort trades by date
+⋮----
+// Calculate initial capital
+⋮----
+// Group trades by month
+⋮----
+// Calculate percentage returns and update running capital
+⋮----
+// Update capital for next month (compounding)
+⋮----
+// Update startingCapital for any remaining trades in future months
+⋮----
+// Fill in zeros for months without data
+⋮----
+async function calculateRollingMetrics(trades: Trade[], signal?: AbortSignal)
+⋮----
+// Use sliding window approach to avoid repeated array operations
+// Pre-extract P&L values for faster access
+⋮----
+// Initialize window state
+⋮----
+// Initialize first window
+⋮----
+// Process each position using sliding window
+⋮----
+// Yield every 100 iterations to keep UI responsive
+⋮----
+// Calculate metrics for current window
+⋮----
+// Calculate variance (need to iterate for this, but only over window)
+⋮----
+// Slide window to the next position (skip on final iteration—there is no next window to build)
+⋮----
+// Remove old value
+⋮----
+// Add new value
+⋮----
+function getFiniteNumber(value: unknown): number | undefined
+⋮----
+function calculateVolatilityRegimes(trades: Trade[])
+⋮----
+function calculatePremiumEfficiency(trades: Trade[])
+⋮----
+function calculateMarginUtilization(trades: Trade[])
+⋮----
+function calculateExitReasonBreakdown(trades: Trade[])
+⋮----
+function calculateHoldingPeriods(trades: Trade[])
 ```
