@@ -13,10 +13,12 @@ interface MonthlyReturnsChartProps {
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 type ViewMode = 'dollars' | 'percent'
+type DisplayMode = 'chronological' | 'combined'
 
 export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
   const { data } = usePerformanceStore()
   const [viewMode, setViewMode] = useState<ViewMode>('dollars')
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('chronological')
 
   const { plotData, layout } = useMemo(() => {
     if (!data?.monthlyReturns) {
@@ -30,79 +32,173 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
       return { plotData: [], layout: {} }
     }
 
-    // Flatten the data for chronological bar chart (matching legacy)
-    const allMonths: string[] = []
-    const allValues: number[] = []
-    const allLabels: string[] = []
+    if (displayMode === 'combined') {
+      // Combined mode: aggregate all years for each month
+      const monthlyAggregates: { [month: number]: { sum: number; count: number } } = {}
 
-    const years = Object.keys(sourceData).map(Number).sort()
+      const years = Object.keys(sourceData).map(Number).sort()
 
-    for (const year of years) {
-      const yearData = sourceData[year]
-      for (let monthIdx = 1; monthIdx <= 12; monthIdx++) {
-        // Only include months with non-zero values (matching legacy line 670)
-        if (monthIdx in yearData && yearData[monthIdx] !== 0) {
-          const value = yearData[monthIdx]
-          allMonths.push(`${MONTH_NAMES[monthIdx - 1]} ${year}`)
-          allValues.push(value)
-
-          // Format label based on view mode
-          if (viewMode === 'dollars') {
-            allLabels.push(`$${value >= 0 ? '+' : ''}${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
-          } else {
-            allLabels.push(`${value >= 0 ? '+' : ''}${value.toFixed(1)}%`)
+      for (const year of years) {
+        const yearData = sourceData[year]
+        for (let monthIdx = 1; monthIdx <= 12; monthIdx++) {
+          if (monthIdx in yearData && yearData[monthIdx] !== 0) {
+            if (!monthlyAggregates[monthIdx]) {
+              monthlyAggregates[monthIdx] = { sum: 0, count: 0 }
+            }
+            monthlyAggregates[monthIdx].sum += yearData[monthIdx]
+            monthlyAggregates[monthIdx].count += 1
           }
         }
       }
-    }
 
-    if (allValues.length === 0) {
-      return { plotData: [], layout: {} }
-    }
+      const months: string[] = []
+      const avgValues: number[] = []
+      const counts: number[] = []
+      const labels: string[] = []
 
-    // Color bars based on positive/negative values
-    const colors = allValues.map(v => v >= 0 ? '#16a34a' : '#dc2626')
+      for (let monthIdx = 1; monthIdx <= 12; monthIdx++) {
+        if (monthlyAggregates[monthIdx]) {
+          const avg = monthlyAggregates[monthIdx].sum / monthlyAggregates[monthIdx].count
+          months.push(MONTH_NAMES[monthIdx - 1])
+          avgValues.push(avg)
+          counts.push(monthlyAggregates[monthIdx].count)
 
-    const barTrace: Partial<PlotData> = {
-      x: allMonths,
-      y: allValues,
-      type: 'bar',
-      marker: { color: colors },
-      text: allLabels,
-      textposition: 'inside',
-      textfont: {
-        size: 10,
-        color: 'white'
-      },
-      hovertemplate: '<b>%{x}</b><br>Return: %{text}<extra></extra>'
-    }
-
-    const yAxisTitle = viewMode === 'dollars' ? 'Monthly Return ($)' : 'Monthly Return (%)'
-
-    const chartLayout: Partial<Layout> = {
-      ...createBarChartLayout('', 'Month', yAxisTitle),
-      xaxis: {
-        title: { text: 'Month' },
-        showgrid: false,
-        tickangle: 45, // Angle labels for readability
-      },
-      yaxis: {
-        title: { text: yAxisTitle },
-        showgrid: true,
-        zeroline: true,
-        zerolinewidth: 1,
-      },
-      showlegend: false,
-      margin: {
-        t: 60,
-        r: 40,
-        b: 80, // More bottom margin for angled labels
-        l: 80
+          // Format label based on view mode
+          if (viewMode === 'dollars') {
+            labels.push(`$${avg >= 0 ? '+' : ''}${avg.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
+          } else {
+            labels.push(`${avg >= 0 ? '+' : ''}${avg.toFixed(1)}%`)
+          }
+        }
       }
-    }
 
-    return { plotData: [barTrace], layout: chartLayout }
-  }, [data, viewMode])
+      if (avgValues.length === 0) {
+        return { plotData: [], layout: {} }
+      }
+
+      // Color bars based on positive/negative values
+      const colors = avgValues.map(v => v >= 0 ? '#22c55e' : '#ef4444')
+
+      const hoverFormat = viewMode === 'dollars'
+        ? '<b>%{x}</b><br><b>Avg Return:</b> $%{y:.1f}<br><b>Months:</b> %{customdata}<extra></extra>'
+        : '<b>%{x}</b><br><b>Avg Return:</b> %{y:.1f}%<br><b>Months:</b> %{customdata}<extra></extra>'
+
+      const barTrace: Partial<PlotData> = {
+        x: months,
+        y: avgValues,
+        type: 'bar',
+        marker: { color: colors },
+        text: labels,
+        textposition: 'inside',
+        textfont: {
+          size: 12,
+          color: 'white',
+          family: 'Arial Black'
+        },
+        hovertemplate: hoverFormat,
+        customdata: counts
+      }
+
+      const yAxisTitle = viewMode === 'dollars' ? 'Average Monthly Return ($)' : 'Average Monthly Return (%)'
+
+      const chartLayout: Partial<Layout> = {
+        ...createBarChartLayout('', 'Month', yAxisTitle),
+        xaxis: {
+          title: { text: 'Month' },
+          showgrid: false,
+        },
+        yaxis: {
+          title: { text: yAxisTitle },
+          showgrid: true,
+          zeroline: true,
+          zerolinecolor: '#e5e7eb',
+          zerolinewidth: 1,
+        },
+        showlegend: false,
+        margin: {
+          t: 60,
+          r: 40,
+          b: 80,
+          l: 80
+        }
+      }
+
+      return { plotData: [barTrace], layout: chartLayout }
+    } else {
+      // Chronological mode: flatten the data for chronological bar chart
+      const allMonths: string[] = []
+      const allValues: number[] = []
+      const allLabels: string[] = []
+
+      const years = Object.keys(sourceData).map(Number).sort()
+
+      for (const year of years) {
+        const yearData = sourceData[year]
+        for (let monthIdx = 1; monthIdx <= 12; monthIdx++) {
+          // Only include months with non-zero values (matching legacy line 670)
+          if (monthIdx in yearData && yearData[monthIdx] !== 0) {
+            const value = yearData[monthIdx]
+            allMonths.push(`${MONTH_NAMES[monthIdx - 1]} ${year}`)
+            allValues.push(value)
+
+            // Format label based on view mode
+            if (viewMode === 'dollars') {
+              allLabels.push(`$${value >= 0 ? '+' : ''}${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
+            } else {
+              allLabels.push(`${value >= 0 ? '+' : ''}${value.toFixed(1)}%`)
+            }
+          }
+        }
+      }
+
+      if (allValues.length === 0) {
+        return { plotData: [], layout: {} }
+      }
+
+      // Color bars based on positive/negative values
+      const colors = allValues.map(v => v >= 0 ? '#16a34a' : '#dc2626')
+
+      const barTrace: Partial<PlotData> = {
+        x: allMonths,
+        y: allValues,
+        type: 'bar',
+        marker: { color: colors },
+        text: allLabels,
+        textposition: 'inside',
+        textfont: {
+          size: 10,
+          color: 'white'
+        },
+        hovertemplate: '<b>%{x}</b><br>Return: %{text}<extra></extra>'
+      }
+
+      const yAxisTitle = viewMode === 'dollars' ? 'Monthly Return ($)' : 'Monthly Return (%)'
+
+      const chartLayout: Partial<Layout> = {
+        ...createBarChartLayout('', 'Month', yAxisTitle),
+        xaxis: {
+          title: { text: 'Month' },
+          showgrid: false,
+          tickangle: 45, // Angle labels for readability
+        },
+        yaxis: {
+          title: { text: yAxisTitle },
+          showgrid: true,
+          zeroline: true,
+          zerolinewidth: 1,
+        },
+        showlegend: false,
+        margin: {
+          t: 60,
+          r: 40,
+          b: 80, // More bottom margin for angled labels
+          l: 80
+        }
+      }
+
+      return { plotData: [barTrace], layout: chartLayout }
+    }
+  }, [data, viewMode, displayMode])
 
   const tooltip = {
     flavor: "Your trading foundation year by year - which months added strong blocks and which needed rebuilding.",
@@ -110,22 +206,40 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
   }
 
   const toggleControls = (
-    <ToggleGroup
-      type="single"
-      value={viewMode}
-      onValueChange={(value) => {
-        if (value) setViewMode(value as ViewMode)
-      }}
-      variant="outline"
-      size="sm"
-    >
-      <ToggleGroupItem value="dollars" aria-label="View in dollars">
-        Dollars
-      </ToggleGroupItem>
-      <ToggleGroupItem value="percent" aria-label="View in percent">
-        Percent
-      </ToggleGroupItem>
-    </ToggleGroup>
+    <div className="flex gap-2">
+      <ToggleGroup
+        type="single"
+        value={displayMode}
+        onValueChange={(value) => {
+          if (value) setDisplayMode(value as DisplayMode)
+        }}
+        variant="outline"
+        size="sm"
+      >
+        <ToggleGroupItem value="chronological" aria-label="Chronological view">
+          Chronological
+        </ToggleGroupItem>
+        <ToggleGroupItem value="combined" aria-label="Combined view">
+          Combined
+        </ToggleGroupItem>
+      </ToggleGroup>
+      <ToggleGroup
+        type="single"
+        value={viewMode}
+        onValueChange={(value) => {
+          if (value) setViewMode(value as ViewMode)
+        }}
+        variant="outline"
+        size="sm"
+      >
+        <ToggleGroupItem value="dollars" aria-label="View in dollars">
+          Dollars
+        </ToggleGroupItem>
+        <ToggleGroupItem value="percent" aria-label="View in percent">
+          Percent
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
   )
 
   if (!data || !data.monthlyReturns || Object.keys(data.monthlyReturns).length === 0) {
