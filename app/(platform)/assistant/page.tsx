@@ -39,6 +39,7 @@ import {
   getMultipleChartsJson,
   TAB_ORDER,
 } from "@/lib/utils/performance-export";
+import { Trade } from "@/lib/models/trade";
 
 const GPT_URL =
   "https://chatgpt.com/g/g-6919e4fab91c8191a77967240ab4f3e8-tradeblocks-assistant";
@@ -67,6 +68,7 @@ export default function AssistantPage() {
   const [strategyStats, setStrategyStats] = useState<
     Record<string, StrategyStats>
   >({});
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [chartData, setChartData] = useState<SnapshotChartData | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
@@ -84,6 +86,7 @@ export default function AssistantPage() {
     if (!activeBlock) {
       setPortfolioStats(null);
       setStrategyStats({});
+      setTrades([]);
       setChartData(null);
       return;
     }
@@ -112,6 +115,7 @@ export default function AssistantPage() {
           });
           setPortfolioStats(snapshot.portfolioStats);
           setChartData(snapshot.chartData);
+          setTrades(snapshot.filteredTrades);
 
           const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 });
           const strategies = calculator.calculateStrategyStats(
@@ -199,6 +203,16 @@ export default function AssistantPage() {
             avgWin: stat.avgWin,
             avgLoss: stat.avgLoss,
             profitFactor: stat.profitFactor,
+          })),
+          // Expose per-trade margin + P/L so GPT exports always carry ROM inputs
+          trades: trades.map((t, idx) => ({
+            tradeNumber: idx + 1,
+            dateOpened: t.dateOpened instanceof Date ? t.dateOpened.toISOString() : t.dateOpened,
+            pl: t.pl,
+            marginReq: t.marginReq,
+            numContracts: t.numContracts,
+            strategy: t.strategy,
+            rom: t.marginReq && t.marginReq !== 0 ? (t.pl / t.marginReq) * 100 : null,
           })),
         };
       }

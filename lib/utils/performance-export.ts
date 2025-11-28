@@ -160,10 +160,28 @@ export const CHART_EXPORTS: ChartExportConfig[] = [
     tab: "Returns Analysis",
     exportFn: (data) => {
       const lines = ["# Return Distribution (ROM %)"];
-      lines.push(toCsvRow(["Trade Index", "ROM %"]));
-      data.returnDistribution.forEach((rom, index) => {
-        lines.push(toCsvRow([index + 1, rom.toFixed(2)]));
-      });
+
+      // Detailed inputs (includes margin) when available
+      if (data.returnDistributionDetails && data.returnDistributionDetails.length > 0) {
+        lines.push(toCsvRow(["Trade #", "Date", "P&L ($)", "Margin Req ($)", "ROM (%)", "Strategy"]));
+        data.returnDistributionDetails.forEach((t) => {
+          lines.push(
+            toCsvRow([
+              t.tradeNumber,
+              t.date,
+              t.pl.toFixed(2),
+              t.marginReq.toFixed(2),
+              t.rom.toFixed(2),
+              t.strategy ?? "",
+            ])
+          );
+        });
+      } else {
+        lines.push(toCsvRow(["Trade Index", "ROM %"]));
+        data.returnDistribution.forEach((rom, index) => {
+          lines.push(toCsvRow([index + 1, rom.toFixed(2)]));
+        });
+      }
 
       // Add summary statistics
       if (data.returnDistribution.length > 0) {
@@ -209,11 +227,19 @@ export const CHART_EXPORTS: ChartExportConfig[] = [
     tab: "Returns Analysis",
     exportFn: (data) => {
       const lines = ["# Trade Sequence"];
-      lines.push(toCsvRow(["Trade #", "Date", "P&L ($)", "ROM (%)"]));
+      const hasMargin = data.tradeSequence.some((t) => typeof t.marginReq === "number");
+      lines.push(
+        hasMargin
+          ? toCsvRow(["Trade #", "Date", "P&L ($)", "Margin Req ($)", "ROM (%)"])
+          : toCsvRow(["Trade #", "Date", "P&L ($)", "ROM (%)"])
+      );
       for (const trade of data.tradeSequence) {
-        lines.push(
-          toCsvRow([trade.tradeNumber, trade.date, trade.pl.toFixed(2), trade.rom.toFixed(2)])
-        );
+        const base = [trade.tradeNumber, trade.date, trade.pl.toFixed(2)];
+        if (hasMargin) {
+          base.push((trade.marginReq ?? 0).toFixed(2));
+        }
+        base.push(trade.rom.toFixed(2));
+        lines.push(toCsvRow(base));
       }
       return lines;
     },
@@ -510,6 +536,7 @@ export function getChartJsonData(
       return {
         chartName: "Return Distribution",
         values: d.returnDistribution,
+        inputs: d.returnDistributionDetails,
         statistics: {
           count: d.returnDistribution.length,
           mean,
