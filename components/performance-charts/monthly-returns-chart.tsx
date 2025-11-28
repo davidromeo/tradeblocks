@@ -15,6 +15,69 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 type ViewMode = 'dollars' | 'percent'
 type DisplayMode = 'chronological' | 'combined'
 
+interface BarTraceConfig {
+  x: string[]
+  y: number[]
+  colors: string[]
+  labels: string[]
+  hoverFormat: string
+  customdata?: number[]
+}
+
+function getBarColors(values: number[]): string[] {
+  return values.map(v => v >= 0 ? '#16a34a' : '#dc2626')
+}
+
+function formatValueLabel(value: number, viewMode: ViewMode): string {
+  if (viewMode === 'dollars') {
+    return `$${value >= 0 ? '+' : ''}${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+  } else {
+    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
+  }
+}
+
+function createBarTrace(config: BarTraceConfig): Partial<PlotData> {
+  return {
+    x: config.x,
+    y: config.y,
+    type: 'bar',
+    marker: { color: config.colors },
+    text: config.labels,
+    textposition: 'inside',
+    textfont: {
+      size: 10,
+      color: 'white',
+    },
+    hovertemplate: config.hoverFormat,
+    customdata: config.customdata
+  }
+}
+
+function createChartLayout(yAxisTitle: string, hasAngledLabels: boolean): Partial<Layout> {
+  return {
+    ...createBarChartLayout('', 'Month', yAxisTitle),
+    xaxis: {
+      title: { text: 'Month' },
+      showgrid: false,
+      ...(hasAngledLabels && { tickangle: 45 })
+    },
+    yaxis: {
+      title: { text: yAxisTitle },
+      showgrid: true,
+      zeroline: true,
+      zerolinecolor: '#e5e7eb',
+      zerolinewidth: 1,
+    },
+    showlegend: false,
+    margin: {
+      t: 60,
+      r: 40,
+      b: 80,
+      l: 80
+    }
+  }
+}
+
 export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
   const { data } = usePerformanceStore()
   const [viewMode, setViewMode] = useState<ViewMode>('dollars')
@@ -62,13 +125,7 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
           months.push(MONTH_NAMES[monthIdx - 1])
           avgValues.push(avg)
           counts.push(monthlyAggregates[monthIdx].count)
-
-          // Format label based on view mode
-          if (viewMode === 'dollars') {
-            labels.push(`$${avg >= 0 ? '+' : ''}${avg.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
-          } else {
-            labels.push(`${avg >= 0 ? '+' : ''}${avg.toFixed(1)}%`)
-          }
+          labels.push(formatValueLabel(avg, viewMode))
         }
       }
 
@@ -76,52 +133,23 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
         return { plotData: [], layout: {} }
       }
 
-      // Color bars based on positive/negative values
-      const colors = avgValues.map(v => v >= 0 ? '#22c55e' : '#ef4444')
+      const colors = getBarColors(avgValues)
 
       const hoverFormat = viewMode === 'dollars'
         ? '<b>%{x}</b><br><b>Avg Return:</b> $%{y:.1f}<br><b>Months:</b> %{customdata}<extra></extra>'
         : '<b>%{x}</b><br><b>Avg Return:</b> %{y:.1f}%<br><b>Months:</b> %{customdata}<extra></extra>'
 
-      const barTrace: Partial<PlotData> = {
+      const barTrace = createBarTrace({
         x: months,
         y: avgValues,
-        type: 'bar',
-        marker: { color: colors },
-        text: labels,
-        textposition: 'inside',
-        textfont: {
-          size: 12,
-          color: 'white',
-          family: 'Arial Black'
-        },
-        hovertemplate: hoverFormat,
+        colors,
+        labels,
+        hoverFormat,
         customdata: counts
-      }
+      })
 
       const yAxisTitle = viewMode === 'dollars' ? 'Average Monthly Return ($)' : 'Average Monthly Return (%)'
-
-      const chartLayout: Partial<Layout> = {
-        ...createBarChartLayout('', 'Month', yAxisTitle),
-        xaxis: {
-          title: { text: 'Month' },
-          showgrid: false,
-        },
-        yaxis: {
-          title: { text: yAxisTitle },
-          showgrid: true,
-          zeroline: true,
-          zerolinecolor: '#e5e7eb',
-          zerolinewidth: 1,
-        },
-        showlegend: false,
-        margin: {
-          t: 60,
-          r: 40,
-          b: 80,
-          l: 80
-        }
-      }
+      const chartLayout = createChartLayout(yAxisTitle, false)
 
       return { plotData: [barTrace], layout: chartLayout }
     } else {
@@ -140,13 +168,7 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
             const value = yearData[monthIdx]
             allMonths.push(`${MONTH_NAMES[monthIdx - 1]} ${year}`)
             allValues.push(value)
-
-            // Format label based on view mode
-            if (viewMode === 'dollars') {
-              allLabels.push(`$${value >= 0 ? '+' : ''}${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`)
-            } else {
-              allLabels.push(`${value >= 0 ? '+' : ''}${value.toFixed(1)}%`)
-            }
+            allLabels.push(formatValueLabel(value, viewMode))
           }
         }
       }
@@ -155,46 +177,18 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
         return { plotData: [], layout: {} }
       }
 
-      // Color bars based on positive/negative values
-      const colors = allValues.map(v => v >= 0 ? '#16a34a' : '#dc2626')
+      const colors = getBarColors(allValues)
 
-      const barTrace: Partial<PlotData> = {
+      const barTrace = createBarTrace({
         x: allMonths,
         y: allValues,
-        type: 'bar',
-        marker: { color: colors },
-        text: allLabels,
-        textposition: 'inside',
-        textfont: {
-          size: 10,
-          color: 'white'
-        },
-        hovertemplate: '<b>%{x}</b><br>Return: %{text}<extra></extra>'
-      }
+        colors,
+        labels: allLabels,
+        hoverFormat: '<b>%{x}</b><br>Return: %{text}<extra></extra>'
+      })
 
       const yAxisTitle = viewMode === 'dollars' ? 'Monthly Return ($)' : 'Monthly Return (%)'
-
-      const chartLayout: Partial<Layout> = {
-        ...createBarChartLayout('', 'Month', yAxisTitle),
-        xaxis: {
-          title: { text: 'Month' },
-          showgrid: false,
-          tickangle: 45, // Angle labels for readability
-        },
-        yaxis: {
-          title: { text: yAxisTitle },
-          showgrid: true,
-          zeroline: true,
-          zerolinewidth: 1,
-        },
-        showlegend: false,
-        margin: {
-          t: 60,
-          r: 40,
-          b: 80, // More bottom margin for angled labels
-          l: 80
-        }
-      }
+      const chartLayout = createChartLayout(yAxisTitle, true)
 
       return { plotData: [barTrace], layout: chartLayout }
     }
