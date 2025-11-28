@@ -18,7 +18,6 @@ type DisplayMode = 'chronological' | 'combined'
 interface BarTraceConfig {
   x: string[]
   y: number[]
-  colors: string[]
   labels: string[]
   hoverFormat: string
   customdata?: number[]
@@ -41,7 +40,7 @@ function createBarTrace(config: BarTraceConfig): Partial<PlotData> {
     x: config.x,
     y: config.y,
     type: 'bar',
-    marker: { color: config.colors },
+    marker: { color: getBarColors(config.y) },
     text: config.labels,
     textposition: 'inside',
     textfont: {
@@ -133,8 +132,6 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
         return { plotData: [], layout: {} }
       }
 
-      const colors = getBarColors(avgValues)
-
       const hoverFormat = viewMode === 'dollars'
         ? '<b>%{x}</b><br><b>Avg Return:</b> $%{y:.1f}<br><b>Months:</b> %{customdata}<extra></extra>'
         : '<b>%{x}</b><br><b>Avg Return:</b> %{y:.1f}%<br><b>Months:</b> %{customdata}<extra></extra>'
@@ -142,7 +139,6 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
       const barTrace = createBarTrace({
         x: months,
         y: avgValues,
-        colors,
         labels,
         hoverFormat,
         customdata: counts
@@ -177,12 +173,9 @@ export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
         return { plotData: [], layout: {} }
       }
 
-      const colors = getBarColors(allValues)
-
       const barTrace = createBarTrace({
         x: allMonths,
         y: allValues,
-        colors,
         labels: allLabels,
         hoverFormat: '<b>%{x}</b><br>Return: %{text}<extra></extra>'
       })
