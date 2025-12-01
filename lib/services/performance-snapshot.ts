@@ -397,6 +397,11 @@ function calculateDailyDrawdownFromEquityCurve(
   // Collapse multiple trades on the same calendar day into a single end-of-day point
   const dailyPoints: Array<{ date: string; equity: number }> = []
 
+  // Seed the high water mark from the initial curve point so day-one drops are preserved
+  let highWaterMark = Number.isFinite(equityCurve[0].highWaterMark)
+    ? equityCurve[0].highWaterMark
+    : equityCurve[0].equity
+
   equityCurve.forEach(point => {
     const dayKey = point.date.slice(0, 10) // YYYY-MM-DD
     const lastPoint = dailyPoints[dailyPoints.length - 1]
@@ -408,8 +413,6 @@ function calculateDailyDrawdownFromEquityCurve(
       dailyPoints.push({ date: point.date, equity: point.equity })
     }
   })
-
-  let highWaterMark = Number.NEGATIVE_INFINITY
 
   return dailyPoints.map(point => {
     if (!isFinite(highWaterMark) || point.equity > highWaterMark) {
