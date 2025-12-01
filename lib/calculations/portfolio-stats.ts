@@ -262,25 +262,45 @@ export class PortfolioStatsCalculator {
       }
     })
 
-    // Calculate initial capital from first trade
-    const firstTrade = sortedTrades[0]
-    const initialCapital = firstTrade.fundsAtClose - firstTrade.pl
+    // Calculate initial capital using existing helper for consistency
+    let initialCapital = PortfolioStatsCalculator.calculateInitialCapital(sortedTrades)
+    if (!isFinite(initialCapital) || initialCapital <= 0) {
+      initialCapital = sortedTrades[0].fundsAtClose - sortedTrades[0].pl
+    }
 
-    // Use actual portfolio values from fundsAtClose (legacy approach)
+    // Build an end-of-day equity series so intraday sequencing doesn't inflate drawdowns
+    let runningEquity = initialCapital
+    const dailyEquity: Array<{ date: string; equity: number }> = []
+
+    sortedTrades.forEach(trade => {
+      const equity = isFinite(trade.fundsAtClose)
+        ? trade.fundsAtClose
+        : runningEquity + trade.pl
+
+      runningEquity = equity
+
+      const closeDate = new Date(trade.dateClosed as Date)
+      const isoDate = closeDate.toISOString()
+      const dayKey = isoDate.slice(0, 10)
+
+      const lastPoint = dailyEquity[dailyEquity.length - 1]
+      if (lastPoint && lastPoint.date.slice(0, 10) === dayKey) {
+        dailyEquity[dailyEquity.length - 1] = { date: isoDate, equity }
+      } else {
+        dailyEquity.push({ date: isoDate, equity })
+      }
+    })
+
     let peak = initialCapital
     let maxDrawdown = 0
 
-    for (const trade of sortedTrades) {
-      const portfolioValue = trade.fundsAtClose
-
-      // Update peak
-      if (portfolioValue > peak) {
-        peak = portfolioValue
+    for (const point of dailyEquity) {
+      if (point.equity > peak) {
+        peak = point.equity
       }
 
-      // Calculate drawdown from current peak
       if (peak > 0) {
-        const drawdown = (peak - portfolioValue) / peak * 100
+        const drawdown = (peak - point.equity) / peak * 100
         maxDrawdown = Math.max(maxDrawdown, drawdown)
       }
     }

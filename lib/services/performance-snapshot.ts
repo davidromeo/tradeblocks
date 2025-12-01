@@ -382,18 +382,49 @@ function buildEquityAndDrawdown(
   }
 
   const equityCurve = calculateEquityCurveFromTrades(trades, useFundsAtClose)
-
-  const drawdownData = equityCurve.map(point => {
-    const { equity, highWaterMark, date } = point
-    if (!isFinite(highWaterMark) || highWaterMark === 0) {
-      return { date, drawdownPct: 0 }
-    }
-
-    const drawdownPct = ((equity - highWaterMark) / highWaterMark) * 100
-    return { date, drawdownPct }
-  })
+  const drawdownData = calculateDailyDrawdownFromEquityCurve(equityCurve)
 
   return { equityCurve, drawdownData }
+}
+
+function calculateDailyDrawdownFromEquityCurve(
+  equityCurve: SnapshotChartData['equityCurve']
+): SnapshotChartData['drawdownData'] {
+  if (!equityCurve || equityCurve.length === 0) {
+    return []
+  }
+
+  // Collapse multiple trades on the same calendar day into a single end-of-day point
+  const dailyPoints: Array<{ date: string; equity: number }> = []
+
+  equityCurve.forEach(point => {
+    const dayKey = point.date.slice(0, 10) // YYYY-MM-DD
+    const lastPoint = dailyPoints[dailyPoints.length - 1]
+
+    if (lastPoint && lastPoint.date.slice(0, 10) === dayKey) {
+      // Overwrite with the latest equity for that day (end-of-day)
+      dailyPoints[dailyPoints.length - 1] = { date: point.date, equity: point.equity }
+    } else {
+      dailyPoints.push({ date: point.date, equity: point.equity })
+    }
+  })
+
+  let highWaterMark = Number.NEGATIVE_INFINITY
+
+  return dailyPoints.map(point => {
+    if (!isFinite(highWaterMark) || point.equity > highWaterMark) {
+      highWaterMark = point.equity
+    }
+
+    const drawdownPct = highWaterMark > 0
+      ? ((point.equity - highWaterMark) / highWaterMark) * 100
+      : 0
+
+    return {
+      date: point.date,
+      drawdownPct
+    }
+  })
 }
 
 function buildEquityAndDrawdownFromDailyLogs(

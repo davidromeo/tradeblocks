@@ -233,11 +233,46 @@ describe('Comprehensive Portfolio Statistics', () => {
   describe('Drawdown Calculations', () => {
     test('should calculate max drawdown from trades', () => {
       const drawdownTrades: Trade[] = [
-        { ...sampleTrades[0], pl: 100, fundsAtClose: 10100, dateOpened: new Date('2024-01-01') },
-        { ...sampleTrades[0], pl: 150, fundsAtClose: 10250, dateOpened: new Date('2024-01-02') }, // Peak
-        { ...sampleTrades[0], pl: -100, fundsAtClose: 10150, dateOpened: new Date('2024-01-03') },
-        { ...sampleTrades[0], pl: -50, fundsAtClose: 10100, dateOpened: new Date('2024-01-04') }, // Trough
-        { ...sampleTrades[0], pl: 75, fundsAtClose: 10175, dateOpened: new Date('2024-01-05') },
+        {
+          ...sampleTrades[0],
+          pl: 100,
+          fundsAtClose: 10100,
+          dateOpened: new Date('2024-01-01'),
+          dateClosed: new Date('2024-01-01'),
+          timeClosed: '15:59:00'
+        },
+        {
+          ...sampleTrades[0],
+          pl: 150,
+          fundsAtClose: 10250,
+          dateOpened: new Date('2024-01-02'),
+          dateClosed: new Date('2024-01-02'),
+          timeClosed: '15:59:00'
+        }, // Peak
+        {
+          ...sampleTrades[0],
+          pl: -100,
+          fundsAtClose: 10150,
+          dateOpened: new Date('2024-01-03'),
+          dateClosed: new Date('2024-01-03'),
+          timeClosed: '15:59:00'
+        },
+        {
+          ...sampleTrades[0],
+          pl: -50,
+          fundsAtClose: 10100,
+          dateOpened: new Date('2024-01-04'),
+          dateClosed: new Date('2024-01-04'),
+          timeClosed: '15:59:00'
+        }, // Trough
+        {
+          ...sampleTrades[0],
+          pl: 75,
+          fundsAtClose: 10175,
+          dateOpened: new Date('2024-01-05'),
+          dateClosed: new Date('2024-01-05'),
+          timeClosed: '15:59:00'
+        },
       ];
 
       const stats = calculator.calculatePortfolioStats(drawdownTrades, undefined, false);
