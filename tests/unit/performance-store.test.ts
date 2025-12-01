@@ -46,22 +46,34 @@ describe('performance-store chart data', () => {
 
       expect(lastPoint.equity).toBe(lastClosedTrade.fundsAtClose)
 
-      let peak = expectedInitialCapital
-      let maxDrawdown = 0
       let equity = expectedInitialCapital
+      let peak = expectedInitialCapital
+      const dailyEquity: Array<{ date: string; equity: number }> = []
 
       closedTrades.forEach(trade => {
         const nextEquity = typeof trade.fundsAtClose === 'number'
           ? trade.fundsAtClose
           : equity + trade.pl
 
-        peak = Math.max(peak, nextEquity)
+        equity = nextEquity
+        const isoDate = new Date(trade.dateClosed ?? trade.dateOpened).toISOString()
+        const dayKey = isoDate.slice(0, 10)
+        const lastDaily = dailyEquity[dailyEquity.length - 1]
+
+        if (lastDaily && lastDaily.date.slice(0, 10) === dayKey) {
+          dailyEquity[dailyEquity.length - 1] = { date: isoDate, equity }
+        } else {
+          dailyEquity.push({ date: isoDate, equity })
+        }
+      })
+
+      let maxDrawdown = 0
+      dailyEquity.forEach(point => {
+        peak = Math.max(peak, point.equity)
         if (peak > 0) {
-          const drawdown = (peak - nextEquity) / peak * 100
+          const drawdown = (peak - point.equity) / peak * 100
           maxDrawdown = Math.max(maxDrawdown, drawdown)
         }
-
-        equity = nextEquity
       })
 
       const chartMaxDrawdown = Math.abs(Math.min(...result.drawdownData.map(point => point.drawdownPct)))
