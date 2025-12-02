@@ -9,6 +9,19 @@ export interface Trade {
   openingPrice: number
   legs: string // Option legs description
   premium: number
+  /**
+   * Records how the premium value was encoded in the source CSV.
+   * Some exports (OptionOmega) provide cents as whole numbers without decimals.
+   */
+ premiumPrecision?: 'dollars' | 'cents'
+  /**
+   * Canonical trading-day key (ET, yyyy-MM-dd). Derived at ingest time.
+   */
+  dayKey?: string
+  /**
+   * Raw "Date Opened" string from CSV for traceability.
+   */
+  openedOnRaw?: string
 
   // Closing information (optional for open trades)
   closingPrice?: number
@@ -39,6 +52,11 @@ export interface Trade {
   movement?: number
   maxProfit?: number
   maxLoss?: number
+  /**
+   * Synthetic-only: ratio of the worst observed loss to account capital at the time
+   * Used to scale synthetic losses relative to current account size
+   */
+  syntheticCapitalRatio?: number
 }
 
 /**
