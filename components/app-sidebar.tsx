@@ -2,6 +2,7 @@
 
 import {
   IconChartHistogram,
+  IconCalendar,
   IconGauge,
   IconLayoutDashboard,
   IconLink,
@@ -62,6 +63,12 @@ const navData = {
       title: "Correlation Matrix",
       href: "/correlation-matrix",
       icon: IconChartHistogram,
+    },
+    {
+      title: "P/L Calendar",
+      href: "/pl-calendar",
+      icon: IconCalendar,
+      badge: "New",
     },
     {
       title: "Walk-Forward",
