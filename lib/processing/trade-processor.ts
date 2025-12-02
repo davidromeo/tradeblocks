@@ -11,6 +11,7 @@ import { ValidationError, ProcessingError } from '../models'
 import { rawTradeDataSchema, tradeSchema } from '../models/validators'
 import { CSVParser, ParseProgress } from './csv-parser'
 import { findMissingHeaders, normalizeHeaders } from '../utils/csv-headers'
+import { getTradingDayKey } from '../utils/trading-day'
 // import { CSVParseResult } from './csv-parser'
 
 /**
@@ -352,9 +353,15 @@ export class TradeProcessor {
       const premiumPrecision: Trade['premiumPrecision'] =
         rawPremiumString && !rawPremiumString.includes('.') ? 'cents' : 'dollars'
 
+      const openedOnRaw = rawData['Date Opened']
+      const timeOpenedRaw = rawData['Time Opened'] || '00:00:00'
+      const dayKey = getTradingDayKey(openedOnRaw, timeOpenedRaw)
+
       const trade: Trade = {
         dateOpened,
-        timeOpened: rawData['Time Opened'] || '00:00:00',
+        timeOpened: timeOpenedRaw,
+        dayKey,
+        openedOnRaw,
         openingPrice: parseNumber(rawData['Opening Price'], 'Opening Price'),
         legs: rawData['Legs'] || '',
         premium: parseNumber(rawData['Premium'], 'Premium'),
