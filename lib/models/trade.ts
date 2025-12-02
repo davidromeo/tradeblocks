@@ -13,7 +13,15 @@ export interface Trade {
    * Records how the premium value was encoded in the source CSV.
    * Some exports (OptionOmega) provide cents as whole numbers without decimals.
    */
-  premiumPrecision?: 'dollars' | 'cents'
+ premiumPrecision?: 'dollars' | 'cents'
+  /**
+   * Canonical trading-day key (ET, yyyy-MM-dd). Derived at ingest time.
+   */
+  dayKey?: string
+  /**
+   * Raw "Date Opened" string from CSV for traceability.
+   */
+  openedOnRaw?: string
 
   // Closing information (optional for open trades)
   closingPrice?: number

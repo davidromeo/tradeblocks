@@ -37,6 +37,8 @@ export const rawTradeDataSchema = z.object({
 export const tradeSchema = z.object({
   dateOpened: z.date(),
   timeOpened: z.string().regex(/^\d{2}:\d{2}:\d{2}$/, "Time must be in HH:mm:ss format"),
+  dayKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  openedOnRaw: z.string().optional(),
   openingPrice: z.number().finite(),
   legs: z.string().min(1),
   premium: z.number().finite(),
