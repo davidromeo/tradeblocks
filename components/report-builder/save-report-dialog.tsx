@@ -35,6 +35,7 @@ interface SaveReportDialogProps {
   colorBy?: ChartAxisConfig
   sizeBy?: ChartAxisConfig
   tableBuckets?: number[]
+  tableColumns?: string[]
 }
 
 export function SaveReportDialog({
@@ -44,7 +45,8 @@ export function SaveReportDialog({
   yAxis,
   colorBy,
   sizeBy,
-  tableBuckets
+  tableBuckets,
+  tableColumns
 }: SaveReportDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -61,7 +63,8 @@ export function SaveReportDialog({
       yAxis,
       colorBy,
       sizeBy,
-      tableBuckets
+      tableBuckets,
+      tableColumns
     })
 
     setName('')

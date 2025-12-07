@@ -6,29 +6,69 @@
  */
 
 import { EnrichedTrade } from '@/lib/models/enriched-trade'
-import { getFieldInfo } from '@/lib/models/report-config'
+import {
+  getFieldInfo,
+  parseColumnValue,
+  AggregationType,
+  DEFAULT_TABLE_COLUMNS
+} from '@/lib/models/report-config'
 
 /**
- * A single row in the aggregated table
+ * A single row in the aggregated table with dynamic column values
  */
 export interface TableRow {
-  label: string        // Bucket label (e.g., "< 20", "20-25", "≥ 30")
-  count: number        // Trade count in bucket
-  winRate: number      // % of winning trades
-  avgPlPercent: number // Average P&L as % of premium
-  avgPlDollar: number  // Average P&L in dollars
-  totalPl: number      // Total P&L in dollars
+  label: string                    // Bucket label (e.g., "< 20", "20-25", "≥ 30")
+  values: Record<string, number>   // Column values keyed by column value string (e.g., { 'count': 45, 'winRate': 67.5, 'pl:avg': 1234 })
 }
 
 /**
  * Get the value of a field from a trade
  */
-function getTradeValue(trade: EnrichedTrade, field: string): number | null {
+export function getTradeValue(trade: EnrichedTrade, field: string): number | null {
   const value = (trade as unknown as Record<string, unknown>)[field]
   if (typeof value === 'number' && isFinite(value)) {
     return value
   }
   return null
+}
+
+/**
+ * Compute an aggregation over a set of trades
+ */
+export function computeAggregation(
+  trades: EnrichedTrade[],
+  field: string,
+  aggregation: AggregationType
+): number {
+  // Special cases for count and winRate
+  if (aggregation === 'count') {
+    return trades.length
+  }
+  if (aggregation === 'winRate') {
+    if (trades.length === 0) return 0
+    const winners = trades.filter(t => (t.pl ?? 0) > 0).length
+    return (winners / trades.length) * 100
+  }
+
+  // Get numeric values for the field
+  const values = trades
+    .map(t => getTradeValue(t, field))
+    .filter((v): v is number => v !== null)
+
+  if (values.length === 0) return 0
+
+  switch (aggregation) {
+    case 'sum':
+      return values.reduce((a, b) => a + b, 0)
+    case 'avg':
+      return values.reduce((a, b) => a + b, 0) / values.length
+    case 'min':
+      return Math.min(...values)
+    case 'max':
+      return Math.max(...values)
+    default:
+      return 0
+  }
 }
 
 /**
@@ -59,12 +99,14 @@ function formatBucketLabel(
  * @param trades - Array of enriched trades to aggregate
  * @param xField - Field name to bucket by
  * @param bucketEdges - Array of threshold values (e.g., [15, 20, 25, 30])
+ * @param selectedColumns - Array of column value strings (e.g., ['count', 'winRate', 'pl:avg'])
  * @returns Array of TableRow with aggregated statistics
  */
 export function buildTableRows(
   trades: EnrichedTrade[],
   xField: string,
-  bucketEdges: number[]
+  bucketEdges: number[],
+  selectedColumns: string[] = DEFAULT_TABLE_COLUMNS
 ): TableRow[] {
   if (!bucketEdges || bucketEdges.length === 0 || trades.length === 0) {
     return []
@@ -132,33 +174,21 @@ export function buildTableRows(
     }
   }
 
-  // Calculate statistics for each bucket
+  // Calculate statistics for each bucket based on selected columns
   return buckets
     .filter(bucket => bucket.trades.length > 0)
     .map(bucket => {
-      const count = bucket.trades.length
-      const winners = bucket.trades.filter(t => (t.isWinner ?? 0) === 1).length
-      const winRate = (winners / count) * 100
+      const values: Record<string, number> = {}
 
-      // Calculate average P&L
-      const totalPl = bucket.trades.reduce((sum, t) => sum + (t.pl ?? 0), 0)
-      const avgPlDollar = totalPl / count
-
-      // Calculate average P&L as % of premium
-      const plPercents = bucket.trades
-        .filter(t => t.premium && t.premium > 0)
-        .map(t => ((t.pl ?? 0) / t.premium!) * 100)
-      const avgPlPercent = plPercents.length > 0
-        ? plPercents.reduce((sum, p) => sum + p, 0) / plPercents.length
-        : 0
+      // Compute each selected column
+      for (const columnKey of selectedColumns) {
+        const { field, aggregation } = parseColumnValue(columnKey)
+        values[columnKey] = computeAggregation(bucket.trades, field, aggregation)
+      }
 
       return {
         label: bucket.label,
-        count,
-        winRate,
-        avgPlPercent,
-        avgPlDollar,
-        totalPl
+        values
       }
     })
 }

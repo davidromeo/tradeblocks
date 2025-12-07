@@ -81,6 +81,7 @@ export interface ReportConfig {
   colorBy?: ChartAxisConfig   // Optional color encoding
   sizeBy?: ChartAxisConfig    // Optional size encoding (scatter only)
   tableBuckets?: number[]     // Bucket thresholds for table type (e.g., [15, 20, 25, 30])
+  tableColumns?: string[]     // Selected columns for table type (e.g., ['count', 'winRate', 'pl:avg'])
   isBuiltIn?: boolean         // True for preset reports
   createdAt: string
   updatedAt: string
@@ -248,4 +249,124 @@ export function createDefaultReportConfig(): Omit<ReportConfig, 'id' | 'createdA
     xAxis: { field: 'openingVix', label: 'Opening VIX' },
     yAxis: { field: 'pl', label: 'Profit/Loss' }
   }
+}
+
+// ============================================================================
+// Table Column Configuration
+// ============================================================================
+
+/**
+ * Aggregation types for table columns
+ */
+export type AggregationType = 'avg' | 'sum' | 'min' | 'max' | 'count' | 'winRate'
+
+/**
+ * Table column option for MultiSelect
+ */
+export interface TableColumnOption {
+  value: string  // Format: "field:aggregation" or special like "count", "winRate"
+  label: string
+}
+
+/**
+ * Table column group for MultiSelect
+ */
+export interface TableColumnGroup {
+  heading: string
+  options: TableColumnOption[]
+}
+
+/**
+ * Predefined table column options grouped by category
+ * Value format: "field:aggregation" (e.g., "pl:avg") or special values ("count", "winRate")
+ */
+export const TABLE_COLUMN_OPTIONS: TableColumnGroup[] = [
+  {
+    heading: 'Core',
+    options: [
+      { value: 'count', label: 'Trades' },
+      { value: 'winRate', label: 'Win Rate' }
+    ]
+  },
+  {
+    heading: 'P&L',
+    options: [
+      { value: 'pl:avg', label: 'Avg P&L ($)' },
+      { value: 'pl:sum', label: 'Total P&L ($)' },
+      { value: 'rom:avg', label: 'Avg ROM (%)' }
+    ]
+  },
+  {
+    heading: 'Risk',
+    options: [
+      { value: 'mfePercent:avg', label: 'Avg MFE (%)' },
+      { value: 'maePercent:avg', label: 'Avg MAE (%)' },
+      { value: 'profitCapturePercent:avg', label: 'Avg Profit Capture (%)' },
+      { value: 'rMultiple:avg', label: 'Avg R-Multiple' }
+    ]
+  },
+  {
+    heading: 'Timing',
+    options: [
+      { value: 'durationHours:avg', label: 'Avg Duration (hrs)' }
+    ]
+  },
+  {
+    heading: 'Market',
+    options: [
+      { value: 'openingVix:avg', label: 'Avg Opening VIX' },
+      { value: 'vixChange:avg', label: 'Avg VIX Change' }
+    ]
+  }
+]
+
+/**
+ * Default selected table columns
+ */
+export const DEFAULT_TABLE_COLUMNS: string[] = ['count', 'winRate', 'pl:avg', 'rom:avg']
+
+/**
+ * Get all table column options as a flat array
+ */
+export function getAllTableColumnOptions(): TableColumnOption[] {
+  return TABLE_COLUMN_OPTIONS.flatMap(group => group.options)
+}
+
+/**
+ * Parse a column value into field and aggregation
+ * Special values: "count" -> { field: 'count', aggregation: 'count' }
+ *                "winRate" -> { field: 'isWinner', aggregation: 'winRate' }
+ * Regular values: "pl:avg" -> { field: 'pl', aggregation: 'avg' }
+ */
+export function parseColumnValue(value: string): { field: string; aggregation: AggregationType } {
+  if (value === 'count') {
+    return { field: 'count', aggregation: 'count' }
+  }
+  if (value === 'winRate') {
+    return { field: 'isWinner', aggregation: 'winRate' }
+  }
+  const [field, aggregation] = value.split(':')
+  return {
+    field: field || value,
+    aggregation: (aggregation as AggregationType) || 'avg'
+  }
+}
+
+/**
+ * Get label for a column value
+ */
+export function getColumnLabel(value: string): string {
+  const option = getAllTableColumnOptions().find(opt => opt.value === value)
+  return option?.label ?? value
+}
+
+/**
+ * Get unit for formatting a column value
+ */
+export function getColumnUnit(value: string): string | undefined {
+  const { field } = parseColumnValue(value)
+  if (field === 'count') return undefined
+  if (field === 'isWinner') return '%'
+  const fieldInfo = getFieldInfo(field)
+  return fieldInfo?.unit
 }

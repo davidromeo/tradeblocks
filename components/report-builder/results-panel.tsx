@@ -7,6 +7,7 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -14,11 +15,13 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { MultiSelect } from '@/components/multi-select'
 import { EnrichedTrade } from '@/lib/models/enriched-trade'
 import {
   ChartType,
   ChartAxisConfig,
-  CHART_TYPE_LABELS
+  CHART_TYPE_LABELS,
+  TABLE_COLUMN_OPTIONS
 } from '@/lib/models/report-config'
 import { RegimeComparisonStats } from '@/lib/calculations/regime-comparison'
 import { ComparisonSummaryCard } from './comparison-summary-card'
@@ -37,12 +40,14 @@ interface ResultsPanelProps {
   colorBy?: ChartAxisConfig
   sizeBy?: ChartAxisConfig
   tableBuckets: number[]
+  tableColumns: string[]
   onChartTypeChange: (type: ChartType) => void
   onXAxisChange: (field: string) => void
   onYAxisChange: (field: string) => void
   onColorByChange: (field: string) => void
   onSizeByChange: (field: string) => void
   onTableBucketsChange: (buckets: number[]) => void
+  onTableColumnsChange: (columns: string[]) => void
 }
 
 export function ResultsPanel({
@@ -55,20 +60,22 @@ export function ResultsPanel({
   colorBy,
   sizeBy,
   tableBuckets,
+  tableColumns,
   onChartTypeChange,
   onXAxisChange,
   onYAxisChange,
   onColorByChange,
   onSizeByChange,
-  onTableBucketsChange
+  onTableBucketsChange,
+  onTableColumnsChange
 }: ResultsPanelProps) {
   // Check if we're showing a filtered subset
   const isFiltered = filteredTrades.length !== trades.length
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {/* Chart Configuration */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Chart</CardTitle>
@@ -128,13 +135,31 @@ export function ResultsPanel({
               </>
             )}
           </div>
+
+          {/* Column selector for table type */}
+          {chartType === 'table' && (
+            <div className="pt-3">
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                Table Columns
+              </Label>
+              <MultiSelect
+                options={TABLE_COLUMN_OPTIONS}
+                defaultValue={tableColumns}
+                onValueChange={onTableColumnsChange}
+                placeholder="Select columns..."
+                maxCount={4}
+                hideSelectAll
+              />
+            </div>
+          )}
         </CardHeader>
-        <CardContent>
+        <CardContent className={chartType === 'table' ? 'overflow-hidden' : ''}>
           {chartType === 'table' ? (
             <CustomTable
               trades={filteredTrades}
               xAxis={xAxis}
               bucketEdges={tableBuckets}
+              selectedColumns={tableColumns}
             />
           ) : (
             <CustomChart

@@ -15,7 +15,8 @@ import {
   ChartType,
   ChartAxisConfig,
   ReportConfig,
-  createEmptyFilterConfig
+  createEmptyFilterConfig,
+  DEFAULT_TABLE_COLUMNS
 } from '@/lib/models/report-config'
 import { applyFilters, FlexibleFilterResult } from '@/lib/calculations/flexible-filter'
 import { enrichTrades } from '@/lib/calculations/enrich-trades'
@@ -45,6 +46,7 @@ export function ReportBuilderTab() {
   const [colorBy, setColorBy] = useState<ChartAxisConfig | undefined>(undefined)
   const [sizeBy, setSizeBy] = useState<ChartAxisConfig | undefined>(undefined)
   const [tableBuckets, setTableBuckets] = useState<number[]>(() => getDefaultBucketEdges('openingVix'))
+  const [tableColumns, setTableColumns] = useState<string[]>(DEFAULT_TABLE_COLUMNS)
 
   // Load a saved report
   const handleLoadReport = (report: ReportConfig) => {
@@ -55,6 +57,7 @@ export function ReportBuilderTab() {
     setColorBy(report.colorBy)
     setSizeBy(report.sizeBy)
     setTableBuckets(report.tableBuckets ?? getDefaultBucketEdges(report.xAxis.field))
+    setTableColumns(report.tableColumns ?? DEFAULT_TABLE_COLUMNS)
   }
 
   // Pre-compute enriched trades with derived fields (MFE%, MAE%, ROM, etc.)
@@ -130,6 +133,7 @@ export function ReportBuilderTab() {
             colorBy={colorBy}
             sizeBy={sizeBy}
             tableBuckets={tableBuckets}
+            tableColumns={tableColumns}
           />
         </div>
       </div>
@@ -154,12 +158,14 @@ export function ReportBuilderTab() {
           colorBy={colorBy}
           sizeBy={sizeBy}
           tableBuckets={tableBuckets}
+          tableColumns={tableColumns}
           onChartTypeChange={setChartType}
           onXAxisChange={handleXAxisChange}
           onYAxisChange={handleYAxisChange}
           onColorByChange={handleColorByChange}
           onSizeByChange={handleSizeByChange}
           onTableBucketsChange={setTableBuckets}
+          onTableColumnsChange={setTableColumns}
         />
       </div>
     </div>
