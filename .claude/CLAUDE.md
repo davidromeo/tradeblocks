@@ -68,7 +68,7 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
   - `(platform)/` - Main application routes with sidebar layout
 - `components/` - React components
   - `ui/` - shadcn/ui components (Radix UI primitives)
-  - `performance-charts/` - Recharts-based performance visualizations
+  - `performance-charts/` - Plotly-based performance visualizations (via react-plotly.js)
 - `lib/` - Core business logic (framework-agnostic)
   - `models/` - TypeScript interfaces and types
   - `processing/` - CSV parsing and data processing
@@ -116,6 +116,49 @@ import { Button } from '@/components/ui/button'
 ## UI Component Library
 
 Uses shadcn/ui components built on Radix UI primitives with Tailwind CSS. Components are in `components/ui/` and follow the shadcn pattern (copy-paste, not npm installed).
+
+## Charting
+
+All performance charts use **Plotly** via `react-plotly.js`, NOT Recharts. Charts follow a consistent pattern:
+
+1. **Use `ChartWrapper`** (`components/performance-charts/chart-wrapper.tsx`) - provides consistent Card styling, theme support, tooltips, and Plotly configuration
+2. **Import types from plotly.js**: `import type { Layout, PlotData } from 'plotly.js'`
+3. **Build traces in useMemo** with proper typing: `const traces: Partial<PlotData>[] = [...]`
+4. **Pass to ChartWrapper**: `<ChartWrapper title="..." data={traces} layout={layout} />`
+
+Common Plotly features used:
+- Stacked areas: `stackgroup: "one"`, `groupnorm: "percent"`
+- Fill to zero: `fill: 'tozeroy'`
+- Custom hover: `hovertemplate: '...<extra></extra>'`
+
+## Form Input Patterns
+
+**Number inputs with validation**: When creating number inputs that users need to edit freely (delete and retype), use a two-state pattern:
+
+```typescript
+const [value, setValue] = useState<number>(10)           // Actual validated value
+const [inputValue, setInputValue] = useState<string>("10") // String for input display
+
+const handleBlur = () => {
+  const val = parseInt(inputValue, 10)
+  if (!isNaN(val) && val >= min && val <= max) {
+    setValue(val)
+    setInputValue(String(val))
+  } else {
+    setInputValue(String(value)) // Revert to last valid value
+  }
+}
+
+<Input
+  type="number"
+  value={inputValue}
+  onChange={(e) => setInputValue(e.target.value)}
+  onBlur={handleBlur}
+  onKeyDown={(e) => e.key === "Enter" && handleBlur()}
+/>
+```
+
+This pattern allows users to delete the entire value and type a new number, with validation only on blur or Enter.
 
 ## State Management
 
