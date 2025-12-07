@@ -35,13 +35,23 @@ import {
   AlertTriangle,
   BarChart3,
   Calendar,
+  CalendarIcon,
   Download,
   Gauge,
   Target,
   TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 import { useEffect, useState } from "react";
+import { DateRange } from "react-day-picker";
 
 // Strategy options will be dynamically generated from trades
 
@@ -51,6 +61,7 @@ export default function BlockStatsPage() {
   const [riskFreeRate, setRiskFreeRate] = useState("2");
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
   const [normalizeTo1Lot, setNormalizeTo1Lot] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   // Data fetching state
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -105,6 +116,11 @@ export default function BlockStatsPage() {
     window.localStorage.setItem(storageKey, normalizeTo1Lot ? "true" : "false");
   }, [activeBlock?.id, normalizeTo1Lot]);
 
+  // Handle date range changes
+  const handleDateRangeChange = (newDateRange: DateRange | undefined) => {
+    setDateRange(newDateRange);
+  };
+
   // Fetch trades and daily logs when active block changes
   // Uses cached performance snapshot for instant load when available
   useEffect(() => {
@@ -138,7 +154,9 @@ export default function BlockStatsPage() {
         const isDefaultView =
           selectedStrategies.length === 0 &&
           (parseFloat(riskFreeRate) || 2.0) === 2.0 &&
-          !normalizeTo1Lot;
+          !normalizeTo1Lot &&
+          !dateRange?.from &&
+          !dateRange?.to;
 
         if (isDefaultView) {
           const cachedSnapshot = await getPerformanceSnapshotCache(activeBlock.id);
@@ -195,13 +213,24 @@ export default function BlockStatsPage() {
 
       try {
         const riskFree = parseFloat(riskFreeRate) || 2.0;
+        const hasFilters =
+          selectedStrategies.length > 0 ||
+          dateRange?.from ||
+          dateRange?.to;
+
         const snapshot = await buildPerformanceSnapshot({
           trades,
           dailyLogs,
-          filters:
-            selectedStrategies.length > 0
-              ? { strategies: selectedStrategies }
-              : undefined,
+          filters: hasFilters
+            ? {
+                ...(selectedStrategies.length > 0 && {
+                  strategies: selectedStrategies,
+                }),
+                ...((dateRange?.from || dateRange?.to) && {
+                  dateRange: { from: dateRange?.from, to: dateRange?.to },
+                }),
+              }
+            : undefined,
           riskFreeRate: riskFree,
           normalizeTo1Lot,
         });
@@ -229,7 +258,7 @@ export default function BlockStatsPage() {
     // Use a small delay to avoid closing the popover during selection
     const timeoutId = setTimeout(calculateMetrics, 0);
     return () => clearTimeout(timeoutId);
-  }, [trades, dailyLogs, riskFreeRate, selectedStrategies, normalizeTo1Lot]);
+  }, [trades, dailyLogs, riskFreeRate, selectedStrategies, normalizeTo1Lot, dateRange]);
 
   // Helper functions
   const getDateRange = () => {
@@ -413,11 +442,19 @@ export default function BlockStatsPage() {
         name: activeBlock.name,
       },
       filters: {
-        selectedStrategies: selectedStrategies.length > 0 ? selectedStrategies : "all",
+        dateRange:
+          dateRange?.from || dateRange?.to
+            ? {
+                from: dateRange?.from?.toISOString(),
+                to: dateRange?.to?.toISOString(),
+              }
+            : "all",
+        selectedStrategies:
+          selectedStrategies.length > 0 ? selectedStrategies : "all",
         riskFreeRate: parseFloat(riskFreeRate) || 2.0,
         normalizeTo1Lot,
       },
-      dateRange: getDateRange(),
+      tradeDateRange: getDateRange(),
       portfolioStats: {
         totalTrades: portfolioStats.totalTrades,
         totalPl: portfolioStats.totalPl,
@@ -487,7 +524,15 @@ export default function BlockStatsPage() {
     lines.push("# Block Stats Export");
     lines.push(toCsvRow(["Block", activeBlock.name]));
     lines.push(toCsvRow(["Exported At", new Date().toISOString()]));
-    lines.push(toCsvRow(["Date Range", getDateRange()]));
+    lines.push(toCsvRow(["Trade Date Range", getDateRange()]));
+    lines.push(
+      toCsvRow([
+        "Date Range Filter",
+        dateRange?.from || dateRange?.to
+          ? `${dateRange?.from ? format(dateRange.from, "LLL dd, y") : "Start"} - ${dateRange?.to ? format(dateRange.to, "LLL dd, y") : "End"}`
+          : "All time",
+      ])
+    );
     lines.push(toCsvRow(["Risk-Free Rate", `${riskFreeRate}%`]));
     lines.push(toCsvRow(["Normalize to 1-Lot", normalizeTo1Lot]));
     lines.push(
@@ -646,6 +691,40 @@ export default function BlockStatsPage() {
     <div className="space-y-6">
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4">
+        <div className="space-y-2">
+          <Label>Date Range</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[280px] justify-start text-left font-normal",
+                  !dateRange && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "LLL dd, y")} -{" "}
+                      {format(dateRange.to, "LLL dd, y")}
+                    </>
+                  ) : (
+                    format(dateRange.from, "LLL dd, y")
+                  )
+                ) : (
+                  <span>All time</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <DateRangePicker
+                date={dateRange}
+                onDateChange={handleDateRangeChange}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="risk-free-rate">Risk-free Rate (%)</Label>
           <Input
