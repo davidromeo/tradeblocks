@@ -126,6 +126,8 @@ export function MarginUtilizationTable({ className }: MarginUtilizationTableProp
 
   const [bucketSize, setBucketSize] = useState<number>(1)
   const [maxThreshold, setMaxThreshold] = useState<number>(10)
+  const [bucketInput, setBucketInput] = useState<string>("1")
+  const [maxInput, setMaxInput] = useState<string>("10")
 
   const initialCapital = data?.portfolioStats?.initialCapital ?? 0
 
@@ -201,6 +203,26 @@ export function MarginUtilizationTable({ className }: MarginUtilizationTableProp
       "This chart shows how your margin utilization changes month over month. Each colored band represents a percentage range of your starting capital used as margin. Watch for trends - are you taking on more margin over time?",
   }
 
+  const handleBucketBlur = () => {
+    const val = parseInt(bucketInput, 10)
+    if (!isNaN(val) && val >= 1 && val <= 50) {
+      setBucketSize(val)
+      setBucketInput(String(val))
+    } else {
+      setBucketInput(String(bucketSize))
+    }
+  }
+
+  const handleMaxBlur = () => {
+    const val = parseInt(maxInput, 10)
+    if (!isNaN(val) && val >= 1 && val <= 100) {
+      setMaxThreshold(val)
+      setMaxInput(String(val))
+    } else {
+      setMaxInput(String(maxThreshold))
+    }
+  }
+
   const headerControls = (
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-2">
@@ -209,13 +231,10 @@ export function MarginUtilizationTable({ className }: MarginUtilizationTableProp
           type="number"
           min={1}
           max={50}
-          value={bucketSize}
-          onChange={(e) => {
-            const val = parseInt(e.target.value, 10)
-            if (!isNaN(val) && val >= 1 && val <= 50) {
-              setBucketSize(val)
-            }
-          }}
+          value={bucketInput}
+          onChange={(e) => setBucketInput(e.target.value)}
+          onBlur={handleBucketBlur}
+          onKeyDown={(e) => e.key === "Enter" && handleBucketBlur()}
           className="w-16 h-8 text-center"
         />
         <span className="text-sm text-muted-foreground">%</span>
@@ -227,13 +246,10 @@ export function MarginUtilizationTable({ className }: MarginUtilizationTableProp
           type="number"
           min={1}
           max={100}
-          value={maxThreshold}
-          onChange={(e) => {
-            const val = parseInt(e.target.value, 10)
-            if (!isNaN(val) && val >= 1 && val <= 100) {
-              setMaxThreshold(val)
-            }
-          }}
+          value={maxInput}
+          onChange={(e) => setMaxInput(e.target.value)}
+          onBlur={handleMaxBlur}
+          onKeyDown={(e) => e.key === "Enter" && handleMaxBlur()}
           className="w-16 h-8 text-center"
         />
         <span className="text-sm text-muted-foreground">%</span>
