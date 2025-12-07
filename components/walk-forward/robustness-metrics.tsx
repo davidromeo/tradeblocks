@@ -25,6 +25,12 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
     ? summary.degradationFactor * 100
     : 0
 
+  // Calculate percentage-based delta: (OOS - IS) / |IS| * 100
+  // This shows how much performance changed as a percentage of the in-sample baseline
+  const avgDeltaPct = summary.avgInSamplePerformance !== 0
+    ? (stats.averagePerformanceDelta / Math.abs(summary.avgInSamplePerformance)) * 100
+    : 0
+
   return (
     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
       <MetricCard
@@ -59,14 +65,14 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
       />
       <MetricCard
         title="Avg Performance Delta"
-        value={stats.averagePerformanceDelta}
-        subtitle={`${targetMetricLabel} difference`}
-        format="number"
+        value={Number.isFinite(avgDeltaPct) ? avgDeltaPct : 0}
+        subtitle={`% change from in-sample`}
+        format="percentage"
         tooltip={{
-          flavor: "Average absolute change between in-sample and out-of-sample scoring.",
-          detailed: "Smaller deltas reflect smoother degradation when rolling forward.",
+          flavor: "Average percentage change between in-sample and out-of-sample performance.",
+          detailed: "Shows how much the target metric shifts when moving from optimization to forward-testing. Values near 0% indicate stable performance; large negative values suggest overfitting.",
         }}
-        isPositive={stats.averagePerformanceDelta >= 0}
+        isPositive={avgDeltaPct >= -10}
       />
       <MetricCard
         title="Robustness Score"
