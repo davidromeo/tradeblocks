@@ -13,24 +13,25 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+/**
+ * Hardcoded VIX regime buckets
+ * These define the volatility regime thresholds for the chart
+ */
+const VIX_BUCKETS = [
+  { name: '≤ 18', min: -Infinity, max: 18, color: '#3b82f6' },
+  { name: '18 - 25', min: 18, max: 25, color: '#eab308' },
+  { name: '≥ 25', min: 25, max: Infinity, color: '#f87171' }
+]
+
 interface VixRegimeChartProps {
   className?: string
 }
 
-/**
- * Volatility regimes derived from long-run VIX observations.
- * - Low volatility: VIX ≤ 18 (below long-term average of ~19)
- * - Medium volatility: 18 < VIX ≤ 25 (historically elevated)
- * - High volatility: VIX > 25 (stress conditions)
- */
-const VIX_BUCKETS = [
-  { name: '≤ 18', min: -Infinity, max: 18 },
-  { name: '18 - 25', min: 18, max: 25 },
-  { name: '≥ 25', min: 25, max: Infinity }
-]
-
 export function VixRegimeChart({ className }: VixRegimeChartProps) {
   const { data } = usePerformanceStore()
+
+  // Use hardcoded VIX buckets
+  const vixBuckets = VIX_BUCKETS
 
   const { plotData, layout, openingSummary, closingSummary } = useMemo(() => {
     if (!data?.volatilityRegimes || data.volatilityRegimes.length === 0) {
@@ -117,12 +118,14 @@ export function VixRegimeChart({ className }: VixRegimeChartProps) {
     if (closingEntries.length > 0) traces.push(buildTrace(closingEntries, false))
 
     const buildSummary = (entries: typeof openingEntries, axisSuffix: '' | '2') => {
-      return VIX_BUCKETS.map(bucket => {
+      return vixBuckets.map(bucket => {
         const bucketTrades = entries.filter(entry => {
           const vix = axisSuffix === ''
             ? entry.openingVix ?? 0
             : entry.closingVix ?? 0
-          return vix >= bucket.min && vix < bucket.max
+          // Use >= min and < max for all buckets except the last one which uses <= max
+          const isLastBucket = bucket.max === Infinity
+          return vix >= bucket.min && (isLastBucket ? true : vix < bucket.max)
         })
 
         if (bucketTrades.length === 0) {
@@ -152,41 +155,29 @@ export function VixRegimeChart({ className }: VixRegimeChartProps) {
     const regimeShapes = (forOpening: boolean): Layout['shapes'] => {
       const xref = forOpening ? 'x' : 'x2'
       const yref = forOpening ? 'y' : 'y2'
-      return [
-        {
-          type: 'rect',
-          xref,
-          yref,
-          x0: 0,
-          x1: 18,
-          y0: yMin,
-          y1: yMax,
-          fillcolor: 'rgba(59,130,246,0.05)',
-          line: { width: 0 }
-        },
-        {
-          type: 'rect',
-          xref,
-          yref,
-          x0: 18,
-          x1: 25,
-          y0: yMin,
-          y1: yMax,
-          fillcolor: 'rgba(234,179,8,0.07)',
-          line: { width: 0 }
-        },
-        {
-          type: 'rect',
-          xref,
-          yref,
-          x0: 25,
-          x1: 80,
-          y0: yMin,
-          y1: yMax,
-          fillcolor: 'rgba(248,113,113,0.08)',
-          line: { width: 0 }
-        }
-      ]
+
+      // Convert hex color to rgba with low opacity for background shading
+      const colorToRgba = (color: string | undefined, opacity: number): string => {
+        if (!color) return `rgba(107,114,128,${opacity})`
+        // Parse hex color
+        const hex = color.replace('#', '')
+        const r = parseInt(hex.substring(0, 2), 16)
+        const g = parseInt(hex.substring(2, 4), 16)
+        const b = parseInt(hex.substring(4, 6), 16)
+        return `rgba(${r},${g},${b},${opacity})`
+      }
+
+      return vixBuckets.map((bucket, index) => ({
+        type: 'rect' as const,
+        xref,
+        yref,
+        x0: bucket.min === -Infinity ? 0 : bucket.min,
+        x1: bucket.max === Infinity ? 80 : bucket.max,
+        y0: yMin,
+        y1: yMax,
+        fillcolor: colorToRgba(bucket.color, 0.05 + index * 0.02),
+        line: { width: 0 }
+      }))
     }
 
     // Create title annotations for each subplot
@@ -313,7 +304,7 @@ export function VixRegimeChart({ className }: VixRegimeChartProps) {
             <TableBody>
               {openingSummary.map((stats, index) => (
                 <TableRow key={`open-${index}`}>
-                  <TableCell className="font-medium">{VIX_BUCKETS[index].name}</TableCell>
+                  <TableCell className="font-medium">{vixBuckets[index]?.name ?? `Bucket ${index + 1}`}</TableCell>
                   <TableCell className="text-right">{stats.avgRom.toFixed(1)}%</TableCell>
                   <TableCell className="text-right">{stats.winRate.toFixed(0)}%</TableCell>
                   <TableCell className="text-right">{stats.count}</TableCell>
@@ -336,7 +327,7 @@ export function VixRegimeChart({ className }: VixRegimeChartProps) {
             <TableBody>
               {closingSummary.map((stats, index) => (
                 <TableRow key={`close-${index}`}>
-                  <TableCell className="font-medium">{VIX_BUCKETS[index].name}</TableCell>
+                  <TableCell className="font-medium">{vixBuckets[index]?.name ?? `Bucket ${index + 1}`}</TableCell>
                   <TableCell className="text-right">{stats.avgRom.toFixed(1)}%</TableCell>
                   <TableCell className="text-right">{stats.winRate.toFixed(0)}%</TableCell>
                   <TableCell className="text-right">{stats.count}</TableCell>
