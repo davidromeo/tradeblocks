@@ -1,8 +1,8 @@
 "use client"
 
 import { IconPlayerPlay } from "@tabler/icons-react"
-import { HelpCircle, Loader2, Square } from "lucide-react"
-import { useMemo } from "react"
+import { HelpCircle, Loader2, Square, Sparkles } from "lucide-react"
+import { useEffect, useMemo } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -81,11 +81,21 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const updateConfig = useWalkForwardStore((state) => state.updateConfig)
   const setParameterRange = useWalkForwardStore((state) => state.setParameterRange)
   const applyPreset = useWalkForwardStore((state) => state.applyPreset)
+  const autoConfigureFromBlock = useWalkForwardStore((state) => state.autoConfigureFromBlock)
+  const tradeFrequency = useWalkForwardStore((state) => state.tradeFrequency)
+  const autoConfigApplied = useWalkForwardStore((state) => state.autoConfigApplied)
   const runAnalysis = useWalkForwardStore((state) => state.runAnalysis)
   const cancelAnalysis = useWalkForwardStore((state) => state.cancelAnalysis)
   const isRunning = useWalkForwardStore((state) => state.isRunning)
   const progress = useWalkForwardStore((state) => state.progress)
   const error = useWalkForwardStore((state) => state.error)
+
+  // Auto-configure when block changes
+  useEffect(() => {
+    if (blockId) {
+      autoConfigureFromBlock(blockId)
+    }
+  }, [blockId, autoConfigureFromBlock])
 
   const disableRun = !blockId || isRunning
 
@@ -223,6 +233,17 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
           <Alert variant="destructive">
             <AlertTitle>Analysis error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {autoConfigApplied && tradeFrequency && (
+          <Alert>
+            <Sparkles className="h-4 w-4" />
+            <AlertTitle>Auto-configured for your trading frequency</AlertTitle>
+            <AlertDescription>
+              Detected ~{tradeFrequency.tradesPerMonth.toFixed(1)} trades/month ({tradeFrequency.totalTrades} trades over {Math.round(tradeFrequency.tradingDays / 30)} months).
+              Window sizes adjusted to capture sufficient trades per period.
+            </AlertDescription>
           </Alert>
         )}
 

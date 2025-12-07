@@ -8,8 +8,112 @@ import {
   WalkForwardProgressEvent,
 } from '@/lib/models/walk-forward'
 import { toCsvRow } from '@/lib/utils/export-helpers'
+import { Trade } from '@/lib/models/trade'
 
 type WalkForwardPresetKey = 'conservative' | 'moderate' | 'aggressive'
+
+export interface TradeFrequencyInfo {
+  totalTrades: number
+  tradingDays: number
+  avgDaysBetweenTrades: number
+  tradesPerMonth: number
+}
+
+/**
+ * Calculates trade frequency metrics from a list of trades.
+ */
+export function calculateTradeFrequency(trades: Trade[]): TradeFrequencyInfo | null {
+  if (!trades || trades.length < 2) {
+    return null
+  }
+
+  const sortedTrades = [...trades].sort(
+    (a, b) => new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+  )
+
+  const firstDate = new Date(sortedTrades[0].dateOpened).getTime()
+  const lastDate = new Date(sortedTrades[sortedTrades.length - 1].dateOpened).getTime()
+  const tradingDays = Math.max(1, Math.ceil((lastDate - firstDate) / (24 * 60 * 60 * 1000)))
+
+  const avgDaysBetweenTrades = tradingDays / (trades.length - 1)
+  const tradesPerMonth = (trades.length / tradingDays) * 30
+
+  return {
+    totalTrades: trades.length,
+    tradingDays,
+    avgDaysBetweenTrades,
+    tradesPerMonth,
+  }
+}
+
+/**
+ * Generates sensible WFA configuration defaults based on trade frequency.
+ * Ensures windows are large enough to capture sufficient trades for meaningful analysis.
+ */
+export function calculateAutoConfig(frequency: TradeFrequencyInfo): Partial<WalkForwardConfig> {
+  const { avgDaysBetweenTrades, tradesPerMonth, tradingDays } = frequency
+
+  // Target: ~10-15 trades for in-sample, ~3-5 for out-of-sample
+  const targetInSampleTrades = 10
+  const targetOutOfSampleTrades = 3
+
+  // Calculate days needed to capture target trades
+  let inSampleDays = Math.ceil(avgDaysBetweenTrades * targetInSampleTrades)
+  let outOfSampleDays = Math.ceil(avgDaysBetweenTrades * targetOutOfSampleTrades)
+
+  // Apply reasonable bounds
+  // Minimum: 14 days IS, 7 days OOS (for high-frequency trading)
+  // Maximum: 180 days IS, 60 days OOS (for very low-frequency trading)
+  inSampleDays = Math.max(14, Math.min(180, inSampleDays))
+  outOfSampleDays = Math.max(7, Math.min(60, outOfSampleDays))
+
+  // Step size: typically equal to OOS days for non-overlapping, or half for overlapping
+  const stepSizeDays = outOfSampleDays
+
+  // Ensure we can create at least 3-4 windows with the available data
+  const totalWindowDays = inSampleDays + outOfSampleDays
+  const maxWindows = Math.floor((tradingDays - inSampleDays) / stepSizeDays)
+
+  // If we can't create enough windows, reduce window sizes proportionally
+  if (maxWindows < 3 && tradingDays > 60) {
+    const scaleFactor = tradingDays / (totalWindowDays + 3 * stepSizeDays)
+    if (scaleFactor < 1) {
+      inSampleDays = Math.max(14, Math.floor(inSampleDays * scaleFactor))
+      outOfSampleDays = Math.max(7, Math.floor(outOfSampleDays * scaleFactor))
+    }
+  }
+
+  // Calculate minimum trade thresholds based on frequency
+  // For low-frequency strategies, we need to be more lenient
+  let minInSampleTrades: number
+  let minOutOfSampleTrades: number
+
+  if (tradesPerMonth >= 20) {
+    // High frequency: daily or more
+    minInSampleTrades = 15
+    minOutOfSampleTrades = 5
+  } else if (tradesPerMonth >= 8) {
+    // Medium frequency: 2-3 per week
+    minInSampleTrades = 10
+    minOutOfSampleTrades = 3
+  } else if (tradesPerMonth >= 4) {
+    // Low frequency: weekly
+    minInSampleTrades = 6
+    minOutOfSampleTrades = 2
+  } else {
+    // Very low frequency: bi-weekly or less
+    minInSampleTrades = 4
+    minOutOfSampleTrades = 1
+  }
+
+  return {
+    inSampleDays,
+    outOfSampleDays,
+    stepSizeDays,
+    minInSampleTrades,
+    minOutOfSampleTrades,
+  }
+}
 
 interface WalkForwardPreset {
   label: string
@@ -26,12 +130,15 @@ interface WalkForwardStore {
   results: WalkForwardAnalysis | null
   history: WalkForwardAnalysis[]
   presets: Record<WalkForwardPresetKey, WalkForwardPreset>
+  tradeFrequency: TradeFrequencyInfo | null
+  autoConfigApplied: boolean
   runAnalysis: (blockId: string) => Promise<void>
   cancelAnalysis: () => void
   loadHistory: (blockId: string) => Promise<void>
   updateConfig: (config: Partial<Omit<WalkForwardConfig, 'parameterRanges'>>) => void
   setParameterRange: (key: string, range: WalkForwardParameterRangeTuple) => void
   applyPreset: (preset: WalkForwardPresetKey) => void
+  autoConfigureFromBlock: (blockId: string) => Promise<void>
   clearResults: () => void
   exportResultsAsJson: () => string | null
   exportResultsAsCsv: () => string | null
@@ -171,6 +278,8 @@ export const useWalkForwardStore = create<WalkForwardStore>((set, get) => ({
   results: null,
   history: [],
   presets: WALK_FORWARD_PRESETS,
+  tradeFrequency: null,
+  autoConfigApplied: false,
 
   updateConfig: (partialConfig) => {
     set((state) => ({
@@ -219,6 +328,41 @@ export const useWalkForwardStore = create<WalkForwardStore>((set, get) => ({
         },
       }
     })
+  },
+
+  autoConfigureFromBlock: async (blockId: string) => {
+    if (!blockId) {
+      return
+    }
+
+    try {
+      const db = await import('@/lib/db')
+      const trades = await db.getTradesByBlock(blockId)
+
+      if (!trades || trades.length < 2) {
+        set({ tradeFrequency: null, autoConfigApplied: false })
+        return
+      }
+
+      const frequency = calculateTradeFrequency(trades)
+      if (!frequency) {
+        set({ tradeFrequency: null, autoConfigApplied: false })
+        return
+      }
+
+      const autoConfig = calculateAutoConfig(frequency)
+
+      set((state) => ({
+        tradeFrequency: frequency,
+        autoConfigApplied: true,
+        config: {
+          ...state.config,
+          ...autoConfig,
+        },
+      }))
+    } catch {
+      set({ tradeFrequency: null, autoConfigApplied: false })
+    }
   },
 
   runAnalysis: async (blockId: string) => {
