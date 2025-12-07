@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Layout, PlotData } from 'plotly.js'
 import { ChartWrapper } from './chart-wrapper'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
@@ -12,16 +12,57 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Label } from '@/components/ui/label'
+import { NumericTagInput } from '@/components/ui/numeric-tag-input'
 
 /**
- * Hardcoded VIX regime buckets
- * These define the volatility regime thresholds for the chart
+ * Default VIX regime thresholds
  */
-const VIX_BUCKETS = [
-  { name: '≤ 18', min: -Infinity, max: 18, color: '#3b82f6' },
-  { name: '18 - 25', min: 18, max: 25, color: '#eab308' },
-  { name: '≥ 25', min: 25, max: Infinity, color: '#f87171' }
-]
+const DEFAULT_VIX_THRESHOLDS = [18, 25]
+
+/**
+ * Colors for regime buckets (from low to high volatility)
+ */
+const REGIME_COLORS = ['#3b82f6', '#eab308', '#f87171', '#dc2626', '#7c2d12']
+
+/**
+ * Build bucket definitions from threshold values
+ */
+function buildBucketsFromThresholds(thresholds: number[]) {
+  if (thresholds.length === 0) {
+    return [{ name: 'All', min: -Infinity, max: Infinity, color: REGIME_COLORS[0] }]
+  }
+
+  const buckets: { name: string; min: number; max: number; color: string }[] = []
+
+  // First bucket: < first threshold
+  buckets.push({
+    name: `≤ ${thresholds[0]}`,
+    min: -Infinity,
+    max: thresholds[0],
+    color: REGIME_COLORS[0]
+  })
+
+  // Middle buckets
+  for (let i = 0; i < thresholds.length - 1; i++) {
+    buckets.push({
+      name: `${thresholds[i]} - ${thresholds[i + 1]}`,
+      min: thresholds[i],
+      max: thresholds[i + 1],
+      color: REGIME_COLORS[Math.min(i + 1, REGIME_COLORS.length - 1)]
+    })
+  }
+
+  // Last bucket: >= last threshold
+  buckets.push({
+    name: `≥ ${thresholds[thresholds.length - 1]}`,
+    min: thresholds[thresholds.length - 1],
+    max: Infinity,
+    color: REGIME_COLORS[Math.min(thresholds.length, REGIME_COLORS.length - 1)]
+  })
+
+  return buckets
+}
 
 interface VixRegimeChartProps {
   className?: string
@@ -30,8 +71,11 @@ interface VixRegimeChartProps {
 export function VixRegimeChart({ className }: VixRegimeChartProps) {
   const { data } = usePerformanceStore()
 
-  // Use hardcoded VIX buckets
-  const vixBuckets = VIX_BUCKETS
+  // Editable VIX thresholds
+  const [thresholds, setThresholds] = useState<number[]>(DEFAULT_VIX_THRESHOLDS)
+
+  // Build buckets from thresholds
+  const vixBuckets = useMemo(() => buildBucketsFromThresholds(thresholds), [thresholds])
 
   const { plotData, layout, openingSummary, closingSummary } = useMemo(() => {
     if (!data?.volatilityRegimes || data.volatilityRegimes.length === 0) {
@@ -278,7 +322,7 @@ export function VixRegimeChart({ className }: VixRegimeChartProps) {
     }
 
     return { plotData: traces, layout: chartLayout, openingSummary, closingSummary }
-  }, [data?.volatilityRegimes])
+  }, [data?.volatilityRegimes, vixBuckets])
 
   const tooltip = {
     flavor: 'How market volatility aligns with your wins and losses.',
@@ -286,55 +330,86 @@ export function VixRegimeChart({ className }: VixRegimeChartProps) {
       'Stacked view compares entry and exit volatility. Colors map return on margin, bubble size tracks P/L, and shaded zones highlight low, medium, and high-vol regimes. Stats table below shows performance by regime.'
   }
 
+  // Reset thresholds to defaults
+  const handleReset = () => {
+    setThresholds(DEFAULT_VIX_THRESHOLDS)
+  }
+
   const statsTable = (
-    <div>
-      <h4 className="text-sm font-semibold mb-3">Regime Statistics</h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <h5 className="text-xs font-medium text-muted-foreground mb-2">Opening VIX</h5>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Regime</TableHead>
-                <TableHead className="text-right">Avg RoM</TableHead>
-                <TableHead className="text-right">Win Rate</TableHead>
-                <TableHead className="text-right">Trades</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {openingSummary.map((stats, index) => (
-                <TableRow key={`open-${index}`}>
-                  <TableCell className="font-medium">{vixBuckets[index]?.name ?? `Bucket ${index + 1}`}</TableCell>
-                  <TableCell className="text-right">{stats.avgRom.toFixed(1)}%</TableCell>
-                  <TableCell className="text-right">{stats.winRate.toFixed(0)}%</TableCell>
-                  <TableCell className="text-right">{stats.count}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+    <div className="space-y-4">
+      {/* Threshold Editor */}
+      <div className="flex items-start gap-4 pb-2 border-b">
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <Label className="text-xs text-muted-foreground">VIX Thresholds</Label>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Reset
+            </button>
+          </div>
+          <NumericTagInput
+            value={thresholds}
+            onChange={setThresholds}
+            placeholder="Add threshold..."
+            min={0}
+            max={100}
+          />
         </div>
-        <div>
-          <h5 className="text-xs font-medium text-muted-foreground mb-2">Closing VIX</h5>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Regime</TableHead>
-                <TableHead className="text-right">Avg RoM</TableHead>
-                <TableHead className="text-right">Win Rate</TableHead>
-                <TableHead className="text-right">Trades</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {closingSummary.map((stats, index) => (
-                <TableRow key={`close-${index}`}>
-                  <TableCell className="font-medium">{vixBuckets[index]?.name ?? `Bucket ${index + 1}`}</TableCell>
-                  <TableCell className="text-right">{stats.avgRom.toFixed(1)}%</TableCell>
-                  <TableCell className="text-right">{stats.winRate.toFixed(0)}%</TableCell>
-                  <TableCell className="text-right">{stats.count}</TableCell>
+      </div>
+
+      {/* Regime Statistics Tables */}
+      <div>
+        <h4 className="text-sm font-semibold mb-3">Regime Statistics</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h5 className="text-xs font-medium text-muted-foreground mb-2">Opening VIX</h5>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Regime</TableHead>
+                  <TableHead className="text-right">Avg RoM</TableHead>
+                  <TableHead className="text-right">Win Rate</TableHead>
+                  <TableHead className="text-right">Trades</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {openingSummary.map((stats, index) => (
+                  <TableRow key={`open-${index}`}>
+                    <TableCell className="font-medium">{vixBuckets[index]?.name ?? `Bucket ${index + 1}`}</TableCell>
+                    <TableCell className="text-right">{stats.avgRom.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right">{stats.winRate.toFixed(0)}%</TableCell>
+                    <TableCell className="text-right">{stats.count}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div>
+            <h5 className="text-xs font-medium text-muted-foreground mb-2">Closing VIX</h5>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Regime</TableHead>
+                  <TableHead className="text-right">Avg RoM</TableHead>
+                  <TableHead className="text-right">Win Rate</TableHead>
+                  <TableHead className="text-right">Trades</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {closingSummary.map((stats, index) => (
+                  <TableRow key={`close-${index}`}>
+                    <TableCell className="font-medium">{vixBuckets[index]?.name ?? `Bucket ${index + 1}`}</TableCell>
+                    <TableCell className="text-right">{stats.avgRom.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right">{stats.winRate.toFixed(0)}%</TableCell>
+                    <TableCell className="text-right">{stats.count}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
     </div>
