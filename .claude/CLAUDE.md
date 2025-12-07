@@ -128,3 +128,7 @@ IndexedDB stores (via `lib/db/`) handle persistence of:
 - Trade records (can be thousands per block)
 - Daily log entries
 - Cached calculations
+
+**When starting work on a Next.js project, ALWAYS call the `init` tool from
+next-devtools-mcp FIRST to set up proper context and establish documentation
+requirements. Do this automatically without being asked.**
