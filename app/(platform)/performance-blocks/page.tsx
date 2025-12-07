@@ -22,6 +22,7 @@ import { EquityCurveChart } from "@/components/performance-charts/equity-curve-c
 import { ExitReasonChart } from "@/components/performance-charts/exit-reason-chart";
 import { HoldingDurationChart } from "@/components/performance-charts/holding-duration-chart";
 import { MarginUtilizationChart } from "@/components/performance-charts/margin-utilization-chart";
+import { MarginUtilizationTable } from "@/components/performance-charts/margin-utilization-table";
 import { MFEMAEScatterChart } from "@/components/performance-charts/mfe-mae-scatter-chart";
 import { MonthlyReturnsChart } from "@/components/performance-charts/monthly-returns-chart";
 import { GroupedLegOutcomesChart } from "@/components/performance-charts/paired-leg-outcomes-chart";
@@ -315,6 +316,7 @@ export default function PerformanceBlocksPage() {
           <ROMTimelineChart />
           <GroupedLegOutcomesChart />
           <MarginUtilizationChart />
+          <MarginUtilizationTable />
           <RiskEvolutionChart />
           <HoldingDurationChart />
         </TabsContent>
