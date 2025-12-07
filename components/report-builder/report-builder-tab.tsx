@@ -47,6 +47,7 @@ export function ReportBuilderTab() {
   const [sizeBy, setSizeBy] = useState<ChartAxisConfig | undefined>(undefined)
   const [tableBuckets, setTableBuckets] = useState<number[]>(() => getDefaultBucketEdges('openingVix'))
   const [tableColumns, setTableColumns] = useState<string[]>(DEFAULT_TABLE_COLUMNS)
+  const [reportName, setReportName] = useState<string | undefined>(undefined)
 
   // Load a saved report
   const handleLoadReport = (report: ReportConfig) => {
@@ -58,15 +59,17 @@ export function ReportBuilderTab() {
     setSizeBy(report.sizeBy)
     setTableBuckets(report.tableBuckets ?? getDefaultBucketEdges(report.xAxis.field))
     setTableColumns(report.tableColumns ?? DEFAULT_TABLE_COLUMNS)
+    setReportName(report.name)
   }
 
   // Pre-compute enriched trades with derived fields (MFE%, MAE%, ROM, etc.)
+  // Uses data.trades which respects top-level filters (date range, strategy, normalize to 1 lot)
   const enrichedTrades = useMemo(() => {
-    if (!data?.allTrades || data.allTrades.length === 0) {
+    if (!data?.trades || data.trades.length === 0) {
       return []
     }
-    return enrichTrades(data.allTrades)
-  }, [data?.allTrades])
+    return enrichTrades(data.trades)
+  }, [data?.trades])
 
   // Calculate filtered results using enriched trades
   const filterResult = useMemo((): FlexibleFilterResult | null => {
@@ -84,15 +87,20 @@ export function ReportBuilderTab() {
     return calculateRegimeComparison(filterResult.filteredTrades, enrichedTrades)
   }, [filterResult, enrichedTrades])
 
+  // Clear report name when config changes (no longer matches saved report)
+  const clearReportName = () => setReportName(undefined)
+
   // Axis change handlers
   const handleXAxisChange = (field: string) => {
     setXAxis({ field, label: field })
     // Reset table buckets to defaults for new field
     setTableBuckets(getDefaultBucketEdges(field))
+    clearReportName()
   }
 
   const handleYAxisChange = (field: string) => {
     setYAxis({ field, label: field })
+    clearReportName()
   }
 
   const handleColorByChange = (field: string) => {
@@ -101,6 +109,7 @@ export function ReportBuilderTab() {
     } else {
       setColorBy({ field, label: field })
     }
+    clearReportName()
   }
 
   const handleSizeByChange = (field: string) => {
@@ -109,6 +118,22 @@ export function ReportBuilderTab() {
     } else {
       setSizeBy({ field, label: field })
     }
+    clearReportName()
+  }
+
+  const handleChartTypeChange = (type: ChartType) => {
+    setChartType(type)
+    clearReportName()
+  }
+
+  const handleTableBucketsChange = (buckets: number[]) => {
+    setTableBuckets(buckets)
+    clearReportName()
+  }
+
+  const handleTableColumnsChange = (columns: string[]) => {
+    setTableColumns(columns)
+    clearReportName()
   }
 
   if (enrichedTrades.length === 0) {
@@ -159,13 +184,14 @@ export function ReportBuilderTab() {
           sizeBy={sizeBy}
           tableBuckets={tableBuckets}
           tableColumns={tableColumns}
-          onChartTypeChange={setChartType}
+          reportName={reportName}
+          onChartTypeChange={handleChartTypeChange}
           onXAxisChange={handleXAxisChange}
           onYAxisChange={handleYAxisChange}
           onColorByChange={handleColorByChange}
           onSizeByChange={handleSizeByChange}
-          onTableBucketsChange={setTableBuckets}
-          onTableColumnsChange={setTableColumns}
+          onTableBucketsChange={handleTableBucketsChange}
+          onTableColumnsChange={handleTableColumnsChange}
         />
       </div>
     </div>

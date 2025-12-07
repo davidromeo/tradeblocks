@@ -175,9 +175,8 @@ export function buildTableRows(
   }
 
   // Calculate statistics for each bucket based on selected columns
-  return buckets
-    .filter(bucket => bucket.trades.length > 0)
-    .map(bucket => {
+  // Show all buckets, even empty ones, so user can see the full distribution
+  return buckets.map(bucket => {
       const values: Record<string, number> = {}
 
       // Compute each selected column

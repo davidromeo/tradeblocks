@@ -22,6 +22,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'openingVix', label: 'Opening VIX' },
     yAxis: { field: 'pl', label: 'Profit/Loss' },
+    colorBy: { field: 'rom', label: 'ROM %' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -33,6 +34,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'openingShortLongRatio', label: 'Opening S/L Ratio' },
     yAxis: { field: 'pl', label: 'Profit/Loss' },
+    colorBy: { field: 'rom', label: 'ROM %' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -44,6 +46,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'gap', label: 'Gap %' },
     yAxis: { field: 'pl', label: 'Profit/Loss' },
+    colorBy: { field: 'rom', label: 'ROM %' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -71,6 +74,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'openingVix', label: 'Opening VIX' },
     yAxis: { field: 'pl', label: 'Profit/Loss' },
+    colorBy: { field: 'rom', label: 'ROM %' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -119,6 +123,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'excursionRatio', label: 'Excursion Ratio (MFE/MAE)' },
     yAxis: { field: 'pl', label: 'Profit/Loss' },
+    colorBy: { field: 'mfePercent', label: 'MFE %' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -132,6 +137,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'openingVix', label: 'Opening VIX' },
     yAxis: { field: 'rom', label: 'Return on Margin %' },
+    colorBy: { field: 'pl', label: 'P/L' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -156,6 +162,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'durationHours', label: 'Duration (hrs)' },
     yAxis: { field: 'pl', label: 'Profit/Loss' },
+    colorBy: { field: 'rom', label: 'ROM %' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -167,6 +174,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     chartType: 'scatter',
     xAxis: { field: 'durationHours', label: 'Duration (hrs)' },
     yAxis: { field: 'mfePercent', label: 'MFE %' },
+    colorBy: { field: 'pl', label: 'P/L' },
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -194,6 +202,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     xAxis: { field: 'openingVix', label: 'Opening VIX' },
     yAxis: { field: 'pl', label: '' },
     tableBuckets: [15, 20, 25, 30],
+    tableColumns: ['count', 'winRate', 'pl:avg', 'rom:avg'],
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
@@ -206,6 +215,7 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     xAxis: { field: 'openingShortLongRatio', label: 'Opening S/L Ratio' },
     yAxis: { field: 'pl', label: '' },
     tableBuckets: [0.5, 0.75, 1.0, 1.25, 1.5],
+    tableColumns: ['count', 'winRate', 'pl:avg', 'rom:avg'],
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'

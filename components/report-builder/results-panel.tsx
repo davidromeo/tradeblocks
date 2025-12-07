@@ -41,6 +41,7 @@ interface ResultsPanelProps {
   sizeBy?: ChartAxisConfig
   tableBuckets: number[]
   tableColumns: string[]
+  reportName?: string  // Name of loaded/saved report
   onChartTypeChange: (type: ChartType) => void
   onXAxisChange: (field: string) => void
   onYAxisChange: (field: string) => void
@@ -61,6 +62,7 @@ export function ResultsPanel({
   sizeBy,
   tableBuckets,
   tableColumns,
+  reportName,
   onChartTypeChange,
   onXAxisChange,
   onYAxisChange,
@@ -78,7 +80,9 @@ export function ResultsPanel({
       <Card className="min-w-0">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Chart</CardTitle>
+            <CardTitle className="text-base">
+              {reportName || 'Report'}
+            </CardTitle>
             <Select
               value={chartType}
               onValueChange={(v) => onChartTypeChange(v as ChartType)}
@@ -99,7 +103,7 @@ export function ResultsPanel({
           {/* Axis selectors - 2 columns */}
           <div className="grid grid-cols-2 gap-3 pt-3">
             <ChartAxisSelector
-              label="X Axis"
+              label={chartType === 'table' ? 'Group By' : 'X Axis'}
               value={xAxis.field}
               onChange={onXAxisChange}
             />
