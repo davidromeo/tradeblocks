@@ -15,6 +15,15 @@
  */
 
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { calculateThresholdAnalysis } from "@/lib/calculations/threshold-analysis";
@@ -24,9 +33,19 @@ import {
   ThresholdMetric,
   getFieldInfo,
 } from "@/lib/models/report-config";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, ArrowDown, Sparkles, ChevronDown, RotateCcw } from "lucide-react";
 import type { Layout, PlotData } from "plotly.js";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+
+type OptimizeStrategy = "maxTotalPl" | "bestAvgCustom" | "reset";
+
+interface TradeWithData {
+  trade: EnrichedTrade;
+  xValue: number;
+  pl: number;
+  plPct: number;
+  rom: number;
+}
 
 interface ThresholdChartProps {
   trades: EnrichedTrade[];
@@ -61,6 +80,10 @@ export function ThresholdChart({
 
   // What-if explorer state - actual X value range
   const [rangeValues, setRangeValues] = useState<[number, number]>([dataMinX, dataMaxX]);
+
+  // Minimum % of trades to keep for "Best Avg" optimization
+  const [minKeptPct, setMinKeptPct] = useState(50);
+  const [minKeptPctInput, setMinKeptPctInput] = useState("50");
 
   // Update range when data changes
   useMemo(() => {
@@ -148,6 +171,115 @@ export function ThresholdChart({
       excludedTotalPl,
     };
   }, [analysis, trades, xAxis.field, rangeValues, metric]);
+
+  // Build trade data for optimization (memoized separately since it's used by optimize)
+  const tradesWithData = useMemo((): TradeWithData[] => {
+    return trades
+      .map((trade) => {
+        const xValue = (trade as unknown as Record<string, unknown>)[xAxis.field];
+        return {
+          trade,
+          xValue: typeof xValue === "number" && isFinite(xValue) ? xValue : null,
+          pl: trade.pl ?? 0,
+          plPct: trade.premiumEfficiency ?? 0,
+          rom: trade.rom ?? 0,
+        };
+      })
+      .filter((t): t is TradeWithData => t.xValue !== null);
+  }, [trades, xAxis.field]);
+
+  // Optimization function
+  const findOptimalRange = useCallback(
+    (strategy: OptimizeStrategy): [number, number] | null => {
+      if (tradesWithData.length < 3) return null;
+
+      const sortedByX = [...tradesWithData].sort((a, b) => a.xValue - b.xValue);
+      const xValues = sortedByX.map((t) => t.xValue);
+      const uniqueX = [...new Set(xValues)].sort((a, b) => a - b);
+
+      if (uniqueX.length < 2) return null;
+
+      // Get metric value based on current selection
+      const getMetricValue = (t: TradeWithData) => {
+        switch (metric) {
+          case "rom": return t.rom;
+          case "plPct": return t.plPct;
+          default: return t.pl;
+        }
+      };
+
+      // Helper to evaluate a range
+      const evaluateRange = (minX: number, maxX: number) => {
+        const kept = tradesWithData.filter((t) => t.xValue >= minX && t.xValue <= maxX);
+        if (kept.length === 0) return { keptCount: 0, keptPct: 0, totalPl: 0, avgMetric: 0 };
+
+        const totalPl = kept.reduce((sum, t) => sum + t.pl, 0);
+        const avgMetric = kept.reduce((sum, t) => sum + getMetricValue(t), 0) / kept.length;
+        const keptPct = (kept.length / tradesWithData.length) * 100;
+
+        return { keptCount: kept.length, keptPct, totalPl, avgMetric };
+      };
+
+      let bestRange: [number, number] | null = null;
+      let bestScore = -Infinity;
+
+      // Try all combinations of start/end points from unique X values
+      // For performance, sample if there are too many unique values
+      const sampleSize = Math.min(uniqueX.length, 30);
+      const step = Math.max(1, Math.floor(uniqueX.length / sampleSize));
+      const sampledX = uniqueX.filter((_, i) => i % step === 0 || i === uniqueX.length - 1);
+
+      for (let i = 0; i < sampledX.length; i++) {
+        for (let j = i; j < sampledX.length; j++) {
+          const minX = sampledX[i];
+          const maxX = sampledX[j];
+          const result = evaluateRange(minX, maxX);
+
+          let score: number;
+
+          switch (strategy) {
+            case "maxTotalPl":
+              // Maximize total P/L, with slight penalty for excluding too many trades
+              score = result.totalPl * (0.5 + 0.5 * (result.keptPct / 100));
+              break;
+
+            case "bestAvgCustom":
+              // Best average metric while keeping at least minKeptPct% of trades
+              if (result.keptPct < minKeptPct) continue;
+              score = result.avgMetric;
+              break;
+
+            default:
+              continue;
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestRange = [minX, maxX];
+          }
+        }
+      }
+
+      return bestRange;
+    },
+    [tradesWithData, metric, minKeptPct]
+  );
+
+  // Handle optimize button click
+  const handleOptimize = useCallback(
+    (strategy: OptimizeStrategy) => {
+      if (strategy === "reset") {
+        setRangeValues([dataMinX, dataMaxX]);
+        return;
+      }
+
+      const optimalRange = findOptimalRange(strategy);
+      if (optimalRange) {
+        setRangeValues(optimalRange);
+      }
+    },
+    [findOptimalRange, dataMinX, dataMaxX]
+  );
 
   const { traces, layout } = useMemo(() => {
     if (!analysis || analysis.dataPoints.length === 0) {
@@ -385,15 +517,78 @@ export function ThresholdChart({
         <div className="mt-3 p-3 bg-muted/30 rounded-lg border text-sm">
           <div className="font-medium mb-3">What-If Filter Explorer</div>
 
-          {/* Range Slider */}
+          {/* Range Slider with Optimize */}
           <div className="space-y-2 mb-4">
             <div className="flex items-center justify-between">
               <Label className="text-xs text-muted-foreground">
                 Keep trades where {fieldLabel} is between:
               </Label>
-              <span className="text-xs font-medium">
-                {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium">
+                  {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
+                </span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-xs gap-1">
+                      <Sparkles className="h-3 w-3" />
+                      Optimize
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={() => handleOptimize("maxTotalPl")}>
+                      Maximize Total P/L
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-1.5">
+                      <div className="text-xs text-muted-foreground mb-1.5">Best Avg (keep min % of trades)</div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={minKeptPctInput}
+                          onChange={(e) => setMinKeptPctInput(e.target.value)}
+                          onBlur={() => {
+                            const val = parseInt(minKeptPctInput, 10);
+                            if (!isNaN(val) && val >= 10 && val <= 100) {
+                              setMinKeptPct(val);
+                              setMinKeptPctInput(String(val));
+                            } else {
+                              setMinKeptPctInput(String(minKeptPct));
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              const val = parseInt(minKeptPctInput, 10);
+                              if (!isNaN(val) && val >= 10 && val <= 100) {
+                                setMinKeptPct(val);
+                                setMinKeptPctInput(String(val));
+                                handleOptimize("bestAvgCustom");
+                              }
+                            }
+                          }}
+                          className="h-7 w-16 text-xs"
+                          min={10}
+                          max={100}
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => handleOptimize("bestAvgCustom")}
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleOptimize("reset")} className="text-muted-foreground">
+                      <RotateCcw className="h-3 w-3 mr-2" />
+                      Reset to Full Range
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
             <Slider
               value={rangeValues}
