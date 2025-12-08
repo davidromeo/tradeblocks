@@ -26,8 +26,8 @@ interface MonthlyPLCalendarProps {
   maxMarginForPeriod: number;
   drawdownThreshold?: number;
   weeklyMode: "trailing7" | "calendarWeek";
-  heatmapMetric: "pl" | "rom";
-  settings: import("@/lib/settings/pl-calendar-settings").PLCalendarSettings;
+  heatmapMetric: "pl" | "rom" | "running";
+  settings?: import("@/lib/settings/pl-calendar-settings").PLCalendarSettings;
 }
 
 export function MonthlyPLCalendar({
@@ -39,7 +39,7 @@ export function MonthlyPLCalendar({
   drawdownThreshold = 10,
   weeklyMode,
   heatmapMetric,
-  settings,
+  settings = defaultPLCalendarSettings,
 }: MonthlyPLCalendarProps) {
   const safeSettings: PLCalendarSettings = {
     ...defaultPLCalendarSettings,
@@ -119,13 +119,12 @@ export function MonthlyPLCalendar({
 
   const absMaxDailyMetric = Math.max(
     1,
-    ...dayEntries.map((e) =>
-      Math.abs(
-        heatmapMetric === "rom"
-          ? e.stats?.romPct ?? 0
-          : e.stats?.netPL ?? 0
-      )
-    )
+    ...dayEntries.map((e) => {
+      if (heatmapMetric === "rom") return Math.abs(e.stats?.romPct ?? 0);
+      if (heatmapMetric === "running")
+        return Math.abs(e.stats?.cumulativePL ?? e.stats?.netPL ?? 0);
+      return Math.abs(e.stats?.netPL ?? 0);
+    })
   );
 
   // chunk into weeks of 7
@@ -255,10 +254,22 @@ export function MonthlyPLCalendar({
                 <div className="grid grid-cols-5 gap-[1px]">
                   {filteredWeek.map((entry) => {
                     const { day, dateKey, stats, isCurrentMonth, utilization } = entry;
-                    const metricValue =
-                      heatmapMetric === "rom"
-                        ? stats?.romPct ?? 0
-                        : stats?.netPL ?? 0;
+                    let metricValue: number;
+                    let metricLabel: string;
+
+                    if (heatmapMetric === "rom") {
+                      metricValue = stats?.romPct ?? 0;
+                      metricLabel =
+                        stats?.romPct !== undefined ? `${stats.romPct.toFixed(1)}%` : "–";
+                    } else if (heatmapMetric === "running") {
+                      const running = stats?.cumulativePL ?? stats?.netPL ?? 0;
+                      metricValue = running;
+                      metricLabel = formatCompactUsd(running);
+                    } else {
+                      const pl = stats?.netPL ?? 0;
+                      metricValue = pl;
+                      metricLabel = formatCompactUsd(pl);
+                    }
                     return (
                       <div
                         key={dateKey || day.toString()}
@@ -304,9 +315,7 @@ export function MonthlyPLCalendar({
                           getDailyPLClass(metricValue, absMaxDailyMetric)
                         )}
                       >
-                        {heatmapMetric === "rom"
-                          ? `${(stats.romPct ?? 0).toFixed(1)}%`
-                          : formatCompactUsd(stats.netPL)}
+                        {metricLabel}
                       </div>
                               <span className="text-[11px] text-muted-foreground">
                                 {weeklyMode === "trailing7" ? "7d" : "Wk"}{" "}

@@ -8,6 +8,7 @@ interface MonthlySummary {
   trades: number;
   winRate?: number;
   romPct?: number;
+  runningNetPL?: number;
 }
 
 interface YearSummary {
@@ -27,7 +28,7 @@ export interface YearlyCalendarSnapshot {
 
 interface YearHeatmapProps {
   data: YearlyCalendarSnapshot;
-  metric?: "pl" | "rom";
+  metric?: "pl" | "rom" | "running";
   onMonthClick?: (year: number, month: number) => void;
 }
 
@@ -56,10 +57,10 @@ function formatCompactPL(value: number): string {
   return `${sign}$${abs.toFixed(2)}`;
 }
 
-function getCellColorClass(value: number, metric: "pl" | "rom") {
+function getCellColorClass(value: number, metric: "pl" | "rom" | "running") {
   // Normalize value into buckets for color intensity.
   const abs = Math.abs(value);
-  const thresholds = metric === "pl" ? [500, 2000, 5000] : [1, 5, 10];
+  const thresholds = metric === "rom" ? [1, 5, 10] : [500, 2000, 5000];
   const isPositive = value >= 0;
 
   if (abs === 0) return "bg-zinc-900 text-zinc-400";
@@ -130,7 +131,11 @@ export function YearHeatmap({ data, onMonthClick, metric = "pl" }: YearHeatmapPr
                   }
 
                   const metricValue =
-                    metric === "pl" ? monthSummary.netPL : monthSummary.romPct ?? 0;
+                    metric === "rom"
+                      ? monthSummary.romPct ?? 0
+                      : metric === "running"
+                      ? monthSummary.runningNetPL ?? monthSummary.netPL
+                      : monthSummary.netPL;
 
                   const colorClass = getCellColorClass(metricValue, metric);
 
@@ -146,15 +151,23 @@ export function YearHeatmap({ data, onMonthClick, metric = "pl" }: YearHeatmapPr
                       colorClass
                     )}
                     title={`${
-                      metric === "pl"
-                        ? `$${monthSummary.netPL.toLocaleString()}`
-                        : `${(monthSummary.romPct ?? 0).toFixed(1)}% ROM`
+                      metric === "rom"
+                        ? `${(monthSummary.romPct ?? 0).toFixed(1)}% ROM`
+                        : `$${(
+                            metric === "running"
+                              ? monthSummary.runningNetPL ?? monthSummary.netPL
+                              : monthSummary.netPL
+                          ).toLocaleString()}`
                     } · ${monthSummary.trades} ${monthSummary.trades === 1 ? "trade" : "trades"}`}
                   >
                     <div className="font-mono text-xs">
-                      {metric === "pl"
-                        ? formatCompactPL(monthSummary.netPL)
-                        : `${(monthSummary.romPct ?? 0).toFixed(1)}%`}
+                      {metric === "rom"
+                        ? `${(monthSummary.romPct ?? 0).toFixed(1)}%`
+                        : formatCompactPL(
+                            metric === "running"
+                              ? monthSummary.runningNetPL ?? monthSummary.netPL
+                              : monthSummary.netPL
+                          )}
                     </div>
                     <div className="mt-0.5 text-[0.65rem] text-zinc-300/80">
                       {monthSummary.trades}{" "}

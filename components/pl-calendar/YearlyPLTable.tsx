@@ -21,12 +21,14 @@ export interface MonthStats {
   totalPremium: number;
   totalMargin?: number;
   romPct?: number;
+  // Cumulative P/L from Jan through this month (per year)
+  runningNetPL?: number;
 }
 
 interface YearlyPLTableProps {
   year: number;
   monthlyStats: Map<number, MonthStats>;
-  metric?: "pl" | "rom";
+  metric?: "pl" | "rom" | "running";
 }
 
 export function YearlyPLTable({ year, monthlyStats, metric = "pl" }: YearlyPLTableProps) {
@@ -54,9 +56,11 @@ export function YearlyPLTable({ year, monthlyStats, metric = "pl" }: YearlyPLTab
                 : 0;
 
             const displayValue =
-              metric === "pl"
-                ? stats?.netPL ?? 0
-                : stats?.romPct ?? 0;
+              metric === "rom"
+                ? stats?.romPct ?? 0
+                : metric === "running"
+                ? stats?.runningNetPL ?? stats?.netPL ?? 0
+                : stats?.netPL ?? 0;
 
             return (
               <TableRow key={monthIndex}>
@@ -72,9 +76,9 @@ export function YearlyPLTable({ year, monthlyStats, metric = "pl" }: YearlyPLTab
                   )}
                 >
                   {stats
-                    ? metric === "pl"
-                      ? `${displayValue >= 0 ? "+" : ""}$${Math.abs(displayValue).toLocaleString()}`
-                      : `${displayValue.toFixed(1)}%`
+                    ? metric === "rom"
+                      ? `${displayValue.toFixed(1)}%`
+                      : `${displayValue >= 0 ? "+" : ""}$${Math.abs(displayValue).toLocaleString()}`
                     : "-"}
                 </TableCell>
                 <TableCell className="text-right">
@@ -97,26 +101,26 @@ export function YearlyPLTable({ year, monthlyStats, metric = "pl" }: YearlyPLTab
             <TableCell className="text-right">
               {(() => {
                 const totalPL =
-                  metric === "pl"
+                  metric === "rom"
                     ? Array.from(monthlyStats.values()).reduce(
-                        (acc, s) => acc + s.netPL,
-                        0
-                      )
-                    : Array.from(monthlyStats.values()).reduce(
                         (acc, s) =>
                           acc +
                           (s.romPct !== undefined ? s.romPct : 0),
                         0
-                      ) / Math.max(1, monthlyStats.size);
+                      ) / Math.max(1, monthlyStats.size)
+                    : Array.from(monthlyStats.values()).reduce(
+                        (acc, s) => acc + s.netPL,
+                        0
+                      );
                 return (
                   <span
                     className={
                       totalPL >= 0 ? "text-emerald-500" : "text-rose-500"
                     }
                   >
-                    {metric === "pl"
-                      ? `${totalPL >= 0 ? "+" : ""}$${totalPL.toLocaleString()}`
-                      : `${totalPL.toFixed(1)}%`}
+                    {metric === "rom"
+                      ? `${totalPL.toFixed(1)}%`
+                      : `${totalPL >= 0 ? "+" : ""}$${totalPL.toLocaleString()}`}
                   </span>
                 );
               })()}
