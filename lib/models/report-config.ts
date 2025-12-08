@@ -111,6 +111,8 @@ export interface ReportConfig {
   chartType: ChartType
   xAxis: ChartAxisConfig
   yAxis: ChartAxisConfig
+  yAxis2?: ChartAxisConfig    // Secondary Y-axis (right side) for scatter/line charts
+  yAxis3?: ChartAxisConfig    // Tertiary Y-axis (far right) for scatter/line charts
   colorBy?: ChartAxisConfig   // Optional color encoding
   sizeBy?: ChartAxisConfig    // Optional size encoding (scatter only)
   tableBuckets?: number[]     // Bucket thresholds for table type (e.g., [15, 20, 25, 30])

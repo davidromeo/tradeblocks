@@ -40,6 +40,8 @@ interface ResultsPanelProps {
   chartType: ChartType;
   xAxis: ChartAxisConfig;
   yAxis: ChartAxisConfig;
+  yAxis2?: ChartAxisConfig;
+  yAxis3?: ChartAxisConfig;
   colorBy?: ChartAxisConfig;
   sizeBy?: ChartAxisConfig;
   tableBuckets: number[];
@@ -49,6 +51,8 @@ interface ResultsPanelProps {
   onChartTypeChange: (type: ChartType) => void;
   onXAxisChange: (field: string) => void;
   onYAxisChange: (field: string) => void;
+  onYAxis2Change: (field: string) => void;
+  onYAxis3Change: (field: string) => void;
   onColorByChange: (field: string) => void;
   onSizeByChange: (field: string) => void;
   onTableBucketsChange: (buckets: number[]) => void;
@@ -63,6 +67,8 @@ export function ResultsPanel({
   chartType,
   xAxis,
   yAxis,
+  yAxis2,
+  yAxis3,
   colorBy,
   sizeBy,
   tableBuckets,
@@ -72,6 +78,8 @@ export function ResultsPanel({
   onChartTypeChange,
   onXAxisChange,
   onYAxisChange,
+  onYAxis2Change,
+  onYAxis3Change,
   onColorByChange,
   onSizeByChange,
   onTableBucketsChange,
@@ -175,9 +183,21 @@ export function ResultsPanel({
             )}
           </div>
 
-          {/* Scatter-specific controls (color and size on second row) */}
+          {/* Scatter-specific controls - Y Axis 2/3, Color, Size */}
           {chartType === "scatter" && (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              <ChartAxisSelector
+                label="Y Axis 2"
+                value={yAxis2?.field ?? "none"}
+                onChange={onYAxis2Change}
+                allowNone
+              />
+              <ChartAxisSelector
+                label="Y Axis 3"
+                value={yAxis3?.field ?? "none"}
+                onChange={onYAxis3Change}
+                allowNone
+              />
               <ChartAxisSelector
                 label="Color By"
                 value={colorBy?.field ?? "none"}
@@ -188,6 +208,24 @@ export function ResultsPanel({
                 label="Size By"
                 value={sizeBy?.field ?? "none"}
                 onChange={onSizeByChange}
+                allowNone
+              />
+            </div>
+          )}
+
+          {/* Line-specific controls - Y Axis 2/3 */}
+          {chartType === "line" && (
+            <div className="grid grid-cols-2 gap-2">
+              <ChartAxisSelector
+                label="Y Axis 2"
+                value={yAxis2?.field ?? "none"}
+                onChange={onYAxis2Change}
+                allowNone
+              />
+              <ChartAxisSelector
+                label="Y Axis 3"
+                value={yAxis3?.field ?? "none"}
+                onChange={onYAxis3Change}
                 allowNone
               />
             </div>
@@ -237,6 +275,8 @@ export function ResultsPanel({
               chartType={chartType}
               xAxis={xAxis}
               yAxis={yAxis}
+              yAxis2={yAxis2}
+              yAxis3={yAxis3}
               colorBy={colorBy}
               sizeBy={sizeBy}
             />

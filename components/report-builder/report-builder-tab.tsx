@@ -48,6 +48,8 @@ export function ReportBuilderTab() {
   const [chartType, setChartType] = useState<ChartType>('scatter')
   const [xAxis, setXAxis] = useState<ChartAxisConfig>({ field: 'openingVix', label: 'Opening VIX' })
   const [yAxis, setYAxis] = useState<ChartAxisConfig>({ field: 'pl', label: 'Profit/Loss' })
+  const [yAxis2, setYAxis2] = useState<ChartAxisConfig | undefined>(undefined)
+  const [yAxis3, setYAxis3] = useState<ChartAxisConfig | undefined>(undefined)
   const [colorBy, setColorBy] = useState<ChartAxisConfig | undefined>(undefined)
   const [sizeBy, setSizeBy] = useState<ChartAxisConfig | undefined>(undefined)
   const [tableBuckets, setTableBuckets] = useState<number[]>(() => getDefaultBucketEdges('openingVix'))
@@ -61,6 +63,8 @@ export function ReportBuilderTab() {
     setChartType(report.chartType)
     setXAxis(report.xAxis)
     setYAxis(report.yAxis)
+    setYAxis2(report.yAxis2)
+    setYAxis3(report.yAxis3)
     setColorBy(report.colorBy)
     setSizeBy(report.sizeBy)
     setTableBuckets(report.tableBuckets ?? getDefaultBucketEdges(report.xAxis.field))
@@ -107,6 +111,24 @@ export function ReportBuilderTab() {
 
   const handleYAxisChange = (field: string) => {
     setYAxis({ field, label: field })
+    clearReportName()
+  }
+
+  const handleYAxis2Change = (field: string) => {
+    if (field === 'none') {
+      setYAxis2(undefined)
+    } else {
+      setYAxis2({ field, label: field })
+    }
+    clearReportName()
+  }
+
+  const handleYAxis3Change = (field: string) => {
+    if (field === 'none') {
+      setYAxis3(undefined)
+    } else {
+      setYAxis3({ field, label: field })
+    }
     clearReportName()
   }
 
@@ -169,6 +191,8 @@ export function ReportBuilderTab() {
             chartType={chartType}
             xAxis={xAxis}
             yAxis={yAxis}
+            yAxis2={yAxis2}
+            yAxis3={yAxis3}
             colorBy={colorBy}
             sizeBy={sizeBy}
             tableBuckets={tableBuckets}
@@ -203,6 +227,8 @@ export function ReportBuilderTab() {
           chartType={chartType}
           xAxis={xAxis}
           yAxis={yAxis}
+          yAxis2={yAxis2}
+          yAxis3={yAxis3}
           colorBy={colorBy}
           sizeBy={sizeBy}
           tableBuckets={tableBuckets}
@@ -212,6 +238,8 @@ export function ReportBuilderTab() {
           onChartTypeChange={handleChartTypeChange}
           onXAxisChange={handleXAxisChange}
           onYAxisChange={handleYAxisChange}
+          onYAxis2Change={handleYAxis2Change}
+          onYAxis3Change={handleYAxis3Change}
           onColorByChange={handleColorByChange}
           onSizeByChange={handleSizeByChange}
           onTableBucketsChange={handleTableBucketsChange}

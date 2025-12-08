@@ -21,9 +21,20 @@ interface CustomChartProps {
   chartType: ChartType
   xAxis: ChartAxisConfig
   yAxis: ChartAxisConfig
+  yAxis2?: ChartAxisConfig  // Secondary Y-axis (right side)
+  yAxis3?: ChartAxisConfig  // Tertiary Y-axis (far right)
   colorBy?: ChartAxisConfig
   sizeBy?: ChartAxisConfig
   className?: string
+}
+
+/**
+ * Colors for multi-axis traces
+ */
+const AXIS_COLORS = {
+  y1: 'rgb(59, 130, 246)',   // Blue (primary)
+  y2: 'rgb(239, 68, 68)',    // Red (secondary)
+  y3: 'rgb(34, 197, 94)'     // Green (tertiary)
 }
 
 /**
@@ -436,11 +447,125 @@ function buildBoxTraces(
   }]
 }
 
+/**
+ * Build traces for additional Y-axes (y2, y3)
+ */
+function buildAdditionalAxisTraces(
+  trades: EnrichedTrade[],
+  xAxis: ChartAxisConfig,
+  yAxis2?: ChartAxisConfig,
+  yAxis3?: ChartAxisConfig,
+  chartType?: ChartType
+): Partial<PlotData>[] {
+  const traces: Partial<PlotData>[] = []
+  const isLine = chartType === 'line'
+  const xInfo = getFieldInfo(xAxis.field)
+
+  // Build Y2 trace
+  if (yAxis2 && yAxis2.field !== 'none') {
+    const y2Info = getFieldInfo(yAxis2.field)
+    const points: { x: number; y: number }[] = []
+
+    for (const trade of trades) {
+      const x = getTradeValue(trade, xAxis.field)
+      const y = getTradeValue(trade, yAxis2.field)
+      if (x !== null && y !== null) {
+        points.push({ x, y })
+      }
+    }
+
+    // Sort by X for line charts
+    if (isLine) {
+      points.sort((a, b) => a.x - b.x)
+    }
+
+    if (points.length > 0) {
+      traces.push({
+        x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
+        y: points.map(p => p.y),
+        type: 'scatter',
+        mode: isLine ? 'lines+markers' : 'markers',
+        marker: {
+          color: AXIS_COLORS.y2,
+          size: 6
+        },
+        line: isLine ? {
+          color: AXIS_COLORS.y2,
+          width: 2
+        } : undefined,
+        yaxis: 'y2',
+        name: y2Info?.label ?? yAxis2.field,
+        hovertemplate: points.map(p =>
+          `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
+          `${y2Info?.label ?? yAxis2.field}: ${p.y.toFixed(2)}<extra></extra>`
+        )
+      })
+    }
+  }
+
+  // Build Y3 trace
+  if (yAxis3 && yAxis3.field !== 'none') {
+    const y3Info = getFieldInfo(yAxis3.field)
+    const points: { x: number; y: number }[] = []
+
+    for (const trade of trades) {
+      const x = getTradeValue(trade, xAxis.field)
+      const y = getTradeValue(trade, yAxis3.field)
+      if (x !== null && y !== null) {
+        points.push({ x, y })
+      }
+    }
+
+    // Sort by X for line charts
+    if (isLine) {
+      points.sort((a, b) => a.x - b.x)
+    }
+
+    if (points.length > 0) {
+      traces.push({
+        x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
+        y: points.map(p => p.y),
+        type: 'scatter',
+        mode: isLine ? 'lines+markers' : 'markers',
+        marker: {
+          color: AXIS_COLORS.y3,
+          size: 6
+        },
+        line: isLine ? {
+          color: AXIS_COLORS.y3,
+          width: 2
+        } : undefined,
+        yaxis: 'y3',
+        name: y3Info?.label ?? yAxis3.field,
+        hovertemplate: points.map(p =>
+          `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
+          `${y3Info?.label ?? yAxis3.field}: ${p.y.toFixed(2)}<extra></extra>`
+        )
+      })
+    }
+  }
+
+  return traces
+}
+
+/**
+ * Calculate Y-axis range with padding
+ */
+function calculateAxisRange(values: number[]): [number, number] {
+  if (values.length === 0) return [0, 1]
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const padding = (max - min) * 0.1 || 1
+  return [min - padding, max + padding]
+}
+
 export function CustomChart({
   trades,
   chartType,
   xAxis,
   yAxis,
+  yAxis2,
+  yAxis3,
   colorBy,
   sizeBy,
   className
@@ -452,12 +577,74 @@ export function CustomChart({
 
     let chartTraces: Partial<PlotData>[] = []
 
+    // Check if we're using multi-axis (only for scatter/line)
+    const hasMultiAxis = (chartType === 'scatter' || chartType === 'line') &&
+      ((yAxis2 && yAxis2.field !== 'none') || (yAxis3 && yAxis3.field !== 'none'))
+
     switch (chartType) {
       case 'scatter':
-        chartTraces = buildScatterTraces(trades, xAxis, yAxis, colorBy, sizeBy)
+        // When using multi-axis, don't use colorBy (it conflicts with axis coloring)
+        if (hasMultiAxis) {
+          // Build simple scatter for primary axis with axis color
+          const xInfo = getFieldInfo(xAxis.field)
+          const yInfo = getFieldInfo(yAxis.field)
+          const points: { x: number; y: number }[] = []
+          for (const trade of trades) {
+            const x = getTradeValue(trade, xAxis.field)
+            const y = getTradeValue(trade, yAxis.field)
+            if (x !== null && y !== null) {
+              points.push({ x, y })
+            }
+          }
+          chartTraces = [{
+            x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
+            y: points.map(p => p.y),
+            type: 'scatter',
+            mode: 'markers',
+            marker: {
+              color: AXIS_COLORS.y1,
+              size: 8
+            },
+            name: yInfo?.label ?? yAxis.field,
+            hovertemplate: points.map(p =>
+              `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
+              `${yInfo?.label ?? yAxis.field}: ${p.y.toFixed(2)}<extra></extra>`
+            )
+          }]
+        } else {
+          chartTraces = buildScatterTraces(trades, xAxis, yAxis, colorBy, sizeBy)
+        }
         break
       case 'line':
-        chartTraces = buildLineTraces(trades, xAxis, yAxis)
+        // For line charts with multi-axis, use axis colors
+        if (hasMultiAxis) {
+          const xInfo = getFieldInfo(xAxis.field)
+          const yInfo = getFieldInfo(yAxis.field)
+          const points: { x: number; y: number }[] = []
+          for (const trade of trades) {
+            const x = getTradeValue(trade, xAxis.field)
+            const y = getTradeValue(trade, yAxis.field)
+            if (x !== null && y !== null) {
+              points.push({ x, y })
+            }
+          }
+          points.sort((a, b) => a.x - b.x)
+          chartTraces = [{
+            x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
+            y: points.map(p => p.y),
+            type: 'scatter',
+            mode: 'lines+markers',
+            line: { color: AXIS_COLORS.y1, width: 2 },
+            marker: { color: AXIS_COLORS.y1, size: 6 },
+            name: yInfo?.label ?? yAxis.field,
+            hovertemplate: points.map(p =>
+              `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
+              `${yInfo?.label ?? yAxis.field}: ${p.y.toFixed(2)}<extra></extra>`
+            )
+          }]
+        } else {
+          chartTraces = buildLineTraces(trades, xAxis, yAxis)
+        }
         break
       case 'histogram':
         chartTraces = buildHistogramTraces(trades, xAxis)
@@ -470,14 +657,31 @@ export function CustomChart({
         break
     }
 
+    // Add additional Y-axis traces for scatter/line
+    if (hasMultiAxis) {
+      const additionalTraces = buildAdditionalAxisTraces(trades, xAxis, yAxis2, yAxis3, chartType)
+      chartTraces = [...chartTraces, ...additionalTraces]
+    }
+
     const xInfo = getFieldInfo(xAxis.field)
     const yInfo = getFieldInfo(yAxis.field)
 
-    // Show legend for categorical color fields (e.g., isWinner)
+    // Show legend for categorical color fields OR when using multi-axis
     const useCategoricalColor = colorBy && colorBy.field !== 'none' && isBinaryField(colorBy.field)
+    const showLegend = useCategoricalColor || hasMultiAxis
 
     // Use date axis type for date fields
     const isXAxisDate = isDateField(xAxis.field)
+
+    // Calculate dynamic right margin based on number of axes
+    let rightMargin = 40
+    if (colorBy && colorBy.field !== 'none' && !hasMultiAxis) {
+      rightMargin = 100 // Space for color bar
+    } else if (hasMultiAxis) {
+      const hasY3 = yAxis3 && yAxis3.field !== 'none'
+      // Y2 uses the default right side, Y3 shifts outward by 60px
+      rightMargin = hasY3 ? 110 : 50
+    }
 
     const chartLayout: Partial<Layout> = {
       xaxis: {
@@ -486,29 +690,78 @@ export function CustomChart({
         type: isXAxisDate ? 'date' : undefined
       },
       yaxis: {
-        title: { text: chartType === 'histogram' ? 'Count' : (yInfo?.label ?? yAxis.field) },
+        title: {
+          text: chartType === 'histogram' ? 'Count' : (yInfo?.label ?? yAxis.field),
+          font: hasMultiAxis ? { color: AXIS_COLORS.y1 } : undefined
+        },
         zeroline: true,
         zerolinewidth: 1,
-        zerolinecolor: '#94a3b8'
+        zerolinecolor: '#94a3b8',
+        tickfont: hasMultiAxis ? { color: AXIS_COLORS.y1 } : undefined
       },
-      showlegend: useCategoricalColor,
-      legend: useCategoricalColor ? {
-        x: 1,
-        y: 1,
-        xanchor: 'right',
+      showlegend: showLegend,
+      legend: showLegend ? {
+        x: 0,
+        y: 1.1,
+        xanchor: 'left',
+        yanchor: 'bottom',
+        orientation: 'h',
         bgcolor: 'rgba(0,0,0,0)'
       } : undefined,
       hovermode: 'closest',
       margin: {
-        t: 20,
-        r: colorBy && colorBy.field !== 'none' ? 100 : 40,
+        t: showLegend ? 40 : 20,
+        r: rightMargin,
         b: 60,
         l: 70
       }
     }
 
+    // Add Y2 axis config
+    if (yAxis2 && yAxis2.field !== 'none') {
+      const y2Info = getFieldInfo(yAxis2.field)
+      const y2Values: number[] = []
+      for (const trade of trades) {
+        const v = getTradeValue(trade, yAxis2.field)
+        if (v !== null) y2Values.push(v)
+      }
+      ;(chartLayout as Record<string, unknown>).yaxis2 = {
+        title: { text: y2Info?.label ?? yAxis2.field, font: { color: AXIS_COLORS.y2 } },
+        overlaying: 'y',
+        side: 'right',
+        zeroline: true,
+        zerolinewidth: 1,
+        zerolinecolor: '#94a3b8',
+        range: calculateAxisRange(y2Values),
+        tickfont: { color: AXIS_COLORS.y2 }
+      }
+    }
+
+    // Add Y3 axis config
+    if (yAxis3 && yAxis3.field !== 'none') {
+      const y3Info = getFieldInfo(yAxis3.field)
+      const y3Values: number[] = []
+      for (const trade of trades) {
+        const v = getTradeValue(trade, yAxis3.field)
+        if (v !== null) y3Values.push(v)
+      }
+      ;(chartLayout as Record<string, unknown>).yaxis3 = {
+        title: { text: y3Info?.label ?? yAxis3.field, font: { color: AXIS_COLORS.y3 } },
+        overlaying: 'y',
+        side: 'right',
+        anchor: 'free',
+        position: 1,
+        zeroline: true,
+        zerolinewidth: 1,
+        zerolinecolor: '#94a3b8',
+        range: calculateAxisRange(y3Values),
+        tickfont: { color: AXIS_COLORS.y3 },
+        shift: 60
+      }
+    }
+
     return { traces: chartTraces, layout: chartLayout }
-  }, [trades, chartType, xAxis, yAxis, colorBy, sizeBy])
+  }, [trades, chartType, xAxis, yAxis, yAxis2, yAxis3, colorBy, sizeBy])
 
   if (trades.length === 0) {
     return (

@@ -216,6 +216,20 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     updatedAt: '2024-01-01T00:00:00.000Z'
   },
   {
+    id: 'builtin-multi-axis-time',
+    name: 'P/L + VIX + SLR Over Time',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'scatter',
+    xAxis: { field: 'dateOpenedTimestamp', label: 'Date Opened' },
+    yAxis: { field: 'pl', label: 'Profit/Loss' },
+    yAxis2: { field: 'openingVix', label: 'Opening VIX' },
+    yAxis3: { field: 'openingShortLongRatio', label: 'S/L Ratio' },
+    category: 'timing',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
     id: 'builtin-duration-vs-pl',
     name: 'Duration vs P/L',
     filter: { conditions: [], logic: 'and' },

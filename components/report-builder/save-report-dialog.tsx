@@ -25,7 +25,10 @@ import {
   FilterConfig,
   ChartType,
   ChartAxisConfig,
-  ThresholdMetric
+  ThresholdMetric,
+  getFieldInfo,
+  FILTER_OPERATOR_LABELS,
+  CHART_TYPE_LABELS
 } from '@/lib/models/report-config'
 
 interface SaveReportDialogProps {
@@ -33,6 +36,8 @@ interface SaveReportDialogProps {
   chartType: ChartType
   xAxis: ChartAxisConfig
   yAxis: ChartAxisConfig
+  yAxis2?: ChartAxisConfig
+  yAxis3?: ChartAxisConfig
   colorBy?: ChartAxisConfig
   sizeBy?: ChartAxisConfig
   tableBuckets?: number[]
@@ -45,6 +50,8 @@ export function SaveReportDialog({
   chartType,
   xAxis,
   yAxis,
+  yAxis2,
+  yAxis3,
   colorBy,
   sizeBy,
   tableBuckets,
@@ -64,6 +71,8 @@ export function SaveReportDialog({
       chartType,
       xAxis,
       yAxis,
+      yAxis2,
+      yAxis3,
       colorBy,
       sizeBy,
       tableBuckets,
@@ -109,14 +118,38 @@ export function SaveReportDialog({
             />
           </div>
           <div className="text-sm text-muted-foreground space-y-1">
-            <p><strong>Chart Type:</strong> {chartType}</p>
-            <p><strong>X Axis:</strong> {xAxis.label || xAxis.field}</p>
-            <p><strong>Y Axis:</strong> {yAxis.label || yAxis.field}</p>
+            <p><strong>Chart Type:</strong> {CHART_TYPE_LABELS[chartType]}</p>
+            <p><strong>X Axis:</strong> {getFieldInfo(xAxis.field)?.label || xAxis.field}</p>
+            <p><strong>Y Axis:</strong> {getFieldInfo(yAxis.field)?.label || yAxis.field}</p>
+            {yAxis2 && yAxis2.field !== 'none' && (
+              <p><strong>Y Axis 2:</strong> {getFieldInfo(yAxis2.field)?.label || yAxis2.field}</p>
+            )}
+            {yAxis3 && yAxis3.field !== 'none' && (
+              <p><strong>Y Axis 3:</strong> {getFieldInfo(yAxis3.field)?.label || yAxis3.field}</p>
+            )}
             {colorBy && colorBy.field !== 'none' && (
-              <p><strong>Color By:</strong> {colorBy.label || colorBy.field}</p>
+              <p><strong>Color By:</strong> {getFieldInfo(colorBy.field)?.label || colorBy.field}</p>
+            )}
+            {sizeBy && sizeBy.field !== 'none' && (
+              <p><strong>Size By:</strong> {getFieldInfo(sizeBy.field)?.label || sizeBy.field}</p>
             )}
             {filterConfig.conditions.filter(c => c.enabled).length > 0 && (
-              <p><strong>Filters:</strong> {filterConfig.conditions.filter(c => c.enabled).length} active</p>
+              <div>
+                <p className="mb-1"><strong>Filters:</strong></p>
+                <ul className="list-disc list-inside pl-2 space-y-0.5">
+                  {filterConfig.conditions.filter(c => c.enabled).map(c => {
+                    const fieldInfo = getFieldInfo(c.field)
+                    const fieldLabel = fieldInfo?.label || c.field
+                    const opLabel = FILTER_OPERATOR_LABELS[c.operator]
+                    const valueStr = c.operator === 'between'
+                      ? `${c.value} - ${c.value2}`
+                      : c.value
+                    return (
+                      <li key={c.id}>{fieldLabel} {opLabel} {valueStr}</li>
+                    )
+                  })}
+                </ul>
+              </div>
             )}
           </div>
         </div>
