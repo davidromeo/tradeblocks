@@ -16,15 +16,15 @@ import type { Layout, PlotData, Shape } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { EnrichedTrade } from "@/lib/models/enriched-trade";
 import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
-import { WhatIfExplorer2D, YAxisConfig } from "./what-if-explorer-2d";
+import { WhatIfExplorer2D, YAxisConfig, YAxisRange } from "./what-if-explorer-2d";
 
 /**
  * Colors for multi-axis traces
  */
 const AXIS_COLORS = {
   y1: "rgb(59, 130, 246)", // Blue (primary)
-  y2: "rgb(239, 68, 68)", // Red (secondary)
-  y3: "rgb(34, 197, 94)", // Green (tertiary)
+  y2: "rgb(249, 115, 22)", // Orange (secondary)
+  y3: "rgb(20, 184, 166)", // Teal (tertiary)
 };
 
 interface ScatterChartProps {
@@ -122,19 +122,18 @@ export function ScatterChart({
   }, [yAxis, yAxis2, yAxis3]);
 
   // Track the selected range from What-If Explorer for visual highlighting
-  // Only uses first Y axis for chart highlighting
+  // Now supports multiple Y axes for multi-axis bounding boxes
   const [selectedRange, setSelectedRange] = useState<{
     xMin: number;
     xMax: number;
-    yMin: number;
-    yMax: number;
+    yRanges: YAxisRange[];
   } | null>(null);
 
   const handleRangeChange = useCallback(
-    (xMin: number, xMax: number, yMin: number, yMax: number) => {
+    (xMin: number, xMax: number, yRanges: YAxisRange[]) => {
       // Only update if What-If is enabled
       if (showWhatIf) {
-        setSelectedRange({ xMin, xMax, yMin, yMax });
+        setSelectedRange({ xMin, xMax, yRanges });
       }
     },
     [showWhatIf]
@@ -154,13 +153,37 @@ export function ScatterChart({
 
     // Multi-axis mode - different rendering path
     if (hasMultiAxis) {
+      // Calculate size values for scaling if sizeBy is configured
+      const hasSizeBy = sizeBy && sizeBy.field !== "none";
+      let maxSizeValue = 1;
+      const tradeSizes: number[] = [];
+
+      if (hasSizeBy) {
+        for (const trade of trades) {
+          const s = getTradeValue(trade, sizeBy.field);
+          if (s !== null) {
+            tradeSizes.push(Math.abs(s));
+          } else {
+            tradeSizes.push(0);
+          }
+        }
+        maxSizeValue = tradeSizes.length > 0 ? Math.max(...tradeSizes) : 1;
+      }
+
+      const getMarkerSize = (index: number, baseSize: number): number => {
+        if (!hasSizeBy || tradeSizes.length === 0) return baseSize;
+        const sizeValue = tradeSizes[index] ?? 0;
+        return Math.min(30, Math.max(6, (sizeValue / (maxSizeValue || 1)) * 25 + 5));
+      };
+
       // Build primary Y axis trace
-      const y1Points: { x: number; y: number }[] = [];
-      for (const trade of trades) {
+      const y1Points: { x: number; y: number; tradeIndex: number }[] = [];
+      for (let i = 0; i < trades.length; i++) {
+        const trade = trades[i];
         const x = getTradeValue(trade, xAxis.field);
         const y = getTradeValue(trade, yAxis.field);
         if (x !== null && y !== null) {
-          y1Points.push({ x, y });
+          y1Points.push({ x, y, tradeIndex: i });
         }
       }
 
@@ -172,7 +195,7 @@ export function ScatterChart({
           mode: "markers",
           marker: {
             color: AXIS_COLORS.y1,
-            size: 8,
+            size: hasSizeBy ? y1Points.map((p) => getMarkerSize(p.tradeIndex, 8)) : 8,
           },
           name: yInfo?.label ?? yAxis.field,
           hovertemplate: y1Points.map(
@@ -186,12 +209,13 @@ export function ScatterChart({
       // Build Y2 trace
       if (yAxis2 && yAxis2.field !== "none") {
         const y2Info = getFieldInfo(yAxis2.field);
-        const y2Points: { x: number; y: number }[] = [];
-        for (const trade of trades) {
+        const y2Points: { x: number; y: number; tradeIndex: number }[] = [];
+        for (let i = 0; i < trades.length; i++) {
+          const trade = trades[i];
           const x = getTradeValue(trade, xAxis.field);
           const y = getTradeValue(trade, yAxis2.field);
           if (x !== null && y !== null) {
-            y2Points.push({ x, y });
+            y2Points.push({ x, y, tradeIndex: i });
           }
         }
 
@@ -203,7 +227,7 @@ export function ScatterChart({
             mode: "markers",
             marker: {
               color: AXIS_COLORS.y2,
-              size: 6,
+              size: hasSizeBy ? y2Points.map((p) => getMarkerSize(p.tradeIndex, 6)) : 6,
             },
             yaxis: "y2",
             name: y2Info?.label ?? yAxis2.field,
@@ -219,12 +243,13 @@ export function ScatterChart({
       // Build Y3 trace
       if (yAxis3 && yAxis3.field !== "none") {
         const y3Info = getFieldInfo(yAxis3.field);
-        const y3Points: { x: number; y: number }[] = [];
-        for (const trade of trades) {
+        const y3Points: { x: number; y: number; tradeIndex: number }[] = [];
+        for (let i = 0; i < trades.length; i++) {
+          const trade = trades[i];
           const x = getTradeValue(trade, xAxis.field);
           const y = getTradeValue(trade, yAxis3.field);
           if (x !== null && y !== null) {
-            y3Points.push({ x, y });
+            y3Points.push({ x, y, tradeIndex: i });
           }
         }
 
@@ -236,7 +261,7 @@ export function ScatterChart({
             mode: "markers",
             marker: {
               color: AXIS_COLORS.y3,
-              size: 6,
+              size: hasSizeBy ? y3Points.map((p) => getMarkerSize(p.tradeIndex, 6)) : 6,
             },
             yaxis: "y3",
             name: y3Info?.label ?? yAxis3.field,
@@ -267,16 +292,16 @@ export function ScatterChart({
         },
         showlegend: true,
         legend: {
-          x: 0,
-          y: 1.1,
-          xanchor: "left",
+          x: 0.5,
+          y: 1.0,
+          xanchor: "center",
           yanchor: "bottom",
           orientation: "h" as const,
           bgcolor: "rgba(0,0,0,0)",
         },
         hovermode: "closest",
         margin: {
-          t: 40,
+          t: 50,
           r: rightMargin,
           b: 60,
           l: 70,
@@ -322,6 +347,40 @@ export function ScatterChart({
           range: calculateAxisRange(y3Values),
           shift: 60,
         };
+      }
+
+      // Add rectangle shapes for selected range in multi-axis mode
+      if (effectiveSelectedRange) {
+        const { xMin, xMax, yRanges } = effectiveSelectedRange;
+
+        // Color palette matching AXIS_COLORS for each Y axis
+        const boundingBoxColors = [
+          { line: "rgb(59, 130, 246)", fill: "rgba(59, 130, 246, 0.05)" },   // Blue (y1)
+          { line: "rgb(249, 115, 22)", fill: "rgba(249, 115, 22, 0.05)" },   // Orange (y2)
+          { line: "rgb(20, 184, 166)", fill: "rgba(20, 184, 166, 0.05)" },   // Teal (y3)
+        ];
+
+        const shapes: Partial<Shape>[] = [];
+        yRanges.forEach((range, index) => {
+          const colors = boundingBoxColors[index] ?? boundingBoxColors[0];
+          shapes.push({
+            type: "rect",
+            xref: "x",
+            yref: range.yref as "y" | "y2" | "y3",
+            x0: xMin,
+            x1: xMax,
+            y0: range.min,
+            y1: range.max,
+            line: {
+              color: colors.line,
+              width: 2,
+              dash: "dash",
+            },
+            fillcolor: colors.fill,
+          });
+        });
+
+        chartLayout.shapes = shapes;
       }
 
       return { traces: chartTraces, layout: chartLayout };
@@ -387,13 +446,17 @@ export function ScatterChart({
 
     // If we have a selected range, create two traces: in-range and out-of-range
     // Also check if we're actually filtering (range doesn't cover all points)
-    const isActuallyFiltering = effectiveSelectedRange && (
+    // For single Y-axis mode, use first Y range
+    const firstYRange = effectiveSelectedRange?.yRanges[0];
+    const isActuallyFiltering = effectiveSelectedRange && firstYRange && (
       points.some((p) => p.x < effectiveSelectedRange.xMin || p.x > effectiveSelectedRange.xMax ||
-                        p.y < effectiveSelectedRange.yMin || p.y > effectiveSelectedRange.yMax)
+                        p.y < firstYRange.min || p.y > firstYRange.max)
     );
 
-    if (effectiveSelectedRange && isActuallyFiltering) {
-      const { xMin, xMax, yMin, yMax } = effectiveSelectedRange;
+    if (effectiveSelectedRange && firstYRange && isActuallyFiltering) {
+      const { xMin, xMax } = effectiveSelectedRange;
+      const yMin = firstYRange.min;
+      const yMax = firstYRange.max;
       const hasColorBy = colorBy && colorBy.field !== "none";
 
       const inRangePoints = points.filter(
@@ -588,24 +651,35 @@ export function ScatterChart({
       rightMargin = 100; // Space for color bar
     }
 
-    // Add rectangle shape for selected range
+    // Add rectangle shapes for selected range - one per Y axis (color-coded)
     const shapes: Partial<Shape>[] = [];
     if (effectiveSelectedRange) {
-      const { xMin, xMax, yMin, yMax } = effectiveSelectedRange;
-      shapes.push({
-        type: "rect",
-        xref: "x",
-        yref: "y",
-        x0: xMin,
-        x1: xMax,
-        y0: yMin,
-        y1: yMax,
-        line: {
-          color: "rgb(59, 130, 246)",
-          width: 2,
-          dash: "dash",
-        },
-        fillcolor: "rgba(59, 130, 246, 0.05)",
+      const { xMin, xMax, yRanges } = effectiveSelectedRange;
+
+      // Color palette matching AXIS_COLORS for each Y axis
+      const boundingBoxColors = [
+        { line: "rgb(59, 130, 246)", fill: "rgba(59, 130, 246, 0.05)" },   // Blue (y1)
+        { line: "rgb(249, 115, 22)", fill: "rgba(249, 115, 22, 0.05)" },   // Orange (y2)
+        { line: "rgb(139, 92, 246)", fill: "rgba(139, 92, 246, 0.05)" },   // Purple (y3)
+      ];
+
+      yRanges.forEach((range, index) => {
+        const colors = boundingBoxColors[index] ?? boundingBoxColors[0];
+        shapes.push({
+          type: "rect",
+          xref: "x",
+          yref: range.yref as "y" | "y2" | "y3",
+          x0: xMin,
+          x1: xMax,
+          y0: range.min,
+          y1: range.max,
+          line: {
+            color: colors.line,
+            width: 2,
+            dash: "dash",
+          },
+          fillcolor: colors.fill,
+        });
       });
     }
 
@@ -624,9 +698,9 @@ export function ScatterChart({
       showlegend: showLegend,
       legend: showLegend
         ? {
-            x: 0,
-            y: 1.1,
-            xanchor: "left",
+            x: 0.5,
+            y: 1.0,
+            xanchor: "center",
             yanchor: "bottom",
             orientation: "h" as const,
             bgcolor: "rgba(0,0,0,0)",
@@ -634,7 +708,7 @@ export function ScatterChart({
         : undefined,
       hovermode: "closest",
       margin: {
-        t: showLegend ? 40 : 20,
+        t: showLegend ? 50 : 20,
         r: rightMargin,
         b: 60,
         l: 70,

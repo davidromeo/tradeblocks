@@ -70,6 +70,13 @@ export interface YAxisConfig {
   label: string;
 }
 
+/** Y-axis range with reference for Plotly shapes */
+export interface YAxisRange {
+  min: number;
+  max: number;
+  yref: string; // "y", "y2", or "y3"
+}
+
 interface WhatIfExplorer2DProps {
   trades: EnrichedTrade[];
   xAxisField: string;
@@ -77,8 +84,8 @@ interface WhatIfExplorer2DProps {
   yAxes: YAxisConfig[];
   metric: ThresholdMetric; // 'pl', 'plPct', or 'rom'
   className?: string;
-  /** Callback when range changes - for chart highlighting (uses first Y axis) */
-  onRangeChange?: (xMin: number, xMax: number, yMin: number, yMax: number) => void;
+  /** Callback when range changes - for chart highlighting (all Y axes) */
+  onRangeChange?: (xMin: number, xMax: number, yRanges: YAxisRange[]) => void;
 }
 
 function calculateStats(
@@ -193,15 +200,16 @@ export function WhatIfExplorer2D({
     }
   }, [tradesWithData.length, axisRanges, yAxes]);
 
-  // Notify parent of range changes (using first Y axis for chart highlighting)
+  // Notify parent of range changes (all Y axes for chart highlighting)
   useEffect(() => {
     if (yRangeValues.length > 0) {
-      onRangeChange?.(
-        xRangeValues[0],
-        xRangeValues[1],
-        yRangeValues[0][0],
-        yRangeValues[0][1]
-      );
+      // Build Y ranges with their Plotly axis references
+      const yRanges: YAxisRange[] = yRangeValues.map((range, index) => ({
+        min: range[0],
+        max: range[1],
+        yref: index === 0 ? "y" : `y${index + 1}`, // "y", "y2", "y3"
+      }));
+      onRangeChange?.(xRangeValues[0], xRangeValues[1], yRanges);
     }
   }, [xRangeValues, yRangeValues, onRangeChange]);
 
@@ -670,11 +678,22 @@ export function WhatIfExplorer2D({
           const yRange = yRangeValues[index] ?? [0, 1];
           const dataRange = axisRanges.y[index] ?? { min: 0, max: 1 };
           const yLabel = yAxis.label;
+          // Color dots matching AXIS_COLORS in scatter-chart.tsx
+          const axisColors = [
+            "rgb(59, 130, 246)",  // Blue (y1)
+            "rgb(249, 115, 22)", // Orange (y2)
+            "rgb(20, 184, 166)", // Teal (y3)
+          ];
+          const dotColor = axisColors[index] ?? axisColors[0];
 
           return (
             <div key={yAxis.field} className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: dotColor }}
+                  />
                   Y{yAxes.length > 1 ? index + 1 : ""}: {yLabel}
                 </Label>
                 <div className="flex items-center gap-2">
