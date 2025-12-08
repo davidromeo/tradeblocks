@@ -89,13 +89,12 @@ export function ResultsPanel({
   // Check if we're showing a filtered subset
   const isFiltered = filteredTrades.length !== trades.length;
 
-  // Determine number of columns based on chart type
+  // Determine number of columns for non-scatter/line layouts
   const getGridCols = () => {
     if (chartType === "histogram") return "grid-cols-2"; // type + x
     if (chartType === "threshold") return "grid-cols-2 lg:grid-cols-3"; // type + x + metric
     if (chartType === "table") return "grid-cols-2"; // type + x (buckets on second row)
-    if (chartType === "scatter") return "grid-cols-2 lg:grid-cols-3"; // type + x + y (color/size on second row)
-    return "grid-cols-2 lg:grid-cols-3"; // type + x + y (bar, box, line)
+    return "grid-cols-2 lg:grid-cols-3"; // type + x + y (bar, box)
   };
 
   return (
@@ -109,125 +108,150 @@ export function ResultsPanel({
           )}
 
           {/* Compact controls row */}
-          <div className={`grid ${getGridCols()} gap-2 items-end`}>
-            {/* Chart type selector */}
-            <div className="min-w-0">
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Chart Type
-              </Label>
-              <Select
-                value={chartType}
-                onValueChange={(v) => onChartTypeChange(v as ChartType)}
-              >
-                <SelectTrigger className="h-8 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CHART_TYPE_LABELS).map(([type, label]) => (
-                    <SelectItem key={type} value={type}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* X Axis / Group By / Analyze Field */}
-            <ChartAxisSelector
-              label={
-                chartType === "table"
-                  ? "Group By"
-                  : chartType === "threshold"
-                  ? "Analyze Field"
-                  : "X Axis"
-              }
-              value={xAxis.field}
-              onChange={onXAxisChange}
-            />
-
-            {/* Y Axis (for bar, box, scatter, line) */}
-            {(chartType === "bar" || chartType === "box" || chartType === "scatter" || chartType === "line") && (
-              <ChartAxisSelector
-                label="Y Axis"
-                value={yAxis.field}
-                onChange={onYAxisChange}
-              />
-            )}
-
-            {/* Metric selector for threshold */}
-            {chartType === "threshold" && (
+          {chartType === "scatter" || chartType === "line" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 items-end">
+              {/* Chart type selector */}
               <div className="min-w-0">
                 <Label className="text-xs text-muted-foreground mb-1 block">
-                  Metric
+                  Chart Type
                 </Label>
                 <Select
-                  value={thresholdMetric}
-                  onValueChange={(v) =>
-                    onThresholdMetricChange(v as ThresholdMetric)
-                  }
+                  value={chartType}
+                  onValueChange={(v) => onChartTypeChange(v as ChartType)}
                 >
                   <SelectTrigger className="h-8 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(THRESHOLD_METRIC_LABELS).map(
-                      ([metric, label]) => (
-                        <SelectItem key={metric} value={metric}>
-                          {label}
-                        </SelectItem>
-                      )
-                    )}
+                    {Object.entries(CHART_TYPE_LABELS).map(([type, label]) => (
+                      <SelectItem key={type} value={type}>
+                        {label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-            )}
-          </div>
 
-          {/* Scatter-specific controls - Y Axis 2/3, Color, Size */}
-          {chartType === "scatter" && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {/* X Axis */}
               <ChartAxisSelector
-                label="Y Axis 2"
+                label="X Axis"
+                value={xAxis.field}
+                onChange={onXAxisChange}
+              />
+
+              {/* Y axes on the same row for better balance */}
+              <ChartAxisSelector
+                label="Y Axis (Primary)"
+                value={yAxis.field}
+                onChange={onYAxisChange}
+              />
+              <ChartAxisSelector
+                label="Y Axis 2 (Right)"
                 value={yAxis2?.field ?? "none"}
                 onChange={onYAxis2Change}
                 allowNone
               />
               <ChartAxisSelector
-                label="Y Axis 3"
+                label="Y Axis 3 (Far Right)"
                 value={yAxis3?.field ?? "none"}
                 onChange={onYAxis3Change}
                 allowNone
               />
+            </div>
+          ) : (
+            <div className={`grid ${getGridCols()} gap-2 items-end`}>
+              {/* Chart type selector */}
+              <div className="min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Chart Type
+                </Label>
+                <Select
+                  value={chartType}
+                  onValueChange={(v) => onChartTypeChange(v as ChartType)}
+                >
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CHART_TYPE_LABELS).map(([type, label]) => (
+                      <SelectItem key={type} value={type}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* X Axis / Group By / Analyze Field */}
+              <ChartAxisSelector
+                label={
+                  chartType === "table"
+                    ? "Group By"
+                    : chartType === "threshold"
+                    ? "Analyze Field"
+                    : "X Axis"
+                }
+                value={xAxis.field}
+                onChange={onXAxisChange}
+              />
+
+              {/* Y Axis (for bar, box) */}
+              {(chartType === "bar" || chartType === "box") && (
+                <ChartAxisSelector
+                  label="Y Axis"
+                  value={yAxis.field}
+                  onChange={onYAxisChange}
+                />
+              )}
+
+              {/* Metric selector for threshold */}
+              {chartType === "threshold" && (
+                <div className="min-w-0">
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Metric
+                  </Label>
+                  <Select
+                    value={thresholdMetric}
+                    onValueChange={(v) =>
+                      onThresholdMetricChange(v as ThresholdMetric)
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(THRESHOLD_METRIC_LABELS).map(
+                        ([metric, label]) => (
+                          <SelectItem key={metric} value={metric}>
+                            {label}
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Scatter-specific secondary controls - Color/Size inline */}
+          {chartType === "scatter" && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-5 gap-2 items-end">
               <ChartAxisSelector
                 label="Color By"
                 value={colorBy?.field ?? "none"}
                 onChange={onColorByChange}
                 allowNone
+                className="xl:col-span-2"
               />
               <ChartAxisSelector
                 label="Size By"
                 value={sizeBy?.field ?? "none"}
                 onChange={onSizeByChange}
                 allowNone
+                className="xl:col-span-2"
               />
-            </div>
-          )}
-
-          {/* Line-specific controls - Y Axis 2/3 */}
-          {chartType === "line" && (
-            <div className="grid grid-cols-2 gap-2">
-              <ChartAxisSelector
-                label="Y Axis 2"
-                value={yAxis2?.field ?? "none"}
-                onChange={onYAxis2Change}
-                allowNone
-              />
-              <ChartAxisSelector
-                label="Y Axis 3"
-                value={yAxis3?.field ?? "none"}
-                onChange={onYAxis3Change}
-                allowNone
-              />
+              <div className="hidden xl:block" />
             </div>
           )}
 

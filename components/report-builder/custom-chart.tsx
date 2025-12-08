@@ -691,13 +691,11 @@ export function CustomChart({
       },
       yaxis: {
         title: {
-          text: chartType === 'histogram' ? 'Count' : (yInfo?.label ?? yAxis.field),
-          font: hasMultiAxis ? { color: AXIS_COLORS.y1 } : undefined
+          text: chartType === 'histogram' ? 'Count' : (yInfo?.label ?? yAxis.field)
         },
         zeroline: true,
         zerolinewidth: 1,
-        zerolinecolor: '#94a3b8',
-        tickfont: hasMultiAxis ? { color: AXIS_COLORS.y1 } : undefined
+        zerolinecolor: '#94a3b8'
       },
       showlegend: showLegend,
       legend: showLegend ? {
@@ -726,14 +724,13 @@ export function CustomChart({
         if (v !== null) y2Values.push(v)
       }
       ;(chartLayout as Record<string, unknown>).yaxis2 = {
-        title: { text: y2Info?.label ?? yAxis2.field, font: { color: AXIS_COLORS.y2 } },
+        title: { text: y2Info?.label ?? yAxis2.field },
         overlaying: 'y',
         side: 'right',
         zeroline: true,
         zerolinewidth: 1,
         zerolinecolor: '#94a3b8',
-        range: calculateAxisRange(y2Values),
-        tickfont: { color: AXIS_COLORS.y2 }
+        range: calculateAxisRange(y2Values)
       }
     }
 
@@ -746,7 +743,7 @@ export function CustomChart({
         if (v !== null) y3Values.push(v)
       }
       ;(chartLayout as Record<string, unknown>).yaxis3 = {
-        title: { text: y3Info?.label ?? yAxis3.field, font: { color: AXIS_COLORS.y3 } },
+        title: { text: y3Info?.label ?? yAxis3.field },
         overlaying: 'y',
         side: 'right',
         anchor: 'free',
@@ -755,7 +752,6 @@ export function CustomChart({
         zerolinewidth: 1,
         zerolinecolor: '#94a3b8',
         range: calculateAxisRange(y3Values),
-        tickfont: { color: AXIS_COLORS.y3 },
         shift: 60
       }
     }
