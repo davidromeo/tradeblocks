@@ -24,7 +24,8 @@ import { useSettingsStore } from '@/lib/stores/settings-store'
 import {
   FilterConfig,
   ChartType,
-  ChartAxisConfig
+  ChartAxisConfig,
+  ThresholdMetric
 } from '@/lib/models/report-config'
 
 interface SaveReportDialogProps {
@@ -36,6 +37,7 @@ interface SaveReportDialogProps {
   sizeBy?: ChartAxisConfig
   tableBuckets?: number[]
   tableColumns?: string[]
+  thresholdMetric?: ThresholdMetric
 }
 
 export function SaveReportDialog({
@@ -46,7 +48,8 @@ export function SaveReportDialog({
   colorBy,
   sizeBy,
   tableBuckets,
-  tableColumns
+  tableColumns,
+  thresholdMetric
 }: SaveReportDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -64,7 +67,8 @@ export function SaveReportDialog({
       colorBy,
       sizeBy,
       tableBuckets,
-      tableColumns
+      tableColumns,
+      thresholdMetric
     })
 
     setName('')

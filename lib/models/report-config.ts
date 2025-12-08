@@ -55,7 +55,7 @@ export interface ChartAxisConfig {
 /**
  * Supported chart types
  */
-export type ChartType = 'scatter' | 'bar' | 'histogram' | 'box' | 'table'
+export type ChartType = 'scatter' | 'bar' | 'histogram' | 'box' | 'table' | 'threshold'
 
 /**
  * Human-readable labels for chart types
@@ -65,7 +65,22 @@ export const CHART_TYPE_LABELS: Record<ChartType, string> = {
   bar: 'Bar Chart',
   histogram: 'Histogram',
   box: 'Box Plot',
-  table: 'Table'
+  table: 'Table',
+  threshold: 'Threshold Analysis'
+}
+
+/**
+ * Metric options for threshold analysis secondary Y-axis
+ */
+export type ThresholdMetric = 'pl' | 'plPct' | 'rom'
+
+/**
+ * Human-readable labels for threshold metrics
+ */
+export const THRESHOLD_METRIC_LABELS: Record<ThresholdMetric, string> = {
+  pl: 'Avg P/L ($)',
+  plPct: 'Avg P/L (%)',
+  rom: 'Avg ROM (%)'
 }
 
 /**
@@ -82,6 +97,7 @@ export interface ReportConfig {
   sizeBy?: ChartAxisConfig    // Optional size encoding (scatter only)
   tableBuckets?: number[]     // Bucket thresholds for table type (e.g., [15, 20, 25, 30])
   tableColumns?: string[]     // Selected columns for table type (e.g., ['count', 'winRate', 'pl:avg'])
+  thresholdMetric?: ThresholdMetric  // Secondary Y-axis metric for threshold chart (default: 'pl')
   isBuiltIn?: boolean         // True for preset reports
   createdAt: string
   updatedAt: string

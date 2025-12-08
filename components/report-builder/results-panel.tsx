@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 /**
  * Results Panel
@@ -6,49 +6,54 @@
  * Right panel of the Report Builder showing the chart builder and comparison stats.
  */
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
+import { MultiSelect } from "@/components/multi-select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { MultiSelect } from '@/components/multi-select'
-import { EnrichedTrade } from '@/lib/models/enriched-trade'
+  SelectValue,
+} from "@/components/ui/select";
+import { RegimeComparisonStats } from "@/lib/calculations/regime-comparison";
+import { EnrichedTrade } from "@/lib/models/enriched-trade";
 import {
-  ChartType,
-  ChartAxisConfig,
   CHART_TYPE_LABELS,
-  TABLE_COLUMN_OPTIONS
-} from '@/lib/models/report-config'
-import { RegimeComparisonStats } from '@/lib/calculations/regime-comparison'
-import { ComparisonSummaryCard } from './comparison-summary-card'
-import { ChartAxisSelector } from './chart-axis-selector'
-import { CustomChart } from './custom-chart'
-import { CustomTable } from './custom-table'
-import { BucketEditor } from './bucket-editor'
+  ChartAxisConfig,
+  ChartType,
+  TABLE_COLUMN_OPTIONS,
+  THRESHOLD_METRIC_LABELS,
+  ThresholdMetric,
+} from "@/lib/models/report-config";
+import { BucketEditor } from "./bucket-editor";
+import { ChartAxisSelector } from "./chart-axis-selector";
+import { ComparisonSummaryCard } from "./comparison-summary-card";
+import { CustomChart } from "./custom-chart";
+import { CustomTable } from "./custom-table";
+import { ThresholdChart } from "./threshold-chart";
 
 interface ResultsPanelProps {
-  trades: EnrichedTrade[]
-  filteredTrades: EnrichedTrade[]
-  comparisonStats: RegimeComparisonStats | null
-  chartType: ChartType
-  xAxis: ChartAxisConfig
-  yAxis: ChartAxisConfig
-  colorBy?: ChartAxisConfig
-  sizeBy?: ChartAxisConfig
-  tableBuckets: number[]
-  tableColumns: string[]
-  reportName?: string  // Name of loaded/saved report
-  onChartTypeChange: (type: ChartType) => void
-  onXAxisChange: (field: string) => void
-  onYAxisChange: (field: string) => void
-  onColorByChange: (field: string) => void
-  onSizeByChange: (field: string) => void
-  onTableBucketsChange: (buckets: number[]) => void
-  onTableColumnsChange: (columns: string[]) => void
+  trades: EnrichedTrade[];
+  filteredTrades: EnrichedTrade[];
+  comparisonStats: RegimeComparisonStats | null;
+  chartType: ChartType;
+  xAxis: ChartAxisConfig;
+  yAxis: ChartAxisConfig;
+  colorBy?: ChartAxisConfig;
+  sizeBy?: ChartAxisConfig;
+  tableBuckets: number[];
+  tableColumns: string[];
+  thresholdMetric: ThresholdMetric;
+  reportName?: string; // Name of loaded/saved report
+  onChartTypeChange: (type: ChartType) => void;
+  onXAxisChange: (field: string) => void;
+  onYAxisChange: (field: string) => void;
+  onColorByChange: (field: string) => void;
+  onSizeByChange: (field: string) => void;
+  onTableBucketsChange: (buckets: number[]) => void;
+  onTableColumnsChange: (columns: string[]) => void;
+  onThresholdMetricChange: (metric: ThresholdMetric) => void;
 }
 
 export function ResultsPanel({
@@ -62,6 +67,7 @@ export function ResultsPanel({
   sizeBy,
   tableBuckets,
   tableColumns,
+  thresholdMetric,
   reportName,
   onChartTypeChange,
   onXAxisChange,
@@ -69,10 +75,11 @@ export function ResultsPanel({
   onColorByChange,
   onSizeByChange,
   onTableBucketsChange,
-  onTableColumnsChange
+  onTableColumnsChange,
+  onThresholdMetricChange,
 }: ResultsPanelProps) {
   // Check if we're showing a filtered subset
-  const isFiltered = filteredTrades.length !== trades.length
+  const isFiltered = filteredTrades.length !== trades.length;
 
   return (
     <div className="space-y-4 min-w-0">
@@ -81,13 +88,13 @@ export function ResultsPanel({
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">
-              {reportName || 'Report'}
+              {reportName || "Report"}
             </CardTitle>
             <Select
               value={chartType}
               onValueChange={(v) => onChartTypeChange(v as ChartType)}
             >
-              <SelectTrigger className="w-[150px] h-8">
+              <SelectTrigger className="w-[225px] h-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -103,17 +110,48 @@ export function ResultsPanel({
           {/* Axis selectors - 2 columns */}
           <div className="grid grid-cols-2 gap-3 pt-3">
             <ChartAxisSelector
-              label={chartType === 'table' ? 'Group By' : 'X Axis'}
+              label={
+                chartType === "table"
+                  ? "Group By"
+                  : chartType === "threshold"
+                  ? "Analyze Field"
+                  : "X Axis"
+              }
               value={xAxis.field}
               onChange={onXAxisChange}
             />
-            {chartType === 'table' ? (
+            {chartType === "table" ? (
               <BucketEditor
                 field={xAxis.field}
                 value={tableBuckets}
                 onChange={onTableBucketsChange}
               />
-            ) : chartType !== 'histogram' ? (
+            ) : chartType === "threshold" ? (
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Metric
+                </Label>
+                <Select
+                  value={thresholdMetric}
+                  onValueChange={(v) =>
+                    onThresholdMetricChange(v as ThresholdMetric)
+                  }
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(THRESHOLD_METRIC_LABELS).map(
+                      ([metric, label]) => (
+                        <SelectItem key={metric} value={metric}>
+                          {label}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : chartType !== "histogram" ? (
               <ChartAxisSelector
                 label="Y Axis"
                 value={yAxis.field}
@@ -122,17 +160,17 @@ export function ResultsPanel({
             ) : (
               <div /> // Empty placeholder for grid alignment
             )}
-            {chartType === 'scatter' && (
+            {chartType === "scatter" && (
               <>
                 <ChartAxisSelector
                   label="Color By"
-                  value={colorBy?.field ?? 'none'}
+                  value={colorBy?.field ?? "none"}
                   onChange={onColorByChange}
                   allowNone
                 />
                 <ChartAxisSelector
                   label="Size By"
-                  value={sizeBy?.field ?? 'none'}
+                  value={sizeBy?.field ?? "none"}
                   onChange={onSizeByChange}
                   allowNone
                 />
@@ -141,7 +179,7 @@ export function ResultsPanel({
           </div>
 
           {/* Column selector for table type */}
-          {chartType === 'table' && (
+          {chartType === "table" && (
             <div className="pt-3">
               <Label className="text-xs text-muted-foreground mb-1 block">
                 Table Columns
@@ -157,13 +195,19 @@ export function ResultsPanel({
             </div>
           )}
         </CardHeader>
-        <CardContent className={chartType === 'table' ? 'overflow-hidden' : ''}>
-          {chartType === 'table' ? (
+        <CardContent className={chartType === "table" ? "overflow-hidden" : ""}>
+          {chartType === "table" ? (
             <CustomTable
               trades={filteredTrades}
               xAxis={xAxis}
               bucketEdges={tableBuckets}
               selectedColumns={tableColumns}
+            />
+          ) : chartType === "threshold" ? (
+            <ThresholdChart
+              trades={filteredTrades}
+              xAxis={xAxis}
+              metric={thresholdMetric}
             />
           ) : (
             <CustomChart
@@ -193,7 +237,7 @@ export function ResultsPanel({
         <ComparisonSummaryCard stats={comparisonStats} />
       )}
     </div>
-  )
+  );
 }
 
-export default ResultsPanel
+export default ResultsPanel;

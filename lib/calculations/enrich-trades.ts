@@ -70,7 +70,7 @@ function enrichSingleTrade(
 
   // Return metrics
   const rom = trade.marginReq > 0 ? (trade.pl / trade.marginReq) * 100 : undefined
-  const premiumEfficiency = trade.premium > 0 ? (trade.pl / trade.premium) * 100 : undefined
+  const premiumEfficiency = trade.premium !== 0 ? (trade.pl / Math.abs(trade.premium)) * 100 : undefined
 
   // Risk multiple: P/L divided by MAE (how many R's won/lost)
   const rMultiple = mfeMaePoint?.mae && mfeMaePoint.mae > 0

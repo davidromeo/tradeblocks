@@ -8,13 +8,17 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { Filter, ChevronRight } from 'lucide-react'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
 import { useSettingsStore } from '@/lib/stores/settings-store'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   FilterConfig,
   ChartType,
   ChartAxisConfig,
   ReportConfig,
+  ThresholdMetric,
   createEmptyFilterConfig,
   DEFAULT_TABLE_COLUMNS
 } from '@/lib/models/report-config'
@@ -38,6 +42,7 @@ export function ReportBuilderTab() {
 
   // Filter state
   const [filterConfig, setFilterConfig] = useState<FilterConfig>(createEmptyFilterConfig())
+  const [showFilters, setShowFilters] = useState(false)
 
   // Chart configuration state
   const [chartType, setChartType] = useState<ChartType>('scatter')
@@ -47,6 +52,7 @@ export function ReportBuilderTab() {
   const [sizeBy, setSizeBy] = useState<ChartAxisConfig | undefined>(undefined)
   const [tableBuckets, setTableBuckets] = useState<number[]>(() => getDefaultBucketEdges('openingVix'))
   const [tableColumns, setTableColumns] = useState<string[]>(DEFAULT_TABLE_COLUMNS)
+  const [thresholdMetric, setThresholdMetric] = useState<ThresholdMetric>('plPct')
   const [reportName, setReportName] = useState<string | undefined>(undefined)
 
   // Load a saved report
@@ -59,6 +65,7 @@ export function ReportBuilderTab() {
     setSizeBy(report.sizeBy)
     setTableBuckets(report.tableBuckets ?? getDefaultBucketEdges(report.xAxis.field))
     setTableColumns(report.tableColumns ?? DEFAULT_TABLE_COLUMNS)
+    setThresholdMetric(report.thresholdMetric ?? 'plPct')
     setReportName(report.name)
   }
 
@@ -136,6 +143,11 @@ export function ReportBuilderTab() {
     clearReportName()
   }
 
+  const handleThresholdMetricChange = (metric: ThresholdMetric) => {
+    setThresholdMetric(metric)
+    clearReportName()
+  }
+
   if (enrichedTrades.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -144,9 +156,11 @@ export function ReportBuilderTab() {
     )
   }
 
+  const activeFilterCount = filterConfig.conditions.filter(c => c.enabled).length
+
   return (
     <div className="space-y-4">
-      {/* Header with Save/Load */}
+      {/* Header with Save/Load and Filter Toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <SavedReportsDropdown onSelect={handleLoadReport} />
@@ -159,20 +173,29 @@ export function ReportBuilderTab() {
             sizeBy={sizeBy}
             tableBuckets={tableBuckets}
             tableColumns={tableColumns}
+            thresholdMetric={thresholdMetric}
           />
         </div>
+        <Button
+          variant={showFilters ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => setShowFilters(!showFilters)}
+          className="gap-2"
+        >
+          <Filter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+              {activeFilterCount}
+            </Badge>
+          )}
+          <ChevronRight className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
+        </Button>
       </div>
 
-      {/* Main Content - Split Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-6">
-        {/* Left Panel - Filters */}
-        <FilterPanel
-          filterConfig={filterConfig}
-          onFilterChange={setFilterConfig}
-          filterResult={filterResult}
-        />
-
-        {/* Right Panel - Chart Builder */}
+      {/* Main Content - Chart with optional Filter Panel */}
+      <div className={`grid grid-cols-1 gap-6 ${showFilters ? 'lg:grid-cols-[1fr_300px]' : ''}`}>
+        {/* Left Panel - Chart Builder (takes full width when filters hidden) */}
         <ResultsPanel
           trades={enrichedTrades}
           filteredTrades={filterResult?.filteredTrades ?? enrichedTrades}
@@ -184,6 +207,7 @@ export function ReportBuilderTab() {
           sizeBy={sizeBy}
           tableBuckets={tableBuckets}
           tableColumns={tableColumns}
+          thresholdMetric={thresholdMetric}
           reportName={reportName}
           onChartTypeChange={handleChartTypeChange}
           onXAxisChange={handleXAxisChange}
@@ -192,7 +216,17 @@ export function ReportBuilderTab() {
           onSizeByChange={handleSizeByChange}
           onTableBucketsChange={handleTableBucketsChange}
           onTableColumnsChange={handleTableColumnsChange}
+          onThresholdMetricChange={handleThresholdMetricChange}
         />
+
+        {/* Right Panel - Filters (only shown when toggled) */}
+        {showFilters && (
+          <FilterPanel
+            filterConfig={filterConfig}
+            onFilterChange={setFilterConfig}
+            filterResult={filterResult}
+          />
+        )}
       </div>
     </div>
   )

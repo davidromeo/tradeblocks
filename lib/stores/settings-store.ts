@@ -219,6 +219,32 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     isBuiltIn: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+
+  // Threshold Analysis
+  {
+    id: 'builtin-slr-threshold',
+    name: 'S/L Ratio Threshold Analysis',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'threshold',
+    xAxis: { field: 'openingShortLongRatio', label: 'Opening S/L Ratio' },
+    yAxis: { field: 'pl', label: '' },
+    thresholdMetric: 'plPct',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'builtin-vix-threshold',
+    name: 'VIX Threshold Analysis',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'threshold',
+    xAxis: { field: 'openingVix', label: 'Opening VIX' },
+    yAxis: { field: 'pl', label: '' },
+    thresholdMetric: 'plPct',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
   }
 ]
 
