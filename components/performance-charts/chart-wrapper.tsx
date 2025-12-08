@@ -272,53 +272,60 @@ export function ChartWrapper({
 
   const headerActions = actions ?? children
 
+  // Only render CardHeader if there's content to show
+  const hasHeader = title || description || tooltip || headerAddon || headerActions
+
   return (
     <Card className={cn("h-full", className)}>
-      <CardHeader className="pb-0">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-lg font-semibold">{title}</CardTitle>
-              {tooltip && (
-                <HoverCard>
-                  <HoverCardTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-muted-foreground/60 cursor-help" />
-                  </HoverCardTrigger>
-                  <HoverCardContent className="w-80 p-0 overflow-hidden">
-                    <div className="space-y-3">
-                      {/* Header with title */}
-                      <div className="bg-primary/5 border-b px-4 py-3">
-                        <h4 className="text-sm font-semibold text-primary">{title}</h4>
-                      </div>
+      {hasHeader && (
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              {title && (
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg font-semibold">{title}</CardTitle>
+                  {tooltip && (
+                    <HoverCard>
+                      <HoverCardTrigger asChild>
+                        <HelpCircle className="w-4 h-4 text-muted-foreground/60 cursor-help" />
+                      </HoverCardTrigger>
+                      <HoverCardContent className="w-80 p-0 overflow-hidden">
+                        <div className="space-y-3">
+                          {/* Header with title */}
+                          <div className="bg-primary/5 border-b px-4 py-3">
+                            <h4 className="text-sm font-semibold text-primary">{title}</h4>
+                          </div>
 
-                      {/* Content */}
-                      <div className="px-4 pb-4 space-y-3">
-                        {/* Flavor text */}
-                        <p className="text-sm font-medium text-foreground leading-relaxed">
-                          {tooltip.flavor}
-                        </p>
+                          {/* Content */}
+                          <div className="px-4 pb-4 space-y-3">
+                            {/* Flavor text */}
+                            <p className="text-sm font-medium text-foreground leading-relaxed">
+                              {tooltip.flavor}
+                            </p>
 
-                        {/* Detailed explanation */}
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          {tooltip.detailed}
-                        </p>
-                      </div>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
+                            {/* Detailed explanation */}
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {tooltip.detailed}
+                            </p>
+                          </div>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  )}
+                </div>
               )}
+              {description && (
+                <CardDescription className="text-sm text-muted-foreground">
+                  {description}
+                </CardDescription>
+              )}
+              {headerAddon}
             </div>
-            {description && (
-              <CardDescription className="text-sm text-muted-foreground">
-                {description}
-              </CardDescription>
-            )}
-            {headerAddon}
+            {headerActions}
           </div>
-          {headerActions}
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
+        </CardHeader>
+      )}
+      <CardContent className={hasHeader ? "pt-0" : "pt-4"}>
         <div ref={plotRef} className="relative" style={containerStyle}>
           {contentOverlay && (
             <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">

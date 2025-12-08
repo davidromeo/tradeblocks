@@ -9,6 +9,7 @@ import {
   CalendarIcon,
   Gauge,
   Loader2,
+  Proportions,
   TrendingUp,
   Zap,
 } from "lucide-react";
@@ -23,7 +24,7 @@ import { ExitReasonChart } from "@/components/performance-charts/exit-reason-cha
 import { HoldingDurationChart } from "@/components/performance-charts/holding-duration-chart";
 import { MarginUtilizationChart } from "@/components/performance-charts/margin-utilization-chart";
 import { MarginUtilizationTable } from "@/components/performance-charts/margin-utilization-table";
-import { MFEMAEScatterChart } from "@/components/performance-charts/mfe-mae-scatter-chart";
+// MFEMAEScatterChart now available via ReportBuilderTab presets
 import { MonthlyReturnsChart } from "@/components/performance-charts/monthly-returns-chart";
 import { GroupedLegOutcomesChart } from "@/components/performance-charts/paired-leg-outcomes-chart";
 import { PremiumEfficiencyChart } from "@/components/performance-charts/premium-efficiency-chart";
@@ -34,11 +35,13 @@ import { ROMTimelineChart } from "@/components/performance-charts/rom-timeline-c
 import { TradeSequenceChart } from "@/components/performance-charts/trade-sequence-chart";
 import { VixRegimeChart } from "@/components/performance-charts/vix-regime-chart";
 import { WinLossStreaksChart } from "@/components/performance-charts/win-loss-streaks-chart";
+import { ReportBuilderTab } from "@/components/report-builder";
 
 // UI Components
 import { MultiSelect } from "@/components/multi-select";
 import { NoActiveBlock } from "@/components/no-active-block";
 import { PerformanceExportDialog } from "@/components/performance-export-dialog";
+import { SizingModeToggle } from "@/components/sizing-mode-toggle";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Label } from "@/components/ui/label";
@@ -49,7 +52,6 @@ import {
 } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { SizingModeToggle } from "@/components/sizing-mode-toggle";
 
 const PERFORMANCE_STORAGE_KEY_PREFIX = "performance:normalizeTo1Lot:";
 
@@ -287,9 +289,9 @@ export default function PerformanceBlocksPage() {
               <Zap /> Trade Efficiency
             </code>
           </TabsTrigger>
-          <TabsTrigger value="excursion" className="px-2.5 sm:px-3">
+          <TabsTrigger value="report-builder" className="px-2.5 sm:px-3">
             <code className="flex items-center gap-1 text-[13px] [&>svg]:h-4 [&>svg]:w-4">
-              <AlertTriangle /> Excursion Analysis (Beta)
+              <Proportions /> Report Builder (Beta)
             </code>
           </TabsTrigger>
         </TabsList>
@@ -330,9 +332,9 @@ export default function PerformanceBlocksPage() {
           {/* Additional efficiency metrics can go here */}
         </TabsContent>
 
-        {/* Tab 5: Excursion Analysis */}
-        <TabsContent value="excursion" className="space-y-6">
-          <MFEMAEScatterChart />
+        {/* Tab 5: Report Builder */}
+        <TabsContent value="report-builder" className="space-y-6">
+          <ReportBuilderTab />
         </TabsContent>
       </Tabs>
     </div>
