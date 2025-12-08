@@ -7,36 +7,40 @@
  */
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue
-} from '@/components/ui/select'
+} from '@/components/ui/select' // Still used for operator selector
 import { Switch } from '@/components/ui/switch'
 import {
   FilterCondition,
   FilterOperator,
   FILTER_OPERATOR_LABELS,
-  getFieldsByCategory
+  getFieldsByCategory,
+  getFieldInfo,
+  FIELD_CATEGORY_LABELS,
+  FieldCategory
 } from '@/lib/models/report-config'
 
 interface FilterConditionRowProps {
   condition: FilterCondition
   onChange: (condition: FilterCondition) => void
   onRemove: () => void
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  market: 'Market Conditions',
-  performance: 'Performance',
-  timing: 'Timing'
 }
 
 export function FilterConditionRow({
@@ -46,8 +50,13 @@ export function FilterConditionRow({
 }: FilterConditionRowProps) {
   const [valueInput, setValueInput] = useState(condition.value.toString())
   const [value2Input, setValue2Input] = useState(condition.value2?.toString() ?? '')
+  const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false)
 
   const fieldsByCategory = getFieldsByCategory()
+
+  // Get the display label for the current field
+  const currentField = getFieldInfo(condition.field)
+  const fieldDisplayValue = currentField?.label ?? condition.field
 
   const handleFieldChange = (field: string) => {
     onChange({ ...condition, field })
@@ -97,23 +106,43 @@ export function FilterConditionRow({
           className="data-[state=checked]:bg-primary shrink-0"
         />
 
-        <Select value={condition.field} onValueChange={handleFieldChange}>
-          <SelectTrigger className="flex-1 h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(fieldsByCategory).map(([category, fields]) => (
-              <SelectGroup key={category}>
-                <SelectLabel>{CATEGORY_LABELS[category] ?? category}</SelectLabel>
-                {fields.map(field => (
-                  <SelectItem key={field.field} value={field.field}>
-                    {field.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
+        <DropdownMenu open={fieldDropdownOpen} onOpenChange={setFieldDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 h-8 justify-between font-normal text-sm"
+            >
+              <span className="truncate">{fieldDisplayValue}</span>
+              <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {Array.from(fieldsByCategory.entries()).map(([category, fields]) => {
+              if (fields.length === 0) return null
+              return (
+                <DropdownMenuSub key={category}>
+                  <DropdownMenuSubTrigger>
+                    {FIELD_CATEGORY_LABELS[category]}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-52">
+                    {fields.map(field => (
+                      <DropdownMenuItem
+                        key={field.field}
+                        onClick={() => {
+                          handleFieldChange(field.field)
+                          setFieldDropdownOpen(false)
+                        }}
+                      >
+                        {field.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button
           variant="ghost"

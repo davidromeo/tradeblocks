@@ -39,7 +39,8 @@ function computeDurationHours(trade: Trade): number | undefined {
 }
 
 /**
- * Extracts hour of day from trade opening time
+ * Extracts hour of day from trade opening time string (HH:MM:SS format)
+ * The time in the CSV is already in Eastern Time
  */
 function extractHourOfDay(timeOpened: string): number | undefined {
   try {
@@ -77,6 +78,11 @@ function enrichSingleTrade(
     ? trade.pl / mfeMaePoint.mae
     : undefined
 
+  // Parse date (may be Date object or ISO string from IndexedDB)
+  // The date in the CSV is stored as Eastern Time date, parsed as UTC midnight
+  // Use getUTCDay() to get the correct day without timezone shift
+  const dateOpened = new Date(trade.dateOpened)
+
   return {
     ...trade,
     // MFE/MAE metrics from pre-calculated data
@@ -91,11 +97,11 @@ function enrichSingleTrade(
     rom,
     premiumEfficiency,
 
-    // Timing
+    // Timing (data is already in Eastern Time from the CSV)
     durationHours: computeDurationHours(trade),
-    dayOfWeek: trade.dateOpened.getDay(),
+    dayOfWeek: dateOpened.getUTCDay(),
     hourOfDay: extractHourOfDay(trade.timeOpened),
-    dateOpenedTimestamp: trade.dateOpened.getTime(),
+    dateOpenedTimestamp: dateOpened.getTime(),
 
     // Costs & Net
     totalFees,

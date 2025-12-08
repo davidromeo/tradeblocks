@@ -4,19 +4,28 @@
  * Chart Axis Selector
  *
  * Dropdown component for selecting a field to use as an axis in charts.
+ * Uses nested submenus organized by field category.
  */
 
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
-import { getFieldsByCategory } from '@/lib/models/report-config'
+import {
+  getFieldsByCategory,
+  getFieldInfo,
+  FIELD_CATEGORY_LABELS,
+  FieldCategory
+} from '@/lib/models/report-config'
 
 interface ChartAxisSelectorProps {
   label: string
@@ -26,12 +35,6 @@ interface ChartAxisSelectorProps {
   className?: string
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  market: 'Market Conditions',
-  performance: 'Performance',
-  timing: 'Timing'
-}
-
 export function ChartAxisSelector({
   label,
   value,
@@ -39,34 +42,66 @@ export function ChartAxisSelector({
   allowNone = false,
   className
 }: ChartAxisSelectorProps) {
+  const [open, setOpen] = useState(false)
   const fieldsByCategory = getFieldsByCategory()
+
+  // Get the display label for the current value
+  const currentField = value === 'none' ? null : getFieldInfo(value)
+  const displayValue = value === 'none'
+    ? 'None'
+    : currentField
+      ? currentField.label
+      : value
+
+  const handleSelect = (fieldValue: string) => {
+    onChange(fieldValue)
+    setOpen(false)
+  }
 
   return (
     <div className={`min-w-0 ${className ?? ""}`}>
       <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 w-full">
-          <SelectValue placeholder="Select field..." className="truncate" />
-        </SelectTrigger>
-        <SelectContent>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-full justify-between font-normal"
+          >
+            <span className="truncate">{displayValue}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56">
           {allowNone && (
-            <SelectItem value="none">None</SelectItem>
+            <DropdownMenuItem onClick={() => handleSelect('none')}>
+              None
+            </DropdownMenuItem>
           )}
-          {Object.entries(fieldsByCategory).map(([category, fields]) => (
-            <SelectGroup key={category}>
-              <SelectLabel className="text-xs">{CATEGORY_LABELS[category] ?? category}</SelectLabel>
-              {fields.map(field => (
-                <SelectItem key={field.field} value={field.field}>
-                  {field.label}
-                  {field.unit && (
-                    <span className="text-muted-foreground ml-1">({field.unit})</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
+
+          {Array.from(fieldsByCategory.entries()).map(([category, fields]) => {
+            if (fields.length === 0) return null
+
+            return (
+              <DropdownMenuSub key={category}>
+                <DropdownMenuSubTrigger>
+                  {FIELD_CATEGORY_LABELS[category as FieldCategory]}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-52">
+                  {fields.map(field => (
+                    <DropdownMenuItem
+                      key={field.field}
+                      onClick={() => handleSelect(field.field)}
+                    >
+                      {field.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

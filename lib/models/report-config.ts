@@ -173,12 +173,39 @@ export type ReportField =
   | 'tradeNumber'
 
 /**
+ * Field category for organizing fields in UI
+ */
+export type FieldCategory = 'market' | 'returns' | 'risk' | 'trade' | 'timing'
+
+/**
+ * Human-readable labels for field categories
+ */
+export const FIELD_CATEGORY_LABELS: Record<FieldCategory, string> = {
+  market: 'Market',
+  returns: 'Returns',
+  risk: 'Risk (MFE/MAE)',
+  trade: 'Trade Details',
+  timing: 'Timing'
+}
+
+/**
+ * Order for field categories in dropdowns
+ */
+export const FIELD_CATEGORY_ORDER: FieldCategory[] = [
+  'market',
+  'returns',
+  'risk',
+  'trade',
+  'timing'
+]
+
+/**
  * Field metadata for UI display
  */
 export interface FieldInfo {
   field: ReportField
   label: string
-  category: 'market' | 'performance' | 'timing'
+  category: FieldCategory
   unit?: string
   description?: string
 }
@@ -200,36 +227,38 @@ export const REPORT_FIELDS: FieldInfo[] = [
   { field: 'gap', label: 'Gap %', category: 'market', unit: '%', description: 'Opening gap percentage' },
   { field: 'movement', label: 'Movement', category: 'market', description: 'Price movement during trade' },
 
-  // Performance metrics (base)
-  { field: 'pl', label: 'Profit/Loss', category: 'performance', unit: '$', description: 'Trade P&L in dollars' },
-  { field: 'netPl', label: 'Net P/L', category: 'performance', unit: '$', description: 'P&L after fees' },
-  { field: 'premium', label: 'Premium', category: 'performance', unit: '$', description: 'Premium collected' },
-  { field: 'marginReq', label: 'Margin Required', category: 'performance', unit: '$', description: 'Margin requirement' },
-  { field: 'rom', label: 'Return on Margin', category: 'performance', unit: '%', description: 'P/L / Margin * 100' },
-  { field: 'premiumEfficiency', label: 'Premium Efficiency', category: 'performance', unit: '%', description: 'P/L / Premium * 100' },
-  { field: 'openingPrice', label: 'Opening Price', category: 'performance', unit: '$', description: 'Trade opening price' },
-  { field: 'closingPrice', label: 'Closing Price', category: 'performance', unit: '$', description: 'Trade closing price' },
-  { field: 'numContracts', label: 'Contracts', category: 'performance', description: 'Number of contracts' },
-  { field: 'totalFees', label: 'Total Fees', category: 'performance', unit: '$', description: 'Opening + closing fees' },
-  { field: 'openingCommissionsFees', label: 'Opening Fees', category: 'performance', unit: '$', description: 'Opening commissions and fees' },
-  { field: 'closingCommissionsFees', label: 'Closing Fees', category: 'performance', unit: '$', description: 'Closing commissions and fees' },
-  { field: 'maxProfit', label: 'Max Profit', category: 'performance', unit: '$', description: 'Maximum potential profit' },
-  { field: 'maxLoss', label: 'Max Loss', category: 'performance', unit: '$', description: 'Maximum potential loss' },
-  { field: 'isWinner', label: 'Is Winner', category: 'performance', description: '1 if profitable, 0 if loss' },
-  { field: 'tradeNumber', label: 'Trade #', category: 'performance', description: '1-indexed trade sequence' },
+  // Return metrics
+  { field: 'pl', label: 'Profit/Loss', category: 'returns', unit: '$', description: 'Trade P&L in dollars' },
+  { field: 'netPl', label: 'Net P/L', category: 'returns', unit: '$', description: 'P&L after fees' },
+  { field: 'rom', label: 'Return on Margin', category: 'returns', unit: '%', description: 'P/L / Margin * 100' },
+  { field: 'premiumEfficiency', label: 'Premium Efficiency', category: 'returns', unit: '%', description: 'P/L / Premium * 100' },
+  { field: 'isWinner', label: 'Is Winner', category: 'returns', description: '1 if profitable, 0 if loss' },
 
-  // MFE/MAE metrics
-  { field: 'mfePercent', label: 'MFE %', category: 'performance', unit: '%', description: 'Maximum Favorable Excursion %' },
-  { field: 'maePercent', label: 'MAE %', category: 'performance', unit: '%', description: 'Maximum Adverse Excursion %' },
-  { field: 'profitCapturePercent', label: 'Profit Capture %', category: 'performance', unit: '%', description: 'P/L / MFE * 100' },
-  { field: 'excursionRatio', label: 'Excursion Ratio', category: 'performance', description: 'MFE / MAE (reward/risk)' },
-  { field: 'rMultiple', label: 'R-Multiple', category: 'performance', description: 'P/L / MAE (risk units won/lost)' },
+  // Risk metrics (MFE/MAE)
+  { field: 'mfePercent', label: 'MFE %', category: 'risk', unit: '%', description: 'Maximum Favorable Excursion %' },
+  { field: 'maePercent', label: 'MAE %', category: 'risk', unit: '%', description: 'Maximum Adverse Excursion %' },
+  { field: 'profitCapturePercent', label: 'Profit Capture %', category: 'risk', unit: '%', description: 'P/L / MFE * 100' },
+  { field: 'excursionRatio', label: 'Excursion Ratio', category: 'risk', description: 'MFE / MAE (reward/risk)' },
+  { field: 'rMultiple', label: 'R-Multiple', category: 'risk', description: 'P/L / MAE (risk units won/lost)' },
+
+  // Trade details
+  { field: 'premium', label: 'Premium', category: 'trade', unit: '$', description: 'Premium collected' },
+  { field: 'marginReq', label: 'Margin Required', category: 'trade', unit: '$', description: 'Margin requirement' },
+  { field: 'openingPrice', label: 'Opening Price', category: 'trade', unit: '$', description: 'Trade opening price' },
+  { field: 'closingPrice', label: 'Closing Price', category: 'trade', unit: '$', description: 'Trade closing price' },
+  { field: 'numContracts', label: 'Contracts', category: 'trade', description: 'Number of contracts' },
+  { field: 'totalFees', label: 'Total Fees', category: 'trade', unit: '$', description: 'Opening + closing fees' },
+  { field: 'openingCommissionsFees', label: 'Opening Fees', category: 'trade', unit: '$', description: 'Opening commissions and fees' },
+  { field: 'closingCommissionsFees', label: 'Closing Fees', category: 'trade', unit: '$', description: 'Closing commissions and fees' },
+  { field: 'maxProfit', label: 'Max Profit', category: 'trade', unit: '$', description: 'Maximum potential profit' },
+  { field: 'maxLoss', label: 'Max Loss', category: 'trade', unit: '$', description: 'Maximum potential loss' },
 
   // Timing
+  { field: 'tradeNumber', label: 'Trade #', category: 'timing', description: '1-indexed trade sequence' },
+  { field: 'dateOpenedTimestamp', label: 'Date Opened', category: 'timing', description: 'Trade entry date (for time-series charts)' },
   { field: 'durationHours', label: 'Duration (hrs)', category: 'timing', unit: 'hrs', description: 'Trade holding period in hours' },
   { field: 'dayOfWeek', label: 'Day of Week', category: 'timing', description: '0=Sun, 1=Mon, ..., 6=Sat' },
-  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour trade was opened (0-23)' },
-  { field: 'dateOpenedTimestamp', label: 'Date Opened', category: 'timing', description: 'Trade entry date (for time-series charts)' }
+  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour trade was opened (0-23)' }
 ]
 
 /**
@@ -240,16 +269,22 @@ export function getFieldInfo(field: string): FieldInfo | undefined {
 }
 
 /**
- * Get fields grouped by category
+ * Get fields grouped by category, ordered by FIELD_CATEGORY_ORDER
  */
-export function getFieldsByCategory(): Record<string, FieldInfo[]> {
-  return REPORT_FIELDS.reduce((acc, field) => {
-    if (!acc[field.category]) {
-      acc[field.category] = []
-    }
-    acc[field.category].push(field)
-    return acc
-  }, {} as Record<string, FieldInfo[]>)
+export function getFieldsByCategory(): Map<FieldCategory, FieldInfo[]> {
+  const grouped = new Map<FieldCategory, FieldInfo[]>()
+
+  // Initialize in the correct order
+  for (const category of FIELD_CATEGORY_ORDER) {
+    grouped.set(category, [])
+  }
+
+  // Add fields to their categories
+  for (const field of REPORT_FIELDS) {
+    grouped.get(field.category)?.push(field)
+  }
+
+  return grouped
 }
 
 /**

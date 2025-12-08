@@ -201,7 +201,10 @@ export function ThresholdChart({
       },
       yaxis: {
         title: { text: "Cumulative %" },
-        range: [minCumulative - cumulativePadding, maxCumulative + cumulativePadding],
+        range: [
+          minCumulative - cumulativePadding,
+          maxCumulative + cumulativePadding,
+        ],
         zeroline: true,
         zerolinewidth: 1,
         zerolinecolor: "#94a3b8",
@@ -229,7 +232,7 @@ export function ThresholdChart({
       },
       hovermode: "closest",
       margin: {
-        t: 40,
+        t: 50,
         r: 80,
         b: 60,
         l: 70,
