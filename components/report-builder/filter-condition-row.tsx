@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 /**
  * Filter Condition Row
@@ -6,10 +6,7 @@
  * A single filter condition editor with field, operator, and value inputs.
  */
 
-import { useState } from 'react'
-import { ChevronDown, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,87 +14,93 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '@/components/ui/select' // Still used for operator selector
-import { Switch } from '@/components/ui/switch'
+  SelectValue,
+} from "@/components/ui/select"; // Still used for operator selector
+import { Switch } from "@/components/ui/switch";
 import {
+  FIELD_CATEGORY_LABELS,
+  FILTER_OPERATOR_LABELS,
   FilterCondition,
   FilterOperator,
-  FILTER_OPERATOR_LABELS,
-  getFieldsByCategory,
   getFieldInfo,
-  FIELD_CATEGORY_LABELS,
-  FieldCategory
-} from '@/lib/models/report-config'
+  getFieldsByCategory,
+} from "@/lib/models/report-config";
+import { ChevronDown, X } from "lucide-react";
+import { useState } from "react";
 
 interface FilterConditionRowProps {
-  condition: FilterCondition
-  onChange: (condition: FilterCondition) => void
-  onRemove: () => void
+  condition: FilterCondition;
+  onChange: (condition: FilterCondition) => void;
+  onRemove: () => void;
 }
 
 export function FilterConditionRow({
   condition,
   onChange,
-  onRemove
+  onRemove,
 }: FilterConditionRowProps) {
-  const [valueInput, setValueInput] = useState(condition.value.toString())
-  const [value2Input, setValue2Input] = useState(condition.value2?.toString() ?? '')
-  const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false)
+  const [valueInput, setValueInput] = useState(condition.value.toString());
+  const [value2Input, setValue2Input] = useState(
+    condition.value2?.toString() ?? ""
+  );
+  const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
 
-  const fieldsByCategory = getFieldsByCategory()
+  const fieldsByCategory = getFieldsByCategory();
 
   // Get the display label for the current field
-  const currentField = getFieldInfo(condition.field)
-  const fieldDisplayValue = currentField?.label ?? condition.field
+  const currentField = getFieldInfo(condition.field);
+  const fieldDisplayValue = currentField?.label ?? condition.field;
 
   const handleFieldChange = (field: string) => {
-    onChange({ ...condition, field })
-  }
+    onChange({ ...condition, field });
+  };
 
   const handleOperatorChange = (operator: string) => {
-    onChange({ ...condition, operator: operator as FilterOperator })
-  }
+    onChange({ ...condition, operator: operator as FilterOperator });
+  };
 
   const handleValueBlur = () => {
-    const val = parseFloat(valueInput)
+    const val = parseFloat(valueInput);
     if (!isNaN(val)) {
-      onChange({ ...condition, value: val })
+      onChange({ ...condition, value: val });
     } else {
-      setValueInput(condition.value.toString())
+      setValueInput(condition.value.toString());
     }
-  }
+  };
 
   const handleValue2Blur = () => {
-    if (value2Input === '') {
-      onChange({ ...condition, value2: undefined })
-      return
+    if (value2Input === "") {
+      onChange({ ...condition, value2: undefined });
+      return;
     }
-    const val = parseFloat(value2Input)
+    const val = parseFloat(value2Input);
     if (!isNaN(val)) {
-      onChange({ ...condition, value2: val })
+      onChange({ ...condition, value2: val });
     } else {
-      setValue2Input(condition.value2?.toString() ?? '')
+      setValue2Input(condition.value2?.toString() ?? "");
     }
-  }
+  };
 
   const handleEnabledChange = (enabled: boolean) => {
-    onChange({ ...condition, enabled })
-  }
+    onChange({ ...condition, enabled });
+  };
 
-  const isBetween = condition.operator === 'between'
+  const isBetween = condition.operator === "between";
 
   return (
-    <div className={`p-2 rounded-md border space-y-2 ${
-      condition.enabled ? 'bg-background' : 'bg-muted/50 opacity-60'
-    }`}>
+    <div
+      className={`p-2 rounded-md border space-y-2 ${
+        condition.enabled ? "bg-background" : "bg-muted/50 opacity-60"
+      }`}
+    >
       {/* Row 1: Toggle, Field selector, Remove button */}
       <div className="flex items-center gap-2">
         <Switch
@@ -106,7 +109,10 @@ export function FilterConditionRow({
           className="data-[state=checked]:bg-primary shrink-0"
         />
 
-        <DropdownMenu open={fieldDropdownOpen} onOpenChange={setFieldDropdownOpen}>
+        <DropdownMenu
+          open={fieldDropdownOpen}
+          onOpenChange={setFieldDropdownOpen}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
@@ -118,29 +124,31 @@ export function FilterConditionRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            {Array.from(fieldsByCategory.entries()).map(([category, fields]) => {
-              if (fields.length === 0) return null
-              return (
-                <DropdownMenuSub key={category}>
-                  <DropdownMenuSubTrigger>
-                    {FIELD_CATEGORY_LABELS[category]}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="w-52">
-                    {fields.map(field => (
-                      <DropdownMenuItem
-                        key={field.field}
-                        onClick={() => {
-                          handleFieldChange(field.field)
-                          setFieldDropdownOpen(false)
-                        }}
-                      >
-                        {field.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              )
-            })}
+            {Array.from(fieldsByCategory.entries()).map(
+              ([category, fields]) => {
+                if (fields.length === 0) return null;
+                return (
+                  <DropdownMenuSub key={category}>
+                    <DropdownMenuSubTrigger>
+                      {FIELD_CATEGORY_LABELS[category]}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-52">
+                      {fields.map((field) => (
+                        <DropdownMenuItem
+                          key={field.field}
+                          onClick={() => {
+                            handleFieldChange(field.field);
+                            setFieldDropdownOpen(false);
+                          }}
+                        >
+                          {field.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+              }
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -174,7 +182,7 @@ export function FilterConditionRow({
           value={valueInput}
           onChange={(e) => setValueInput(e.target.value)}
           onBlur={handleValueBlur}
-          onKeyDown={(e) => e.key === 'Enter' && handleValueBlur()}
+          onKeyDown={(e) => e.key === "Enter" && handleValueBlur()}
           className="flex-1 h-8 text-sm bg-background"
           placeholder="0"
         />
@@ -187,7 +195,7 @@ export function FilterConditionRow({
               value={value2Input}
               onChange={(e) => setValue2Input(e.target.value)}
               onBlur={handleValue2Blur}
-              onKeyDown={(e) => e.key === 'Enter' && handleValue2Blur()}
+              onKeyDown={(e) => e.key === "Enter" && handleValue2Blur()}
               className="flex-1 h-8 text-sm bg-background"
               placeholder="0"
             />
@@ -195,7 +203,7 @@ export function FilterConditionRow({
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default FilterConditionRow
+export default FilterConditionRow;
