@@ -75,6 +75,8 @@ function enrichSingleTrade(
   // Multiply premium by contracts to get total premium for accurate P/L %
   const totalPremium = trade.premium * trade.numContracts
   const premiumEfficiency = totalPremium !== 0 ? (trade.pl / Math.abs(totalPremium)) * 100 : undefined
+  const plPct = premiumEfficiency // Alias for easier discovery
+  const netPlPct = totalPremium !== 0 ? (netPl / Math.abs(totalPremium)) * 100 : undefined
 
   // Risk multiple: P/L divided by MAE (how many R's won/lost)
   const rMultiple = mfeMaePoint?.mae && mfeMaePoint.mae > 0
@@ -99,6 +101,8 @@ function enrichSingleTrade(
     // Return metrics
     rom,
     premiumEfficiency,
+    plPct,
+    netPlPct,
 
     // Timing (data is already in Eastern Time from the CSV)
     durationHours: computeDurationHours(trade),

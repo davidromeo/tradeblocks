@@ -22,6 +22,8 @@ export interface EnrichedTrade extends Trade {
   // Return metrics
   rom?: number                  // Return on Margin (P/L / margin * 100)
   premiumEfficiency?: number    // P/L / premium * 100
+  plPct?: number                // Alias for premiumEfficiency (P/L %)
+  netPlPct?: number             // Net P/L / premium * 100 (after fees)
 
   // Timing
   durationHours?: number        // Holding period in hours

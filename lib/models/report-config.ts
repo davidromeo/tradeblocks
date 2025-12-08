@@ -157,6 +157,8 @@ export type ReportField =
   // Derived: Return metrics
   | 'rom'
   | 'premiumEfficiency'
+  | 'plPct'
+  | 'netPlPct'
   // Derived: Timing
   | 'durationHours'
   | 'dayOfWeek'
@@ -232,6 +234,8 @@ export const REPORT_FIELDS: FieldInfo[] = [
   // Return metrics
   { field: 'pl', label: 'Profit/Loss', category: 'returns', unit: '$', description: 'Trade P&L in dollars' },
   { field: 'netPl', label: 'Net P/L', category: 'returns', unit: '$', description: 'P&L after fees' },
+  { field: 'plPct', label: 'P/L %', category: 'returns', unit: '%', description: 'P/L as % of premium' },
+  { field: 'netPlPct', label: 'Net P/L %', category: 'returns', unit: '%', description: 'Net P/L as % of premium' },
   { field: 'rom', label: 'Return on Margin', category: 'returns', unit: '%', description: 'P/L / Margin * 100' },
   { field: 'premiumEfficiency', label: 'Premium Efficiency', category: 'returns', unit: '%', description: 'P/L / Premium * 100' },
   { field: 'isWinner', label: 'Is Winner', category: 'returns', description: '1 if profitable, 0 if loss' },
@@ -363,14 +367,20 @@ export const TABLE_COLUMN_OPTIONS: TableColumnGroup[] = [
     ]
   },
   {
-    heading: 'P&L',
+    heading: 'P&L ($)',
     options: [
       { value: 'pl:avg', label: 'Avg P&L ($)' },
       { value: 'pl:sum', label: 'Total P&L ($)' },
       { value: 'netPl:avg', label: 'Avg Net P&L ($)' },
-      { value: 'netPl:sum', label: 'Total Net P&L ($)' },
-      { value: 'rom:avg', label: 'Avg ROM (%)' },
-      { value: 'premiumEfficiency:avg', label: 'Avg P&L (%)' }
+      { value: 'netPl:sum', label: 'Total Net P&L ($)' }
+    ]
+  },
+  {
+    heading: 'P&L (%)',
+    options: [
+      { value: 'plPct:avg', label: 'Avg P&L (%)' },
+      { value: 'netPlPct:avg', label: 'Avg Net P&L (%)' },
+      { value: 'rom:avg', label: 'Avg ROM (%)' }
     ]
   },
   {
@@ -414,7 +424,7 @@ export const TABLE_COLUMN_OPTIONS: TableColumnGroup[] = [
 /**
  * Default selected table columns
  */
-export const DEFAULT_TABLE_COLUMNS: string[] = ['count', 'winRate', 'pl:avg', 'rom:avg']
+export const DEFAULT_TABLE_COLUMNS: string[] = ['count', 'winRate', 'pl:avg', 'plPct:avg', 'rom:avg']
 
 /**
  * Get all table column options as a flat array
