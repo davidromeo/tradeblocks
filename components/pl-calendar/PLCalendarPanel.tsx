@@ -336,17 +336,13 @@ export function PLCalendarPanel({ trades, dailyLogs, dateRange }: PLCalendarPane
 
       // If trades already carry drawdownPct (e.g., uploaded daily log), respect that directly so
       // uploaded blocks use the same drawdown series as Block Stats.
+      // uploaded blocks use the same drawdown series as Block Stats.
       const drawdownSeries = inputTrades
-        .map((t) => t.drawdownPct)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((t) => (t as any).drawdownPct)
         .filter((v): v is number => Number.isFinite(v));
 
       if (drawdownSeries.length > 0) {
-        // Sanity Check: log drawdown values for the block being processed
-        // This is to verify if the parser is actually populating drawdownPct
-        if (process.env.NODE_ENV === "development") {
-            const sample = drawdownSeries.slice(0, 5);
-            console.log("Drawdown Series Check (first 5):", sample, "Total entries:", drawdownSeries.length);
-        }
         return Math.max(...drawdownSeries.map((v) => Math.abs(v)));
       }
 
