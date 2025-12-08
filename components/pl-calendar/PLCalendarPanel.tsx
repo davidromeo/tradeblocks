@@ -31,9 +31,11 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+import { DailyLogEntry } from "@/lib/models/daily-log";
 import { Trade } from "@/lib/models/trade";
 import { cn } from "@/lib/utils";
 import { getTradingDayKey } from "@/lib/utils/trading-day";
+import type { DateRange } from "react-day-picker";
 
 import { DailyDetailModal, DaySummary } from "./DayDetailModal";
 import { MonthlyPLCalendar } from "./MonthlyPLCalendar";
@@ -41,8 +43,23 @@ import { WeekdayAlphaMap } from "./WeekdayAlphaMap";
 import { YearHeatmap, YearlyCalendarSnapshot } from "./YearHeatmap";
 import { CalendarBlockConfig, YearViewBlock } from "./YearViewBlock";
 
+// Local type extension: drawdownPct is optional in upstream but may be populated by CSV parsers
+type TradeWithOptionalDrawdown = Trade & { drawdownPct?: number };
+
 interface PLCalendarPanelProps {
-  trades: Trade[];
+  trades: TradeWithOptionalDrawdown[];
+  dailyLogs?: DailyLogEntry[];
+  dateRange?: DateRange;
+}
+
+// Helper to check if a date is within the specified range
+function isWithinRange(
+  date: Date | string | null | undefined,
+  range?: DateRange
+): boolean {
+  if (!range?.from || !range?.to || !date) return true;
+  const d = date instanceof Date ? date : new Date(date);
+  return d >= range.from && d <= range.to;
 }
 
 const formatCompactUsd = (value: number) => {
@@ -207,7 +224,10 @@ type MarketRegime =
   | "HIGH_IV"
   | "LOW_IV";
 
-export function PLCalendarPanel({ trades }: PLCalendarPanelProps) {
+export function PLCalendarPanel({ trades, dailyLogs, dateRange }: PLCalendarPanelProps) {
+  // DEBUG: Log what we receive
+
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "year">("month");
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
@@ -436,12 +456,27 @@ export function PLCalendarPanel({ trades }: PLCalendarPanelProps) {
     [selectedStrategies, sizingMode, kellyFraction]
   );
 
+  // Filter trades and daily logs by date range, then by selected strategies
   const filteredTrades = useMemo(() => {
-    if (selectedStrategies.length === 0) return trades;
-    return trades.filter((t) =>
+    // First filter by date range if specified
+    let result = trades;
+    if (dateRange?.from && dateRange?.to) {
+      result = result.filter((t) => {
+        const d = new Date(t.dateClosed ?? t.dateOpened);
+        return isWithinRange(d, dateRange);
+      });
+    }
+    // Then filter by selected strategies
+    if (selectedStrategies.length === 0) return result;
+    return result.filter((t) =>
       selectedStrategies.includes(t.strategy || "Custom")
     );
-  }, [trades, selectedStrategies]);
+  }, [trades, selectedStrategies, dateRange]);
+
+
+
+  // DEBUG: Log filtered results
+
 
   // Debug helper: compare active vs first uploaded block trades to catch ordering/field mismatches that affect Max DD.
   useEffect(() => {
@@ -1218,7 +1253,8 @@ export function PLCalendarPanel({ trades }: PLCalendarPanelProps) {
                   <YearViewBlock
                     key={block.id}
                     block={block}
-                    baseTrades={trades}
+                    baseTrades={filteredTrades}
+                    dateRange={dateRange}
                     onUpdateTrades={(newTrades, name) => updateYearBlockTrades(block.id, newTrades, name)}
                     onClose={() => removeYearBlock(block.id)}
                     renderContent={(blockTrades) => (
@@ -1445,6 +1481,9 @@ function YearlyPLOutput({
   heatmapMetric,
   onMonthClick,
 }: YearlyPLOutputProps) {
+  // DEBUG: Log what YearlyPLOutput receives
+
+
   const filtered = useMemo(() => {
     if (selectedStrategies.length === 0) return trades;
     return trades.filter((t) => selectedStrategies.includes(t.strategy || "Custom"));

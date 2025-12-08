@@ -1,5 +1,6 @@
 import { format, parse } from "date-fns";
 import React, { useCallback } from "react";
+import { DateRange } from "react-day-picker";
 
 import { Trade } from "@/lib/models/trade";
 
@@ -13,6 +14,7 @@ export type CalendarBlockConfig = {
 interface YearViewBlockProps {
   block: CalendarBlockConfig;
   baseTrades: Trade[];
+  dateRange?: DateRange;
   onUpdateTrades: (tradesForBlock: Trade[], name?: string) => void;
   onClose: () => void;
   renderContent: (trades: Trade[]) => React.ReactNode;
@@ -141,7 +143,7 @@ function parseOptionOmegaCsv(csvText: string): { trades: Trade[]; detectedMaxDra
   const idxPL = findIndex(["P/L", "PL", "Net P/L", "Net PL", "Daily P/L"]);
   const idxContracts = findIndex(["No. of Contracts", "Contracts"]);
   const idxFundsAtClose = findIndex(["Funds at Close", "Net Liquidity"]);
-  const idxMarginReq = findIndex(["Margin Req.", "Margin Req"]);
+  const idxMarginReq = findIndex(["Margin Req.", "Margin Req", "Initial Margin", "Init Margin", "Margin"]);
   const idxStrategy = findIndex(["Strategy"]);
   const idxOpeningFees = findIndex(["Opening Commissions + Fees"]);
   const idxClosingFees = findIndex(["Closing Commissions + Fees"]);
@@ -236,6 +238,20 @@ function parseOptionOmegaCsv(csvText: string): { trades: Trade[]; detectedMaxDra
     if (!openedOn && !closedOn) continue;
 
     const strategy = get(idxStrategy) || "Unknown";
+    
+    let marginReqVal = parseNumber(get(idxMarginReq));
+    const fundsAtCloseVal = parseNumber(get(idxFundsAtClose));
+
+    // Heuristic Check: If Margin Req is suspiciously large and close to Funds At Close
+    // (likely detecting Account Balance as Margin), then ignore it to avoid skewing ROM.
+    if (
+        marginReqVal > 1_000_000 && 
+        fundsAtCloseVal > 1_000_000 && 
+        Math.abs(marginReqVal - fundsAtCloseVal) / (fundsAtCloseVal || 1) < 0.2
+    ) {
+        // likely account balance mapped to margin, or margin column contains bal
+        marginReqVal = 0;
+    }
 
     const trade: Trade = {
       dateOpened: openedOn ?? new Date("1970-01-01"),
@@ -251,8 +267,8 @@ function parseOptionOmegaCsv(csvText: string): { trades: Trade[]; detectedMaxDra
       reasonForClose: get(idxReasonForClose) || undefined,
       pl: parseNumber(get(idxPL)),
       numContracts: parseNumber(get(idxContracts)),
-      fundsAtClose: parseNumber(get(idxFundsAtClose)),
-      marginReq: parseNumber(get(idxMarginReq)),
+      fundsAtClose: fundsAtCloseVal,
+      marginReq: marginReqVal,
       strategy,
       openingCommissionsFees: parseNumber(get(idxOpeningFees)),
       closingCommissionsFees: parseNumber(get(idxClosingFees)),
@@ -359,15 +375,41 @@ export function YearViewBlock({
   onUpdateTrades,
   onClose,
   renderContent,
+  dateRange, // Added dateRange to destructuring
 }: YearViewBlockProps) {
-  const { isPrimary, trades, name } = block;
+  const { isPrimary, name, trades } = block; // Restored id for logging
   const [uploadedTrades, setUploadedTrades] = React.useState<Trade[]>([]);
   // Store the explicit Max DD found in CSV, if any
   const [uploadedMaxDrawdown, setUploadedMaxDrawdown] = React.useState<number | null>(null);
 
+  // Helper to check if a date is within the specified range
+  const isWithinRange = React.useCallback((date: Date | string | number, range?: DateRange) => {
+    if (!range?.from || !range?.to || !date) return true;
+    const d = date instanceof Date ? date : new Date(date);
+    return d >= range.from && d <= range.to;
+  }, []);
+
   const effectiveTrades = React.useMemo(
-    () => (isPrimary ? baseTrades : (uploadedTrades.length > 0 ? uploadedTrades : trades ?? [])),
-    [baseTrades, isPrimary, uploadedTrades, trades]
+    () => {
+      // Primary block: always use baseTrades (passed from parent, already filtered)
+      if (isPrimary) {
+        return baseTrades;
+      }
+
+      // Uploaded/Secondary block:
+      // 1. Determine raw source (uploaded > block.trades > empty)
+      // CRITICAL FIX: Do NOT fallback to baseTrades, or else it duplicates the active block!
+      const rawTrades = uploadedTrades.length > 0 ? uploadedTrades : (trades ?? []);
+
+      // 2. Apply date range filter (parent filters baseTrades, but we must filter our own)
+      if (!dateRange?.from || !dateRange?.to) {
+        return rawTrades;
+      }
+
+      const filtered = rawTrades.filter(t => isWithinRange(t.dateClosed ?? t.dateOpened, dateRange));
+      return filtered;
+    },
+    [baseTrades, isPrimary, uploadedTrades, trades, dateRange, isWithinRange]
   );
   const hasData = isPrimary || (effectiveTrades && effectiveTrades.length > 0);
 
@@ -476,7 +518,7 @@ export function YearViewBlock({
           </span>
           {!isPrimary && parsedMaxAbsDrawdown !== null && (
             <span className="text-[10px] text-slate-500">
-              Parsed max |DD|: {parsedMaxAbsDrawdown.toFixed(2)}%
+
             </span>
           )}
           {!isPrimary && (
