@@ -55,13 +55,14 @@ export interface ChartAxisConfig {
 /**
  * Supported chart types
  */
-export type ChartType = 'scatter' | 'bar' | 'histogram' | 'box' | 'table' | 'threshold'
+export type ChartType = 'scatter' | 'line' | 'bar' | 'histogram' | 'box' | 'table' | 'threshold'
 
 /**
  * Human-readable labels for chart types
  */
 export const CHART_TYPE_LABELS: Record<ChartType, string> = {
   scatter: 'Scatter Plot',
+  line: 'Line Chart',
   bar: 'Bar Chart',
   histogram: 'Histogram',
   box: 'Box Plot',
@@ -84,6 +85,23 @@ export const THRESHOLD_METRIC_LABELS: Record<ThresholdMetric, string> = {
 }
 
 /**
+ * Categories for organizing preset reports
+ */
+export type ReportCategory = 'market' | 'mfe-mae' | 'returns' | 'timing' | 'risk' | 'threshold'
+
+/**
+ * Human-readable labels for report categories
+ */
+export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {
+  market: 'Market Analysis',
+  'mfe-mae': 'MFE/MAE Analysis',
+  returns: 'Return Metrics',
+  timing: 'Timing Analysis',
+  risk: 'Risk Analysis',
+  threshold: 'Threshold Analysis'
+}
+
+/**
  * Full report configuration combining filters and chart settings
  */
 export interface ReportConfig {
@@ -98,6 +116,7 @@ export interface ReportConfig {
   tableBuckets?: number[]     // Bucket thresholds for table type (e.g., [15, 20, 25, 30])
   tableColumns?: string[]     // Selected columns for table type (e.g., ['count', 'winRate', 'pl:avg'])
   thresholdMetric?: ThresholdMetric  // Secondary Y-axis metric for threshold chart (default: 'pl')
+  category?: ReportCategory   // Category for grouping preset reports in menus
   isBuiltIn?: boolean         // True for preset reports
   createdAt: string
   updatedAt: string
@@ -140,6 +159,7 @@ export type ReportField =
   | 'durationHours'
   | 'dayOfWeek'
   | 'hourOfDay'
+  | 'dateOpenedTimestamp'
   // Derived: Costs & Net
   | 'totalFees'
   | 'netPl'
@@ -208,7 +228,8 @@ export const REPORT_FIELDS: FieldInfo[] = [
   // Timing
   { field: 'durationHours', label: 'Duration (hrs)', category: 'timing', unit: 'hrs', description: 'Trade holding period in hours' },
   { field: 'dayOfWeek', label: 'Day of Week', category: 'timing', description: '0=Sun, 1=Mon, ..., 6=Sat' },
-  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour trade was opened (0-23)' }
+  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour trade was opened (0-23)' },
+  { field: 'dateOpenedTimestamp', label: 'Date Opened', category: 'timing', description: 'Trade entry date (for time-series charts)' }
 ]
 
 /**

@@ -7,7 +7,7 @@
  */
 
 import { MultiSelect } from "@/components/multi-select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -81,34 +81,50 @@ export function ResultsPanel({
   // Check if we're showing a filtered subset
   const isFiltered = filteredTrades.length !== trades.length;
 
+  // Determine number of columns based on chart type
+  const getGridCols = () => {
+    if (chartType === "histogram") return "grid-cols-2"; // type + x
+    if (chartType === "threshold") return "grid-cols-2 lg:grid-cols-3"; // type + x + metric
+    if (chartType === "table") return "grid-cols-2"; // type + x (buckets on second row)
+    if (chartType === "scatter") return "grid-cols-2 lg:grid-cols-3"; // type + x + y (color/size on second row)
+    return "grid-cols-2 lg:grid-cols-3"; // type + x + y (bar, box, line)
+  };
+
   return (
     <div className="space-y-4 min-w-0">
       {/* Chart Configuration */}
       <Card className="min-w-0">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">
-              {reportName || "Report"}
-            </CardTitle>
-            <Select
-              value={chartType}
-              onValueChange={(v) => onChartTypeChange(v as ChartType)}
-            >
-              <SelectTrigger className="w-[225px] h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(CHART_TYPE_LABELS).map(([type, label]) => (
-                  <SelectItem key={type} value={type}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <CardHeader className="pb-2 space-y-2">
+          {/* Report title (only shown when a report is loaded) */}
+          {reportName && (
+            <h3 className="text-base font-semibold">{reportName}</h3>
+          )}
 
-          {/* Axis selectors - 2 columns */}
-          <div className="grid grid-cols-2 gap-3 pt-3">
+          {/* Compact controls row */}
+          <div className={`grid ${getGridCols()} gap-2 items-end`}>
+            {/* Chart type selector */}
+            <div className="min-w-0">
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                Chart Type
+              </Label>
+              <Select
+                value={chartType}
+                onValueChange={(v) => onChartTypeChange(v as ChartType)}
+              >
+                <SelectTrigger className="h-8 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(CHART_TYPE_LABELS).map(([type, label]) => (
+                    <SelectItem key={type} value={type}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* X Axis / Group By / Analyze Field */}
             <ChartAxisSelector
               label={
                 chartType === "table"
@@ -120,14 +136,19 @@ export function ResultsPanel({
               value={xAxis.field}
               onChange={onXAxisChange}
             />
-            {chartType === "table" ? (
-              <BucketEditor
-                field={xAxis.field}
-                value={tableBuckets}
-                onChange={onTableBucketsChange}
+
+            {/* Y Axis (for bar, box, scatter, line) */}
+            {(chartType === "bar" || chartType === "box" || chartType === "scatter" || chartType === "line") && (
+              <ChartAxisSelector
+                label="Y Axis"
+                value={yAxis.field}
+                onChange={onYAxisChange}
               />
-            ) : chartType === "threshold" ? (
-              <div>
+            )}
+
+            {/* Metric selector for threshold */}
+            {chartType === "threshold" && (
+              <div className="min-w-0">
                 <Label className="text-xs text-muted-foreground mb-1 block">
                   Metric
                 </Label>
@@ -137,7 +158,7 @@ export function ResultsPanel({
                     onThresholdMetricChange(v as ThresholdMetric)
                   }
                 >
-                  <SelectTrigger className="h-8">
+                  <SelectTrigger className="h-8 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -151,47 +172,48 @@ export function ResultsPanel({
                   </SelectContent>
                 </Select>
               </div>
-            ) : chartType !== "histogram" ? (
-              <ChartAxisSelector
-                label="Y Axis"
-                value={yAxis.field}
-                onChange={onYAxisChange}
-              />
-            ) : (
-              <div /> // Empty placeholder for grid alignment
-            )}
-            {chartType === "scatter" && (
-              <>
-                <ChartAxisSelector
-                  label="Color By"
-                  value={colorBy?.field ?? "none"}
-                  onChange={onColorByChange}
-                  allowNone
-                />
-                <ChartAxisSelector
-                  label="Size By"
-                  value={sizeBy?.field ?? "none"}
-                  onChange={onSizeByChange}
-                  allowNone
-                />
-              </>
             )}
           </div>
 
-          {/* Column selector for table type */}
-          {chartType === "table" && (
-            <div className="pt-3">
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Table Columns
-              </Label>
-              <MultiSelect
-                options={TABLE_COLUMN_OPTIONS}
-                defaultValue={tableColumns}
-                onValueChange={onTableColumnsChange}
-                placeholder="Select columns..."
-                maxCount={4}
-                hideSelectAll
+          {/* Scatter-specific controls (color and size on second row) */}
+          {chartType === "scatter" && (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              <ChartAxisSelector
+                label="Color By"
+                value={colorBy?.field ?? "none"}
+                onChange={onColorByChange}
+                allowNone
               />
+              <ChartAxisSelector
+                label="Size By"
+                value={sizeBy?.field ?? "none"}
+                onChange={onSizeByChange}
+                allowNone
+              />
+            </div>
+          )}
+
+          {/* Table-specific controls (buckets and columns) */}
+          {chartType === "table" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+              <BucketEditor
+                field={xAxis.field}
+                value={tableBuckets}
+                onChange={onTableBucketsChange}
+              />
+              <div className="min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Columns
+                </Label>
+                <MultiSelect
+                  options={TABLE_COLUMN_OPTIONS}
+                  defaultValue={tableColumns}
+                  onValueChange={onTableColumnsChange}
+                  placeholder="Select columns..."
+                  maxCount={4}
+                  hideSelectAll
+                />
+              </div>
             </div>
           )}
         </CardHeader>

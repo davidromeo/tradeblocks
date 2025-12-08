@@ -50,6 +50,39 @@ function isBinaryField(field: string): boolean {
 }
 
 /**
+ * Date/timestamp fields that should use date axis formatting
+ */
+const DATE_FIELDS = new Set(['dateOpenedTimestamp'])
+
+/**
+ * Check if a field is a date/timestamp field
+ */
+function isDateField(field: string): boolean {
+  return DATE_FIELDS.has(field)
+}
+
+/**
+ * Format a value for hover display based on field type
+ */
+function formatValueForHover(value: number, field: string): string {
+  if (isDateField(field)) {
+    return new Date(value).toLocaleDateString()
+  }
+  return value.toFixed(2)
+}
+
+/**
+ * Convert a numeric value to a Plotly-compatible format
+ * For date fields, converts timestamp to ISO string for proper axis handling
+ */
+function toPlotlyValue(value: number, field: string): number | string {
+  if (isDateField(field)) {
+    return new Date(value).toISOString()
+  }
+  return value
+}
+
+/**
  * Build traces for a scatter plot with categorical coloring (winners/losers)
  */
 function buildCategoricalScatterTraces(
@@ -153,11 +186,14 @@ function buildScatterTraces(
     return buildCategoricalScatterTraces(trades, xAxis, yAxis, colorBy, sizeBy)
   }
 
-  const xValues: number[] = []
+  const xValues: (number | string)[] = []
   const yValues: number[] = []
   const colorValues: number[] = []
   const sizeValues: number[] = []
   const hoverTexts: string[] = []
+
+  const xInfo = getFieldInfo(xAxis.field)
+  const yInfo = getFieldInfo(yAxis.field)
 
   for (const trade of trades) {
     const x = getTradeValue(trade, xAxis.field)
@@ -165,7 +201,7 @@ function buildScatterTraces(
 
     if (x === null || y === null) continue
 
-    xValues.push(x)
+    xValues.push(toPlotlyValue(x, xAxis.field))
     yValues.push(y)
 
     if (colorBy && colorBy.field !== 'none') {
@@ -179,10 +215,8 @@ function buildScatterTraces(
     }
 
     // Build hover text
-    const xInfo = getFieldInfo(xAxis.field)
-    const yInfo = getFieldInfo(yAxis.field)
     hoverTexts.push(
-      `${xInfo?.label ?? xAxis.field}: ${x.toFixed(2)}<br>` +
+      `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(x, xAxis.field)}<br>` +
       `${yInfo?.label ?? yAxis.field}: ${y.toFixed(2)}`
     )
   }
@@ -305,6 +339,52 @@ function buildBarTraces(
 }
 
 /**
+ * Build traces for a line chart (sorted by X, shows trend)
+ */
+function buildLineTraces(
+  trades: EnrichedTrade[],
+  xAxis: ChartAxisConfig,
+  yAxis: ChartAxisConfig
+): Partial<PlotData>[] {
+  const points: { x: number; y: number }[] = []
+
+  for (const trade of trades) {
+    const x = getTradeValue(trade, xAxis.field)
+    const y = getTradeValue(trade, yAxis.field)
+
+    if (x !== null && y !== null) {
+      points.push({ x, y })
+    }
+  }
+
+  // Sort by X value for proper line rendering
+  points.sort((a, b) => a.x - b.x)
+
+  const xInfo = getFieldInfo(xAxis.field)
+  const yInfo = getFieldInfo(yAxis.field)
+
+  return [{
+    x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
+    y: points.map(p => p.y),
+    type: 'scatter',
+    mode: 'lines+markers',
+    line: {
+      color: 'rgb(59, 130, 246)',
+      width: 2
+    },
+    marker: {
+      color: 'rgb(59, 130, 246)',
+      size: 6
+    },
+    hovertemplate: points.map(p =>
+      `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
+      `${yInfo?.label ?? yAxis.field}: ${p.y.toFixed(2)}<extra></extra>`
+    ),
+    name: yInfo?.label ?? yAxis.field
+  }]
+}
+
+/**
  * Build traces for a box plot
  */
 function buildBoxTraces(
@@ -376,6 +456,9 @@ export function CustomChart({
       case 'scatter':
         chartTraces = buildScatterTraces(trades, xAxis, yAxis, colorBy, sizeBy)
         break
+      case 'line':
+        chartTraces = buildLineTraces(trades, xAxis, yAxis)
+        break
       case 'histogram':
         chartTraces = buildHistogramTraces(trades, xAxis)
         break
@@ -393,10 +476,14 @@ export function CustomChart({
     // Show legend for categorical color fields (e.g., isWinner)
     const useCategoricalColor = colorBy && colorBy.field !== 'none' && isBinaryField(colorBy.field)
 
+    // Use date axis type for date fields
+    const isXAxisDate = isDateField(xAxis.field)
+
     const chartLayout: Partial<Layout> = {
       xaxis: {
         title: { text: xInfo?.label ?? xAxis.field },
-        zeroline: chartType !== 'histogram'
+        zeroline: chartType !== 'histogram',
+        type: isXAxisDate ? 'date' : undefined
       },
       yaxis: {
         title: { text: chartType === 'histogram' ? 'Count' : (yInfo?.label ?? yAxis.field) },

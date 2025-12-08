@@ -42,11 +42,11 @@ export function ChartAxisSelector({
   const fieldsByCategory = getFieldsByCategory()
 
   return (
-    <div className={className}>
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+    <div className={`min-w-0 ${className ?? ""}`}>
+      <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 mt-1">
-          <SelectValue placeholder="Select field..." />
+        <SelectTrigger className="h-8 w-full">
+          <SelectValue placeholder="Select field..." className="truncate" />
         </SelectTrigger>
         <SelectContent>
           {allowNone && (

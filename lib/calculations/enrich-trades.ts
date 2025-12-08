@@ -95,6 +95,7 @@ function enrichSingleTrade(
     durationHours: computeDurationHours(trade),
     dayOfWeek: trade.dateOpened.getDay(),
     hourOfDay: extractHourOfDay(trade.timeOpened),
+    dateOpenedTimestamp: trade.dateOpened.getTime(),
 
     // Costs & Net
     totalFees,

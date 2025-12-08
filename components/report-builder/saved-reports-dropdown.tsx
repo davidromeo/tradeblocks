@@ -4,9 +4,10 @@
  * Saved Reports Dropdown
  *
  * Dropdown to select and load saved report configurations.
+ * Uses nested submenus to organize preset reports by category.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { ChevronDown, Star, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,14 +15,31 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useSettingsStore } from '@/lib/stores/settings-store'
-import { ReportConfig } from '@/lib/models/report-config'
+import {
+  ReportConfig,
+  ReportCategory,
+  REPORT_CATEGORY_LABELS
+} from '@/lib/models/report-config'
 
 interface SavedReportsDropdownProps {
   onSelect: (report: ReportConfig) => void
 }
+
+// Order for categories in the menu
+const CATEGORY_ORDER: ReportCategory[] = [
+  'market',
+  'mfe-mae',
+  'returns',
+  'timing',
+  'risk',
+  'threshold'
+]
 
 export function SavedReportsDropdown({ onSelect }: SavedReportsDropdownProps) {
   const savedReports = useSettingsStore((state) => state.savedReports)
@@ -35,6 +53,21 @@ export function SavedReportsDropdown({ onSelect }: SavedReportsDropdownProps) {
 
   const builtInReports = savedReports.filter(r => r.isBuiltIn)
   const userReports = savedReports.filter(r => !r.isBuiltIn)
+
+  // Group built-in reports by category
+  const reportsByCategory = useMemo(() => {
+    const grouped = new Map<ReportCategory, ReportConfig[]>()
+
+    for (const report of builtInReports) {
+      const category = report.category ?? 'market'
+      if (!grouped.has(category)) {
+        grouped.set(category, [])
+      }
+      grouped.get(category)!.push(report)
+    }
+
+    return grouped
+  }, [builtInReports])
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
@@ -50,24 +83,32 @@ export function SavedReportsDropdown({ onSelect }: SavedReportsDropdownProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        {builtInReports.length > 0 && (
-          <>
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-              Presets
-            </div>
-            {builtInReports.map((report) => (
-              <DropdownMenuItem
-                key={report.id}
-                onClick={() => onSelect(report)}
-                className="gap-2"
-              >
-                <Star className="h-3 w-3 text-yellow-500" />
-                {report.name}
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
+        {/* Preset categories as submenus */}
+        {CATEGORY_ORDER.map((category) => {
+          const reports = reportsByCategory.get(category)
+          if (!reports || reports.length === 0) return null
 
+          return (
+            <DropdownMenuSub key={category}>
+              <DropdownMenuSubTrigger className="gap-2">
+                <Star className="h-3 w-3 text-yellow-500" />
+                {REPORT_CATEGORY_LABELS[category]}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-52">
+                {reports.map((report) => (
+                  <DropdownMenuItem
+                    key={report.id}
+                    onClick={() => onSelect(report)}
+                  >
+                    {report.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )
+        })}
+
+        {/* User's custom reports */}
         {userReports.length > 0 && (
           <>
             <DropdownMenuSeparator />
