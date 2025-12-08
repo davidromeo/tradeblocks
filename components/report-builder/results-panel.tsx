@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { HelpCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { RegimeComparisonStats } from "@/lib/calculations/regime-comparison";
 import { EnrichedTrade } from "@/lib/models/enriched-trade";
 import {
@@ -32,6 +32,7 @@ import {
   THRESHOLD_METRIC_LABELS,
   ThresholdMetric,
 } from "@/lib/models/report-config";
+import { HelpCircle } from "lucide-react";
 import { BucketEditor } from "./bucket-editor";
 import { ChartAxisSelector } from "./chart-axis-selector";
 import { ComparisonSummaryCard } from "./comparison-summary-card";
@@ -131,6 +132,8 @@ interface ResultsPanelProps {
   tableColumns: string[];
   thresholdMetric: ThresholdMetric;
   reportName?: string; // Name of loaded/saved report
+  showWhatIf: boolean;
+  onShowWhatIfChange: (show: boolean) => void;
   onChartTypeChange: (type: ChartType) => void;
   onXAxisChange: (field: string) => void;
   onYAxisChange: (field: string) => void;
@@ -158,6 +161,8 @@ export function ResultsPanel({
   tableColumns,
   thresholdMetric,
   reportName,
+  showWhatIf,
+  onShowWhatIfChange,
   onChartTypeChange,
   onXAxisChange,
   onYAxisChange,
@@ -319,24 +324,43 @@ export function ResultsPanel({
             </div>
           )}
 
-          {/* Scatter-specific secondary controls - Color/Size inline */}
+          {/* Scatter-specific secondary controls - Color/Size/What-If */}
           {chartType === "scatter" && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-5 gap-2 items-end">
-              <ChartAxisSelector
-                label="Color By"
-                value={colorBy?.field ?? "none"}
-                onChange={onColorByChange}
-                allowNone
-                className="xl:col-span-2"
-              />
-              <ChartAxisSelector
-                label="Size By"
-                value={sizeBy?.field ?? "none"}
-                onChange={onSizeByChange}
-                allowNone
-                className="xl:col-span-2"
-              />
-              <div className="hidden xl:block" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 items-end">
+              <div className="xl:col-span-2">
+                <ChartAxisSelector
+                  label="Color By"
+                  value={colorBy?.field ?? "none"}
+                  onChange={onColorByChange}
+                  allowNone
+                />
+              </div>
+              <div className="xl:col-span-2">
+                <ChartAxisSelector
+                  label="Size By"
+                  value={sizeBy?.field ?? "none"}
+                  onChange={onSizeByChange}
+                  allowNone
+                />
+              </div>
+              <div className="min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  What-If Analysis
+                </Label>
+                <div className="flex items-center gap-2 h-8">
+                  <Switch
+                    id="what-if-toggle"
+                    checked={showWhatIf}
+                    onCheckedChange={onShowWhatIfChange}
+                  />
+                  <Label
+                    htmlFor="what-if-toggle"
+                    className="text-xs cursor-pointer whitespace-nowrap"
+                  >
+                    {showWhatIf ? "On" : "Off"}
+                  </Label>
+                </div>
+              </div>
             </div>
           )}
 
@@ -394,6 +418,7 @@ export function ResultsPanel({
               colorBy={colorBy}
               sizeBy={sizeBy}
               metric={thresholdMetric}
+              showWhatIf={showWhatIf}
             />
           ) : (
             <CustomChart

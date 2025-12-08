@@ -36,6 +36,7 @@ interface ScatterChartProps {
   colorBy?: ChartAxisConfig;
   sizeBy?: ChartAxisConfig;
   metric?: ThresholdMetric;
+  showWhatIf?: boolean;
   className?: string;
 }
 
@@ -93,6 +94,7 @@ export function ScatterChart({
   colorBy,
   sizeBy,
   metric = "plPct",
+  showWhatIf = true,
   className,
 }: ScatterChartProps) {
   // Check if we're using multi-axis mode
@@ -130,10 +132,16 @@ export function ScatterChart({
 
   const handleRangeChange = useCallback(
     (xMin: number, xMax: number, yMin: number, yMax: number) => {
-      setSelectedRange({ xMin, xMax, yMin, yMax });
+      // Only update if What-If is enabled
+      if (showWhatIf) {
+        setSelectedRange({ xMin, xMax, yMin, yMax });
+      }
     },
-    []
+    [showWhatIf]
   );
+
+  // Clear selected range when What-If is disabled
+  const effectiveSelectedRange = showWhatIf ? selectedRange : null;
 
   const { traces, layout } = useMemo(() => {
     if (trades.length === 0) {
@@ -378,8 +386,15 @@ export function ScatterChart({
     }
 
     // If we have a selected range, create two traces: in-range and out-of-range
-    if (selectedRange) {
-      const { xMin, xMax, yMin, yMax } = selectedRange;
+    // Also check if we're actually filtering (range doesn't cover all points)
+    const isActuallyFiltering = effectiveSelectedRange && (
+      points.some((p) => p.x < effectiveSelectedRange.xMin || p.x > effectiveSelectedRange.xMax ||
+                        p.y < effectiveSelectedRange.yMin || p.y > effectiveSelectedRange.yMax)
+    );
+
+    if (effectiveSelectedRange && isActuallyFiltering) {
+      const { xMin, xMax, yMin, yMax } = effectiveSelectedRange;
+      const hasColorBy = colorBy && colorBy.field !== "none";
 
       const inRangePoints = points.filter(
         (p) => p.x >= xMin && p.x <= xMax && p.y >= yMin && p.y <= yMax
@@ -405,21 +420,82 @@ export function ScatterChart({
         });
       }
 
-      // In-range points (blue/highlighted)
+      // In-range points - apply colorBy if set, otherwise blue
       if (inRangePoints.length > 0) {
-        chartTraces.push({
-          x: inRangePoints.map((p) => p.xPlotly),
-          y: inRangePoints.map((p) => p.y),
-          mode: "markers",
-          type: "scatter",
-          marker: {
-            color: "rgb(59, 130, 246)", // Blue
-            size: inRangePoints.map((p) => p.size ?? 8),
-          },
-          hovertemplate: inRangePoints.map((p) => p.hover + "<extra>In Range</extra>"),
-          name: "In Range",
-          showlegend: true,
-        });
+        if (hasColorBy && colorBy.field === "isWinner") {
+          // Binary coloring for winners/losers (in range only)
+          const winners = inRangePoints.filter((p) => p.color === 1);
+          const losers = inRangePoints.filter((p) => p.color !== 1);
+
+          if (losers.length > 0) {
+            chartTraces.push({
+              x: losers.map((p) => p.xPlotly),
+              y: losers.map((p) => p.y),
+              mode: "markers",
+              type: "scatter",
+              marker: {
+                color: "rgb(239, 68, 68)", // Red
+                size: losers.map((p) => p.size ?? 8),
+              },
+              hovertemplate: losers.map((p) => p.hover + "<extra>In Range - Loser</extra>"),
+              name: "Losers (In Range)",
+            });
+          }
+
+          if (winners.length > 0) {
+            chartTraces.push({
+              x: winners.map((p) => p.xPlotly),
+              y: winners.map((p) => p.y),
+              mode: "markers",
+              type: "scatter",
+              marker: {
+                color: "rgb(34, 197, 94)", // Green
+                size: winners.map((p) => p.size ?? 8),
+              },
+              hovertemplate: winners.map((p) => p.hover + "<extra>In Range - Winner</extra>"),
+              name: "Winners (In Range)",
+            });
+          }
+        } else if (hasColorBy) {
+          // Continuous color scale for in-range points
+          const colorValues = inRangePoints.map((p) => p.color ?? 0);
+          const maxAbs = Math.max(...colorValues.map(Math.abs)) || 1;
+
+          chartTraces.push({
+            x: inRangePoints.map((p) => p.xPlotly),
+            y: inRangePoints.map((p) => p.y),
+            mode: "markers",
+            type: "scatter",
+            marker: {
+              color: colorValues,
+              colorscale: "RdYlBu",
+              cmin: -maxAbs,
+              cmax: maxAbs,
+              showscale: true,
+              colorbar: {
+                title: { text: getFieldInfo(colorBy.field)?.label ?? colorBy.field },
+              },
+              size: inRangePoints.map((p) => p.size ?? 8),
+            },
+            hovertemplate: inRangePoints.map((p) => p.hover + "<extra>In Range</extra>"),
+            name: "In Range",
+          });
+        } else {
+          // Simple blue for in-range
+          chartTraces.push({
+            x: inRangePoints.map((p) => p.xPlotly),
+            y: inRangePoints.map((p) => p.y),
+            mode: "markers",
+            type: "scatter",
+            marker: {
+              color: "rgb(59, 130, 246)", // Blue
+              size: inRangePoints.map((p) => p.size ?? 8),
+            },
+            hovertemplate: inRangePoints.map((p) => p.hover + "<extra>In Range</extra>"),
+            name: "In Range",
+            showlegend: true,
+          });
+        }
       }
     } else {
       // No range selection - check for color encoding
@@ -501,20 +577,21 @@ export function ScatterChart({
     }
 
     // Build layout
+    const hasColorBy = colorBy && colorBy.field !== "none";
     const showLegend =
-      selectedRange !== null ||
-      (colorBy && colorBy.field !== "none" && colorBy.field === "isWinner");
+      isActuallyFiltering ||
+      (hasColorBy && colorBy.field === "isWinner");
 
-    // Calculate dynamic right margin
+    // Calculate dynamic right margin - need space for colorbar with continuous colorBy
     let rightMargin = 40;
-    if (colorBy && colorBy.field !== "none" && colorBy.field !== "isWinner" && !selectedRange) {
+    if (hasColorBy && colorBy.field !== "isWinner") {
       rightMargin = 100; // Space for color bar
     }
 
     // Add rectangle shape for selected range
     const shapes: Partial<Shape>[] = [];
-    if (selectedRange) {
-      const { xMin, xMax, yMin, yMax } = selectedRange;
+    if (effectiveSelectedRange) {
+      const { xMin, xMax, yMin, yMax } = effectiveSelectedRange;
       shapes.push({
         type: "rect",
         xref: "x",
@@ -566,7 +643,7 @@ export function ScatterChart({
     };
 
     return { traces: chartTraces, layout: chartLayout };
-  }, [trades, xAxis, yAxis, yAxis2, yAxis3, colorBy, sizeBy, selectedRange, hasMultiAxis]);
+  }, [trades, xAxis, yAxis, yAxis2, yAxis3, colorBy, sizeBy, effectiveSelectedRange, hasMultiAxis]);
 
   if (trades.length === 0) {
     return (
@@ -586,13 +663,15 @@ export function ScatterChart({
       />
 
       {/* What-If Filter Explorer */}
-      <WhatIfExplorer2D
-        trades={trades}
-        xAxisField={xAxis.field}
-        yAxes={whatIfYAxes}
-        metric={metric}
-        onRangeChange={handleRangeChange}
-      />
+      {showWhatIf && (
+        <WhatIfExplorer2D
+          trades={trades}
+          xAxisField={xAxis.field}
+          yAxes={whatIfYAxes}
+          metric={metric}
+          onRangeChange={handleRangeChange}
+        />
+      )}
     </div>
   );
 }

@@ -56,6 +56,7 @@ export function ReportBuilderTab() {
   const [tableColumns, setTableColumns] = useState<string[]>(DEFAULT_TABLE_COLUMNS)
   const [thresholdMetric, setThresholdMetric] = useState<ThresholdMetric>('plPct')
   const [reportName, setReportName] = useState<string | undefined>(undefined)
+  const [showWhatIf, setShowWhatIf] = useState(true)
 
   // Load a saved report
   const handleLoadReport = (report: ReportConfig) => {
@@ -235,6 +236,8 @@ export function ReportBuilderTab() {
           tableColumns={tableColumns}
           thresholdMetric={thresholdMetric}
           reportName={reportName}
+          showWhatIf={showWhatIf}
+          onShowWhatIfChange={setShowWhatIf}
           onChartTypeChange={handleChartTypeChange}
           onXAxisChange={handleXAxisChange}
           onYAxisChange={handleYAxisChange}
