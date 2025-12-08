@@ -37,6 +37,7 @@ import { ChartAxisSelector } from "./chart-axis-selector";
 import { ComparisonSummaryCard } from "./comparison-summary-card";
 import { CustomChart } from "./custom-chart";
 import { CustomTable } from "./custom-table";
+import { HistogramChart } from "./histogram-chart";
 import { ThresholdChart } from "./threshold-chart";
 
 /**
@@ -372,6 +373,12 @@ export function ResultsPanel({
             />
           ) : chartType === "threshold" ? (
             <ThresholdChart
+              trades={filteredTrades}
+              xAxis={xAxis}
+              metric={thresholdMetric}
+            />
+          ) : chartType === "histogram" ? (
+            <HistogramChart
               trades={filteredTrades}
               xAxis={xAxis}
               metric={thresholdMetric}
