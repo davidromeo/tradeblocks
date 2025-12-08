@@ -71,7 +71,10 @@ function enrichSingleTrade(
 
   // Return metrics
   const rom = trade.marginReq > 0 ? (trade.pl / trade.marginReq) * 100 : undefined
-  const premiumEfficiency = trade.premium !== 0 ? (trade.pl / Math.abs(trade.premium)) * 100 : undefined
+  // Premium in CSV is per-contract, P/L is total across all contracts
+  // Multiply premium by contracts to get total premium for accurate P/L %
+  const totalPremium = trade.premium * trade.numContracts
+  const premiumEfficiency = totalPremium !== 0 ? (trade.pl / Math.abs(totalPremium)) * 100 : undefined
 
   // Risk multiple: P/L divided by MAE (how many R's won/lost)
   const rMultiple = mfeMaePoint?.mae && mfeMaePoint.mae > 0

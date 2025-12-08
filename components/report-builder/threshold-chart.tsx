@@ -15,6 +15,8 @@
  */
 
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { calculateThresholdAnalysis } from "@/lib/calculations/threshold-analysis";
 import { EnrichedTrade } from "@/lib/models/enriched-trade";
 import {
@@ -22,8 +24,9 @@ import {
   ThresholdMetric,
   getFieldInfo,
 } from "@/lib/models/report-config";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import type { Layout, PlotData } from "plotly.js";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface ThresholdChartProps {
   trades: EnrichedTrade[];
@@ -38,14 +41,116 @@ export function ThresholdChart({
   metric = "plPct",
   className,
 }: ThresholdChartProps) {
-  const { traces, layout } = useMemo(() => {
-    if (trades.length === 0) {
-      return { traces: [], layout: {} };
+  // Calculate analysis
+  const analysis = useMemo(() => {
+    if (trades.length === 0) return null;
+    return calculateThresholdAnalysis(trades, xAxis.field);
+  }, [trades, xAxis.field]);
+
+  // Get min/max X values from the data
+  const { dataMinX, dataMaxX } = useMemo(() => {
+    if (!analysis || analysis.dataPoints.length === 0) {
+      return { dataMinX: 0, dataMaxX: 1 };
+    }
+    const values = analysis.dataPoints.map((d) => d.xValue);
+    return {
+      dataMinX: Math.min(...values),
+      dataMaxX: Math.max(...values),
+    };
+  }, [analysis]);
+
+  // What-if explorer state - actual X value range
+  const [rangeValues, setRangeValues] = useState<[number, number]>([dataMinX, dataMaxX]);
+
+  // Update range when data changes
+  useMemo(() => {
+    if (analysis && analysis.dataPoints.length > 0) {
+      setRangeValues([dataMinX, dataMaxX]);
+    }
+  }, [analysis, dataMinX, dataMaxX]);
+
+  // Calculate what-if results based on current range
+  const whatIfResults = useMemo(() => {
+    if (!analysis || analysis.dataPoints.length === 0 || trades.length === 0) {
+      return null;
     }
 
-    const analysis = calculateThresholdAnalysis(trades, xAxis.field);
+    // Build trade data with both X value and metric values
+    const tradesWithData = trades
+      .map((trade) => {
+        const xValue = (trade as unknown as Record<string, unknown>)[xAxis.field];
+        return {
+          trade,
+          xValue: typeof xValue === "number" && isFinite(xValue) ? xValue : null,
+          pl: trade.pl ?? 0,
+          plPct: trade.premiumEfficiency ?? 0,
+          rom: trade.rom ?? 0,
+        };
+      })
+      .filter((t) => t.xValue !== null) as Array<{
+        trade: EnrichedTrade;
+        xValue: number;
+        pl: number;
+        plPct: number;
+        rom: number;
+      }>;
 
-    if (analysis.dataPoints.length === 0) {
+    if (tradesWithData.length === 0) return null;
+
+    // Get metric value for a trade
+    const getMetricValue = (t: { pl: number; plPct: number; rom: number }) => {
+      switch (metric) {
+        case "rom": return t.rom;
+        case "plPct": return t.plPct;
+        default: return t.pl;
+      }
+    };
+
+    // Filter trades by range
+    const [minVal, maxVal] = rangeValues;
+    const keptTrades = tradesWithData.filter(
+      (t) => t.xValue >= minVal && t.xValue <= maxVal
+    );
+    const excludedTrades = tradesWithData.filter(
+      (t) => t.xValue < minVal || t.xValue > maxVal
+    );
+
+    // Calculate metrics (averages based on selected metric)
+    const allAvg = tradesWithData.length > 0
+      ? tradesWithData.reduce((sum, t) => sum + getMetricValue(t), 0) / tradesWithData.length
+      : 0;
+    const keptAvg = keptTrades.length > 0
+      ? keptTrades.reduce((sum, t) => sum + getMetricValue(t), 0) / keptTrades.length
+      : 0;
+    const excludedAvg = excludedTrades.length > 0
+      ? excludedTrades.reduce((sum, t) => sum + getMetricValue(t), 0) / excludedTrades.length
+      : 0;
+
+    // Calculate total P/L $ amounts
+    const allTotalPl = tradesWithData.reduce((sum, t) => sum + t.pl, 0);
+    const keptTotalPl = keptTrades.reduce((sum, t) => sum + t.pl, 0);
+    const excludedTotalPl = excludedTrades.reduce((sum, t) => sum + t.pl, 0);
+
+    return {
+      rangeMin: minVal,
+      rangeMax: maxVal,
+      totalTrades: tradesWithData.length,
+      keptTrades: keptTrades.length,
+      excludedTrades: excludedTrades.length,
+      keptPct: (keptTrades.length / tradesWithData.length) * 100,
+      allAvg,
+      keptAvg,
+      excludedAvg,
+      improvement: keptAvg - allAvg,
+      // Total P/L amounts
+      allTotalPl,
+      keptTotalPl,
+      excludedTotalPl,
+    };
+  }, [analysis, trades, xAxis.field, rangeValues, metric]);
+
+  const { traces, layout } = useMemo(() => {
+    if (!analysis || analysis.dataPoints.length === 0) {
       return { traces: [], layout: {} };
     }
 
@@ -123,13 +228,16 @@ export function ThresholdChart({
       }
     };
 
+    // Create a short field name for legend (e.g., "VIX" from "Opening VIX")
+    const shortFieldName = fieldLabel.replace(/^(Opening|Closing|Avg)\s+/i, '');
+
     // Trace 3: Avg metric above threshold (secondary Y-axis)
     const avgAboveTrace: Partial<PlotData> = {
       x: xValues,
       y: analysis.dataPoints.map(getAboveValue),
       type: "scatter",
       mode: "markers",
-      name: `Avg ${metricLabel} Above`,
+      name: `Avg ${metricLabel} (High ${shortFieldName})`,
       marker: {
         color: "rgb(249, 115, 22)", // Orange - neutral color for "above"
         size: 6,
@@ -151,7 +259,7 @@ export function ThresholdChart({
       y: analysis.dataPoints.map(getBelowValue),
       type: "scatter",
       mode: "markers",
-      name: `Avg ${metricLabel} Below`,
+      name: `Avg ${metricLabel} (Low ${shortFieldName})`,
       marker: {
         color: "rgb(139, 92, 246)", // Violet - neutral color for "below"
         size: 6,
@@ -240,7 +348,19 @@ export function ThresholdChart({
     };
 
     return { traces: chartTraces, layout: chartLayout };
-  }, [trades, xAxis, metric]);
+  }, [analysis, xAxis, metric]);
+
+  // Get field info for synopsis
+  const xInfo = getFieldInfo(xAxis.field);
+  const fieldLabel = xInfo?.label ?? xAxis.field;
+  const metricLabel = metric === "rom" ? "ROM" : metric === "plPct" ? "P/L %" : "P/L";
+
+  // Format metric value
+  const formatMetric = (v: number | null) => {
+    if (v === null) return "N/A";
+    if (metric === "pl") return `$${v.toFixed(0)}`;
+    return `${v.toFixed(1)}%`;
+  };
 
   if (trades.length === 0) {
     return (
@@ -251,13 +371,144 @@ export function ThresholdChart({
   }
 
   return (
-    <ChartWrapper
-      title=""
-      className={className}
-      data={traces as PlotData[]}
-      layout={layout}
-      style={{ height: "400px" }}
-    />
+    <div>
+      <ChartWrapper
+        title=""
+        className={className}
+        data={traces as PlotData[]}
+        layout={layout}
+        style={{ height: "400px" }}
+      />
+
+      {/* What-If Explorer */}
+      {whatIfResults && (
+        <div className="mt-3 p-3 bg-muted/30 rounded-lg border text-sm">
+          <div className="font-medium mb-3">What-If Filter Explorer</div>
+
+          {/* Range Slider */}
+          <div className="space-y-2 mb-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">
+                Keep trades where {fieldLabel} is between:
+              </Label>
+              <span className="text-xs font-medium">
+                {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
+              </span>
+            </div>
+            <Slider
+              value={rangeValues}
+              onValueChange={(v) => setRangeValues(v as [number, number])}
+              min={dataMinX}
+              max={dataMaxX}
+              step={(dataMaxX - dataMinX) / 100}
+              className="w-full"
+            />
+          </div>
+
+          {/* Results Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 border-t">
+            {/* Filter info */}
+            <div>
+              <div className="text-muted-foreground text-xs">
+                {fieldLabel} Range
+              </div>
+              <div className="font-medium">
+                {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
+              </div>
+            </div>
+
+            {/* Kept trades */}
+            <div>
+              <div className="text-muted-foreground text-xs flex items-center gap-1">
+                <ArrowUp className="h-3 w-3 text-green-500" />
+                In Range ({whatIfResults.keptTrades} trades)
+              </div>
+              <div
+                className={`font-medium ${
+                  whatIfResults.keptAvg > 0
+                    ? "text-green-600 dark:text-green-400"
+                    : whatIfResults.keptAvg < 0
+                    ? "text-red-600 dark:text-red-400"
+                    : ""
+                }`}
+              >
+                Avg {metricLabel}: {formatMetric(whatIfResults.keptAvg)}
+              </div>
+            </div>
+
+            {/* Excluded trades */}
+            <div>
+              <div className="text-muted-foreground text-xs flex items-center gap-1">
+                <ArrowDown className="h-3 w-3 text-red-500" />
+                Outside ({whatIfResults.excludedTrades} trades)
+              </div>
+              <div
+                className={`font-medium ${
+                  whatIfResults.excludedAvg > 0
+                    ? "text-green-600 dark:text-green-400"
+                    : whatIfResults.excludedAvg < 0
+                    ? "text-red-600 dark:text-red-400"
+                    : ""
+                }`}
+              >
+                Avg {metricLabel}: {formatMetric(whatIfResults.excludedAvg)}
+              </div>
+            </div>
+
+            {/* Impact */}
+            <div>
+              <div className="text-muted-foreground text-xs">vs All Trades</div>
+              <div
+                className={`font-medium ${
+                  whatIfResults.improvement > 0
+                    ? "text-green-600 dark:text-green-400"
+                    : whatIfResults.improvement < 0
+                    ? "text-red-600 dark:text-red-400"
+                    : ""
+                }`}
+              >
+                {whatIfResults.improvement > 0 ? "+" : ""}
+                {formatMetric(whatIfResults.improvement)}
+              </div>
+            </div>
+          </div>
+
+          {/* Total P/L Summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-3 pt-3 border-t">
+            <div>
+              <div className="text-muted-foreground text-xs">Total P/L (All)</div>
+              <div className={`font-medium ${whatIfResults.allTotalPl >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                ${whatIfResults.allTotalPl.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Total P/L (In Range)</div>
+              <div className={`font-medium ${whatIfResults.keptTotalPl >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                ${whatIfResults.keptTotalPl.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Total P/L (Outside)</div>
+              <div className={`font-medium ${whatIfResults.excludedTotalPl >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                ${whatIfResults.excludedTotalPl.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">P/L Change if Filtered</div>
+              <div className={`font-medium ${-whatIfResults.excludedTotalPl >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                {-whatIfResults.excludedTotalPl >= 0 ? "+" : ""}${(-whatIfResults.excludedTotalPl).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="mt-3 pt-2 border-t text-xs text-muted-foreground">
+            Keeping {whatIfResults.keptPct.toFixed(0)}% of trades ({whatIfResults.keptTrades} of {whatIfResults.totalTrades}).
+            {" "}All trades avg: {formatMetric(whatIfResults.allAvg)}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

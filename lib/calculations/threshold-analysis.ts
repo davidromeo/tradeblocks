@@ -80,7 +80,7 @@ export function calculateThresholdAnalysis(
       trade,
       xValue: getTradeValue(trade, xField),
       pl: trade.pl ?? 0,
-      plPct: trade.premiumEfficiency ?? (trade.premium && trade.premium !== 0 ? (trade.pl / Math.abs(trade.premium)) * 100 : 0),
+      plPct: trade.premiumEfficiency ?? (trade.premium && trade.premium !== 0 && trade.numContracts ? (trade.pl / Math.abs(trade.premium * trade.numContracts)) * 100 : 0),
       rom: trade.rom ?? 0
     }))
     .filter(t => t.xValue !== null) as Array<{
@@ -183,5 +183,106 @@ export function calculateThresholdAnalysis(
     dataPoints,
     totalTrades,
     totalPl
+  }
+}
+
+/**
+ * Result of finding the optimal threshold
+ */
+export interface OptimalThresholdResult {
+  threshold: number              // The X value with the largest gap
+  gap: number                    // The difference (above - below)
+  avgAbove: number | null        // Avg metric for trades > threshold
+  avgBelow: number | null        // Avg metric for trades <= threshold
+  tradesAbove: number
+  tradesBelow: number
+  recommendation: 'above' | 'below' | 'neutral'  // Which side performs better
+}
+
+/**
+ * Find the optimal threshold - the point where the gap between
+ * above vs below average metrics is largest
+ *
+ * @param analysis - The threshold analysis result
+ * @param metric - Which metric to use: 'pl', 'plPct', or 'rom'
+ * @param minTradesPct - Minimum % of trades required on each side (default 10%)
+ * @returns The optimal threshold info, or null if not enough data
+ */
+export function findOptimalThreshold(
+  analysis: ThresholdAnalysisResult,
+  metric: 'pl' | 'plPct' | 'rom' = 'plPct',
+  minTradesPct: number = 10
+): OptimalThresholdResult | null {
+  if (analysis.dataPoints.length === 0) {
+    return null
+  }
+
+  const minTrades = Math.ceil(analysis.totalTrades * (minTradesPct / 100))
+
+  // Get the right metric values based on selection
+  const getAbove = (d: ThresholdDataPoint) => {
+    switch (metric) {
+      case 'rom': return d.avgRomAbove
+      case 'plPct': return d.avgPlPctAbove
+      default: return d.avgPlAbove
+    }
+  }
+  const getBelow = (d: ThresholdDataPoint) => {
+    switch (metric) {
+      case 'rom': return d.avgRomBelow
+      case 'plPct': return d.avgPlPctBelow
+      default: return d.avgPlBelow
+    }
+  }
+
+  let bestPoint: ThresholdDataPoint | null = null
+  let bestGap = 0
+
+  for (const point of analysis.dataPoints) {
+    // Ensure minimum trades on each side
+    if (point.tradesAbove < minTrades || point.tradesBelow < minTrades) {
+      continue
+    }
+
+    const above = getAbove(point)
+    const below = getBelow(point)
+
+    if (above === null || below === null) {
+      continue
+    }
+
+    // Calculate absolute gap (we want the largest difference either direction)
+    const gap = Math.abs(above - below)
+
+    if (gap > bestGap) {
+      bestGap = gap
+      bestPoint = point
+    }
+  }
+
+  if (!bestPoint) {
+    return null
+  }
+
+  const avgAbove = getAbove(bestPoint)
+  const avgBelow = getBelow(bestPoint)
+
+  let recommendation: 'above' | 'below' | 'neutral' = 'neutral'
+  if (avgAbove !== null && avgBelow !== null) {
+    if (avgAbove > avgBelow) {
+      recommendation = 'above'
+    } else if (avgBelow > avgAbove) {
+      recommendation = 'below'
+    }
+  }
+
+  return {
+    threshold: bestPoint.xValue,
+    gap: avgAbove !== null && avgBelow !== null ? avgAbove - avgBelow : 0,
+    avgAbove,
+    avgBelow,
+    tradesAbove: bestPoint.tradesAbove,
+    tradesBelow: bestPoint.tradesBelow,
+    recommendation
   }
 }
