@@ -52,11 +52,23 @@ export function computeDerivedFields(trade: Trade): DerivedTradeFields {
     durationHours = (closeDate.getTime() - openDate.getTime()) / (1000 * 60 * 60)
   }
 
+  // Pull through MFE/MAE-derived fields when present (e.g., EnrichedTrade)
+  const maybeNumber = (val: unknown) =>
+    typeof val === 'number' && isFinite(val) ? val : undefined
+
+  const mfePercent = maybeNumber((trade as unknown as Record<string, unknown>).mfePercent)
+  const maePercent = maybeNumber((trade as unknown as Record<string, unknown>).maePercent)
+  const profitCapturePercent = maybeNumber((trade as unknown as Record<string, unknown>).profitCapturePercent)
+  const excursionRatio = maybeNumber((trade as unknown as Record<string, unknown>).excursionRatio)
+
   return {
     dayOfWeek,
     timeMinutes,
-    durationHours
-    // MFE/MAE fields are populated separately from MFEMAEDataPoint
+    durationHours,
+    mfePercent,
+    maePercent,
+    profitCapturePercent,
+    excursionRatio
   }
 }
 
