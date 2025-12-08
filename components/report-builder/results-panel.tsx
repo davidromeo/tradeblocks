@@ -8,6 +8,11 @@
 
 import { MultiSelect } from "@/components/multi-select";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -16,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { HelpCircle } from "lucide-react";
 import { RegimeComparisonStats } from "@/lib/calculations/regime-comparison";
 import { EnrichedTrade } from "@/lib/models/enriched-trade";
 import {
@@ -32,6 +38,81 @@ import { ComparisonSummaryCard } from "./comparison-summary-card";
 import { CustomChart } from "./custom-chart";
 import { CustomTable } from "./custom-table";
 import { ThresholdChart } from "./threshold-chart";
+
+/**
+ * Tooltip content for each chart type
+ */
+const CHART_TYPE_TOOLTIPS: Record<
+  ChartType,
+  { flavor: string; detailed: string }
+> = {
+  scatter: {
+    flavor: "How do two metrics relate to each other across your trades?",
+    detailed:
+      "Scatter plots reveal correlations and patterns between any two fields. Use Color By to highlight winners/losers, or Size By to emphasize trade magnitude. Great for finding relationships like 'do longer holds produce better returns?'",
+  },
+  line: {
+    flavor: "How does a metric trend over time or another ordered variable?",
+    detailed:
+      "Line charts connect points in order, ideal for time series or sequential analysis. Add multiple Y-axes to compare different metrics on the same timeline. Perfect for spotting trends in your trading performance.",
+  },
+  histogram: {
+    flavor: "How are your trade values distributed?",
+    detailed:
+      "Histograms show the frequency distribution of a single metric. Use this to understand typical ranges, identify outliers, and see if your results follow expected patterns like normal distribution.",
+  },
+  bar: {
+    flavor: "How do averages compare across different value ranges?",
+    detailed:
+      "Bar charts group trades into buckets by X-axis value and show the average Y value for each bucket. Useful for questions like 'what's the average P/L for trades at different delta levels?'",
+  },
+  box: {
+    flavor: "How does the spread of outcomes vary across quartiles?",
+    detailed:
+      "Box plots divide your X-axis values into quartiles (Q1-Q4) and show the distribution of Y values in each. Reveals not just averages but variability - are high-delta trades more consistent or more volatile?",
+  },
+  threshold: {
+    flavor: "Where should you set your entry or exit filter thresholds?",
+    detailed:
+      "Threshold analysis helps optimize filter cutoffs. The cumulative lines show what percentage of trades and P/L fall below each threshold. The dots show average returns above vs below each point - look for thresholds where 'above' significantly outperforms 'below'.",
+  },
+  table: {
+    flavor: "What are the aggregate statistics for each value bucket?",
+    detailed:
+      "The table view groups trades by X-axis ranges and calculates statistics for each bucket. Compare win rates, average P/L, trade counts, and more across different segments of your data.",
+  },
+};
+
+/**
+ * Tooltip component for chart type explanation
+ */
+function ChartTypeTooltip({ chartType }: { chartType: ChartType }) {
+  const tooltip = CHART_TYPE_TOOLTIPS[chartType];
+  const title = CHART_TYPE_LABELS[chartType];
+
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <HelpCircle className="w-3.5 h-3.5 text-muted-foreground/60 cursor-help" />
+      </HoverCardTrigger>
+      <HoverCardContent className="w-80 p-0 overflow-hidden">
+        <div className="space-y-3">
+          <div className="bg-primary/5 border-b px-4 py-3">
+            <h4 className="text-sm font-semibold text-primary">{title}</h4>
+          </div>
+          <div className="px-4 pb-4 space-y-3">
+            <p className="text-sm font-medium text-foreground leading-relaxed">
+              {tooltip.flavor}
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {tooltip.detailed}
+            </p>
+          </div>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
 
 interface ResultsPanelProps {
   trades: EnrichedTrade[];
@@ -112,8 +193,9 @@ export function ResultsPanel({
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 items-end">
               {/* Chart type selector */}
               <div className="min-w-0">
-                <Label className="text-xs text-muted-foreground mb-1 block">
+                <Label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   Chart Type
+                  <ChartTypeTooltip chartType={chartType} />
                 </Label>
                 <Select
                   value={chartType}
@@ -162,8 +244,9 @@ export function ResultsPanel({
             <div className={`grid ${getGridCols()} gap-2 items-end`}>
               {/* Chart type selector */}
               <div className="min-w-0">
-                <Label className="text-xs text-muted-foreground mb-1 block">
+                <Label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   Chart Type
+                  <ChartTypeTooltip chartType={chartType} />
                 </Label>
                 <Select
                   value={chartType}

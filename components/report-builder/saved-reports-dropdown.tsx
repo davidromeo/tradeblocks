@@ -8,7 +8,18 @@
  */
 
 import { useEffect, useMemo } from 'react'
-import { ChevronDown, Star, Trash2 } from 'lucide-react'
+import {
+  BarChart3,
+  ChevronDown,
+  LineChart,
+  ScatterChart,
+  SlidersHorizontal,
+  Star,
+  Table2,
+  Trash2,
+  TrendingUp
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -24,8 +35,20 @@ import { useSettingsStore } from '@/lib/stores/settings-store'
 import {
   ReportConfig,
   ReportCategory,
+  ChartType,
   REPORT_CATEGORY_LABELS
 } from '@/lib/models/report-config'
+
+// Map chart types to icons
+const CHART_TYPE_ICONS: Record<ChartType, LucideIcon> = {
+  scatter: ScatterChart,
+  line: LineChart,
+  histogram: BarChart3,
+  bar: BarChart3,
+  box: SlidersHorizontal,
+  threshold: TrendingUp,
+  table: Table2
+}
 
 interface SavedReportsDropdownProps {
   onSelect: (report: ReportConfig) => void
@@ -95,14 +118,19 @@ export function SavedReportsDropdown({ onSelect }: SavedReportsDropdownProps) {
                 {REPORT_CATEGORY_LABELS[category]}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-52">
-                {reports.map((report) => (
-                  <DropdownMenuItem
-                    key={report.id}
-                    onClick={() => onSelect(report)}
-                  >
-                    {report.name}
-                  </DropdownMenuItem>
-                ))}
+                {reports.map((report) => {
+                  const Icon = CHART_TYPE_ICONS[report.chartType]
+                  return (
+                    <DropdownMenuItem
+                      key={report.id}
+                      onClick={() => onSelect(report)}
+                      className="gap-2"
+                    >
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      {report.name}
+                    </DropdownMenuItem>
+                  )
+                })}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           )
@@ -115,23 +143,29 @@ export function SavedReportsDropdown({ onSelect }: SavedReportsDropdownProps) {
             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               My Reports
             </div>
-            {userReports.map((report) => (
-              <DropdownMenuItem
-                key={report.id}
-                onClick={() => onSelect(report)}
-                className="group flex justify-between"
-              >
-                <span>{report.name}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => handleDelete(e, report.id)}
+            {userReports.map((report) => {
+              const Icon = CHART_TYPE_ICONS[report.chartType]
+              return (
+                <DropdownMenuItem
+                  key={report.id}
+                  onClick={() => onSelect(report)}
+                  className="group flex justify-between"
                 >
-                  <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                </Button>
-              </DropdownMenuItem>
-            ))}
+                  <span className="flex items-center gap-2">
+                    <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                    {report.name}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                    onClick={(e) => handleDelete(e, report.id)}
+                  >
+                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                  </Button>
+                </DropdownMenuItem>
+              )
+            })}
           </>
         )}
 

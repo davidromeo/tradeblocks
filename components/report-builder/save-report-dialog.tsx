@@ -27,8 +27,10 @@ import {
   ChartAxisConfig,
   ThresholdMetric,
   getFieldInfo,
+  getColumnLabel,
   FILTER_OPERATOR_LABELS,
-  CHART_TYPE_LABELS
+  CHART_TYPE_LABELS,
+  THRESHOLD_METRIC_LABELS
 } from '@/lib/models/report-config'
 
 interface SaveReportDialogProps {
@@ -119,19 +121,41 @@ export function SaveReportDialog({
           </div>
           <div className="text-sm text-muted-foreground space-y-1">
             <p><strong>Chart Type:</strong> {CHART_TYPE_LABELS[chartType]}</p>
-            <p><strong>X Axis:</strong> {getFieldInfo(xAxis.field)?.label || xAxis.field}</p>
-            <p><strong>Y Axis:</strong> {getFieldInfo(yAxis.field)?.label || yAxis.field}</p>
-            {yAxis2 && yAxis2.field !== 'none' && (
+            {/* X Axis label varies by chart type */}
+            <p>
+              <strong>
+                {chartType === 'table' ? 'Group By' : chartType === 'threshold' ? 'Analyze Field' : 'X Axis'}:
+              </strong>{' '}
+              {getFieldInfo(xAxis.field)?.label || xAxis.field}
+            </p>
+            {/* Y Axis - not shown for table or histogram */}
+            {chartType !== 'table' && chartType !== 'histogram' && (
+              <p><strong>Y Axis:</strong> {getFieldInfo(yAxis.field)?.label || yAxis.field}</p>
+            )}
+            {/* Additional Y axes for scatter/line only */}
+            {(chartType === 'scatter' || chartType === 'line') && yAxis2 && yAxis2.field !== 'none' && (
               <p><strong>Y Axis 2:</strong> {getFieldInfo(yAxis2.field)?.label || yAxis2.field}</p>
             )}
-            {yAxis3 && yAxis3.field !== 'none' && (
+            {(chartType === 'scatter' || chartType === 'line') && yAxis3 && yAxis3.field !== 'none' && (
               <p><strong>Y Axis 3:</strong> {getFieldInfo(yAxis3.field)?.label || yAxis3.field}</p>
             )}
-            {colorBy && colorBy.field !== 'none' && (
+            {/* Color/Size for scatter only */}
+            {chartType === 'scatter' && colorBy && colorBy.field !== 'none' && (
               <p><strong>Color By:</strong> {getFieldInfo(colorBy.field)?.label || colorBy.field}</p>
             )}
-            {sizeBy && sizeBy.field !== 'none' && (
+            {chartType === 'scatter' && sizeBy && sizeBy.field !== 'none' && (
               <p><strong>Size By:</strong> {getFieldInfo(sizeBy.field)?.label || sizeBy.field}</p>
+            )}
+            {/* Threshold metric */}
+            {chartType === 'threshold' && thresholdMetric && (
+              <p><strong>Metric:</strong> {THRESHOLD_METRIC_LABELS[thresholdMetric]}</p>
+            )}
+            {/* Table buckets and columns */}
+            {chartType === 'table' && tableBuckets && tableBuckets.length > 0 && (
+              <p><strong>Buckets:</strong> {tableBuckets.join(', ')}</p>
+            )}
+            {chartType === 'table' && tableColumns && tableColumns.length > 0 && (
+              <p><strong>Columns:</strong> {tableColumns.map(c => getColumnLabel(c)).join(', ')}</p>
             )}
             {filterConfig.conditions.filter(c => c.enabled).length > 0 && (
               <div>

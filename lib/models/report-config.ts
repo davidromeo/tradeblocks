@@ -367,7 +367,10 @@ export const TABLE_COLUMN_OPTIONS: TableColumnGroup[] = [
     options: [
       { value: 'pl:avg', label: 'Avg P&L ($)' },
       { value: 'pl:sum', label: 'Total P&L ($)' },
-      { value: 'rom:avg', label: 'Avg ROM (%)' }
+      { value: 'netPl:avg', label: 'Avg Net P&L ($)' },
+      { value: 'netPl:sum', label: 'Total Net P&L ($)' },
+      { value: 'rom:avg', label: 'Avg ROM (%)' },
+      { value: 'premiumEfficiency:avg', label: 'Avg P&L (%)' }
     ]
   },
   {
@@ -376,7 +379,18 @@ export const TABLE_COLUMN_OPTIONS: TableColumnGroup[] = [
       { value: 'mfePercent:avg', label: 'Avg MFE (%)' },
       { value: 'maePercent:avg', label: 'Avg MAE (%)' },
       { value: 'profitCapturePercent:avg', label: 'Avg Profit Capture (%)' },
+      { value: 'excursionRatio:avg', label: 'Avg Excursion Ratio' },
       { value: 'rMultiple:avg', label: 'Avg R-Multiple' }
+    ]
+  },
+  {
+    heading: 'Position',
+    options: [
+      { value: 'premium:avg', label: 'Avg Premium ($)' },
+      { value: 'marginReq:avg', label: 'Avg Margin ($)' },
+      { value: 'numContracts:avg', label: 'Avg Contracts' },
+      { value: 'totalFees:avg', label: 'Avg Fees ($)' },
+      { value: 'totalFees:sum', label: 'Total Fees ($)' }
     ]
   },
   {
@@ -389,7 +403,10 @@ export const TABLE_COLUMN_OPTIONS: TableColumnGroup[] = [
     heading: 'Market',
     options: [
       { value: 'openingVix:avg', label: 'Avg Opening VIX' },
-      { value: 'vixChange:avg', label: 'Avg VIX Change' }
+      { value: 'closingVix:avg', label: 'Avg Closing VIX' },
+      { value: 'vixChange:avg', label: 'Avg VIX Change' },
+      { value: 'vixChangePct:avg', label: 'Avg VIX Change (%)' },
+      { value: 'gap:avg', label: 'Avg Gap (%)' }
     ]
   }
 ]

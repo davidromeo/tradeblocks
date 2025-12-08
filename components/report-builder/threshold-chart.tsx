@@ -131,7 +131,7 @@ export function ThresholdChart({
       mode: "markers",
       name: `Avg ${metricLabel} Above`,
       marker: {
-        color: "rgb(239, 68, 68)", // Red
+        color: "rgb(249, 115, 22)", // Orange - neutral color for "above"
         size: 6,
       },
       hovertemplate: analysis.dataPoints.map(
@@ -153,7 +153,7 @@ export function ThresholdChart({
       mode: "markers",
       name: `Avg ${metricLabel} Below`,
       marker: {
-        color: "rgb(34, 197, 94)", // Green
+        color: "rgb(139, 92, 246)", // Violet - neutral color for "below"
         size: 6,
       },
       hovertemplate: analysis.dataPoints.map(
