@@ -117,7 +117,7 @@ export function FilterConditionRow({
             <Button
               variant="outline"
               size="sm"
-              className="flex-1 h-8 justify-between font-normal text-sm"
+              className="flex-1 min-w-0 h-8 justify-between font-normal text-sm"
             >
               <span className="truncate">{fieldDisplayValue}</span>
               <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
