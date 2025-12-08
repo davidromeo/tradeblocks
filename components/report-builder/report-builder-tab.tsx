@@ -27,6 +27,7 @@ import { enrichTrades } from '@/lib/calculations/enrich-trades'
 import { calculateRegimeComparison, RegimeComparisonStats } from '@/lib/calculations/regime-comparison'
 import { getDefaultBucketEdges } from '@/lib/calculations/table-aggregation'
 import { FilterPanel } from './filter-panel'
+import { MetricsGuideDialog } from './metrics-guide-dialog'
 import { ResultsPanel } from './results-panel'
 import { SavedReportsDropdown } from './saved-reports-dropdown'
 import { SaveReportDialog } from './save-report-dialog'
@@ -201,21 +202,24 @@ export function ReportBuilderTab() {
             thresholdMetric={thresholdMetric}
           />
         </div>
-        <Button
-          variant={showFilters ? "secondary" : "outline"}
-          size="sm"
-          onClick={() => setShowFilters(!showFilters)}
-          className="gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-          {activeFilterCount > 0 && (
-            <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
-              {activeFilterCount}
-            </Badge>
-          )}
-          <ChevronRight className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <MetricsGuideDialog />
+          <Button
+            variant={showFilters ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                {activeFilterCount}
+              </Badge>
+            )}
+            <ChevronRight className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
+          </Button>
+        </div>
       </div>
 
       {/* Main Content - Chart with optional Filter Panel */}

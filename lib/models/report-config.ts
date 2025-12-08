@@ -156,7 +156,6 @@ export type ReportField =
   | 'shortLongRatioChangePct'
   // Derived: Return metrics
   | 'rom'
-  | 'premiumEfficiency'
   | 'plPct'
   | 'netPlPct'
   // Derived: Timing
@@ -212,6 +211,7 @@ export interface FieldInfo {
   category: FieldCategory
   unit?: string
   description?: string
+  formula?: string
 }
 
 /**
@@ -220,51 +220,50 @@ export interface FieldInfo {
  */
 export const REPORT_FIELDS: FieldInfo[] = [
   // Market conditions
-  { field: 'openingVix', label: 'Opening VIX', category: 'market', description: 'VIX at trade entry' },
-  { field: 'closingVix', label: 'Closing VIX', category: 'market', description: 'VIX at trade exit' },
-  { field: 'vixChange', label: 'VIX Change', category: 'market', description: 'Closing VIX - Opening VIX' },
-  { field: 'vixChangePct', label: 'VIX Change %', category: 'market', unit: '%', description: 'VIX percentage change' },
-  { field: 'openingShortLongRatio', label: 'Opening S/L Ratio', category: 'market', description: 'Short/Long ratio at entry' },
-  { field: 'closingShortLongRatio', label: 'Closing S/L Ratio', category: 'market', description: 'Short/Long ratio at exit' },
-  { field: 'shortLongRatioChange', label: 'S/L Ratio Change', category: 'market', description: 'Closing SLR / Opening SLR' },
-  { field: 'shortLongRatioChangePct', label: 'S/L Ratio Change %', category: 'market', unit: '%', description: 'S/L ratio percentage change' },
-  { field: 'gap', label: 'Gap %', category: 'market', unit: '%', description: 'Opening gap percentage' },
-  { field: 'movement', label: 'Movement', category: 'market', description: 'Price movement during trade' },
+  { field: 'openingVix', label: 'Opening VIX', category: 'market', description: 'VIX level when the trade was opened' },
+  { field: 'closingVix', label: 'Closing VIX', category: 'market', description: 'VIX level when the trade was closed' },
+  { field: 'vixChange', label: 'VIX Change', category: 'market', description: 'How much VIX moved during the trade', formula: 'Closing VIX - Opening VIX' },
+  { field: 'vixChangePct', label: 'VIX Change %', category: 'market', unit: '%', description: 'Percentage change in VIX during the trade', formula: '((Closing VIX - Opening VIX) / Opening VIX) × 100' },
+  { field: 'openingShortLongRatio', label: 'Opening S/L Ratio', category: 'market', description: 'Short/Long ratio at trade entry - measures market sentiment' },
+  { field: 'closingShortLongRatio', label: 'Closing S/L Ratio', category: 'market', description: 'Short/Long ratio at trade exit' },
+  { field: 'shortLongRatioChange', label: 'S/L Ratio Change', category: 'market', description: 'How S/L ratio changed during the trade', formula: 'Closing S/L Ratio / Opening S/L Ratio' },
+  { field: 'shortLongRatioChangePct', label: 'S/L Ratio Change %', category: 'market', unit: '%', description: 'Percentage change in S/L ratio', formula: '((Closing - Opening) / Opening) × 100' },
+  { field: 'gap', label: 'Gap %', category: 'market', unit: '%', description: 'Opening gap percentage from previous close' },
+  { field: 'movement', label: 'Movement', category: 'market', description: 'Underlying price movement during the trade' },
 
   // Return metrics
-  { field: 'pl', label: 'Profit/Loss', category: 'returns', unit: '$', description: 'Trade P&L in dollars' },
-  { field: 'netPl', label: 'Net P/L', category: 'returns', unit: '$', description: 'P&L after fees' },
-  { field: 'plPct', label: 'P/L %', category: 'returns', unit: '%', description: 'P/L as % of premium' },
-  { field: 'netPlPct', label: 'Net P/L %', category: 'returns', unit: '%', description: 'Net P/L as % of premium' },
-  { field: 'rom', label: 'Return on Margin', category: 'returns', unit: '%', description: 'P/L / Margin * 100' },
-  { field: 'premiumEfficiency', label: 'Premium Efficiency', category: 'returns', unit: '%', description: 'P/L / Premium * 100' },
-  { field: 'isWinner', label: 'Is Winner', category: 'returns', description: '1 if profitable, 0 if loss' },
+  { field: 'pl', label: 'Profit/Loss', category: 'returns', unit: '$', description: 'Trade profit or loss in dollars (before fees)' },
+  { field: 'netPl', label: 'Net P/L', category: 'returns', unit: '$', description: 'Profit/loss after subtracting all fees', formula: 'P/L - Total Fees' },
+  { field: 'plPct', label: 'P/L %', category: 'returns', unit: '%', description: 'Return as a percentage of premium collected', formula: '(P/L / Premium) × 100' },
+  { field: 'netPlPct', label: 'Net P/L %', category: 'returns', unit: '%', description: 'Net return as a percentage of premium', formula: '(Net P/L / Premium) × 100' },
+  { field: 'rom', label: 'Return on Margin', category: 'returns', unit: '%', description: 'Return relative to margin required - measures capital efficiency', formula: '(P/L / Margin Required) × 100' },
+  { field: 'isWinner', label: 'Is Winner', category: 'returns', description: 'Binary flag: 1 if trade was profitable, 0 if it was a loss' },
 
   // Risk metrics (MFE/MAE)
-  { field: 'mfePercent', label: 'MFE %', category: 'risk', unit: '%', description: 'Maximum Favorable Excursion %' },
-  { field: 'maePercent', label: 'MAE %', category: 'risk', unit: '%', description: 'Maximum Adverse Excursion %' },
-  { field: 'profitCapturePercent', label: 'Profit Capture %', category: 'risk', unit: '%', description: 'P/L / MFE * 100' },
-  { field: 'excursionRatio', label: 'Excursion Ratio', category: 'risk', description: 'MFE / MAE (reward/risk)' },
-  { field: 'rMultiple', label: 'R-Multiple', category: 'risk', description: 'P/L / MAE (risk units won/lost)' },
+  { field: 'mfePercent', label: 'MFE %', category: 'risk', unit: '%', description: 'Maximum Favorable Excursion - the best unrealized profit during the trade as % of premium', formula: '(Max Unrealized Profit / Premium) × 100' },
+  { field: 'maePercent', label: 'MAE %', category: 'risk', unit: '%', description: 'Maximum Adverse Excursion - the worst unrealized loss during the trade as % of premium', formula: '(Max Unrealized Loss / Premium) × 100' },
+  { field: 'profitCapturePercent', label: 'Profit Capture %', category: 'risk', unit: '%', description: 'How much of the peak profit was captured at exit', formula: '(P/L / MFE) × 100' },
+  { field: 'excursionRatio', label: 'Excursion Ratio', category: 'risk', description: 'Reward/risk ratio - how much upside vs downside the trade experienced', formula: 'MFE / MAE' },
+  { field: 'rMultiple', label: 'R-Multiple', category: 'risk', description: 'Risk-adjusted return - how many "R" (risk units) were won or lost', formula: 'P/L / MAE' },
 
   // Trade details
-  { field: 'premium', label: 'Premium', category: 'trade', unit: '$', description: 'Premium collected' },
-  { field: 'marginReq', label: 'Margin Required', category: 'trade', unit: '$', description: 'Margin requirement' },
-  { field: 'openingPrice', label: 'Opening Price', category: 'trade', unit: '$', description: 'Trade opening price' },
-  { field: 'closingPrice', label: 'Closing Price', category: 'trade', unit: '$', description: 'Trade closing price' },
-  { field: 'numContracts', label: 'Contracts', category: 'trade', description: 'Number of contracts' },
-  { field: 'totalFees', label: 'Total Fees', category: 'trade', unit: '$', description: 'Opening + closing fees' },
-  { field: 'openingCommissionsFees', label: 'Opening Fees', category: 'trade', unit: '$', description: 'Opening commissions and fees' },
-  { field: 'closingCommissionsFees', label: 'Closing Fees', category: 'trade', unit: '$', description: 'Closing commissions and fees' },
-  { field: 'maxProfit', label: 'Max Profit', category: 'trade', unit: '$', description: 'Maximum potential profit' },
-  { field: 'maxLoss', label: 'Max Loss', category: 'trade', unit: '$', description: 'Maximum potential loss' },
+  { field: 'premium', label: 'Premium', category: 'trade', unit: '$', description: 'Premium collected per contract when opening the trade' },
+  { field: 'marginReq', label: 'Margin Required', category: 'trade', unit: '$', description: 'Margin/buying power required to hold the position' },
+  { field: 'openingPrice', label: 'Opening Price', category: 'trade', unit: '$', description: 'Price of the position when opened' },
+  { field: 'closingPrice', label: 'Closing Price', category: 'trade', unit: '$', description: 'Price of the position when closed' },
+  { field: 'numContracts', label: 'Contracts', category: 'trade', description: 'Number of contracts traded' },
+  { field: 'totalFees', label: 'Total Fees', category: 'trade', unit: '$', description: 'All commissions and fees paid', formula: 'Opening Fees + Closing Fees' },
+  { field: 'openingCommissionsFees', label: 'Opening Fees', category: 'trade', unit: '$', description: 'Commissions and fees paid when opening' },
+  { field: 'closingCommissionsFees', label: 'Closing Fees', category: 'trade', unit: '$', description: 'Commissions and fees paid when closing' },
+  { field: 'maxProfit', label: 'Max Profit', category: 'trade', unit: '$', description: 'Maximum potential profit if held to expiration' },
+  { field: 'maxLoss', label: 'Max Loss', category: 'trade', unit: '$', description: 'Maximum potential loss if held to expiration' },
 
   // Timing
-  { field: 'tradeNumber', label: 'Trade #', category: 'timing', description: '1-indexed trade sequence' },
-  { field: 'dateOpenedTimestamp', label: 'Date Opened', category: 'timing', description: 'Trade entry date (for time-series charts)' },
-  { field: 'durationHours', label: 'Duration (hrs)', category: 'timing', unit: 'hrs', description: 'Trade holding period in hours' },
-  { field: 'dayOfWeek', label: 'Day of Week', category: 'timing', description: '0=Sun, 1=Mon, ..., 6=Sat' },
-  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour trade was opened (0-23)' }
+  { field: 'tradeNumber', label: 'Trade #', category: 'timing', description: 'Sequential trade number (1 = first trade)' },
+  { field: 'dateOpenedTimestamp', label: 'Date Opened', category: 'timing', description: 'When the trade was opened (useful for time-series charts)' },
+  { field: 'durationHours', label: 'Duration (hrs)', category: 'timing', unit: 'hrs', description: 'How long the position was held', formula: 'Close Time - Open Time' },
+  { field: 'dayOfWeek', label: 'Day of Week', category: 'timing', description: 'Day of week when opened: 0=Sunday through 6=Saturday' },
+  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour of day when opened (0-23 in Eastern Time)' }
 ]
 
 /**
