@@ -326,8 +326,8 @@ export function ResultsPanel({
 
           {/* Scatter-specific secondary controls - Color/Size/What-If */}
           {chartType === "scatter" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 items-end">
-              <div className="xl:col-span-2">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end">
+              <div className="sm:col-span-2">
                 <ChartAxisSelector
                   label="Color By"
                   value={colorBy?.field ?? "none"}
@@ -335,7 +335,7 @@ export function ResultsPanel({
                   allowNone
                 />
               </div>
-              <div className="xl:col-span-2">
+              <div className="sm:col-span-2">
                 <ChartAxisSelector
                   label="Size By"
                   value={sizeBy?.field ?? "none"}
@@ -343,52 +343,50 @@ export function ResultsPanel({
                   allowNone
                 />
               </div>
-              <div className="min-w-0 flex items-end gap-3">
+              <div className={showWhatIf ? "" : "sm:col-span-2"}>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  What-If Analysis
+                </Label>
+                <div className="flex items-center gap-2 h-8">
+                  <Switch
+                    id="what-if-toggle"
+                    checked={showWhatIf}
+                    onCheckedChange={onShowWhatIfChange}
+                  />
+                  <Label
+                    htmlFor="what-if-toggle"
+                    className="text-xs cursor-pointer"
+                  >
+                    {showWhatIf ? "On" : "Off"}
+                  </Label>
+                </div>
+              </div>
+              {showWhatIf && (
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">
-                    What-If Analysis
+                    Metric
                   </Label>
-                  <div className="flex items-center gap-2 h-8">
-                    <Switch
-                      id="what-if-toggle"
-                      checked={showWhatIf}
-                      onCheckedChange={onShowWhatIfChange}
-                    />
-                    <Label
-                      htmlFor="what-if-toggle"
-                      className="text-xs cursor-pointer whitespace-nowrap"
-                    >
-                      {showWhatIf ? "On" : "Off"}
-                    </Label>
-                  </div>
+                  <Select
+                    value={thresholdMetric}
+                    onValueChange={(v) =>
+                      onThresholdMetricChange(v as ThresholdMetric)
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(THRESHOLD_METRIC_LABELS).map(
+                        ([metric, label]) => (
+                          <SelectItem key={metric} value={metric}>
+                            {label}
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
-                {showWhatIf && (
-                  <div className="min-w-[140px]">
-                    <Label className="text-xs text-muted-foreground mb-1 block">
-                      Metric
-                    </Label>
-                    <Select
-                      value={thresholdMetric}
-                      onValueChange={(v) =>
-                        onThresholdMetricChange(v as ThresholdMetric)
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(THRESHOLD_METRIC_LABELS).map(
-                          ([metric, label]) => (
-                            <SelectItem key={metric} value={metric}>
-                              {label}
-                            </SelectItem>
-                          )
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           )}
 
