@@ -38,6 +38,7 @@ import { ComparisonSummaryCard } from "./comparison-summary-card";
 import { CustomChart } from "./custom-chart";
 import { CustomTable } from "./custom-table";
 import { HistogramChart } from "./histogram-chart";
+import { ScatterChart } from "./scatter-chart";
 import { ThresholdChart } from "./threshold-chart";
 
 /**
@@ -381,6 +382,17 @@ export function ResultsPanel({
             <HistogramChart
               trades={filteredTrades}
               xAxis={xAxis}
+              metric={thresholdMetric}
+            />
+          ) : chartType === "scatter" ? (
+            <ScatterChart
+              trades={filteredTrades}
+              xAxis={xAxis}
+              yAxis={yAxis}
+              yAxis2={yAxis2}
+              yAxis3={yAxis3}
+              colorBy={colorBy}
+              sizeBy={sizeBy}
               metric={thresholdMetric}
             />
           ) : (
