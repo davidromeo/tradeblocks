@@ -72,9 +72,7 @@ function evaluateOperator(
     case 'lte':
       return value <= compareValue
     case 'between':
-      if (compareValue2 === undefined) {
-        return value >= compareValue
-      }
+      if (compareValue2 === undefined) return false
       return value >= compareValue && value <= compareValue2
     default:
       return false

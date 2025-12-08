@@ -343,23 +343,51 @@ export function ResultsPanel({
                   allowNone
                 />
               </div>
-              <div className="min-w-0">
-                <Label className="text-xs text-muted-foreground mb-1 block">
-                  What-If Analysis
-                </Label>
-                <div className="flex items-center gap-2 h-8">
-                  <Switch
-                    id="what-if-toggle"
-                    checked={showWhatIf}
-                    onCheckedChange={onShowWhatIfChange}
-                  />
-                  <Label
-                    htmlFor="what-if-toggle"
-                    className="text-xs cursor-pointer whitespace-nowrap"
-                  >
-                    {showWhatIf ? "On" : "Off"}
+              <div className="min-w-0 flex items-end gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    What-If Analysis
                   </Label>
+                  <div className="flex items-center gap-2 h-8">
+                    <Switch
+                      id="what-if-toggle"
+                      checked={showWhatIf}
+                      onCheckedChange={onShowWhatIfChange}
+                    />
+                    <Label
+                      htmlFor="what-if-toggle"
+                      className="text-xs cursor-pointer whitespace-nowrap"
+                    >
+                      {showWhatIf ? "On" : "Off"}
+                    </Label>
+                  </div>
                 </div>
+                {showWhatIf && (
+                  <div className="min-w-[140px]">
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      Metric
+                    </Label>
+                    <Select
+                      value={thresholdMetric}
+                      onValueChange={(v) =>
+                        onThresholdMetricChange(v as ThresholdMetric)
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(THRESHOLD_METRIC_LABELS).map(
+                          ([metric, label]) => (
+                            <SelectItem key={metric} value={metric}>
+                              {label}
+                            </SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -384,6 +412,36 @@ export function ResultsPanel({
                   maxCount={4}
                   hideSelectAll
                 />
+              </div>
+            </div>
+          )}
+
+          {chartType === "histogram" && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-2" />
+              <div className="min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Metric (What-If)
+                </Label>
+                <Select
+                  value={thresholdMetric}
+                  onValueChange={(v) =>
+                    onThresholdMetricChange(v as ThresholdMetric)
+                  }
+                >
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(THRESHOLD_METRIC_LABELS).map(
+                      ([metric, label]) => (
+                        <SelectItem key={metric} value={metric}>
+                          {label}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}

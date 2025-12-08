@@ -58,6 +58,12 @@ export function ReportBuilderTab() {
   const [thresholdMetric, setThresholdMetric] = useState<ThresholdMetric>('plPct')
   const [reportName, setReportName] = useState<string | undefined>(undefined)
   const [showWhatIf, setShowWhatIf] = useState(true)
+  const clearReportName = () => setReportName(undefined)
+
+  const handleFilterChange = (config: FilterConfig) => {
+    setFilterConfig(config)
+    clearReportName()
+  }
 
   // Load a saved report
   const handleLoadReport = (report: ReportConfig) => {
@@ -99,9 +105,6 @@ export function ReportBuilderTab() {
     }
     return calculateRegimeComparison(filterResult.filteredTrades, enrichedTrades)
   }, [filterResult, enrichedTrades])
-
-  // Clear report name when config changes (no longer matches saved report)
-  const clearReportName = () => setReportName(undefined)
 
   // Axis change handlers
   const handleXAxisChange = (field: string) => {
@@ -258,7 +261,7 @@ export function ReportBuilderTab() {
         {showFilters && (
           <FilterPanel
             filterConfig={filterConfig}
-            onFilterChange={setFilterConfig}
+            onFilterChange={handleFilterChange}
             filterResult={filterResult}
           />
         )}

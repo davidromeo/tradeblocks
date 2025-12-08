@@ -278,26 +278,39 @@ export function formatStatWithDelta(
   format: 'percent' | 'currency' | 'decimal' = 'decimal',
   higherIsBetter: boolean = true
 ): { value: string; delta: string; isPositive: boolean } {
+  const finiteValue = Number.isFinite(value)
+  const finiteDelta = Number.isFinite(delta)
+
   let formattedValue: string
   let formattedDelta: string
 
   switch (format) {
     case 'percent':
-      formattedValue = `${value.toFixed(1)}%`
-      formattedDelta = `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`
+      formattedValue = finiteValue ? `${value.toFixed(1)}%` : '∞'
+      formattedDelta = finiteDelta
+        ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`
+        : `${delta > 0 ? '+' : ''}∞`
       break
     case 'currency':
-      formattedValue = `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-      formattedDelta = `${delta >= 0 ? '+' : ''}$${delta.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+      formattedValue = finiteValue
+        ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+        : '∞'
+      formattedDelta = finiteDelta
+        ? `${delta >= 0 ? '+' : ''}$${delta.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+        : `${delta > 0 ? '+' : ''}∞`
       break
     case 'decimal':
     default:
-      formattedValue = value.toFixed(2)
-      formattedDelta = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`
+      formattedValue = finiteValue ? value.toFixed(2) : '∞'
+      formattedDelta = finiteDelta
+        ? `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`
+        : `${delta > 0 ? '+' : ''}∞`
       break
   }
 
-  const isPositive = higherIsBetter ? delta > 0 : delta < 0
+  const isPositive = finiteDelta
+    ? (higherIsBetter ? delta > 0 : delta < 0)
+    : higherIsBetter
 
   return {
     value: formattedValue,
