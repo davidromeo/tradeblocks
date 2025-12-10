@@ -1,5 +1,6 @@
 import { Trade } from "@/lib/models/trade";
 import { mean } from "mathjs";
+import { getRanks } from "./statistical-utils";
 
 export type CorrelationMethod = "pearson" | "spearman" | "kendall";
 export type CorrelationAlignment = "shared" | "zero-pad";
@@ -227,34 +228,8 @@ function kendallCorrelation(x: number[], y: number[]): number {
   return (concordant - discordant) / denominator;
 }
 
-/**
- * Convert array of values to ranks (handling ties with average rank)
- */
-function getRanks(values: number[]): number[] {
-  const indexed = values.map((value, index) => ({ value, index }));
-  indexed.sort((a, b) => a.value - b.value);
-
-  const ranks = new Array(values.length);
-  let i = 0;
-
-  while (i < indexed.length) {
-    let j = i;
-    // Find all tied values
-    while (j < indexed.length && indexed[j].value === indexed[i].value) {
-      j++;
-    }
-
-    // Assign average rank to all tied values
-    const averageRank = (i + j + 1) / 2; // +1 because ranks are 1-indexed
-    for (let k = i; k < j; k++) {
-      ranks[indexed[k].index] = averageRank;
-    }
-
-    i = j;
-  }
-
-  return ranks;
-}
+// Re-export getRanks for backwards compatibility
+export { getRanks } from "./statistical-utils";
 
 function normalizeReturn(
   trade: Trade,

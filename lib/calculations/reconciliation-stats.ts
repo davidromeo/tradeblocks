@@ -6,6 +6,7 @@
  */
 
 import { NormalizedTrade } from '@/lib/services/trade-reconciliation'
+import { getRanks } from './statistical-utils'
 
 export interface MatchedPair {
   backtested: NormalizedTrade
@@ -256,35 +257,6 @@ export function calculateSpearmanCorrelation(pairs: MatchedPair[]): number | nul
   }
 
   return covariance / (stdDevBacktested * stdDevReported)
-}
-
-/**
- * Convert values to ranks (average rank for ties)
- */
-function getRanks(values: number[]): number[] {
-  const indexed = values.map((value, index) => ({ value, index }))
-  indexed.sort((a, b) => a.value - b.value)
-
-  const ranks = new Array(values.length)
-
-  let i = 0
-  while (i < indexed.length) {
-    // Find all items with same value (ties)
-    let j = i + 1
-    while (j < indexed.length && indexed[j].value === indexed[i].value) {
-      j++
-    }
-
-    // Assign average rank to all ties
-    const averageRank = (i + 1 + j) / 2
-    for (let k = i; k < j; k++) {
-      ranks[indexed[k].index] = averageRank
-    }
-
-    i = j
-  }
-
-  return ranks
 }
 
 /**
