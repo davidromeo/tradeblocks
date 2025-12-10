@@ -33,7 +33,25 @@ const DEPENDENCE_WEIGHT = 0.5;
 
 // Minimum number of tail observations required for valid tail dependence calculation
 // With fewer than this, the conditional probability P(j in tail | i in tail) is too noisy
-const MIN_TAIL_OBSERVATIONS = 5;
+// This is the absolute floor - dynamic minimum scales with sample size
+const MIN_TAIL_OBSERVATIONS_FLOOR = 5;
+
+/**
+ * Calculate dynamic minimum tail observations based on sample size
+ * Scales with tailThreshold and actual observations to be more stringent for larger datasets
+ * while maintaining a floor of 5 for small datasets
+ */
+function getMinTailObservations(
+  tailThreshold: number,
+  sharedTradingDays: number
+): number {
+  // For larger datasets, require at least 10% of expected tail events
+  // This prevents accepting 5 observations when you have 500 potential tail days
+  const expectedTailDays = tailThreshold * sharedTradingDays;
+  const scaledMinimum = Math.ceil(expectedTailDays * 0.1);
+
+  return Math.max(MIN_TAIL_OBSERVATIONS_FLOOR, scaledMinimum);
+}
 
 /**
  * Perform full Gaussian copula tail risk analysis
@@ -49,14 +67,20 @@ export function performTailRiskAnalysis(
   const startTime = performance.now();
 
   const {
-    tailThreshold = 0.1,
+    tailThreshold: rawTailThreshold = 0.1,
     minTradingDays = 30,
     normalization = "raw",
     dateBasis = "opened",
     tickerFilter,
     strategyFilter,
-    varianceThreshold = 0.8,
+    varianceThreshold: rawVarianceThreshold = 0.8,
   } = options;
+
+  // Validate and clamp thresholds to prevent degenerate calculations
+  // tailThreshold must be in (0, 1) - values at boundaries produce empty/full tails
+  const tailThreshold = Math.max(0.01, Math.min(0.99, rawTailThreshold));
+  // varianceThreshold must be in (0, 1) for meaningful factor counting
+  const varianceThreshold = Math.max(0.5, Math.min(0.99, rawVarianceThreshold));
 
   // Step 1: Filter trades
   let filteredTrades = trades;
@@ -252,30 +276,42 @@ function aggregateAndAlignReturns(
 
 /**
  * Normalize trade return based on selected mode
+ * Returns null for invalid/non-finite values to prevent corrupted calculations
  */
 function normalizeReturn(
   trade: Trade,
   mode: "raw" | "margin" | "notional"
 ): number | null {
+  let result: number;
+
   switch (mode) {
     case "margin": {
-      if (!trade.marginReq) {
+      if (!trade.marginReq || trade.marginReq === 0) {
         return null;
       }
-      return trade.pl / trade.marginReq;
+      result = trade.pl / trade.marginReq;
+      break;
     }
     case "notional": {
       const notional = Math.abs(
         (trade.openingPrice || 0) * (trade.numContracts || 0)
       );
-      if (!notional) {
+      if (!notional || notional === 0) {
         return null;
       }
-      return trade.pl / notional;
+      result = trade.pl / notional;
+      break;
     }
     default:
-      return trade.pl;
+      result = trade.pl;
   }
+
+  // Guard against NaN/Infinity from malformed data or division edge cases
+  if (!Number.isFinite(result)) {
+    return null;
+  }
+
+  return result;
 }
 
 /**
@@ -423,7 +459,7 @@ interface TailDependenceResult {
  * For each pair (i, j), calculates P(j in tail | i in tail)
  * where "in tail" means below the tailThreshold percentile.
  *
- * Key improvements:
+ * Key points:
  * 1. Only considers days where BOTH strategies actually traded (excludes zero-padded days)
  * 2. Requires minimum tail observations for valid estimates (returns NaN otherwise)
  * 3. Uses linear interpolation for threshold calculation
@@ -483,13 +519,15 @@ function estimateTailDependence(
         continue;
       }
 
-      // Count co-occurrences in tail, but ONLY on days where BOTH strategies traded
+      // Count shared trading days and co-occurrences in tail
+      let sharedTradingDays = 0;
       let bothInTail = 0;
       let iInTailAndBothTraded = 0;
 
       for (let t = 0; t < m; t++) {
         // Only count days where both strategies actually traded
         if (tradedMask[i][t] && tradedMask[j][t]) {
+          sharedTradingDays++;
           if (inTail[i][t]) {
             iInTailAndBothTraded++;
             if (inTail[j][t]) {
@@ -499,8 +537,14 @@ function estimateTailDependence(
         }
       }
 
+      // Calculate dynamic minimum based on shared trading days for this pair
+      const minTailObs = getMinTailObservations(
+        tailThreshold,
+        sharedTradingDays
+      );
+
       // Check if we have enough tail observations for a valid estimate
-      if (iInTailAndBothTraded < MIN_TAIL_OBSERVATIONS) {
+      if (iInTailAndBothTraded < minTailObs) {
         row.push(NaN); // Insufficient data
         insufficientPairs++;
       } else {

@@ -201,7 +201,7 @@ export function probabilityIntegralTransform(values: number[]): number[] {
  *
  * @param x - First array
  * @param y - Second array
- * @returns Pearson correlation in [-1, 1]
+ * @returns Pearson correlation in [-1, 1], or 0 if inputs contain non-finite values
  */
 export function pearsonCorrelation(x: number[], y: number[]): number {
   if (x.length !== y.length || x.length === 0) {
@@ -213,6 +213,10 @@ export function pearsonCorrelation(x: number[], y: number[]): number {
   let sumY = 0;
 
   for (let i = 0; i < n; i++) {
+    // Guard against NaN/Infinity in inputs
+    if (!Number.isFinite(x[i]) || !Number.isFinite(y[i])) {
+      return 0;
+    }
     sumX += x[i];
     sumY += y[i];
   }
@@ -239,5 +243,12 @@ export function pearsonCorrelation(x: number[], y: number[]): number {
     return 0;
   }
 
-  return numerator / denominator;
+  const result = numerator / denominator;
+
+  // Guard against non-finite result from numeric edge cases
+  if (!Number.isFinite(result)) {
+    return 0;
+  }
+
+  return result;
 }
