@@ -10,6 +10,7 @@ import {
   IconSparkles,
   IconStack2,
   IconTimelineEvent,
+  IconTrendingDown,
 } from "@tabler/icons-react";
 import { Blocks } from "lucide-react";
 import Link from "next/link";
@@ -62,6 +63,12 @@ const navData = {
       title: "Correlation Matrix",
       href: "/correlation-matrix",
       icon: IconChartHistogram,
+    },
+    {
+      title: "Tail Risk Analysis",
+      href: "/tail-risk-analysis",
+      icon: IconTrendingDown,
+      badge: "New",
     },
     {
       title: "Walk-Forward",
