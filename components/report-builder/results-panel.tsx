@@ -179,7 +179,7 @@ export function ResultsPanel({
 
   // Determine number of columns for non-scatter/line layouts
   const getGridCols = () => {
-    if (chartType === "histogram") return "grid-cols-2"; // type + x
+    if (chartType === "histogram") return "grid-cols-2 lg:grid-cols-3"; // type + x + metric
     if (chartType === "threshold") return "grid-cols-2 lg:grid-cols-3"; // type + x + metric
     if (chartType === "table") return "grid-cols-2"; // type + x (buckets on second row)
     return "grid-cols-2 lg:grid-cols-3"; // type + x + y (bar, box)
@@ -226,6 +226,7 @@ export function ResultsPanel({
                 label="X Axis"
                 value={xAxis.field}
                 onChange={onXAxisChange}
+                trades={trades}
               />
 
               {/* Y axes on the same row for better balance */}
@@ -233,18 +234,21 @@ export function ResultsPanel({
                 label="Y Axis (Primary)"
                 value={yAxis.field}
                 onChange={onYAxisChange}
+                trades={trades}
               />
               <ChartAxisSelector
                 label="Y Axis 2 (Right)"
                 value={yAxis2?.field ?? "none"}
                 onChange={onYAxis2Change}
                 allowNone
+                trades={trades}
               />
               <ChartAxisSelector
                 label="Y Axis 3 (Far Right)"
                 value={yAxis3?.field ?? "none"}
                 onChange={onYAxis3Change}
                 allowNone
+                trades={trades}
               />
             </div>
           ) : (
@@ -283,6 +287,7 @@ export function ResultsPanel({
                 }
                 value={xAxis.field}
                 onChange={onXAxisChange}
+                trades={trades}
               />
 
               {/* Y Axis (for bar, box) */}
@@ -291,14 +296,15 @@ export function ResultsPanel({
                   label="Y Axis"
                   value={yAxis.field}
                   onChange={onYAxisChange}
+                  trades={trades}
                 />
               )}
 
-              {/* Metric selector for threshold */}
-              {chartType === "threshold" && (
+              {/* Metric selector for threshold and histogram */}
+              {(chartType === "threshold" || chartType === "histogram") && (
                 <div className="min-w-0">
                   <Label className="text-xs text-muted-foreground mb-1 block">
-                    Metric
+                    {chartType === "histogram" ? "Metric (What-If)" : "Metric"}
                   </Label>
                   <Select
                     value={thresholdMetric}
@@ -333,6 +339,7 @@ export function ResultsPanel({
                   value={colorBy?.field ?? "none"}
                   onChange={onColorByChange}
                   allowNone
+                  trades={trades}
                 />
               </div>
               <div className="sm:col-span-2">
@@ -341,6 +348,7 @@ export function ResultsPanel({
                   value={sizeBy?.field ?? "none"}
                   onChange={onSizeByChange}
                   allowNone
+                  trades={trades}
                 />
               </div>
               <div className={showWhatIf ? "" : "sm:col-span-2"}>
@@ -414,35 +422,6 @@ export function ResultsPanel({
             </div>
           )}
 
-          {chartType === "histogram" && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="sm:col-span-2" />
-              <div className="min-w-0">
-                <Label className="text-xs text-muted-foreground mb-1 block">
-                  Metric (What-If)
-                </Label>
-                <Select
-                  value={thresholdMetric}
-                  onValueChange={(v) =>
-                    onThresholdMetricChange(v as ThresholdMetric)
-                  }
-                >
-                  <SelectTrigger className="h-8 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(THRESHOLD_METRIC_LABELS).map(
-                      ([metric, label]) => (
-                        <SelectItem key={metric} value={metric}>
-                          {label}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
         </CardHeader>
         <CardContent className={chartType === "table" ? "overflow-hidden" : ""}>
           {chartType === "table" ? (

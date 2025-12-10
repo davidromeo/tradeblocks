@@ -12,7 +12,7 @@
  * 4. Average P/L (or ROM) for trades BELOW X threshold
  */
 
-import { EnrichedTrade } from '@/lib/models/enriched-trade'
+import { EnrichedTrade, getEnrichedTradeValue } from '@/lib/models/enriched-trade'
 
 /**
  * A single data point in the threshold analysis
@@ -41,16 +41,8 @@ export interface ThresholdAnalysisResult {
   totalPl: number
 }
 
-/**
- * Get numeric value from trade for a given field
- */
-function getTradeValue(trade: EnrichedTrade, field: string): number | null {
-  const value = (trade as unknown as Record<string, unknown>)[field]
-  if (typeof value === 'number' && isFinite(value)) {
-    return value
-  }
-  return null
-}
+// Use shared getEnrichedTradeValue from enriched-trade model
+const getTradeValue = getEnrichedTradeValue
 
 /**
  * Calculate threshold analysis for a given field

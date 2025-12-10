@@ -21,10 +21,30 @@ export interface FlexibleFilterResult {
 /**
  * Get the value of a field from a trade
  * Returns null if the field doesn't exist or has no value
+ *
+ * Supports:
+ * - Standard fields: field name directly on trade (e.g., "openingVix")
+ * - Custom trade fields: "custom.fieldName" (from trade.customFields)
+ * - Daily custom fields: "daily.fieldName" (from trade.dailyCustomFields)
  */
 function getTradeFieldValue(trade: EnrichedTrade, field: string): number | null {
-  // Use dynamic access since we validate fields via ReportField type
-  const value = (trade as unknown as Record<string, unknown>)[field]
+  let value: unknown
+
+  // Handle custom trade fields (custom.fieldName)
+  if (field.startsWith('custom.')) {
+    const customFieldName = field.slice(7) // Remove 'custom.' prefix
+    value = trade.customFields?.[customFieldName]
+  }
+  // Handle daily custom fields (daily.fieldName)
+  else if (field.startsWith('daily.')) {
+    const dailyFieldName = field.slice(6) // Remove 'daily.' prefix
+    value = trade.dailyCustomFields?.[dailyFieldName]
+  }
+  // Handle standard fields
+  else {
+    value = (trade as unknown as Record<string, unknown>)[field]
+  }
+
   if (typeof value === 'number' && isFinite(value)) {
     return value
   }

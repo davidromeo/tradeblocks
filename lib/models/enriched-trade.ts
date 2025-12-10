@@ -45,4 +45,47 @@ export interface EnrichedTrade extends Trade {
 
   // Sequential
   tradeNumber?: number          // 1-indexed trade sequence
+
+  // Custom fields from trade CSV (inherited from Trade.customFields)
+  // customFields?: Record<string, number | string> - already inherited from Trade
+
+  // Custom fields from daily log, joined by trade date
+  // Prefixed with "daily." in field references for Report Builder
+  dailyCustomFields?: Record<string, number | string>
+}
+
+/**
+ * Get numeric value from an enriched trade for a given field
+ *
+ * Supports:
+ * - Standard fields: field name directly on trade (e.g., "openingVix")
+ * - Custom trade fields: "custom.fieldName" (from trade.customFields)
+ * - Daily custom fields: "daily.fieldName" (from trade.dailyCustomFields)
+ *
+ * @param trade - The enriched trade to extract the value from
+ * @param field - Field name (may be prefixed with "custom." or "daily.")
+ * @returns The numeric value or null if not found/not a number
+ */
+export function getEnrichedTradeValue(trade: EnrichedTrade, field: string): number | null {
+  let value: unknown
+
+  // Handle custom trade fields (custom.fieldName)
+  if (field.startsWith('custom.')) {
+    const customFieldName = field.slice(7) // Remove 'custom.' prefix
+    value = trade.customFields?.[customFieldName]
+  }
+  // Handle daily custom fields (daily.fieldName)
+  else if (field.startsWith('daily.')) {
+    const dailyFieldName = field.slice(6) // Remove 'daily.' prefix
+    value = trade.dailyCustomFields?.[dailyFieldName]
+  }
+  // Handle standard fields
+  else {
+    value = (trade as unknown as Record<string, unknown>)[field]
+  }
+
+  if (typeof value === 'number' && isFinite(value)) {
+    return value
+  }
+  return null
 }

@@ -12,6 +12,13 @@ export interface DailyLogEntry {
   dailyPlPct: number  // P/L percentage
   drawdownPct: number  // Drawdown percentage
   blockId?: string  // Optional block ID for linking to trades
+
+  /**
+   * Custom fields from extra columns in the daily log CSV
+   * Keys are the original column names, values are auto-detected as number or string
+   * These fields can be joined to trades by date for analysis (e.g., dayOpenVix, spyOpen)
+   */
+  customFields?: Record<string, number | string>
 }
 
 /**

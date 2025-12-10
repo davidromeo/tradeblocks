@@ -29,21 +29,21 @@ export const rawTradeDataSchema = z.object({
   "Movement": z.string().optional(),
   "Max Profit": z.string().optional(),
   "Max Loss": z.string().optional(),
-})
+}).passthrough() // Allow custom columns to pass through validation
 
 /**
  * Zod schema for validating processed trade data
  */
 export const tradeSchema = z.object({
   dateOpened: z.date(),
-  timeOpened: z.string().regex(/^\d{2}:\d{2}:\d{2}$/, "Time must be in HH:mm:ss format"),
+  timeOpened: z.string().regex(/^\d{1,2}:\d{2}:\d{2}$/, "Time must be in H:mm:ss or HH:mm:ss format"),
   openingPrice: z.number().finite(),
   legs: z.string().min(1),
   premium: z.number().finite(),
   premiumPrecision: z.enum(['dollars', 'cents']).optional(),
   closingPrice: z.number().finite().optional(),
   dateClosed: z.date().optional(),
-  timeClosed: z.string().regex(/^\d{2}:\d{2}:\d{2}$/).optional(),
+  timeClosed: z.string().regex(/^\d{1,2}:\d{2}:\d{2}$/).optional(),
   avgClosingCost: z.number().finite().optional(),
   reasonForClose: z.string().optional(),
   pl: z.number().finite(),
@@ -61,6 +61,8 @@ export const tradeSchema = z.object({
   movement: z.number().finite().optional(),
   maxProfit: z.number().finite().optional(),
   maxLoss: z.number().finite().optional(),
+  syntheticCapitalRatio: z.number().finite().optional(),
+  customFields: z.record(z.string(), z.union([z.number(), z.string()])).optional(),
 })
 
 /**
@@ -109,7 +111,7 @@ export const rawDailyLogDataSchema = z.object({
   "P/L": z.string().min(1, "P/L is required"),
   "P/L %": z.string().min(1, "P/L % is required"),
   "Drawdown %": z.string().min(1, "Drawdown % is required"),
-})
+}).passthrough() // Allow custom columns to pass through validation
 
 /**
  * Zod schema for validating processed daily log entry
@@ -124,6 +126,7 @@ export const dailyLogEntrySchema = z.object({
   dailyPlPct: z.number().finite(),
   drawdownPct: z.number().finite().max(0), // Drawdown should be negative or zero
   blockId: z.string().optional(),
+  customFields: z.record(z.string(), z.union([z.number(), z.string()])).optional(),
 })
 
 /**

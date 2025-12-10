@@ -83,12 +83,13 @@ export function ReportBuilderTab() {
 
   // Pre-compute enriched trades with derived fields (MFE%, MAE%, ROM, etc.)
   // Uses data.trades which respects top-level filters (date range, strategy, normalize to 1 lot)
+  // Also joins custom fields from daily logs by date
   const enrichedTrades = useMemo(() => {
     if (!data?.trades || data.trades.length === 0) {
       return []
     }
-    return enrichTrades(data.trades)
-  }, [data?.trades])
+    return enrichTrades(data.trades, { dailyLogs: data.dailyLogs })
+  }, [data?.trades, data?.dailyLogs])
 
   // Calculate filtered results using enriched trades
   const filterResult = useMemo((): FlexibleFilterResult | null => {
@@ -263,6 +264,7 @@ export function ReportBuilderTab() {
             filterConfig={filterConfig}
             onFilterChange={handleFilterChange}
             filterResult={filterResult}
+            trades={enrichedTrades}
           />
         )}
       </div>

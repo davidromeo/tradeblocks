@@ -5,8 +5,16 @@
  * Converts raw CSV data to validated DailyLogEntry objects.
  */
 
-import { DailyLogEntry, REQUIRED_DAILY_LOG_COLUMNS } from '../models/daily-log'
-// import { DAILY_LOG_COLUMN_MAPPING } from '../models/daily-log'
+import { DailyLogEntry, REQUIRED_DAILY_LOG_COLUMNS, DAILY_LOG_COLUMN_MAPPING } from '../models/daily-log'
+
+/**
+ * Set of known daily log column names (canonical names from DAILY_LOG_COLUMN_MAPPING)
+ * Used to identify custom columns that should be preserved
+ */
+const KNOWN_DAILY_LOG_COLUMNS = new Set([
+  ...Object.keys(DAILY_LOG_COLUMN_MAPPING),
+  'Withdrawn', // Optional column that may not be in REQUIRED but is known
+])
 import { ValidationError, ProcessingError } from '../models'
 import { rawDailyLogDataSchema, dailyLogEntrySchema } from '../models/validators'
 import { CSVParser, ParseProgress } from './csv-parser'
@@ -142,9 +150,14 @@ export class DailyLogProcessor {
           validEntries++
         } catch (error) {
           invalidEntries++
+          const errorMessage = `Daily log entry conversion failed at row ${i + 2}: ${error instanceof Error ? error.message : String(error)}`
+
+          // Log conversion errors to console for debugging
+          console.warn(`[DailyLogProcessor] ${errorMessage}`)
+
           const validationError: ValidationError = {
             type: 'validation',
-            message: `Daily log entry conversion failed at row ${i + 2}: ${error instanceof Error ? error.message : String(error)}`,
+            message: errorMessage,
             details: { row: parseResult.data[i], rowIndex: i + 2 },
             field: 'unknown',
             value: parseResult.data[i],
@@ -243,8 +256,7 @@ export class DailyLogProcessor {
   /**
    * Validate raw daily log data from CSV
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private validateRawDailyLogData(row: Record<string, string>, _rowIndex: number): Record<string, string> | null {
+  private validateRawDailyLogData(row: Record<string, string>, rowIndex: number): Record<string, string> | null {
     try {
       // Set default values for missing optional fields
       const normalizedRow = { ...row }
@@ -263,8 +275,9 @@ export class DailyLogProcessor {
       rawDailyLogDataSchema.parse(normalizedRow)
 
       return normalizedRow
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (_error) {
+    } catch (error) {
+      // Log validation errors to console for debugging
+      console.warn(`[DailyLogProcessor] Row ${rowIndex + 2} validation failed:`, error instanceof Error ? error.message : error)
       // Return null for invalid rows - they'll be counted as invalid
       return null
     }
@@ -314,6 +327,26 @@ export class DailyLogProcessor {
 
       // Keep percentage values as they are from CSV to match legacy behavior
       // Legacy Python expects percentage values (e.g., -5.55), not decimals (e.g., -0.0555)
+
+      // Extract custom fields (columns not in KNOWN_DAILY_LOG_COLUMNS)
+      const customFields: Record<string, number | string> = {}
+      for (const [key, value] of Object.entries(rawData)) {
+        if (!KNOWN_DAILY_LOG_COLUMNS.has(key) && value !== undefined && value.trim() !== '') {
+          // Auto-detect type: try to parse as number
+          const cleaned = value.replace(/[$,%]/g, '').trim()
+          const parsed = parseFloat(cleaned)
+          if (!isNaN(parsed) && isFinite(parsed)) {
+            customFields[key] = parsed
+          } else {
+            customFields[key] = value.trim()
+          }
+        }
+      }
+
+      // Only add customFields if there are any
+      if (Object.keys(customFields).length > 0) {
+        entry.customFields = customFields
+      }
 
       // Final validation with Zod schema
       const validatedEntry = dailyLogEntrySchema.parse(entry)

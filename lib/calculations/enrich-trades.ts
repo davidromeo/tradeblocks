@@ -7,7 +7,39 @@
 
 import { Trade } from '@/lib/models/trade'
 import { EnrichedTrade } from '@/lib/models/enriched-trade'
+import { DailyLogEntry } from '@/lib/models/daily-log'
 import { calculateMFEMAEData, MFEMAEDataPoint } from './mfe-mae'
+
+/**
+ * Options for enriching trades
+ */
+export interface EnrichTradesOptions {
+  /** Daily log entries to join custom fields from (by date) */
+  dailyLogs?: DailyLogEntry[]
+}
+
+/**
+ * Creates a date key string for matching trades to daily logs
+ * Format: YYYY-MM-DD in UTC to avoid timezone issues
+ */
+function getDateKey(date: Date): string {
+  const d = new Date(date)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Builds a lookup map from date to daily log custom fields
+ */
+function buildDailyCustomFieldsMap(dailyLogs: DailyLogEntry[]): Map<string, Record<string, number | string>> {
+  const map = new Map<string, Record<string, number | string>>()
+  for (const entry of dailyLogs) {
+    if (entry.customFields && Object.keys(entry.customFields).length > 0) {
+      const key = getDateKey(entry.date)
+      map.set(key, entry.customFields)
+    }
+  }
+  return map
+}
 
 /**
  * Computes the duration of a trade in hours
@@ -57,7 +89,8 @@ function extractHourOfDay(timeOpened: string): number | undefined {
 function enrichSingleTrade(
   trade: Trade,
   index: number,
-  mfeMaePoint?: MFEMAEDataPoint
+  mfeMaePoint?: MFEMAEDataPoint,
+  dailyCustomFields?: Record<string, number | string>
 ): EnrichedTrade {
   const totalFees = trade.openingCommissionsFees + (trade.closingCommissionsFees ?? 0)
   const netPl = trade.pl - totalFees
@@ -124,6 +157,9 @@ function enrichSingleTrade(
 
     // Sequential
     tradeNumber: index + 1,
+
+    // Daily custom fields (joined by trade date)
+    dailyCustomFields,
   }
 }
 
@@ -132,8 +168,11 @@ function enrichSingleTrade(
  *
  * Uses calculateMFEMAEData() for MFE/MAE metrics and computes
  * additional derived fields like ROM, duration, VIX changes, etc.
+ *
+ * @param trades - Array of trades to enrich
+ * @param options - Optional configuration including daily logs for joining custom fields
  */
-export function enrichTrades(trades: Trade[]): EnrichedTrade[] {
+export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): EnrichedTrade[] {
   // Calculate MFE/MAE data for all trades
   const mfeMaeData = calculateMFEMAEData(trades)
 
@@ -142,10 +181,23 @@ export function enrichTrades(trades: Trade[]): EnrichedTrade[] {
     mfeMaeData.map(d => [d.tradeNumber - 1, d])
   )
 
+  // Build daily custom fields lookup map if daily logs are provided
+  const dailyCustomFieldsMap = options?.dailyLogs
+    ? buildDailyCustomFieldsMap(options.dailyLogs)
+    : undefined
+
   // Enrich each trade
   return trades.map((trade, index) => {
     const mfeMaePoint = mfeMaeMap.get(index)
-    return enrichSingleTrade(trade, index, mfeMaePoint)
+
+    // Look up daily custom fields for this trade's date
+    let dailyCustomFields: Record<string, number | string> | undefined
+    if (dailyCustomFieldsMap) {
+      const dateKey = getDateKey(trade.dateOpened)
+      dailyCustomFields = dailyCustomFieldsMap.get(dateKey)
+    }
+
+    return enrichSingleTrade(trade, index, mfeMaePoint, dailyCustomFields)
   })
 }
 

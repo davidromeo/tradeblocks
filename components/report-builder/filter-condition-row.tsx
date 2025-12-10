@@ -4,8 +4,10 @@
  * Filter Condition Row
  *
  * A single filter condition editor with field, operator, and value inputs.
+ * Supports both static fields and custom fields from trade/daily log CSVs.
  */
 
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,26 +28,31 @@ import {
 } from "@/components/ui/select"; // Still used for operator selector
 import { Switch } from "@/components/ui/switch";
 import {
-  FIELD_CATEGORY_LABELS,
   FILTER_OPERATOR_LABELS,
   FilterCondition,
   FilterOperator,
+  FieldCategory,
+  CustomFieldCategory,
   getFieldInfo,
-  getFieldsByCategory,
+  getFieldsByCategoryWithCustom,
+  getAllCategoryLabels,
 } from "@/lib/models/report-config";
+import { EnrichedTrade } from "@/lib/models/enriched-trade";
 import { ChevronDown, X } from "lucide-react";
-import { useState } from "react";
 
 interface FilterConditionRowProps {
   condition: FilterCondition;
   onChange: (condition: FilterCondition) => void;
   onRemove: () => void;
+  /** Enriched trades to extract custom fields from */
+  trades?: EnrichedTrade[];
 }
 
 export function FilterConditionRow({
   condition,
   onChange,
   onRemove,
+  trades = [],
 }: FilterConditionRowProps) {
   const [valueInput, setValueInput] = useState(condition.value.toString());
   const [value2Input, setValue2Input] = useState(
@@ -53,7 +60,8 @@ export function FilterConditionRow({
   );
   const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
 
-  const fieldsByCategory = getFieldsByCategory();
+  const fieldsByCategory = useMemo(() => getFieldsByCategoryWithCustom(trades), [trades]);
+  const allCategoryLabels = getAllCategoryLabels();
 
   // Get the display label for the current field
   const currentField = getFieldInfo(condition.field);
@@ -130,7 +138,7 @@ export function FilterConditionRow({
                 return (
                   <DropdownMenuSub key={category}>
                     <DropdownMenuSubTrigger>
-                      {FIELD_CATEGORY_LABELS[category]}
+                      {allCategoryLabels[category as FieldCategory | CustomFieldCategory]}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-52">
                       {fields.map((field) => (

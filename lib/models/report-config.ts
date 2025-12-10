@@ -268,13 +268,41 @@ export const REPORT_FIELDS: FieldInfo[] = [
 
 /**
  * Get field info by field name
+ * Checks static REPORT_FIELDS first, then looks for custom field patterns
  */
 export function getFieldInfo(field: string): FieldInfo | undefined {
-  return REPORT_FIELDS.find(f => f.field === field)
+  // Check static fields first
+  const staticField = REPORT_FIELDS.find(f => f.field === field)
+  if (staticField) return staticField
+
+  // Check if it's a custom trade field (custom.fieldName)
+  if (field.startsWith('custom.')) {
+    const customFieldName = field.slice(7) // Remove 'custom.' prefix
+    return {
+      field: field as ReportField,
+      label: customFieldName,
+      category: 'trade',
+      description: `Custom field from trade CSV: ${customFieldName}`,
+    }
+  }
+
+  // Check if it's a daily custom field (daily.fieldName)
+  if (field.startsWith('daily.')) {
+    const dailyFieldName = field.slice(6) // Remove 'daily.' prefix
+    return {
+      field: field as ReportField,
+      label: `Daily: ${dailyFieldName}`,
+      category: 'market',
+      description: `Custom field from daily log CSV: ${dailyFieldName}`,
+    }
+  }
+
+  return undefined
 }
 
 /**
  * Get fields grouped by category, ordered by FIELD_CATEGORY_ORDER
+ * Includes only static fields (no custom fields)
  */
 export function getFieldsByCategory(): Map<FieldCategory, FieldInfo[]> {
   const grouped = new Map<FieldCategory, FieldInfo[]>()
@@ -290,6 +318,120 @@ export function getFieldsByCategory(): Map<FieldCategory, FieldInfo[]> {
   }
 
   return grouped
+}
+
+/**
+ * Custom field category for organizing custom fields in UI
+ */
+export type CustomFieldCategory = 'custom' | 'dailyCustom'
+
+/**
+ * Labels for custom field categories
+ */
+export const CUSTOM_FIELD_CATEGORY_LABELS: Record<CustomFieldCategory, string> = {
+  custom: 'Custom (Trade)',
+  dailyCustom: 'Custom (Daily)',
+}
+
+/**
+ * Extracts unique custom field names from an array of trades
+ * Returns both trade custom fields and daily custom fields
+ */
+export interface ExtractedCustomFields {
+  /** Custom fields from trade CSV (keys are field names without prefix) */
+  tradeFields: string[]
+  /** Custom fields from daily log CSV (keys are field names without prefix) */
+  dailyFields: string[]
+}
+
+/**
+ * Extract custom field names from enriched trades
+ */
+export function extractCustomFieldNames(trades: Array<{
+  customFields?: Record<string, number | string>
+  dailyCustomFields?: Record<string, number | string>
+}>): ExtractedCustomFields {
+  const tradeFieldSet = new Set<string>()
+  const dailyFieldSet = new Set<string>()
+
+  for (const trade of trades) {
+    if (trade.customFields) {
+      for (const key of Object.keys(trade.customFields)) {
+        tradeFieldSet.add(key)
+      }
+    }
+    if (trade.dailyCustomFields) {
+      for (const key of Object.keys(trade.dailyCustomFields)) {
+        dailyFieldSet.add(key)
+      }
+    }
+  }
+
+  // Return fields in insertion order (preserves CSV column order from first trade)
+  // Using Set preserves insertion order in modern JavaScript
+  return {
+    tradeFields: Array.from(tradeFieldSet),
+    dailyFields: Array.from(dailyFieldSet),
+  }
+}
+
+/**
+ * Get fields grouped by category, including custom fields from trades
+ * This is the dynamic version that includes custom fields discovered in the data
+ */
+export function getFieldsByCategoryWithCustom(trades: Array<{
+  customFields?: Record<string, number | string>
+  dailyCustomFields?: Record<string, number | string>
+}>): Map<FieldCategory | CustomFieldCategory, FieldInfo[]> {
+  // Start with static fields
+  const grouped = new Map<FieldCategory | CustomFieldCategory, FieldInfo[]>()
+
+  // Initialize in the correct order
+  for (const category of FIELD_CATEGORY_ORDER) {
+    grouped.set(category, [])
+  }
+
+  // Add static fields to their categories
+  for (const field of REPORT_FIELDS) {
+    grouped.get(field.category)?.push(field)
+  }
+
+  // Extract custom fields from trades
+  const { tradeFields, dailyFields } = extractCustomFieldNames(trades)
+
+  // Add custom trade fields category if there are any
+  if (tradeFields.length > 0) {
+    const customFieldInfos: FieldInfo[] = tradeFields.map(fieldName => ({
+      field: `custom.${fieldName}` as ReportField,
+      label: fieldName,
+      category: 'trade' as FieldCategory, // Will be shown in 'custom' category
+      description: `Custom field from trade CSV`,
+    }))
+    grouped.set('custom', customFieldInfos)
+  }
+
+  // Add daily custom fields category if there are any
+  if (dailyFields.length > 0) {
+    const dailyFieldInfos: FieldInfo[] = dailyFields.map(fieldName => ({
+      field: `daily.${fieldName}` as ReportField,
+      label: fieldName,
+      category: 'market' as FieldCategory, // Will be shown in 'dailyCustom' category
+      description: `Custom field from daily log CSV`,
+    }))
+    grouped.set('dailyCustom', dailyFieldInfos)
+  }
+
+  return grouped
+}
+
+/**
+ * Get all field category labels including custom categories
+ */
+export function getAllCategoryLabels(): Record<FieldCategory | CustomFieldCategory, string> {
+  return {
+    ...FIELD_CATEGORY_LABELS,
+    ...CUSTOM_FIELD_CATEGORY_LABELS,
+  }
 }
 
 /**
