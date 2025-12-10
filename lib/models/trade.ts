@@ -49,6 +49,12 @@ export interface Trade {
    * Used to scale synthetic losses relative to current account size
    */
   syntheticCapitalRatio?: number
+
+  /**
+   * Custom fields from extra columns in the trade CSV
+   * Keys are the original column names, values are auto-detected as number or string
+   */
+  customFields?: Record<string, number | string>
 }
 
 /**

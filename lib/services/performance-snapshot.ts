@@ -160,7 +160,13 @@ export async function buildPerformanceSnapshot(options: SnapshotOptions): Promis
       strategies.includes(trade.strategy || 'Unknown')
     )
 
-    filteredDailyLogs = undefined
+    // Note: We intentionally keep filteredDailyLogs available here (not setting to undefined).
+    // While equity curve calculations use useFundsAtClose=false when strategies are filtered
+    // (to avoid data leakage from other strategies' fundsAtClose values), we still need
+    // daily logs for:
+    // 1. Custom field joining during trade enrichment (e.g., daily.vixOpen)
+    // 2. Monthly returns % calculations (which have appropriate fallbacks)
+    // The useFundsAtClose flag (line 123) already handles the equity curve concern.
   }
 
   checkCancelled(signal)

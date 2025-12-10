@@ -24,7 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { EnrichedTrade } from "@/lib/models/enriched-trade";
+import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ThresholdMetric, getFieldInfo } from "@/lib/models/report-config";
 import { Sparkles, ChevronDown, RotateCcw, Check } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -124,16 +124,11 @@ export function WhatIfExplorer2D({
   const tradesWithData = useMemo((): TradeWithData[] => {
     return trades
       .map((trade) => {
-        const xValue = (trade as unknown as Record<string, unknown>)[xAxisField];
-        const yValues = yAxes.map((yAxis) => {
-          const val = (trade as unknown as Record<string, unknown>)[yAxis.field];
-          return typeof val === "number" && isFinite(val) ? val : null;
-        });
+        const xValue = getEnrichedTradeValue(trade, xAxisField);
+        const yValues = yAxes.map((yAxis) => getEnrichedTradeValue(trade, yAxis.field));
 
         // Only include if X and ALL Y values are valid
-        const hasAllValues =
-          typeof xValue === "number" && isFinite(xValue) &&
-          yValues.every((v) => v !== null);
+        const hasAllValues = xValue !== null && yValues.every((v) => v !== null);
 
         if (!hasAllValues) return null;
 

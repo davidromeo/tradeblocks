@@ -5,13 +5,20 @@
  * Converts raw CSV data to validated Trade objects.
  */
 
-import { Trade, TRADE_COLUMN_ALIASES, REQUIRED_TRADE_COLUMNS } from '../models/trade'
-// import { TRADE_COLUMN_MAPPING } from '../models/trade'
+import { Trade, TRADE_COLUMN_ALIASES, REQUIRED_TRADE_COLUMNS, TRADE_COLUMN_MAPPING } from '../models/trade'
 import { ValidationError, ProcessingError } from '../models'
 import { rawTradeDataSchema, tradeSchema } from '../models/validators'
 import { CSVParser, ParseProgress } from './csv-parser'
 import { findMissingHeaders, normalizeHeaders } from '../utils/csv-headers'
-// import { CSVParseResult } from './csv-parser'
+
+/**
+ * Set of known trade column names (canonical names from TRADE_COLUMN_MAPPING)
+ * Used to identify custom columns that should be preserved
+ */
+const KNOWN_TRADE_COLUMNS = new Set([
+  ...Object.keys(TRADE_COLUMN_MAPPING),
+  ...Object.keys(TRADE_COLUMN_ALIASES),
+])
 
 /**
  * Trade processing configuration
@@ -142,9 +149,14 @@ export class TradeProcessor {
           validTrades++
         } catch (error) {
           invalidTrades++
+          const errorMessage = `Trade conversion failed at row ${i + 2}: ${error instanceof Error ? error.message : String(error)}`
+
+          // Log conversion errors to console for debugging
+          console.warn(`[TradeProcessor] ${errorMessage}`)
+
           const validationError: ValidationError = {
             type: 'validation',
-            message: `Trade conversion failed at row ${i + 2}: ${error instanceof Error ? error.message : String(error)}`,
+            message: errorMessage,
             details: { row: parseResult.data[i], rowIndex: i + 2 },
             field: 'unknown',
             value: parseResult.data[i],
@@ -250,8 +262,7 @@ export class TradeProcessor {
   /**
    * Validate raw trade data from CSV
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private validateRawTradeData(row: Record<string, string>, _rowIndex: number): Record<string, string> | null {
+  private validateRawTradeData(row: Record<string, string>, rowIndex: number): Record<string, string> | null {
     try {
       // Apply column aliases to normalize variations
       const normalizedRow = { ...row }
@@ -302,8 +313,9 @@ export class TradeProcessor {
       rawTradeDataSchema.parse(normalizedRow)
 
       return normalizedRow
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (_error) {
+    } catch (error) {
+      // Log validation errors to console for debugging
+      console.warn(`[TradeProcessor] Row ${rowIndex + 2} validation failed:`, error instanceof Error ? error.message : error)
       // Return null for invalid rows - they'll be counted as invalid
       return null
     }
@@ -379,6 +391,26 @@ export class TradeProcessor {
         movement: rawData['Movement'] ? parseNumber(rawData['Movement'], 'Movement') : undefined,
         maxProfit: rawData['Max Profit'] ? parseNumber(rawData['Max Profit'], 'Max Profit') : undefined,
         maxLoss: rawData['Max Loss'] ? parseNumber(rawData['Max Loss'], 'Max Loss') : undefined,
+      }
+
+      // Extract custom fields (columns not in KNOWN_TRADE_COLUMNS)
+      const customFields: Record<string, number | string> = {}
+      for (const [key, value] of Object.entries(rawData)) {
+        if (!KNOWN_TRADE_COLUMNS.has(key) && value !== undefined && value.trim() !== '') {
+          // Auto-detect type: try to parse as number
+          const cleaned = value.replace(/[$,%]/g, '').trim()
+          const parsed = parseFloat(cleaned)
+          if (!isNaN(parsed) && isFinite(parsed)) {
+            customFields[key] = parsed
+          } else {
+            customFields[key] = value.trim()
+          }
+        }
+      }
+
+      // Only add customFields if there are any
+      if (Object.keys(customFields).length > 0) {
+        trade.customFields = customFields
       }
 
       // Final validation with Zod schema

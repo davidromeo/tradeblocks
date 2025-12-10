@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { EnrichedTrade } from "@/lib/models/enriched-trade";
+import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ThresholdMetric, getFieldInfo } from "@/lib/models/report-config";
 import { ArrowUp, ArrowDown, Sparkles, ChevronDown, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -74,10 +74,10 @@ export function WhatIfExplorer({
   const tradesWithData = useMemo((): TradeWithData[] => {
     return trades
       .map((trade) => {
-        const xValue = (trade as unknown as Record<string, unknown>)[xAxisField];
+        const xValue = getEnrichedTradeValue(trade, xAxisField);
         return {
           trade,
-          xValue: typeof xValue === "number" && isFinite(xValue) ? xValue : null,
+          xValue,
           pl: trade.pl ?? 0,
           plPct: trade.premiumEfficiency ?? 0,
           rom: trade.rom ?? 0,

@@ -16,18 +16,22 @@ import {
   createFilterCondition
 } from '@/lib/models/report-config'
 import { FlexibleFilterResult } from '@/lib/calculations/flexible-filter'
+import { EnrichedTrade } from '@/lib/models/enriched-trade'
 import { FilterConditionRow } from './filter-condition-row'
 
 interface FilterPanelProps {
   filterConfig: FilterConfig
   onFilterChange: (config: FilterConfig) => void
   filterResult: FlexibleFilterResult | null
+  /** Enriched trades to extract custom fields from */
+  trades?: EnrichedTrade[]
 }
 
 export function FilterPanel({
   filterConfig,
   onFilterChange,
-  filterResult
+  filterResult,
+  trades = []
 }: FilterPanelProps) {
   // Add a new filter condition
   const handleAddCondition = () => {
@@ -82,6 +86,7 @@ export function FilterPanel({
                 condition={condition}
                 onChange={handleConditionChange}
                 onRemove={() => handleRemoveCondition(condition.id)}
+                trades={trades}
               />
             ))}
           </div>

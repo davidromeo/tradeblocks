@@ -28,6 +28,7 @@ import { ProgressDialog } from "@/components/progress-dialog";
 import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
 import { waitForRender } from "@/lib/utils/async-helpers";
 import { useProgressDialog } from "@/hooks/use-progress-dialog";
+import { ImportGuideDialog } from "@/components/import-guide-dialog";
 
 function BlockCard({
   block,
@@ -324,13 +325,21 @@ function BlockRow({
   );
 }
 
-const COMPLETE_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close,P/L,No. of Contracts,Funds at Close,Margin Req.,Strategy
-2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,1.25,2024-01-15,15:45:00,1.25,Profit Target,125.00,1,10125.00,1000.00,Bull Put Spread
-2024-01-16,10:15:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,0.50,2024-01-18,14:30:00,0.50,Profit Target,275.00,1,10400.00,1200.00,Bear Call Spread`;
+// Template with all standard fields (required + optional) - for complete closed trades
+const COMPLETE_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close,P/L,No. of Contracts,Funds at Close,Margin Req.,Strategy,Opening Commissions + Fees,Closing Commissions + Fees,Opening Short/Long Ratio,Closing Short/Long Ratio,Opening VIX,Closing VIX,Gap,Movement,Max Profit,Max Loss
+2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,1.25,2024-01-15,15:45:00,1.25,Profit Target,125.00,1,10125.00,1000.00,Bull Put Spread,1.50,1.50,0.5,0.5,14.25,13.80,0.25,-0.15,250.00,-1000.00
+2024-01-16,10:15:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,0.50,2024-01-18,14:30:00,0.50,Profit Target,275.00,1,10400.00,1200.00,Bear Call Spread,1.50,1.50,0.6,0.55,15.10,14.50,-0.10,0.20,325.00,-1200.00`;
 
+// Template with only required fields - for open trades or minimal data
 const MINIMAL_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close,P/L,No. of Contracts,Funds at Close,Margin Req.,Strategy
 2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,,,,,,125.00,1,10125.00,1000.00,Bull Put Spread
 2024-01-16,09:30:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,,,,,,275.00,1,10400.00,1200.00,Bear Call Spread`;
+
+// Template for daily log CSV
+const DAILY_LOG_TEMPLATE_CSV = `Date,Net Liquidity,Current Funds,Withdrawn,Trading Funds,P/L,P/L %,Drawdown %
+2024-01-15,50000.00,50125.00,0,10000.00,125.00,1.25,0
+2024-01-16,50000.00,50400.00,0,10000.00,275.00,2.75,0
+2024-01-17,50000.00,50150.00,0,10000.00,-250.00,-2.44,-0.50`;
 
 export default function BlockManagementPage() {
   const blocks = useBlockStore(state => state.blocks);
@@ -369,11 +378,24 @@ export default function BlockManagementPage() {
     setIsBlockDialogOpen(true);
   };
 
-  const handleDownloadTemplate = (type: 'complete' | 'minimal') => {
-    const content = type === 'complete' ? COMPLETE_TEMPLATE_CSV : MINIMAL_TEMPLATE_CSV;
-    const filename = type === 'complete'
-      ? 'tradeblocks-template-complete.csv'
-      : 'tradeblocks-template-minimal.csv';
+  const handleDownloadTemplate = (type: 'complete' | 'minimal' | 'daily-log') => {
+    let content: string;
+    let filename: string;
+
+    switch (type) {
+      case 'complete':
+        content = COMPLETE_TEMPLATE_CSV;
+        filename = 'tradeblocks-tradelog-complete.csv';
+        break;
+      case 'minimal':
+        content = MINIMAL_TEMPLATE_CSV;
+        filename = 'tradeblocks-tradelog-minimal.csv';
+        break;
+      case 'daily-log':
+        content = DAILY_LOG_TEMPLATE_CSV;
+        filename = 'tradeblocks-dailylog-template.csv';
+        break;
+    }
 
     const blob = new Blob([content], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -408,25 +430,34 @@ export default function BlockManagementPage() {
                 <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuContent align="start" className="w-72">
               <DropdownMenuItem onClick={() => handleDownloadTemplate('minimal')}>
                 <div className="flex flex-col gap-1">
-                  <span className="font-medium">Minimal Template</span>
+                  <span className="font-medium">Trade Log - Minimal</span>
                   <span className="text-xs text-muted-foreground">
-                    Only required fields filled, closing fields empty
+                    Required fields only, closing fields empty
                   </span>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleDownloadTemplate('complete')}>
                 <div className="flex flex-col gap-1">
-                  <span className="font-medium">Complete Template</span>
+                  <span className="font-medium">Trade Log - Complete</span>
                   <span className="text-xs text-muted-foreground">
-                    All fields filled with example closed trades
+                    All standard fields with example data
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownloadTemplate('daily-log')}>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">Daily Log Template</span>
+                  <span className="text-xs text-muted-foreground">
+                    Daily portfolio values for enhanced stats
                   </span>
                 </div>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <ImportGuideDialog />
           <Button
             variant={viewMode === "grid" ? "default" : "outline"}
             size="sm"
@@ -552,33 +583,50 @@ export default function BlockManagementPage() {
                 <DropdownMenuContent align="center" className="w-72">
                   <DropdownMenuItem onClick={() => handleDownloadTemplate('minimal')}>
                     <div className="flex flex-col gap-1">
-                      <span className="font-medium">Minimal Template</span>
+                      <span className="font-medium">Trade Log - Minimal</span>
                       <span className="text-xs text-muted-foreground">
-                        Only required fields filled, closing fields empty
+                        Required fields only, closing fields empty
                       </span>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleDownloadTemplate('complete')}>
                     <div className="flex flex-col gap-1">
-                      <span className="font-medium">Complete Template</span>
+                      <span className="font-medium">Trade Log - Complete</span>
                       <span className="text-xs text-muted-foreground">
-                        All fields filled with example closed trades
+                        All standard fields with example data
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownloadTemplate('daily-log')}>
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">Daily Log Template</span>
+                      <span className="text-xs text-muted-foreground">
+                        Daily portfolio values for enhanced stats
                       </span>
                     </div>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <div className="bg-muted/50 rounded-lg p-4 text-left text-sm space-y-2">
+            <div className="bg-muted/50 rounded-lg p-4 text-left text-sm space-y-3">
               <div className="flex items-start gap-2">
                 <Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-medium mb-1">Required CSV Fields</p>
                   <p className="text-muted-foreground text-xs leading-relaxed">
-                    <span className="font-medium">Must have values:</span> Date Opened, Time Opened (HH:mm:ss), Opening Price, Legs, Premium, P/L, No. of Contracts, Funds at Close, Margin Req., Strategy
+                    <span className="font-medium">Must have values:</span> Date Opened, Time Opened (H:mm:ss), Opening Price, Legs, Premium, P/L, No. of Contracts, Funds at Close, Margin Req., Strategy
                   </p>
                   <p className="text-muted-foreground text-xs leading-relaxed mt-1">
-                    <span className="font-medium">Optional:</span> All closing fields can be empty for open trades
+                    <span className="font-medium">Optional standard:</span> VIX, Gap, Movement, Commissions, Short/Long Ratio, Max Profit/Loss
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 border-t border-muted pt-3">
+                <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium mb-1">Custom Numeric Fields</p>
+                  <p className="text-muted-foreground text-xs leading-relaxed">
+                    Add extra numeric columns to your CSV for custom filtering and charting in the Report Builder.
                   </p>
                 </div>
               </div>

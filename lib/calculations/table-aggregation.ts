@@ -5,7 +5,7 @@
  * Similar to the S/L Drift Outcome Table but generalized for any field.
  */
 
-import { EnrichedTrade } from '@/lib/models/enriched-trade'
+import { EnrichedTrade, getEnrichedTradeValue } from '@/lib/models/enriched-trade'
 import {
   getFieldInfo,
   parseColumnValue,
@@ -21,16 +21,8 @@ export interface TableRow {
   values: Record<string, number>   // Column values keyed by column value string (e.g., { 'count': 45, 'winRate': 67.5, 'pl:avg': 1234 })
 }
 
-/**
- * Get the value of a field from a trade
- */
-export function getTradeValue(trade: EnrichedTrade, field: string): number | null {
-  const value = (trade as unknown as Record<string, unknown>)[field]
-  if (typeof value === 'number' && isFinite(value)) {
-    return value
-  }
-  return null
-}
+// Re-export shared getEnrichedTradeValue for backwards compatibility
+export const getTradeValue = getEnrichedTradeValue
 
 /**
  * Compute an aggregation over a set of trades

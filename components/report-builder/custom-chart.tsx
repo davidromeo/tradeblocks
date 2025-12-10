@@ -9,7 +9,7 @@
 import { useMemo } from 'react'
 import type { Layout, PlotData } from 'plotly.js'
 import { ChartWrapper } from '@/components/performance-charts/chart-wrapper'
-import { EnrichedTrade } from '@/lib/models/enriched-trade'
+import { EnrichedTrade, getEnrichedTradeValue } from '@/lib/models/enriched-trade'
 import {
   ChartType,
   ChartAxisConfig,
@@ -37,16 +37,8 @@ const AXIS_COLORS = {
   y3: 'rgb(34, 197, 94)'     // Green (tertiary)
 }
 
-/**
- * Get the value of a field from a trade
- */
-function getTradeValue(trade: EnrichedTrade, field: string): number | null {
-  const value = (trade as unknown as Record<string, unknown>)[field]
-  if (typeof value === 'number' && isFinite(value)) {
-    return value
-  }
-  return null
-}
+// Use shared getEnrichedTradeValue from enriched-trade model
+const getTradeValue = getEnrichedTradeValue
 
 /**
  * Binary/categorical fields that should use discrete colors instead of continuous scale

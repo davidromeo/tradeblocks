@@ -10,7 +10,7 @@
 import { useMemo, useState, useCallback } from "react";
 import type { Layout, PlotData } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
-import { EnrichedTrade } from "@/lib/models/enriched-trade";
+import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
 import { WhatIfExplorer } from "./what-if-explorer";
 
@@ -21,16 +21,8 @@ interface HistogramChartProps {
   className?: string;
 }
 
-/**
- * Get numeric value from trade for a given field
- */
-function getTradeValue(trade: EnrichedTrade, field: string): number | null {
-  const value = (trade as unknown as Record<string, unknown>)[field];
-  if (typeof value === "number" && isFinite(value)) {
-    return value;
-  }
-  return null;
-}
+// Use shared getEnrichedTradeValue from enriched-trade model
+const getTradeValue = getEnrichedTradeValue;
 
 export function HistogramChart({
   trades,

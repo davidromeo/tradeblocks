@@ -5,9 +5,10 @@
  *
  * Dropdown component for selecting a field to use as an axis in charts.
  * Uses nested submenus organized by field category.
+ * Supports both static fields and custom fields from trade/daily log CSVs.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,11 +22,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import {
-  getFieldsByCategory,
+  getFieldsByCategoryWithCustom,
   getFieldInfo,
-  FIELD_CATEGORY_LABELS,
-  FieldCategory
+  getAllCategoryLabels,
+  FieldCategory,
+  CustomFieldCategory
 } from '@/lib/models/report-config'
+import { EnrichedTrade } from '@/lib/models/enriched-trade'
 
 interface ChartAxisSelectorProps {
   label: string
@@ -33,6 +36,8 @@ interface ChartAxisSelectorProps {
   onChange: (value: string) => void
   allowNone?: boolean
   className?: string
+  /** Enriched trades to extract custom fields from */
+  trades?: EnrichedTrade[]
 }
 
 export function ChartAxisSelector({
@@ -40,10 +45,12 @@ export function ChartAxisSelector({
   value,
   onChange,
   allowNone = false,
-  className
+  className,
+  trades = []
 }: ChartAxisSelectorProps) {
   const [open, setOpen] = useState(false)
-  const fieldsByCategory = getFieldsByCategory()
+  const fieldsByCategory = useMemo(() => getFieldsByCategoryWithCustom(trades), [trades])
+  const allCategoryLabels = getAllCategoryLabels()
 
   // Get the display label for the current value
   const currentField = value === 'none' ? null : getFieldInfo(value)
@@ -85,7 +92,7 @@ export function ChartAxisSelector({
             return (
               <DropdownMenuSub key={category}>
                 <DropdownMenuSubTrigger>
-                  {FIELD_CATEGORY_LABELS[category as FieldCategory]}
+                  {allCategoryLabels[category as FieldCategory | CustomFieldCategory]}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-52">
                   {fields.map(field => (
