@@ -17,14 +17,14 @@ export function TailRiskSummaryCards({ result }: TailRiskSummaryCardsProps) {
     varianceThreshold,
   } = result;
 
-  const avgTailDep = analytics.averageTailDependence;
-  const highPairsPct = analytics.highDependencePairsPct * 100;
+  const avgJointRisk = analytics.averageJointTailRisk;
+  const highPairsPct = analytics.highRiskPairsPct * 100;
   const factorRatio =
     strategies.length > 0 ? effectiveFactors / strategies.length : 1;
 
   // Determine if values indicate good (positive) or bad (negative) risk
   const isFactorGood = factorRatio >= 0.3; // More factors = better diversification
-  const isTailDepGood = avgTailDep < 0.3;
+  const isJointRiskGood = avgJointRisk < 0.3;
   const isHighPairsGood = highPairsPct < 20;
 
   return (
@@ -53,16 +53,16 @@ export function TailRiskSummaryCards({ result }: TailRiskSummaryCardsProps) {
       />
 
       <MetricCard
-        title="Avg Tail Dependence"
-        value={avgTailDep.toFixed(2)}
+        title="Avg Joint Tail Risk"
+        value={`${(avgJointRisk * 100).toFixed(0)}%`}
         subtitle={
-          avgTailDep < 0.3
+          avgJointRisk < 0.3
             ? "Good diversification"
-            : avgTailDep < 0.5
+            : avgJointRisk < 0.5
             ? "Moderate tail risk"
             : "High tail concentration"
         }
-        isPositive={isTailDepGood}
+        isPositive={isJointRiskGood}
         tooltip={{
           flavor: `Average probability that strategies have extreme losses together.`,
           detailed: `When one strategy is in its worst ${(tailThreshold * 100).toFixed(0)}% of days, this shows the average probability that another strategy is also in its worst ${(tailThreshold * 100).toFixed(0)}%. Values above 0.5 indicate strategies tend to blow up together on market stress days. Values below 0.3 suggest good tail diversification.`,
@@ -82,9 +82,9 @@ export function TailRiskSummaryCards({ result }: TailRiskSummaryCardsProps) {
         isPositive={isHighPairsGood}
         tooltip={{
           flavor:
-            "Percentage of strategy pairs with tail dependence greater than 0.5.",
+            "Percentage of strategy pairs with joint tail risk greater than 0.5.",
           detailed:
-            "These pairs have more than 50% chance of losing together on extreme days. A high percentage here means much of your portfolio is exposed to correlated tail risk. Look at the heatmap to identify which specific pairs have the highest tail dependence.",
+            "These pairs have more than 50% chance of losing together on extreme days. A high percentage here means much of your portfolio is exposed to correlated tail risk. Look at the heatmap to identify which specific pairs have the highest joint tail risk.",
         }}
       />
     </div>

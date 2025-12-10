@@ -19,7 +19,7 @@ export function TailDependenceHeatmap({
   const { theme } = useTheme();
 
   const { plotData, layout } = useMemo(() => {
-    const { strategies, tailDependenceMatrix } = result;
+    const { strategies, jointTailRiskMatrix } = result;
     const isDark = theme === "dark";
 
     // Truncate strategy names for axis labels
@@ -29,18 +29,18 @@ export function TailDependenceHeatmap({
 
     // Symmetrize the matrix for display (average of both directions)
     // NaN values indicate insufficient data for that pair
-    const symmetricMatrix = tailDependenceMatrix.map((row, i) =>
+    const symmetricMatrix = jointTailRiskMatrix.map((row, i) =>
       row.map((val, j) => {
         if (i === j) return 1.0;
-        const valIJ = tailDependenceMatrix[i][j];
-        const valJI = tailDependenceMatrix[j][i];
+        const valIJ = jointTailRiskMatrix[i][j];
+        const valJI = jointTailRiskMatrix[j][i];
         // If either direction has insufficient data, mark the pair as NaN
         if (Number.isNaN(valIJ) || Number.isNaN(valJI)) return NaN;
         return (valIJ + valJI) / 2;
       })
     );
 
-    // Color scale: 0 (low tail dependence) to 1 (high tail dependence)
+    // Color scale: 0 (low joint tail risk) to 1 (high joint tail risk)
     // Using a different scale than correlation since values are always positive
     const colorscale = isDark
       ? [
@@ -102,7 +102,7 @@ export function TailDependenceHeatmap({
       // Use full strategy names in hover tooltip
       // Note: cells with null z-values (N/A) won't show hover, so single template works
       hovertemplate:
-        "<b>%{customdata[0]} ↔ %{customdata[1]}</b><br>Tail Dependence: %{customdata[2]}<extra></extra>",
+        "<b>%{customdata[0]} ↔ %{customdata[1]}</b><br>Joint Tail Risk: %{customdata[2]}<extra></extra>",
       customdata: symmetricMatrix.map((row, yIndex) =>
         row.map((val, xIndex) => [
           strategies[yIndex],
@@ -111,7 +111,7 @@ export function TailDependenceHeatmap({
         ])
       ),
       colorbar: {
-        title: { text: "Tail Dep.", side: "right" as const },
+        title: { text: "Joint Risk", side: "right" as const },
         tickmode: "array" as const,
         tickvals: [0, 0.25, 0.5, 0.75, 1],
         ticktext: ["0%", "25%", "50%", "75%", "100%"],
@@ -146,13 +146,13 @@ export function TailDependenceHeatmap({
 
   return (
     <ChartWrapper
-      title="Tail Dependence Heatmap"
+      title="Joint Tail Risk Heatmap"
       description="How likely strategies are to have extreme losses together"
       tooltip={{
         flavor:
           "Shows the probability that one strategy is in its worst days when another strategy is also having its worst days.",
         detailed:
-          "Unlike regular correlation which measures average co-movement, tail dependence specifically captures extreme co-movement. A value of 0.7 means when Strategy A has a bad day (bottom 10%), there's a 70% chance Strategy B is also having a bad day. High tail dependence (red) indicates strategies that blow up together on market stress days, even if their day-to-day correlation appears low.",
+          "Unlike regular correlation which measures average co-movement, joint tail risk specifically captures extreme co-movement. A value of 0.7 means when Strategy A has a bad day (bottom 10%), there's a 70% chance Strategy B is also having a bad day. High joint tail risk (red) indicates strategies that blow up together on market stress days, even if their day-to-day correlation appears low.",
       }}
       data={plotData}
       layout={layout}

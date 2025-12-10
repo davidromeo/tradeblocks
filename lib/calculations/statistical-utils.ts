@@ -197,6 +197,105 @@ export function probabilityIntegralTransform(values: number[]): number[] {
 }
 
 /**
+ * Compute Kendall's tau-b correlation coefficient between two arrays
+ *
+ * Kendall's tau is a rank-based correlation measure that is:
+ * - More robust to outliers than Pearson correlation
+ * - Based on concordant/discordant pairs rather than linear relationship
+ * - Bounded in [-1, 1] like Pearson
+ *
+ * tau-b handles ties properly using the formula:
+ * tau-b = (C - D) / sqrt((C + D + T_x) * (C + D + T_y))
+ *
+ * where C = concordant pairs, D = discordant pairs,
+ * T_x = pairs tied only in x, T_y = pairs tied only in y
+ *
+ * @param x - First array
+ * @param y - Second array
+ * @returns Kendall's tau-b in [-1, 1], or 0 if inputs are invalid
+ */
+export function kendallTau(x: number[], y: number[]): number {
+  if (x.length !== y.length || x.length < 2) {
+    return 0;
+  }
+
+  const n = x.length;
+
+  // Check for non-finite values
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(x[i]) || !Number.isFinite(y[i])) {
+      return 0;
+    }
+  }
+
+  let concordant = 0;
+  let discordant = 0;
+  let tiedX = 0;
+  let tiedY = 0;
+
+  // Compare all pairs
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const xDiff = x[i] - x[j];
+      const yDiff = y[i] - y[j];
+
+      if (xDiff === 0 && yDiff === 0) {
+        // Tied in both - doesn't count
+        continue;
+      } else if (xDiff === 0) {
+        // Tied only in x
+        tiedX++;
+      } else if (yDiff === 0) {
+        // Tied only in y
+        tiedY++;
+      } else if (xDiff * yDiff > 0) {
+        // Concordant: same direction
+        concordant++;
+      } else {
+        // Discordant: opposite direction
+        discordant++;
+      }
+    }
+  }
+
+  const numerator = concordant - discordant;
+  const denominator = Math.sqrt(
+    (concordant + discordant + tiedX) * (concordant + discordant + tiedY)
+  );
+
+  if (denominator === 0) {
+    return 0;
+  }
+
+  const result = numerator / denominator;
+
+  // Guard against non-finite result
+  if (!Number.isFinite(result)) {
+    return 0;
+  }
+
+  return result;
+}
+
+/**
+ * Convert Kendall's tau to Pearson correlation using the sin transformation
+ *
+ * This mapping preserves positive semi-definiteness of the correlation matrix,
+ * which is essential for eigenvalue decomposition to produce valid results.
+ *
+ * The formula: r = sin(π * τ / 2)
+ *
+ * This is derived from the relationship between Kendall's tau and Pearson's r
+ * for bivariate normal distributions.
+ *
+ * @param tau - Kendall's tau value in [-1, 1]
+ * @returns Pearson-equivalent correlation in [-1, 1]
+ */
+export function kendallTauToPearson(tau: number): number {
+  return Math.sin((Math.PI * tau) / 2);
+}
+
+/**
  * Compute Pearson correlation coefficient between two arrays
  *
  * @param x - First array

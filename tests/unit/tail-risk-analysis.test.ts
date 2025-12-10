@@ -86,7 +86,7 @@ describe("Tail Risk Analysis", () => {
       expect(result.strategies[0]).toBe("Strategy A");
     });
 
-    it("should calculate tail dependence for two strategies", () => {
+    it("should calculate joint tail risk for two strategies", () => {
       // Create trades with high correlation (same P/L pattern)
       const trades = [
         // Day 1 - both win
@@ -125,18 +125,18 @@ describe("Tail Risk Analysis", () => {
       expect(result.strategies).toHaveLength(2);
       expect(result.tradingDaysUsed).toBe(10);
 
-      // Tail dependence matrix should be 2x2
-      expect(result.tailDependenceMatrix).toHaveLength(2);
-      expect(result.tailDependenceMatrix[0]).toHaveLength(2);
+      // Joint tail risk matrix should be 2x2
+      expect(result.jointTailRiskMatrix).toHaveLength(2);
+      expect(result.jointTailRiskMatrix[0]).toHaveLength(2);
 
       // Diagonal should be 1
-      expect(result.tailDependenceMatrix[0][0]).toBe(1);
-      expect(result.tailDependenceMatrix[1][1]).toBe(1);
+      expect(result.jointTailRiskMatrix[0][0]).toBe(1);
+      expect(result.jointTailRiskMatrix[1][1]).toBe(1);
 
-      // Since returns are highly correlated, tail dependence should be high
+      // Since returns are highly correlated, joint tail risk should be high
       // With 50% threshold, we have 5 tail observations (minimum required)
-      expect(result.tailDependenceMatrix[0][1]).toBeGreaterThan(0);
-      expect(result.tailDependenceMatrix[1][0]).toBeGreaterThan(0);
+      expect(result.jointTailRiskMatrix[0][1]).toBeGreaterThan(0);
+      expect(result.jointTailRiskMatrix[1][0]).toBeGreaterThan(0);
       expect(result.insufficientDataPairs).toBe(0);
     });
 
@@ -355,10 +355,10 @@ describe("Tail Risk Analysis", () => {
 
       // Analytics should exist
       expect(result.analytics).toBeDefined();
-      expect(result.analytics.highestTailDependence.pair).toHaveLength(2);
-      expect(result.analytics.lowestTailDependence.pair).toHaveLength(2);
-      expect(result.analytics.averageTailDependence).toBeGreaterThanOrEqual(0);
-      expect(result.analytics.averageTailDependence).toBeLessThanOrEqual(1);
+      expect(result.analytics.highestJointTailRisk.pair).toHaveLength(2);
+      expect(result.analytics.lowestJointTailRisk.pair).toHaveLength(2);
+      expect(result.analytics.averageJointTailRisk).toBeGreaterThanOrEqual(0);
+      expect(result.analytics.averageJointTailRisk).toBeLessThanOrEqual(1);
     });
 
     it("should include computation time metadata", () => {
@@ -439,15 +439,15 @@ describe("Tail Risk Analysis", () => {
 
       // With only 1 tail observation per strategy, pairs should have NaN
       expect(result.insufficientDataPairs).toBeGreaterThan(0);
-      expect(Number.isNaN(result.tailDependenceMatrix[0][1])).toBe(true);
-      expect(Number.isNaN(result.tailDependenceMatrix[1][0])).toBe(true);
+      expect(Number.isNaN(result.jointTailRiskMatrix[0][1])).toBe(true);
+      expect(Number.isNaN(result.jointTailRiskMatrix[1][0])).toBe(true);
 
       // Diagonal should still be 1
-      expect(result.tailDependenceMatrix[0][0]).toBe(1);
-      expect(result.tailDependenceMatrix[1][1]).toBe(1);
+      expect(result.jointTailRiskMatrix[0][0]).toBe(1);
+      expect(result.jointTailRiskMatrix[1][1]).toBe(1);
 
       // Analytics should handle NaN gracefully (return 0 for no valid pairs)
-      expect(result.analytics.averageTailDependence).toBe(0);
+      expect(result.analytics.averageJointTailRisk).toBe(0);
     });
 
     it("should exclude padded days from tail calculations", () => {

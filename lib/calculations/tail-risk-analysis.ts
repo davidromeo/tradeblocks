@@ -18,7 +18,8 @@ import {
 } from "../models/tail-risk";
 import { Trade } from "../models/trade";
 import {
-  pearsonCorrelation,
+  kendallTau,
+  kendallTauToPearson,
   probabilityIntegralTransform,
 } from "./statistical-utils";
 
@@ -73,6 +74,7 @@ export function performTailRiskAnalysis(
     dateBasis = "opened",
     tickerFilter,
     strategyFilter,
+    dateRange,
     varianceThreshold: rawVarianceThreshold = 0.8,
   } = options;
 
@@ -99,6 +101,30 @@ export function performTailRiskAnalysis(
     filteredTrades = filteredTrades.filter(
       (t) => t.strategy && filterSet.has(t.strategy)
     );
+  }
+
+  // Filter by date range if provided
+  if (dateRange?.from || dateRange?.to) {
+    filteredTrades = filteredTrades.filter((t) => {
+      const tradeDate =
+        dateBasis === "opened"
+          ? new Date(t.dateOpened)
+          : t.dateClosed
+            ? new Date(t.dateClosed)
+            : null;
+
+      if (!tradeDate) return false;
+
+      if (dateRange.from && tradeDate < dateRange.from) return false;
+      if (dateRange.to) {
+        // Include the entire "to" day by comparing to end of day
+        const endOfToDay = new Date(dateRange.to);
+        endOfToDay.setHours(23, 59, 59, 999);
+        if (tradeDate > endOfToDay) return false;
+      }
+
+      return true;
+    });
   }
 
   // Step 2: Aggregate daily returns and align strategies
@@ -139,8 +165,8 @@ export function performTailRiskAnalysis(
   const { eigenvalues, eigenvectors, explainedVariance, effectiveFactors } =
     performEigenAnalysis(copulaCorrelationMatrix, varianceThreshold);
 
-  // Step 6: Estimate empirical tail dependence
-  const tailDependenceResult = estimateTailDependence(
+  // Step 6: Estimate empirical joint tail risk (tail co-probability)
+  const jointTailRiskResult = estimateJointTailRisk(
     transformedReturns,
     aligned.tradedMask,
     tailThreshold
@@ -148,14 +174,14 @@ export function performTailRiskAnalysis(
 
   // Step 7: Calculate analytics
   const analytics = calculateTailRiskAnalytics(
-    tailDependenceResult.matrix,
+    jointTailRiskResult.matrix,
     aligned.strategies
   );
 
   // Step 8: Calculate marginal contributions
   const marginalContributions = calculateMarginalContributions(
     copulaCorrelationMatrix,
-    tailDependenceResult.matrix,
+    jointTailRiskResult.matrix,
     eigenvectors,
     aligned.strategies
   );
@@ -172,8 +198,8 @@ export function performTailRiskAnalysis(
     tailThreshold,
     varianceThreshold,
     copulaCorrelationMatrix,
-    tailDependenceMatrix: tailDependenceResult.matrix,
-    insufficientDataPairs: tailDependenceResult.insufficientPairs,
+    jointTailRiskMatrix: jointTailRiskResult.matrix,
+    insufficientDataPairs: jointTailRiskResult.insufficientPairs,
     eigenvalues,
     eigenvectors,
     explainedVariance,
@@ -315,7 +341,13 @@ function normalizeReturn(
 }
 
 /**
- * Compute correlation matrix from transformed returns
+ * Compute correlation matrix from transformed returns using Kendall's tau
+ *
+ * Uses Kendall's tau-b (rank-based) correlation, then maps to Pearson-equivalent
+ * using sin(π * τ / 2). This approach:
+ * 1. Is more robust to outliers than direct Pearson correlation
+ * 2. Guarantees the resulting matrix is positive semi-definite
+ * 3. Ensures valid eigenvalue decomposition (all eigenvalues >= 0)
  */
 function computeCorrelationMatrix(transformedReturns: number[][]): number[][] {
   const n = transformedReturns.length;
@@ -327,9 +359,9 @@ function computeCorrelationMatrix(transformedReturns: number[][]): number[][] {
       if (i === j) {
         row.push(1.0);
       } else {
-        row.push(
-          pearsonCorrelation(transformedReturns[i], transformedReturns[j])
-        );
+        // Compute Kendall's tau, then map to Pearson-equivalent
+        const tau = kendallTau(transformedReturns[i], transformedReturns[j]);
+        row.push(kendallTauToPearson(tau));
       }
     }
     correlationMatrix.push(row);
@@ -446,15 +478,15 @@ function performEigenAnalysis(
 }
 
 /**
- * Result of tail dependence estimation including insufficient data tracking
+ * Result of joint tail risk estimation including insufficient data tracking
  */
-interface TailDependenceResult {
+interface JointTailRiskResult {
   matrix: number[][];
   insufficientPairs: number;
 }
 
 /**
- * Estimate empirical tail dependence between strategies
+ * Estimate empirical joint tail risk (tail co-probability) between strategies
  *
  * For each pair (i, j), calculates P(j in tail | i in tail)
  * where "in tail" means below the tailThreshold percentile.
@@ -464,11 +496,11 @@ interface TailDependenceResult {
  * 2. Requires minimum tail observations for valid estimates (returns NaN otherwise)
  * 3. Uses linear interpolation for threshold calculation
  */
-function estimateTailDependence(
+function estimateJointTailRisk(
   transformedReturns: number[][],
   tradedMask: boolean[][],
   tailThreshold: number
-): TailDependenceResult {
+): JointTailRiskResult {
   const n = transformedReturns.length;
   const m = transformedReturns[0]?.length || 0;
 
@@ -507,8 +539,8 @@ function estimateTailDependence(
     returns.map((val, t) => tradedMask[i][t] && val <= thresholdValues[i])
   );
 
-  // Compute tail dependence matrix
-  const tailDependenceMatrix: number[][] = [];
+  // Compute joint tail risk matrix
+  const jointTailRiskMatrix: number[][] = [];
   let insufficientPairs = 0;
 
   for (let i = 0; i < n; i++) {
@@ -549,31 +581,31 @@ function estimateTailDependence(
         insufficientPairs++;
       } else {
         // P(j in tail | i in tail) on shared trading days
-        const dependence = bothInTail / iInTailAndBothTraded;
-        row.push(dependence);
+        const jointRisk = bothInTail / iInTailAndBothTraded;
+        row.push(jointRisk);
       }
     }
-    tailDependenceMatrix.push(row);
+    jointTailRiskMatrix.push(row);
   }
 
-  return { matrix: tailDependenceMatrix, insufficientPairs };
+  return { matrix: jointTailRiskMatrix, insufficientPairs };
 }
 
 /**
- * Calculate analytics from tail dependence matrix
+ * Calculate analytics from joint tail risk matrix
  */
 function calculateTailRiskAnalytics(
-  tailDependenceMatrix: number[][],
+  jointTailRiskMatrix: number[][],
   strategies: string[]
 ): TailRiskAnalytics {
   const n = strategies.length;
 
   if (n < 2) {
     return {
-      highestTailDependence: { value: 0, pair: ["", ""] },
-      lowestTailDependence: { value: 0, pair: ["", ""] },
-      averageTailDependence: 0,
-      highDependencePairsPct: 0,
+      highestJointTailRisk: { value: 0, pair: ["", ""] },
+      lowestJointTailRisk: { value: 0, pair: ["", ""] },
+      averageJointTailRisk: 0,
+      highRiskPairsPct: 0,
     };
   }
 
@@ -581,14 +613,14 @@ function calculateTailRiskAnalytics(
   let lowest = { value: Infinity, pair: ["", ""] as [string, string] };
   let sum = 0;
   let validCount = 0;
-  let highDependenceCount = 0;
+  let highRiskCount = 0;
 
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      // Tail dependence is asymmetric: P(B in tail | A in tail) ≠ P(A in tail | B in tail)
+      // Joint tail risk is asymmetric: P(B in tail | A in tail) ≠ P(A in tail | B in tail)
       // We average both directions for a single summary metric per pair
-      const valIJ = tailDependenceMatrix[i][j];
-      const valJI = tailDependenceMatrix[j][i];
+      const valIJ = jointTailRiskMatrix[i][j];
+      const valJI = jointTailRiskMatrix[j][i];
 
       // Skip pairs with insufficient data (NaN values)
       if (Number.isNaN(valIJ) || Number.isNaN(valJI)) {
@@ -607,7 +639,7 @@ function calculateTailRiskAnalytics(
         lowest = { value, pair: [strategies[i], strategies[j]] };
       }
       if (value > HIGH_DEPENDENCE_THRESHOLD) {
-        highDependenceCount++;
+        highRiskCount++;
       }
     }
   }
@@ -615,18 +647,18 @@ function calculateTailRiskAnalytics(
   // Handle case where no valid pairs exist
   if (validCount === 0) {
     return {
-      highestTailDependence: { value: 0, pair: ["", ""] },
-      lowestTailDependence: { value: 0, pair: ["", ""] },
-      averageTailDependence: 0,
-      highDependencePairsPct: 0,
+      highestJointTailRisk: { value: 0, pair: ["", ""] },
+      lowestJointTailRisk: { value: 0, pair: ["", ""] },
+      averageJointTailRisk: 0,
+      highRiskPairsPct: 0,
     };
   }
 
   return {
-    highestTailDependence: highest,
-    lowestTailDependence: lowest,
-    averageTailDependence: sum / validCount,
-    highDependencePairsPct: highDependenceCount / validCount,
+    highestJointTailRisk: highest,
+    lowestJointTailRisk: lowest,
+    averageJointTailRisk: sum / validCount,
+    highRiskPairsPct: highRiskCount / validCount,
   };
 }
 
@@ -635,7 +667,7 @@ function calculateTailRiskAnalytics(
  */
 function calculateMarginalContributions(
   _copulaCorrelationMatrix: number[][],
-  tailDependenceMatrix: number[][],
+  jointTailRiskMatrix: number[][],
   eigenvectors: number[][],
   strategies: string[]
 ): MarginalContribution[] {
@@ -663,22 +695,22 @@ function calculateMarginalContributions(
         ? Math.abs(firstEigenvector[i]) / sumAbsLoadings
         : 1 / n;
 
-    // Average tail dependence with other strategies (skip NaN pairs)
-    let sumDependence = 0;
+    // Average joint tail risk with other strategies (skip NaN pairs)
+    let sumJointRisk = 0;
     let validPairs = 0;
     for (let j = 0; j < n; j++) {
       if (i !== j) {
-        const valIJ = tailDependenceMatrix[i][j];
-        const valJI = tailDependenceMatrix[j][i];
+        const valIJ = jointTailRiskMatrix[i][j];
+        const valJI = jointTailRiskMatrix[j][i];
 
         // Skip pairs with insufficient data
         if (!Number.isNaN(valIJ) && !Number.isNaN(valJI)) {
-          sumDependence += (valIJ + valJI) / 2;
+          sumJointRisk += (valIJ + valJI) / 2;
           validPairs++;
         }
       }
     }
-    const avgTailDependence = validPairs > 0 ? sumDependence / validPairs : 0;
+    const avgTailDependence = validPairs > 0 ? sumJointRisk / validPairs : 0;
 
     // Tail risk contribution: weighted combination of concentration and avg dependence
     // Higher concentration + higher avg dependence = higher contribution
@@ -728,7 +760,7 @@ function createEmptyResult(
     tailThreshold,
     varianceThreshold,
     copulaCorrelationMatrix: identity,
-    tailDependenceMatrix: identity,
+    jointTailRiskMatrix: identity,
     insufficientDataPairs: 0,
     eigenvalues: new Array(n).fill(1),
     eigenvectors: identity,
@@ -737,10 +769,10 @@ function createEmptyResult(
       .map((_, i) => (i + 1) / Math.max(n, 1)),
     effectiveFactors: n,
     analytics: {
-      highestTailDependence: { value: 0, pair: ["", ""] },
-      lowestTailDependence: { value: 0, pair: ["", ""] },
-      averageTailDependence: 0,
-      highDependencePairsPct: 0,
+      highestJointTailRisk: { value: 0, pair: ["", ""] },
+      lowestJointTailRisk: { value: 0, pair: ["", ""] },
+      averageJointTailRisk: 0,
+      highRiskPairsPct: 0,
     },
     marginalContributions: aligned.strategies.map((strategy) => ({
       strategy,

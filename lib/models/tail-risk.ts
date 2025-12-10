@@ -52,6 +52,15 @@ export interface TailRiskAnalysisOptions {
   strategyFilter?: string[];
 
   /**
+   * Filter trades to a specific date range
+   * Uses the dateBasis field to determine which date to compare
+   */
+  dateRange?: {
+    from?: Date;
+    to?: Date;
+  };
+
+  /**
    * Variance threshold for determining effective factors
    * Default: 0.80 (80% of variance explained)
    * Range: 0.5 to 0.99
@@ -86,35 +95,35 @@ export interface MarginalContribution {
 }
 
 /**
- * Analytics derived from the tail dependence matrix
+ * Analytics derived from the joint tail risk matrix
  */
 export interface TailRiskAnalytics {
   /**
-   * Strategy pair with highest tail dependence
+   * Strategy pair with highest joint tail risk
    */
-  highestTailDependence: {
+  highestJointTailRisk: {
     value: number;
     pair: [string, string];
   };
 
   /**
-   * Strategy pair with lowest tail dependence
+   * Strategy pair with lowest joint tail risk
    */
-  lowestTailDependence: {
+  lowestJointTailRisk: {
     value: number;
     pair: [string, string];
   };
 
   /**
-   * Average tail dependence across all strategy pairs
+   * Average joint tail risk across all strategy pairs
    */
-  averageTailDependence: number;
+  averageJointTailRisk: number;
 
   /**
-   * Percentage of pairs with tail dependence > 0.5
+   * Percentage of pairs with joint tail risk > 0.5
    * Indicates how much of the portfolio has high tail risk concentration
    */
-  highDependencePairsPct: number;
+  highRiskPairsPct: number;
 }
 
 /**
@@ -142,23 +151,24 @@ export interface TailRiskAnalysisResult {
 
   // Core results
   /**
-   * Copula correlation matrix (correlation on PIT-transformed data)
+   * Copula correlation matrix (Kendall's tau mapped to Pearson via sin transform)
    * This captures the dependence structure after removing marginal effects
+   * Uses rank-based correlation for robustness and guaranteed PSD matrix
    * Size: strategies.length × strategies.length
    */
   copulaCorrelationMatrix: number[][];
 
   /**
-   * Empirical tail dependence matrix
+   * Joint tail risk matrix (empirical tail co-probability)
    * Entry [i][j] = P(strategy j in tail | strategy i in tail)
    * Range [0, 1] for each entry, NaN if insufficient data
    * Size: strategies.length × strategies.length
    */
-  tailDependenceMatrix: number[][];
+  jointTailRiskMatrix: number[][];
 
   /**
    * Number of strategy pairs with insufficient tail observations
-   * These pairs have NaN in tailDependenceMatrix
+   * These pairs have NaN in jointTailRiskMatrix
    */
   insufficientDataPairs: number;
 

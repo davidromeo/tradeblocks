@@ -25,6 +25,12 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { performTailRiskAnalysis } from "@/lib/calculations/tail-risk-analysis";
 import { getBlock, getTradesByBlockWithOptions } from "@/lib/db";
 import {
@@ -46,11 +52,15 @@ import {
 } from "@/components/ui/collapsible";
 import {
   AlertTriangle,
+  CalendarIcon,
   ChevronDown,
   Download,
   HelpCircle,
   TrendingDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { DateRange } from "react-day-picker";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -78,6 +88,7 @@ export default function TailRiskAnalysisPage() {
   >("raw");
   const [dateBasis, setDateBasis] = useState<"opened" | "closed">("opened");
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   // Load trades
   useEffect(() => {
@@ -133,6 +144,10 @@ export default function TailRiskAnalysisPage() {
       dateBasis,
       strategyFilter:
         selectedStrategies.length > 0 ? selectedStrategies : undefined,
+      dateRange:
+        dateRange?.from || dateRange?.to
+          ? { from: dateRange.from, to: dateRange.to }
+          : undefined,
     };
 
     try {
@@ -141,7 +156,7 @@ export default function TailRiskAnalysisPage() {
       console.error("Tail risk analysis failed:", error);
       return null;
     }
-  }, [trades, tailThreshold, varianceThreshold, normalization, dateBasis, selectedStrategies]);
+  }, [trades, tailThreshold, varianceThreshold, normalization, dateBasis, selectedStrategies, dateRange]);
 
   // Export handlers
   const handleDownloadCsv = useCallback(() => {
@@ -152,13 +167,14 @@ export default function TailRiskAnalysisPage() {
       tailThreshold,
       normalization,
       dateBasis,
+      dateRange: dateRange?.from || dateRange?.to ? { from: dateRange.from, to: dateRange.to } : undefined,
     });
 
     downloadCsv(
       lines,
       generateExportFilename(activeBlock.name, "tail-risk", "csv")
     );
-  }, [analysisResult, activeBlock, tailThreshold, normalization, dateBasis]);
+  }, [analysisResult, activeBlock, tailThreshold, normalization, dateBasis, dateRange]);
 
   const handleDownloadJson = useCallback(() => {
     if (!analysisResult || !activeBlock) return;
@@ -166,15 +182,15 @@ export default function TailRiskAnalysisPage() {
     const { strategies } = analysisResult;
 
     // Convert matrices to labeled objects for readability
-    const labeledTailDependence: Record<string, Record<string, number>> = {};
+    const labeledJointTailRisk: Record<string, Record<string, number>> = {};
     const labeledCopulaCorrelation: Record<string, Record<string, number>> = {};
 
     for (let i = 0; i < strategies.length; i++) {
-      labeledTailDependence[strategies[i]] = {};
+      labeledJointTailRisk[strategies[i]] = {};
       labeledCopulaCorrelation[strategies[i]] = {};
       for (let j = 0; j < strategies.length; j++) {
-        labeledTailDependence[strategies[i]][strategies[j]] =
-          analysisResult.tailDependenceMatrix[i][j];
+        labeledJointTailRisk[strategies[i]][strategies[j]] =
+          analysisResult.jointTailRiskMatrix[i][j];
         labeledCopulaCorrelation[strategies[i]][strategies[j]] =
           analysisResult.copulaCorrelationMatrix[i][j];
       }
@@ -200,23 +216,30 @@ export default function TailRiskAnalysisPage() {
         varianceThresholdDescription: `${(varianceThreshold * 100).toFixed(0)}% cumulative variance threshold for effective factors`,
         normalization,
         dateBasis,
+        dateRange:
+          dateRange?.from || dateRange?.to
+            ? {
+                from: dateRange?.from?.toISOString(),
+                to: dateRange?.to?.toISOString(),
+              }
+            : "all",
       },
       summary: {
         strategiesAnalyzed: strategies.length,
         tradingDaysUsed: analysisResult.tradingDaysUsed,
         effectiveRiskFactors: analysisResult.effectiveFactors,
         effectiveFactorsDescription: `${analysisResult.effectiveFactors} independent risk factors explain ${(analysisResult.varianceThreshold * 100).toFixed(0)}%+ of tail risk variance`,
-        averageTailDependence: analysisResult.analytics.averageTailDependence,
-        highDependencePairsPct: analysisResult.analytics.highDependencePairsPct,
-        highestTailDependence: analysisResult.analytics.highestTailDependence,
-        lowestTailDependence: analysisResult.analytics.lowestTailDependence,
+        averageJointTailRisk: analysisResult.analytics.averageJointTailRisk,
+        highRiskPairsPct: analysisResult.analytics.highRiskPairsPct,
+        highestJointTailRisk: analysisResult.analytics.highestJointTailRisk,
+        lowestJointTailRisk: analysisResult.analytics.lowestJointTailRisk,
       },
-      tailDependenceMatrix: labeledTailDependence,
-      tailDependenceDescription:
+      jointTailRiskMatrix: labeledJointTailRisk,
+      jointTailRiskDescription:
         "Probability that strategy B has an extreme loss day given strategy A has an extreme loss day. Values above 0.5 indicate strategies tend to lose together on bad days.",
       copulaCorrelationMatrix: labeledCopulaCorrelation,
       copulaCorrelationDescription:
-        "Correlation computed on probability-integral-transformed returns (Gaussian copula). Captures dependence structure independent of marginal distributions.",
+        "Correlation computed using Kendall's tau (rank-based) mapped to Pearson via sin transform. Captures dependence structure independent of marginal distributions with guaranteed positive semi-definite matrix.",
       factorAnalysis: labeledEigenvalues,
       factorAnalysisDescription:
         "Eigenvalue decomposition showing how many independent risk factors drive tail behavior. Fewer effective factors = more concentrated tail risk.",
@@ -229,7 +252,7 @@ export default function TailRiskAnalysisPage() {
       exportData,
       generateExportFilename(activeBlock.name, "tail-risk", "json")
     );
-  }, [analysisResult, activeBlock, tailThreshold, normalization, dateBasis]);
+  }, [analysisResult, activeBlock, tailThreshold, varianceThreshold, normalization, dateBasis, dateRange]);
 
   // Loading state
   if (loading) {
@@ -284,8 +307,9 @@ export default function TailRiskAnalysisPage() {
                 options strategies often behave differently in the tails. Two
                 strategies can appear uncorrelated day-to-day but still blow up
                 together on big market moves. This analysis uses{" "}
-                <strong>Gaussian copula</strong> methods to measure{" "}
-                <strong>tail dependence</strong> - the probability that
+                <strong>Gaussian copula</strong> methods with{" "}
+                <strong>Kendall&apos;s tau</strong> to measure{" "}
+                <strong>joint tail risk</strong> - the probability that
                 strategies have extreme losses together.
               </p>
               <div className="flex flex-wrap items-center gap-4 pt-2 text-xs">
@@ -294,7 +318,7 @@ export default function TailRiskAnalysisPage() {
                     variant="secondary"
                     className="font-medium bg-blue-500/10 text-blue-700 dark:text-blue-400"
                   >
-                    LOW TAIL DEP
+                    LOW JOINT RISK
                   </Badge>
                   <span className="text-muted-foreground">
                     Good diversification in stress
@@ -305,7 +329,7 @@ export default function TailRiskAnalysisPage() {
                     variant="outline"
                     className="border-red-500 bg-red-500/10 text-red-700 dark:text-red-400 font-medium"
                   >
-                    HIGH TAIL DEP
+                    HIGH JOINT RISK
                   </Badge>
                   <span className="text-muted-foreground">
                     Strategies blow up together
@@ -323,8 +347,61 @@ export default function TailRiskAnalysisPage() {
           <CardTitle className="text-lg">Analysis Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Row 1: Strategies, Return Basis, Date Basis */}
+          {/* Row 1: Date Range, Strategies, Return Basis, Date Basis */}
           <div className="flex flex-col sm:flex-row gap-6">
+            {/* Date Range */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label>Date Range</Label>
+                <HoverCard>
+                  <HoverCardTrigger asChild>
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-64">
+                    <p className="text-sm">
+                      Filter trades to a specific date range for the analysis.
+                    </p>
+                  </HoverCardContent>
+                </HoverCard>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[240px] justify-start text-left font-normal",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>All time</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <DateRangePicker
+                    date={dateRange}
+                    onDateChange={setDateRange}
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-muted-foreground">
+                {dateRange?.from || dateRange?.to
+                  ? "Filtered date range"
+                  : "Using all available data"}
+              </p>
+            </div>
+
             {/* Strategy Filter */}
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2">
@@ -645,7 +722,7 @@ export default function TailRiskAnalysisPage() {
                 <p className="text-sm text-muted-foreground mt-1">
                   With a {(tailThreshold * 100).toFixed(0)}% tail threshold and
                   your current data, some strategy pairs don&apos;t have enough
-                  shared extreme days to calculate reliable tail dependence.{" "}
+                  shared extreme days to calculate reliable joint tail risk.{" "}
                   <strong>
                     Try increasing the tail threshold to{" "}
                     {Math.min(50, Math.round(tailThreshold * 100) + 5)}-
@@ -669,7 +746,7 @@ export default function TailRiskAnalysisPage() {
           {/* Charts */}
           <Tabs defaultValue="heatmap">
             <TabsList>
-              <TabsTrigger value="heatmap">Tail Dependence</TabsTrigger>
+              <TabsTrigger value="heatmap">Joint Tail Risk</TabsTrigger>
               <TabsTrigger value="factors">Factor Analysis</TabsTrigger>
               <TabsTrigger value="contributions">Contributions</TabsTrigger>
             </TabsList>
@@ -721,37 +798,37 @@ export default function TailRiskAnalysisPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1">
                   <div className="text-sm font-medium text-muted-foreground">
-                    Highest Tail Dependence:
+                    Highest Joint Tail Risk:
                   </div>
                   <div
                     className="text-2xl font-bold"
                     style={{ color: isDark ? "#f87171" : "#dc2626" }}
                   >
-                    {analysisResult.analytics.highestTailDependence.value.toFixed(
+                    {analysisResult.analytics.highestJointTailRisk.value.toFixed(
                       2
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {analysisResult.analytics.highestTailDependence.pair[0]} ↔{" "}
-                    {analysisResult.analytics.highestTailDependence.pair[1]}
+                    {analysisResult.analytics.highestJointTailRisk.pair[0]} ↔{" "}
+                    {analysisResult.analytics.highestJointTailRisk.pair[1]}
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <div className="text-sm font-medium text-muted-foreground">
-                    Lowest Tail Dependence:
+                    Lowest Joint Tail Risk:
                   </div>
                   <div
                     className="text-2xl font-bold"
                     style={{ color: isDark ? "#4ade80" : "#16a34a" }}
                   >
-                    {analysisResult.analytics.lowestTailDependence.value.toFixed(
+                    {analysisResult.analytics.lowestJointTailRisk.value.toFixed(
                       2
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {analysisResult.analytics.lowestTailDependence.pair[0]} ↔{" "}
-                    {analysisResult.analytics.lowestTailDependence.pair[1]}
+                    {analysisResult.analytics.lowestJointTailRisk.pair[0]} ↔{" "}
+                    {analysisResult.analytics.lowestJointTailRisk.pair[1]}
                   </div>
                 </div>
 
@@ -786,16 +863,16 @@ function HeatmapInterpretation({
 }) {
   const [open, setOpen] = useState(false);
   const { analytics, strategies } = result;
-  const avgDep = analytics.averageTailDependence;
-  const highPct = analytics.highDependencePairsPct * 100;
+  const avgRisk = analytics.averageJointTailRisk;
+  const highPct = analytics.highRiskPairsPct * 100;
 
   // Determine overall assessment
   let assessment: "good" | "moderate" | "concerning";
   let assessmentText: string;
-  if (avgDep < 0.3) {
+  if (avgRisk < 0.3) {
     assessment = "good";
     assessmentText = "Your strategies show good tail diversification.";
-  } else if (avgDep < 0.5) {
+  } else if (avgRisk < 0.5) {
     assessment = "moderate";
     assessmentText = "Your strategies have moderate tail concentration.";
   } else {
@@ -831,7 +908,7 @@ function HeatmapInterpretation({
                     <span className="font-medium text-blue-600 dark:text-blue-400">
                       0.0 - 0.3
                     </span>
-                    : Low tail dependence. These strategies rarely have bad days
+                    : Low joint tail risk. These strategies rarely have bad days
                     together.
                   </li>
                   <li>
@@ -867,7 +944,7 @@ function HeatmapInterpretation({
                 >
                   <p className="font-medium">{assessmentText}</p>
                   <p className="mt-1 text-xs opacity-80">
-                    Average tail dependence: {(avgDep * 100).toFixed(0)}% |{" "}
+                    Average joint tail risk: {(avgRisk * 100).toFixed(0)}% |{" "}
                     {highPct.toFixed(0)}% of your {strategies.length} strategy
                     pairs have &gt;50% chance of losing together on extreme
                     days.
@@ -1095,6 +1172,7 @@ interface CsvMeta {
   tailThreshold: number;
   normalization: string;
   dateBasis: string;
+  dateRange?: { from?: Date; to?: Date };
 }
 
 function buildTailRiskCsvLines(
@@ -1110,20 +1188,28 @@ function buildTailRiskCsvLines(
   );
   lines.push(toCsvRow(["Return Basis", meta.normalization]));
   lines.push(toCsvRow(["Date Basis", meta.dateBasis]));
+  lines.push(
+    toCsvRow([
+      "Date Range",
+      meta.dateRange?.from || meta.dateRange?.to
+        ? `${meta.dateRange.from ? format(meta.dateRange.from, "yyyy-MM-dd") : "start"} to ${meta.dateRange.to ? format(meta.dateRange.to, "yyyy-MM-dd") : "end"}`
+        : "All time",
+    ])
+  );
   lines.push(toCsvRow(["Strategies", result.strategies.length]));
   lines.push(toCsvRow(["Trading Days", result.tradingDaysUsed]));
   lines.push(toCsvRow(["Effective Factors", result.effectiveFactors]));
   lines.push(
     toCsvRow([
-      "Avg Tail Dependence",
-      result.analytics.averageTailDependence.toFixed(4),
+      "Avg Joint Tail Risk",
+      result.analytics.averageJointTailRisk.toFixed(4),
     ])
   );
 
   lines.push("");
-  lines.push(toCsvRow(["--- Tail Dependence Matrix ---"]));
+  lines.push(toCsvRow(["--- Joint Tail Risk Matrix ---"]));
   lines.push(toCsvRow(["Strategy", ...result.strategies]));
-  result.tailDependenceMatrix.forEach((row, index) => {
+  result.jointTailRiskMatrix.forEach((row, index) => {
     lines.push(
       toCsvRow([result.strategies[index], ...row.map((v) => v.toFixed(4))])
     );
@@ -1136,7 +1222,7 @@ function buildTailRiskCsvLines(
       "Strategy",
       "Tail Risk Contribution %",
       "Concentration Score",
-      "Avg Tail Dependence",
+      "Avg Joint Tail Risk",
     ])
   );
   result.marginalContributions.forEach((c) => {
