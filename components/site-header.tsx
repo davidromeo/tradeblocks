@@ -37,6 +37,10 @@ const routeMeta: Record<
     title: "Correlation Matrix",
     description: "Understand strategy overlap before deploying capital.",
   },
+  "/tail-risk-analysis": {
+    title: "Tail Risk Analysis",
+    description: "Measure how strategies blow up together during market stress.",
+  },
   "/comparison-blocks": {
     title: "Comparison Blocks",
     description: "Align and compare backtested vs reported trade data.",
