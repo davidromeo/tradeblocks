@@ -28,12 +28,16 @@ export function TailDependenceHeatmap({
     );
 
     // Symmetrize the matrix for display (average of both directions)
+    // NaN values indicate insufficient data for that pair
     const symmetricMatrix = tailDependenceMatrix.map((row, i) =>
-      row.map((val, j) =>
-        i === j
-          ? 1.0
-          : (tailDependenceMatrix[i][j] + tailDependenceMatrix[j][i]) / 2
-      )
+      row.map((val, j) => {
+        if (i === j) return 1.0;
+        const valIJ = tailDependenceMatrix[i][j];
+        const valJI = tailDependenceMatrix[j][i];
+        // If either direction has insufficient data, mark the pair as NaN
+        if (Number.isNaN(valIJ) || Number.isNaN(valJI)) return NaN;
+        return (valIJ + valJI) / 2;
+      })
     );
 
     // Color scale: 0 (low tail dependence) to 1 (high tail dependence)
@@ -54,42 +58,63 @@ export function TailDependenceHeatmap({
           [1, "#b91c1c"], // Dark red for high dependence
         ];
 
+    // For display, replace NaN with null so Plotly shows empty cells
+    // and prepare text labels
+    const displayMatrix = symmetricMatrix.map((row) =>
+      row.map((val) => (Number.isNaN(val) ? null : val))
+    );
+
+    const textLabels = symmetricMatrix.map((row) =>
+      row.map((val) =>
+        Number.isNaN(val) ? "N/A" : `${Math.round(val * 100)}%`
+      )
+    );
+
+    const textColors = symmetricMatrix.map((row) =>
+      row.map((val) => {
+        if (Number.isNaN(val)) {
+          // Grey text for N/A cells
+          return isDark ? "#6b7280" : "#9ca3af";
+        }
+        // Dynamic text color based on value and theme
+        if (isDark) {
+          return val > 0.5 ? "#ffffff" : "#e2e8f0";
+        } else {
+          return val > 0.6 ? "#ffffff" : "#000000";
+        }
+      })
+    );
+
     const heatmapData = {
-      z: symmetricMatrix,
+      z: displayMatrix,
       x: truncatedStrategies,
       y: truncatedStrategies,
       type: "heatmap" as const,
       colorscale,
       zmin: 0,
       zmax: 1,
-      text: symmetricMatrix.map((row) =>
-        row.map((val) => val.toFixed(2))
-      ) as unknown as string,
+      text: textLabels as unknown as string,
       texttemplate: "%{text}",
       textfont: {
         size: 10,
-        color: symmetricMatrix.map((row) =>
-          row.map((val) => {
-            // Dynamic text color based on value and theme
-            if (isDark) {
-              return val > 0.5 ? "#ffffff" : "#e2e8f0";
-            } else {
-              return val > 0.6 ? "#ffffff" : "#000000";
-            }
-          })
-        ) as unknown as string,
+        color: textColors as unknown as string,
       },
       // Use full strategy names in hover tooltip
+      // Note: cells with null z-values (N/A) won't show hover, so single template works
       hovertemplate:
-        "<b>%{customdata[0]} ↔ %{customdata[1]}</b><br>Tail Dependence: %{z:.3f}<extra></extra>",
+        "<b>%{customdata[0]} ↔ %{customdata[1]}</b><br>Tail Dependence: %{customdata[2]}<extra></extra>",
       customdata: symmetricMatrix.map((row, yIndex) =>
-        row.map((_, xIndex) => [strategies[yIndex], strategies[xIndex]])
+        row.map((val, xIndex) => [
+          strategies[yIndex],
+          strategies[xIndex],
+          Number.isNaN(val) ? "N/A" : `${(val * 100).toFixed(1)}%`,
+        ])
       ),
       colorbar: {
         title: { text: "Tail Dep.", side: "right" as const },
-        tickmode: "linear" as const,
-        tick0: 0,
-        dtick: 0.25,
+        tickmode: "array" as const,
+        tickvals: [0, 0.25, 0.5, 0.75, 1],
+        ticktext: ["0%", "25%", "50%", "75%", "100%"],
       },
     };
 

@@ -497,7 +497,7 @@ export default function TailRiskAnalysisPage() {
                     setTailThresholdInput(String(val));
                   }}
                   min={1}
-                  max={25}
+                  max={50}
                   step={1}
                   className="flex-1"
                 />
@@ -508,7 +508,7 @@ export default function TailRiskAnalysisPage() {
                     onChange={(e) => setTailThresholdInput(e.target.value)}
                     onBlur={() => {
                       const val = parseFloat(tailThresholdInput);
-                      if (!isNaN(val) && val >= 1 && val <= 25) {
+                      if (!isNaN(val) && val >= 1 && val <= 50) {
                         setTailThreshold(val / 100);
                         setTailThresholdInput(String(val));
                       } else {
@@ -522,7 +522,7 @@ export default function TailRiskAnalysisPage() {
                     }}
                     className="w-16 h-8 text-center"
                     min={1}
-                    max={25}
+                    max={50}
                   />
                   <span className="text-sm text-muted-foreground">%</span>
                 </div>
@@ -623,6 +623,36 @@ export default function TailRiskAnalysisPage() {
                     `Only ${analysisResult!.tradingDaysUsed} shared trading days found. At least 30 days recommended for reliable tail risk estimation. `}
                   {analysisResult!.strategies.length < 2 &&
                     `Only ${analysisResult!.strategies.length} strategy found. Need at least 2 strategies for correlation analysis.`}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Insufficient Tail Observations Warning */}
+      {analysisResult && analysisResult.insufficientDataPairs > 0 && (
+        <Card className="border-blue-500/50 bg-blue-500/5">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-blue-700 dark:text-blue-400">
+                  {analysisResult.insufficientDataPairs} Strategy Pair
+                  {analysisResult.insufficientDataPairs > 1 ? "s Have" : " Has"}{" "}
+                  Insufficient Tail Data
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  With a {(tailThreshold * 100).toFixed(0)}% tail threshold and
+                  your current data, some strategy pairs don&apos;t have enough
+                  shared extreme days to calculate reliable tail dependence.{" "}
+                  <strong>
+                    Try increasing the tail threshold to{" "}
+                    {Math.min(50, Math.round(tailThreshold * 100) + 5)}-
+                    {Math.min(50, Math.round(tailThreshold * 100) + 10)}%
+                  </strong>{" "}
+                  to include more observations. These pairs are shown as
+                  &quot;N/A&quot; in the heatmap.
                 </p>
               </div>
             </div>

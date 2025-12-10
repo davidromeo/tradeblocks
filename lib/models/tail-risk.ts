@@ -151,10 +151,16 @@ export interface TailRiskAnalysisResult {
   /**
    * Empirical tail dependence matrix
    * Entry [i][j] = P(strategy j in tail | strategy i in tail)
-   * Range [0, 1] for each entry
+   * Range [0, 1] for each entry, NaN if insufficient data
    * Size: strategies.length × strategies.length
    */
   tailDependenceMatrix: number[][];
+
+  /**
+   * Number of strategy pairs with insufficient tail observations
+   * These pairs have NaN in tailDependenceMatrix
+   */
+  insufficientDataPairs: number;
 
   // Factor analysis
   /**
@@ -212,4 +218,11 @@ export interface AlignedStrategyReturns {
    * Entry [i][j] = return of strategy i on date j
    */
   returns: number[][];
+
+  /**
+   * Trading mask: strategies.length × dates.length
+   * Entry [i][j] = true if strategy i actually traded on date j
+   * (vs zero-padded for alignment)
+   */
+  tradedMask: boolean[][];
 }

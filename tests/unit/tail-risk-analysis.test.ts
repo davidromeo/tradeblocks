@@ -118,7 +118,7 @@ describe("Tail Risk Analysis", () => {
       ];
 
       const result = performTailRiskAnalysis(trades, {
-        tailThreshold: 0.2, // 20% for small dataset
+        tailThreshold: 0.5, // 50% threshold so we get 5 tail events from 10 days
         minTradingDays: 5,
       });
 
@@ -134,8 +134,10 @@ describe("Tail Risk Analysis", () => {
       expect(result.tailDependenceMatrix[1][1]).toBe(1);
 
       // Since returns are highly correlated, tail dependence should be high
+      // With 50% threshold, we have 5 tail observations (minimum required)
       expect(result.tailDependenceMatrix[0][1]).toBeGreaterThan(0);
       expect(result.tailDependenceMatrix[1][0]).toBeGreaterThan(0);
+      expect(result.insufficientDataPairs).toBe(0);
     });
 
     it("should produce symmetric copula correlation matrix", () => {
@@ -401,6 +403,83 @@ describe("Tail Risk Analysis", () => {
       expect(endTime - startTime).toBeLessThan(1000);
       expect(result.strategies).toHaveLength(20);
       expect(result.tradingDaysUsed).toBeGreaterThanOrEqual(490); // Allow slight variation due to date generation
+    });
+  });
+
+  describe("Insufficient Data Handling", () => {
+    it("should mark pairs with insufficient tail observations as NaN", () => {
+      // Only 10 days of data, 10% threshold = 1 tail observation (< 5 required)
+      const trades = [
+        createTrade("2024-01-01", "Strategy A", 100),
+        createTrade("2024-01-01", "Strategy B", 80),
+        createTrade("2024-01-02", "Strategy A", -50),
+        createTrade("2024-01-02", "Strategy B", -40),
+        createTrade("2024-01-03", "Strategy A", 120),
+        createTrade("2024-01-03", "Strategy B", 90),
+        createTrade("2024-01-04", "Strategy A", -200),
+        createTrade("2024-01-04", "Strategy B", -180),
+        createTrade("2024-01-05", "Strategy A", 60),
+        createTrade("2024-01-05", "Strategy B", 50),
+        createTrade("2024-01-08", "Strategy A", 70),
+        createTrade("2024-01-08", "Strategy B", 60),
+        createTrade("2024-01-09", "Strategy A", -30),
+        createTrade("2024-01-09", "Strategy B", -25),
+        createTrade("2024-01-10", "Strategy A", 90),
+        createTrade("2024-01-10", "Strategy B", 70),
+        createTrade("2024-01-11", "Strategy A", -10),
+        createTrade("2024-01-11", "Strategy B", -5),
+        createTrade("2024-01-12", "Strategy A", 50),
+        createTrade("2024-01-12", "Strategy B", 40),
+      ];
+
+      const result = performTailRiskAnalysis(trades, {
+        tailThreshold: 0.1, // 10% of 10 days = 1 tail observation (insufficient)
+        minTradingDays: 5,
+      });
+
+      // With only 1 tail observation per strategy, pairs should have NaN
+      expect(result.insufficientDataPairs).toBeGreaterThan(0);
+      expect(Number.isNaN(result.tailDependenceMatrix[0][1])).toBe(true);
+      expect(Number.isNaN(result.tailDependenceMatrix[1][0])).toBe(true);
+
+      // Diagonal should still be 1
+      expect(result.tailDependenceMatrix[0][0]).toBe(1);
+      expect(result.tailDependenceMatrix[1][1]).toBe(1);
+
+      // Analytics should handle NaN gracefully (return 0 for no valid pairs)
+      expect(result.analytics.averageTailDependence).toBe(0);
+    });
+
+    it("should exclude padded days from tail calculations", () => {
+      // Strategy A trades every day, Strategy B trades only odd days
+      // This tests that zero-padded days for B don't count as tail events
+      const trades = [
+        // Day 1 - both trade
+        createTrade("2024-01-01", "Strategy A", 100),
+        createTrade("2024-01-01", "Strategy B", 80),
+        // Day 2 - only A trades (B will be zero-padded)
+        createTrade("2024-01-02", "Strategy A", -50),
+        // Day 3 - both trade
+        createTrade("2024-01-03", "Strategy A", 120),
+        createTrade("2024-01-03", "Strategy B", 90),
+        // Day 4 - only A trades
+        createTrade("2024-01-04", "Strategy A", -200),
+        // Day 5 - both trade
+        createTrade("2024-01-05", "Strategy A", 60),
+        createTrade("2024-01-05", "Strategy B", 50),
+      ];
+
+      const result = performTailRiskAnalysis(trades, {
+        tailThreshold: 0.5, // High threshold to get enough tail events
+        minTradingDays: 3,
+      });
+
+      // Both strategies should be in the result
+      expect(result.strategies).toContain("Strategy A");
+      expect(result.strategies).toContain("Strategy B");
+
+      // Verify we have 5 total days
+      expect(result.tradingDaysUsed).toBe(5);
     });
   });
 });
