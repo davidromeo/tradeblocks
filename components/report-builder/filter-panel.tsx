@@ -4,11 +4,19 @@
  * Filter Panel
  *
  * Left panel of the Report Builder with flexible filter conditions.
+ * Wrapped in React.memo for performance - only re-renders when props actually change.
  */
 
-import { Plus, Trash2 } from 'lucide-react'
+import { memo } from 'react'
+import { Lock, LockOpen, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip'
 import { Separator } from '@/components/ui/separator'
 import {
   FilterConfig,
@@ -25,13 +33,18 @@ interface FilterPanelProps {
   filterResult: FlexibleFilterResult | null
   /** Enriched trades to extract custom fields from */
   trades?: EnrichedTrade[]
+  /** Whether to keep filters when loading reports */
+  keepFilters: boolean
+  onKeepFiltersChange: (value: boolean) => void
 }
 
-export function FilterPanel({
+export const FilterPanel = memo(function FilterPanel({
   filterConfig,
   onFilterChange,
   filterResult,
-  trades = []
+  trades = [],
+  keepFilters,
+  onKeepFiltersChange
 }: FilterPanelProps) {
   // Add a new filter condition
   const handleAddCondition = () => {
@@ -74,7 +87,33 @@ export function FilterPanel({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Filters</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Filters</CardTitle>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={keepFilters ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => onKeepFiltersChange(!keepFilters)}
+                  className="h-7 gap-1.5 px-2"
+                >
+                  {keepFilters ? (
+                    <>
+                      <Lock className="h-3.5 w-3.5" />
+                      <span className="text-xs">Locked</span>
+                    </>
+                  ) : (
+                    <LockOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                <p>{keepFilters ? "Filters locked - loading reports won't change filters" : "Lock to keep filters when loading reports"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Filter conditions */}
@@ -142,6 +181,6 @@ export function FilterPanel({
       </CardContent>
     </Card>
   )
-}
+})
 
 export default FilterPanel

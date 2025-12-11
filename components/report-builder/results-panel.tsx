@@ -4,8 +4,10 @@
  * Results Panel
  *
  * Right panel of the Report Builder showing the chart builder and comparison stats.
+ * Wrapped in React.memo for performance - only re-renders when props actually change.
  */
 
+import { memo } from "react";
 import { MultiSelect } from "@/components/multi-select";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -146,7 +148,7 @@ interface ResultsPanelProps {
   onThresholdMetricChange: (metric: ThresholdMetric) => void;
 }
 
-export function ResultsPanel({
+export const ResultsPanel = memo(function ResultsPanel({
   trades,
   filteredTrades,
   comparisonStats,
@@ -486,6 +488,6 @@ export function ResultsPanel({
       )}
     </div>
   );
-}
+});
 
 export default ResultsPanel;
