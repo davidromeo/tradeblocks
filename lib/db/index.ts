@@ -386,3 +386,9 @@ export {
   hasPerformanceSnapshotCache,
 } from "./performance-snapshot-cache";
 export type { CachedPerformanceSnapshot } from "./performance-snapshot-cache";
+export {
+  storeEnrichedTradesCache,
+  getEnrichedTradesCache,
+  deleteEnrichedTradesCache,
+  hasEnrichedTradesCache,
+} from "./enriched-trades-cache";

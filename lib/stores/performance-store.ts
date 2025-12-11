@@ -1,4 +1,6 @@
+import { enrichTrades } from '@/lib/calculations/enrich-trades'
 import { DailyLogEntry } from '@/lib/models/daily-log'
+import { EnrichedTrade } from '@/lib/models/enriched-trade'
 import { PortfolioStats } from '@/lib/models/portfolio-stats'
 import { Trade } from '@/lib/models/trade'
 import {
@@ -39,6 +41,8 @@ export interface PerformanceData extends SnapshotChartData {
   allDailyLogs: DailyLogEntry[]
   portfolioStats: PortfolioStats | null
   groupedLegOutcomes: GroupedLegOutcomes | null
+  /** Pre-computed enriched trades for Report Builder (with MFE/MAE, ROM, timing, etc.) */
+  enrichedTrades: EnrichedTrade[]
 }
 
 interface PerformanceStore {
@@ -169,7 +173,8 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
         getTradesByBlock,
         getDailyLogsByBlock,
         getBlock,
-        getPerformanceSnapshotCache
+        getPerformanceSnapshotCache,
+        getEnrichedTradesCache
       } = await import('@/lib/db')
 
       // Fetch block to get analysis config
@@ -197,6 +202,15 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
 
           const chartDataWithRom = ensureRomDetails(cachedSnapshot.chartData, cachedSnapshot.filteredTrades)
 
+          // Try to get cached enriched trades, fall back to computing them
+          let enrichedTradesData = await getEnrichedTradesCache(blockId)
+          if (!enrichedTradesData) {
+            // Cache miss - compute enriched trades (will be cached on next upload)
+            enrichedTradesData = enrichTrades(cachedSnapshot.filteredTrades, {
+              dailyLogs: cachedSnapshot.filteredDailyLogs
+            })
+          }
+
           set({
             data: {
               trades: cachedSnapshot.filteredTrades,
@@ -206,6 +220,7 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
               allDailyLogs: cachedSnapshot.filteredDailyLogs,
               portfolioStats: cachedSnapshot.portfolioStats,
               groupedLegOutcomes,
+              enrichedTrades: enrichedTradesData,
               ...chartDataWithRom
             },
             isLoading: false
@@ -236,6 +251,11 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
       const filteredRawTrades = filterTradesForSnapshot(rawTrades, updatedFilters)
       const groupedLegOutcomes = deriveGroupedLegOutcomes(filteredRawTrades)
 
+      // Compute enriched trades for filtered result (smaller set = faster)
+      const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
+        dailyLogs: snapshot.filteredDailyLogs
+      })
+
       set({
         data: {
           trades: snapshot.filteredTrades,
@@ -245,6 +265,7 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
           allDailyLogs: dailyLogs,
           portfolioStats: snapshot.portfolioStats,
           groupedLegOutcomes,
+          enrichedTrades: enrichedTradesData,
           ...chartDataWithRom
         },
         isLoading: false
@@ -274,6 +295,11 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
 
     const filteredRawTrades = filterTradesForSnapshot(data.allRawTrades, filters)
 
+    // Compute enriched trades for the filtered result
+    const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
+      dailyLogs: snapshot.filteredDailyLogs
+    })
+
     set(state => ({
       data: state.data ? {
         ...state.data,
@@ -281,6 +307,7 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
         dailyLogs: snapshot.filteredDailyLogs,
         portfolioStats: snapshot.portfolioStats,
         groupedLegOutcomes: deriveGroupedLegOutcomes(filteredRawTrades),
+        enrichedTrades: enrichedTradesData,
         ...snapshot.chartData
       } : null
     }))

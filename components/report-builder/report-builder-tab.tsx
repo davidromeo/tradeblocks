@@ -7,7 +7,7 @@
  * Provides flexible filtering and chart building capabilities.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Filter, ChevronRight } from 'lucide-react'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
 import { useSettingsStore } from '@/lib/stores/settings-store'
@@ -23,7 +23,6 @@ import {
   DEFAULT_TABLE_COLUMNS
 } from '@/lib/models/report-config'
 import { applyFilters, FlexibleFilterResult } from '@/lib/calculations/flexible-filter'
-import { enrichTrades } from '@/lib/calculations/enrich-trades'
 import { calculateRegimeComparison, RegimeComparisonStats } from '@/lib/calculations/regime-comparison'
 import { getDefaultBucketEdges } from '@/lib/calculations/table-aggregation'
 import { FilterPanel } from './filter-panel'
@@ -58,16 +57,19 @@ export function ReportBuilderTab() {
   const [thresholdMetric, setThresholdMetric] = useState<ThresholdMetric>('plPct')
   const [reportName, setReportName] = useState<string | undefined>(undefined)
   const [showWhatIf, setShowWhatIf] = useState(true)
-  const clearReportName = () => setReportName(undefined)
+  const [keepFilters, setKeepFilters] = useState(false)
 
-  const handleFilterChange = (config: FilterConfig) => {
+  const handleFilterChange = useCallback((config: FilterConfig) => {
     setFilterConfig(config)
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
   // Load a saved report
-  const handleLoadReport = (report: ReportConfig) => {
-    setFilterConfig(report.filter)
+  const handleLoadReport = useCallback((report: ReportConfig) => {
+    // Only replace filters if keepFilters is off
+    if (!keepFilters) {
+      setFilterConfig(report.filter)
+    }
     setChartType(report.chartType)
     setXAxis(report.xAxis)
     setYAxis(report.yAxis)
@@ -78,18 +80,12 @@ export function ReportBuilderTab() {
     setTableBuckets(report.tableBuckets ?? getDefaultBucketEdges(report.xAxis.field))
     setTableColumns(report.tableColumns ?? DEFAULT_TABLE_COLUMNS)
     setThresholdMetric(report.thresholdMetric ?? 'plPct')
-    setReportName(report.name)
-  }
+    setReportName(keepFilters ? undefined : report.name)
+  }, [keepFilters])
 
-  // Pre-compute enriched trades with derived fields (MFE%, MAE%, ROM, etc.)
-  // Uses data.trades which respects top-level filters (date range, strategy, normalize to 1 lot)
-  // Also joins custom fields from daily logs by date
-  const enrichedTrades = useMemo(() => {
-    if (!data?.trades || data.trades.length === 0) {
-      return []
-    }
-    return enrichTrades(data.trades, { dailyLogs: data.dailyLogs })
-  }, [data?.trades, data?.dailyLogs])
+  // Use pre-computed enriched trades from the performance store
+  // These are cached at upload time for instant access
+  const enrichedTrades = useMemo(() => data?.enrichedTrades ?? [], [data?.enrichedTrades])
 
   // Calculate filtered results using enriched trades
   const filterResult = useMemo((): FlexibleFilterResult | null => {
@@ -107,74 +103,74 @@ export function ReportBuilderTab() {
     return calculateRegimeComparison(filterResult.filteredTrades, enrichedTrades)
   }, [filterResult, enrichedTrades])
 
-  // Axis change handlers
-  const handleXAxisChange = (field: string) => {
+  // Axis change handlers - memoized to prevent child re-renders
+  const handleXAxisChange = useCallback((field: string) => {
     setXAxis({ field, label: field })
     // Reset table buckets to defaults for new field
     setTableBuckets(getDefaultBucketEdges(field))
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleYAxisChange = (field: string) => {
+  const handleYAxisChange = useCallback((field: string) => {
     setYAxis({ field, label: field })
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleYAxis2Change = (field: string) => {
+  const handleYAxis2Change = useCallback((field: string) => {
     if (field === 'none') {
       setYAxis2(undefined)
     } else {
       setYAxis2({ field, label: field })
     }
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleYAxis3Change = (field: string) => {
+  const handleYAxis3Change = useCallback((field: string) => {
     if (field === 'none') {
       setYAxis3(undefined)
     } else {
       setYAxis3({ field, label: field })
     }
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleColorByChange = (field: string) => {
+  const handleColorByChange = useCallback((field: string) => {
     if (field === 'none') {
       setColorBy(undefined)
     } else {
       setColorBy({ field, label: field })
     }
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleSizeByChange = (field: string) => {
+  const handleSizeByChange = useCallback((field: string) => {
     if (field === 'none') {
       setSizeBy(undefined)
     } else {
       setSizeBy({ field, label: field })
     }
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleChartTypeChange = (type: ChartType) => {
+  const handleChartTypeChange = useCallback((type: ChartType) => {
     setChartType(type)
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleTableBucketsChange = (buckets: number[]) => {
+  const handleTableBucketsChange = useCallback((buckets: number[]) => {
     setTableBuckets(buckets)
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleTableColumnsChange = (columns: string[]) => {
+  const handleTableColumnsChange = useCallback((columns: string[]) => {
     setTableColumns(columns)
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
-  const handleThresholdMetricChange = (metric: ThresholdMetric) => {
+  const handleThresholdMetricChange = useCallback((metric: ThresholdMetric) => {
     setThresholdMetric(metric)
-    clearReportName()
-  }
+    setReportName(undefined)
+  }, [])
 
   if (enrichedTrades.length === 0) {
     return (
@@ -265,6 +261,8 @@ export function ReportBuilderTab() {
             onFilterChange={handleFilterChange}
             filterResult={filterResult}
             trades={enrichedTrades}
+            keepFilters={keepFilters}
+            onKeepFiltersChange={setKeepFilters}
           />
         )}
       </div>
