@@ -84,6 +84,38 @@ function extractHourOfDay(timeOpened: string): number | undefined {
 }
 
 /**
+ * Extracts time of day as minutes since midnight from trade opening time string (HH:MM:SS format)
+ * This provides exact time precision for scatter plots, unlike hourOfDay which buckets to the hour.
+ * Example: "11:45:00" -> 705 (11 * 60 + 45)
+ */
+function extractTimeOfDayMinutes(timeOpened: string): number | undefined {
+  try {
+    const [hours, minutes] = timeOpened.split(':').map(Number)
+    if (isNaN(hours) || isNaN(minutes)) return undefined
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return undefined
+    return hours * 60 + minutes
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Calculates ISO week number for a given date
+ * ISO weeks start on Monday and week 1 contains the first Thursday of the year
+ */
+function getISOWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  // Set to nearest Thursday (current date + 4 - current day number, making Sunday=7)
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  // Get first day of year
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  // Calculate full weeks to nearest Thursday
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  return weekNo
+}
+
+/**
  * Enriches a single trade with all derived fields
  */
 function enrichSingleTrade(
@@ -141,6 +173,10 @@ function enrichSingleTrade(
     durationHours: computeDurationHours(trade),
     dayOfWeek: dateOpened.getUTCDay(),
     hourOfDay: extractHourOfDay(trade.timeOpened),
+    timeOfDayMinutes: extractTimeOfDayMinutes(trade.timeOpened),
+    dayOfMonth: dateOpened.getUTCDate(),
+    monthOfYear: dateOpened.getUTCMonth() + 1, // 1-12 instead of 0-11
+    weekOfYear: getISOWeekNumber(dateOpened),
     dateOpenedTimestamp: dateOpened.getTime(),
 
     // Costs & Net

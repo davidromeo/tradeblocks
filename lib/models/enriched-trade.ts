@@ -29,6 +29,10 @@ export interface EnrichedTrade extends Trade {
   durationHours?: number        // Holding period in hours
   dayOfWeek?: number            // 0-6 (Sun-Sat) when trade was opened
   hourOfDay?: number            // 0-23 when trade was opened
+  timeOfDayMinutes?: number     // Minutes since midnight (e.g., 11:45 = 705)
+  dayOfMonth?: number           // 1-31 when trade was opened
+  monthOfYear?: number          // 1-12 (Jan-Dec) when trade was opened
+  weekOfYear?: number           // ISO week number (1-52)
   dateOpenedTimestamp?: number  // Unix timestamp (ms) for charting over time
 
   // Costs & Net

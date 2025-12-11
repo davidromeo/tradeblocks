@@ -162,6 +162,10 @@ export type ReportField =
   | 'durationHours'
   | 'dayOfWeek'
   | 'hourOfDay'
+  | 'timeOfDayMinutes'
+  | 'dayOfMonth'
+  | 'monthOfYear'
+  | 'weekOfYear'
   | 'dateOpenedTimestamp'
   // Derived: Costs & Net
   | 'totalFees'
@@ -228,7 +232,7 @@ export const REPORT_FIELDS: FieldInfo[] = [
   { field: 'closingShortLongRatio', label: 'Closing S/L Ratio', category: 'market', description: 'Short/Long ratio at trade exit' },
   { field: 'shortLongRatioChange', label: 'S/L Ratio Change', category: 'market', description: 'How S/L ratio changed during the trade', formula: 'Closing S/L Ratio / Opening S/L Ratio' },
   { field: 'shortLongRatioChangePct', label: 'S/L Ratio Change %', category: 'market', unit: '%', description: 'Percentage change in S/L ratio', formula: '((Closing - Opening) / Opening) × 100' },
-  { field: 'gap', label: 'Gap %', category: 'market', unit: '%', description: 'Opening gap percentage from previous close' },
+  { field: 'gap', label: 'Gap', category: 'market', description: 'Opening gap in points from previous close' },
   { field: 'movement', label: 'Movement', category: 'market', description: 'Underlying price movement during the trade' },
 
   // Return metrics
@@ -263,7 +267,11 @@ export const REPORT_FIELDS: FieldInfo[] = [
   { field: 'dateOpenedTimestamp', label: 'Date Opened', category: 'timing', description: 'When the trade was opened (useful for time-series charts)' },
   { field: 'durationHours', label: 'Duration (hrs)', category: 'timing', unit: 'hrs', description: 'How long the position was held', formula: 'Close Time - Open Time' },
   { field: 'dayOfWeek', label: 'Day of Week', category: 'timing', description: 'Day of week when opened: 0=Sunday through 6=Saturday' },
-  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour of day when opened (0-23 in Eastern Time)' }
+  { field: 'hourOfDay', label: 'Hour of Day', category: 'timing', description: 'Hour of day when opened (0-23 in Eastern Time)' },
+  { field: 'timeOfDayMinutes', label: 'Time of Day', category: 'timing', description: 'Exact time when opened as minutes since midnight (e.g., 11:45 = 705). Useful for scatter plots to analyze floating-time or multiple-entry trades' },
+  { field: 'dayOfMonth', label: 'Day of Month', category: 'timing', description: 'Day of month when opened (1-31)' },
+  { field: 'monthOfYear', label: 'Month of Year', category: 'timing', description: 'Month when opened (1=January through 12=December)' },
+  { field: 'weekOfYear', label: 'Week of Year', category: 'timing', description: 'ISO week number when opened (1-52)' }
 ]
 
 /**
