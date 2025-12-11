@@ -31,27 +31,16 @@ export interface DailyTrade {
   premium: number; // total premium per trade
   margin: number;  // max margin used
   pl: number;
-  romPct?: number;
 }
 
 export interface DaySummary {
   date: Date;
   endDate?: Date;
-  // String key representing the trading day (yyyy-MM-dd) in market timezone.
-  dayKey?: string;
   netPL: number;
   tradeCount: number;
   winRate: number;
   winCount: number;
   maxMargin: number;
-  drawdownPct?: number;
-  cumulativePL?: number;
-  rollingWeeklyPL?: number;
-  calendarWeekPL?: number;
-  streak?: number;
-  marginUsed?: number;
-  romPct?: number;
-  regime?: string;
   // Optional breakout by day (used when showing a week)
   dailyBreakdown?: {
     date: Date;
@@ -230,25 +219,6 @@ export function DailyDetailModal({
             value={fmtCompactUsd(maxMargin)}
             sublabel="Peak exposure"
           />
-          <MetricTile
-            label="Margin Used"
-            value={summary.marginUsed !== undefined ? fmtCompactUsd(summary.marginUsed) : "—"}
-            sublabel="Sum of margin for this period"
-          />
-          <MetricTile
-            label="Return on Margin"
-            value={
-              summary.romPct !== undefined ? `${summary.romPct.toFixed(1)}%` : "—"
-            }
-            sublabel="P/L divided by margin"
-            tone={
-              summary.romPct !== undefined
-                ? summary.romPct >= 0
-                  ? "positive"
-                  : "negative"
-                : "neutral"
-            }
-          />
         </section>
 
         {/* DAILY BREAKDOWN (week mode) */}
@@ -407,9 +377,6 @@ export function DailyDetailModal({
                   <TableHead className="w-[120px] text-right text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
                     Margin
                   </TableHead>
-                  <TableHead className="w-[100px] text-right text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
-                    ROM %
-                  </TableHead>
                   <TableHead className="w-[110px] text-right text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
                     P/L
                   </TableHead>
@@ -419,7 +386,7 @@ export function DailyDetailModal({
                 {filteredTrades.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={6}
                       className="py-6 text-center text-neutral-500"
                     >
                       No trades recorded for this day.
@@ -481,26 +448,18 @@ export function DailyDetailModal({
                         {fmtCompactUsd(t.premium)}
                       </TableCell>
 
-                  {/* Margin */}
-                  <TableCell
-                    className="text-right font-mono text-xs tabular-nums text-neutral-200 whitespace-nowrap"
-                    title={`$${t.margin.toLocaleString()}`}
-                  >
-                    {fmtCompactUsd(t.margin)}
-                  </TableCell>
+                      {/* Margin */}
+                      <TableCell
+                        className="text-right font-mono text-xs tabular-nums text-neutral-200 whitespace-nowrap"
+                        title={`$${t.margin.toLocaleString()}`}
+                      >
+                        {fmtCompactUsd(t.margin)}
+                      </TableCell>
 
-                  {/* ROM */}
-                  <TableCell
-                    className="text-right font-mono text-xs tabular-nums text-neutral-200 whitespace-nowrap"
-                    title={t.romPct !== undefined ? `${t.romPct.toFixed(1)}%` : "--"}
-                  >
-                    {t.romPct !== undefined ? `${t.romPct.toFixed(1)}%` : "—"}
-                  </TableCell>
-
-                  {/* P/L */}
-                  <TableCell
-                    className={cn(
-                      "text-right font-mono text-xs tabular-nums whitespace-nowrap",
+                      {/* P/L */}
+                      <TableCell
+                        className={cn(
+                          "text-right font-mono text-xs tabular-nums whitespace-nowrap",
                           t.pl >= 0 ? "text-emerald-400" : "text-red-400"
                         )}
                         title={fmtUsd(t.pl)}
