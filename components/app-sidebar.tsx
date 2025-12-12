@@ -11,8 +11,8 @@ import {
   IconSparkles,
   IconStack2,
   IconTimelineEvent,
-  IconTrendingDown,
   IconTopologyStar3,
+  IconTrendingDown,
 } from "@tabler/icons-react";
 import { Blocks } from "lucide-react";
 import Link from "next/link";
@@ -100,6 +100,12 @@ const navData = {
       title: "Comparison Blocks",
       href: "/comparison-blocks",
       icon: IconLink,
+      badge: "Beta",
+    },
+    {
+      title: "Comparison Calendar",
+      href: "/pl-calendar-comparison",
+      icon: IconCalendar,
       badge: "Beta",
     },
     {
