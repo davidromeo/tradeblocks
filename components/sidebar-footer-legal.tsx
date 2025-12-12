@@ -18,7 +18,7 @@ import { DialogTitle } from "@radix-ui/react-dialog";
 const disclaimerSections = [
   {
     title: "Educational & Research Purposes Only",
-    body: "TradeBlocks is designed for educational exploration and research analysis of trading strategies. Nothing within this platform constitutes investment advice, trading recommendations, or financial guidance of any kind.",
+    body: "NemoBlocks is designed for educational exploration and research analysis of trading strategies. Nothing within this platform constitutes investment advice, trading recommendations, or financial guidance of any kind.",
     accent: "text-destructive",
   },
   {
@@ -28,7 +28,7 @@ const disclaimerSections = [
   },
   {
     title: "Software & Technical Limitations",
-    body: "Like all software, TradeBlocks may contain errors, bugs, or unexpected behaviors. Our algorithms make assumptions that may not align with your specific trading circumstances. Historical performance analysis cannot predict future market outcomes.",
+    body: "Like all software, NemoBlocks may contain errors, bugs, or unexpected behaviors. Our algorithms make assumptions that may not align with your specific trading circumstances. Historical performance analysis cannot predict future market outcomes.",
     accent: "text-secondary",
   },
   {
@@ -38,7 +38,7 @@ const disclaimerSections = [
   },
   {
     title: "Privacy & Data Handling",
-    body: "TradeBlocks operates entirely in your browser using local storage, indexDB, and session cookies to maintain your data and preferences. We do not transmit, store, or access your trading data on external servers.",
+    body: "NemoBlocks operates entirely in your browser using local storage, indexDB, and session cookies to maintain your data and preferences. We do not transmit, store, or access your trading data on external servers.",
     accent: "text-muted-foreground",
   },
 ];
@@ -72,7 +72,7 @@ export function SidebarFooterLegal() {
         </div>
         <div className="flex items-center justify-center gap-2 rounded-2xl bg-muted px-4 py-3 text-sm font-semibold italic text-muted-foreground">
           <ShieldQuestion className="h-4 w-4" aria-hidden />
-          Remember: TradeBlocks builds insights, not investment advice.
+          Remember: NemoBlocks builds insights, not investment advice.
         </div>
         {/* Attribution links in dialog for mobile */}
         {isMobile && (

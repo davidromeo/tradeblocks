@@ -263,7 +263,7 @@ export default function AssistantPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-primary" />
-            TradeBlocks Assistant
+            NemoBlocks Assistant
           </h1>
           <p className="text-muted-foreground mt-1">
             AI-powered analysis of your trading performance
@@ -519,7 +519,7 @@ export default function AssistantPage() {
                 <div>
                   <div className="font-medium">Upload to the assistant</div>
                   <div className="text-muted-foreground">
-                    Open the TradeBlocks Assistant and upload your JSON file.
+                    Open the NemoBlocks Assistant and upload your JSON file.
                   </div>
                 </div>
               </li>
