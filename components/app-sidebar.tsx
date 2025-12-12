@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  IconCalendar,
   IconChartHistogram,
   IconGauge,
   IconLayoutDashboard,
@@ -11,6 +12,7 @@ import {
   IconStack2,
   IconTimelineEvent,
   IconTrendingDown,
+  IconTopologyStar3,
 } from "@tabler/icons-react";
 import { Blocks } from "lucide-react";
 import Link from "next/link";
@@ -71,6 +73,24 @@ const navData = {
       badge: "New",
     },
     {
+      title: "Multi-Correlation",
+      href: "/multi-correlation",
+      icon: IconTopologyStar3,
+      badge: "New",
+    },
+    {
+      title: "P/L Calendar",
+      href: "/pl-calendar",
+      icon: IconCalendar,
+      badge: "New",
+    },
+    {
+      title: "P/L Analytics",
+      href: "/pl-analytics",
+      icon: IconReportAnalytics,
+      badge: "New",
+    },
+    {
       title: "Walk-Forward",
       href: "/walk-forward",
       icon: IconTimelineEvent,
@@ -83,7 +103,7 @@ const navData = {
       badge: "Beta",
     },
     {
-      title: "TradeBlocks Assistant",
+      title: "NemoBlocks Assistant",
       href: "/assistant",
       icon: IconSparkles,
       badge: "New",
@@ -122,7 +142,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </div>
                 <span className="flex flex-col">
                   <span className="text-sm font-semibold leading-tight">
-                    TradeBlocks
+                    NemoBlocks
                   </span>
                   <span className="text-xs text-muted-foreground">
                     Analytics Platform

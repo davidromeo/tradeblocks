@@ -1,6 +1,5 @@
 import { Trade } from "@/lib/models/trade";
 import { mean } from "mathjs";
-import { getRanks } from "./statistical-utils";
 
 export type CorrelationMethod = "pearson" | "spearman" | "kendall";
 export type CorrelationAlignment = "shared" | "zero-pad";
@@ -17,6 +16,7 @@ export interface CorrelationOptions {
 export interface CorrelationMatrix {
   strategies: string[];
   correlationData: number[][];
+  pairStats: PairStats[][];
 }
 
 export interface CorrelationAnalytics {
@@ -30,6 +30,14 @@ export interface CorrelationAnalytics {
   };
   averageCorrelation: number;
   strategyCount: number;
+}
+
+export interface PairStats {
+  triggered: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  netPL: number;
 }
 
 /**
@@ -85,10 +93,20 @@ export function calculateCorrelationMatrix(
     const identityMatrix = strategies.map((_, i) =>
       strategies.map((_, j) => (i === j ? 1.0 : 0.0))
     );
-    return { strategies, correlationData: identityMatrix };
+    const emptyStats = strategies.map(() =>
+      strategies.map(() => ({
+        triggered: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        netPL: 0,
+      }))
+    );
+    return { strategies, correlationData: identityMatrix, pairStats: emptyStats };
   }
 
   const correlationData: number[][] = [];
+  const pairStats: PairStats[][] = [];
 
   const sortedDates = alignment === "zero-pad"
     ? Array.from(allDates).sort()
@@ -105,10 +123,18 @@ export function calculateCorrelationMatrix(
 
   for (const strategy1 of strategies) {
     const row: number[] = [];
+    const statsRow: PairStats[] = [];
 
     for (const strategy2 of strategies) {
       if (strategy1 === strategy2) {
         row.push(1.0);
+        statsRow.push({
+          triggered: 0,
+          wins: 0,
+          losses: 0,
+          winRate: 0,
+          netPL: 0,
+        });
         continue;
       }
 
@@ -130,9 +156,29 @@ export function calculateCorrelationMatrix(
         }
       }
 
+      let triggered = 0;
+      let wins = 0;
+      let losses = 0;
+      let netPL = 0;
+
+      const len = Math.min(returns1.length, returns2.length);
+      for (let idx = 0; idx < len; idx++) {
+        const r1 = returns1[idx] ?? 0;
+        const r2 = returns2[idx] ?? 0;
+        if (r1 !== 0 && r2 !== 0) {
+          triggered += 1;
+          const combo = r1 + r2;
+          netPL += combo;
+          if (combo > 0) wins += 1;
+          else if (combo < 0) losses += 1;
+        }
+      }
+      const winRate = triggered > 0 ? (wins / triggered) * 100 : 0;
+
       // Need at least 2 data points for correlation
       if (returns1.length < 2 || returns2.length < 2) {
         row.push(0.0);
+        statsRow.push({ triggered, wins, losses, winRate, netPL });
         continue;
       }
 
@@ -147,12 +193,14 @@ export function calculateCorrelationMatrix(
       }
 
       row.push(correlation);
+      statsRow.push({ triggered, wins, losses, winRate, netPL });
     }
 
     correlationData.push(row);
+    pairStats.push(statsRow);
   }
 
-  return { strategies, correlationData };
+  return { strategies, correlationData, pairStats };
 }
 
 /**
@@ -228,8 +276,34 @@ function kendallCorrelation(x: number[], y: number[]): number {
   return (concordant - discordant) / denominator;
 }
 
-// Re-export getRanks for backwards compatibility
-export { getRanks } from "./statistical-utils";
+/**
+ * Convert array of values to ranks (handling ties with average rank)
+ */
+function getRanks(values: number[]): number[] {
+  const indexed = values.map((value, index) => ({ value, index }));
+  indexed.sort((a, b) => a.value - b.value);
+
+  const ranks = new Array(values.length);
+  let i = 0;
+
+  while (i < indexed.length) {
+    let j = i;
+    // Find all tied values
+    while (j < indexed.length && indexed[j].value === indexed[i].value) {
+      j++;
+    }
+
+    // Assign average rank to all tied values
+    const averageRank = (i + j + 1) / 2; // +1 because ranks are 1-indexed
+    for (let k = i; k < j; k++) {
+      ranks[indexed[k].index] = averageRank;
+    }
+
+    i = j;
+  }
+
+  return ranks;
+}
 
 function normalizeReturn(
   trade: Trade,

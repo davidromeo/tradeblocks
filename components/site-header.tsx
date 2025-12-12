@@ -40,6 +40,7 @@ const routeMeta: Record<
   "/tail-risk-analysis": {
     title: "Tail Risk Analysis",
     description: "Measure how strategies blow up together during market stress.",
+    badge: "New",
   },
   "/comparison-blocks": {
     title: "Comparison Blocks",
