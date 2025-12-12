@@ -1,5 +1,6 @@
 "use client";
 
+import { ClusterExposureTable } from "@/components/correlation-matrix/ClusterExposureTable";
 import { NoActiveBlock } from "@/components/no-active-block";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { Badge } from "@/components/ui/badge";
@@ -19,24 +20,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  analyzeMultiCorrelation,
+  StrategySeries,
+} from "@/lib/analytics/multi-correlation";
+import {
   calculateCorrelationAnalytics,
   calculateCorrelationMatrix,
   CorrelationAlignment,
   CorrelationDateBasis,
-  CorrelationMethod,
   CorrelationMatrix,
+  CorrelationMethod,
   CorrelationNormalization,
 } from "@/lib/calculations/correlation";
 import { getBlock, getTradesByBlockWithOptions } from "@/lib/db";
 import { Trade } from "@/lib/models/trade";
 import { useBlockStore } from "@/lib/stores/block-store";
+import { cn } from "@/lib/utils";
 import {
   downloadCsv,
   downloadJson,
   generateExportFilename,
   toCsvRow,
 } from "@/lib/utils/export-helpers";
-import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 import { Download, HelpCircle, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { Data, Layout, PlotData } from "plotly.js";
@@ -93,7 +99,9 @@ export default function CorrelationMatrixPage() {
           if (!trade.marginReq) return null;
           return sizedPL / trade.marginReq;
         case "notional": {
-          const notional = Math.abs((trade.openingPrice || 0) * (trade.numContracts || 0));
+          const notional = Math.abs(
+            (trade.openingPrice || 0) * (trade.numContracts || 0)
+          );
           if (!notional) return null;
           return sizedPL / notional;
         }
@@ -104,7 +112,10 @@ export default function CorrelationMatrixPage() {
     [sizingMode]
   );
 
-  const getTradeDateKeyLocal = (trade: Trade, basis: CorrelationDateBasis): string | null => {
+  const getTradeDateKeyLocal = (
+    trade: Trade,
+    basis: CorrelationDateBasis
+  ): string | null => {
     const date = basis === "closed" ? trade.dateClosed : trade.dateOpened;
     if (!date) return null;
     return date.toISOString().split("T")[0];
@@ -165,6 +176,64 @@ export default function CorrelationMatrixPage() {
 
     loadTrades();
   }, [activeBlockId]);
+
+  // --- Cluster Analysis Logic ---
+  const series = useMemo<StrategySeries[]>(() => {
+    if (trades.length === 0) return [];
+
+    const byStrategy = new Map<
+      string,
+      { totals: Map<string, { pl: number; margin: number }> }
+    >();
+
+    trades.forEach((t) => {
+      const strategy = t.strategy || "Unknown";
+      if (!t.dateOpened) return;
+      const dateKey = format(t.dateOpened, "yyyy-MM-dd");
+
+      if (!byStrategy.has(strategy)) {
+        byStrategy.set(strategy, { totals: new Map() });
+      }
+      const entry = byStrategy.get(strategy)!;
+      const prev = entry.totals.get(dateKey) ?? { pl: 0, margin: 0 };
+      entry.totals.set(dateKey, {
+        pl: prev.pl + t.pl,
+        margin: prev.margin + (t.marginReq ?? 0),
+      });
+    });
+
+    const strategyKeys = Array.from(byStrategy.keys());
+    const defaultWeight =
+      strategyKeys.length > 0 ? 100 / strategyKeys.length : 0;
+
+    return strategyKeys.map((key) => {
+      const totals = byStrategy.get(key)!.totals;
+      const points = Array.from(totals.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, v]) => ({
+          date,
+          pl: v.pl,
+          margin: v.margin,
+        }));
+
+      return {
+        id: key,
+        name: key,
+        weightPct: defaultWeight,
+        points,
+      };
+    });
+  }, [trades]);
+
+  const clusterResult = useMemo(
+    () =>
+      analyzeMultiCorrelation(series, {
+        method: "pearson",
+        clusterThreshold: 0.4,
+      }),
+    [series]
+  );
+  // -----------------------------
 
   const { correlationMatrix, analytics } = useMemo(() => {
     if (trades.length === 0) {
@@ -301,11 +370,14 @@ export default function CorrelationMatrixPage() {
       },
     };
 
-    return { plotData: [heatmapData as unknown as Data], layout: heatmapLayout };
+    return {
+      plotData: [heatmapData as unknown as Data],
+      layout: heatmapLayout,
+    };
   }, [correlationMatrix]);
 
-  const activeBlock = useBlockStore(
-    (state) => state.blocks.find((block) => block.id === activeBlockId)
+  const activeBlock = useBlockStore((state) =>
+    state.blocks.find((block) => block.id === activeBlockId)
   );
 
   const comboPairs = useMemo(() => {
@@ -320,7 +392,8 @@ export default function CorrelationMatrixPage() {
       const pl = normalizeReturnLocal(trade, normalization);
       if (pl === null) return;
       if (!dailyMap[dateKey]) dailyMap[dateKey] = {};
-      dailyMap[dateKey][trade.strategy] = (dailyMap[dateKey][trade.strategy] ?? 0) + pl;
+      dailyMap[dateKey][trade.strategy] =
+        (dailyMap[dateKey][trade.strategy] ?? 0) + pl;
     });
 
     const comboMap = new Map<
@@ -346,7 +419,10 @@ export default function CorrelationMatrixPage() {
       for (const combo of combos) {
         const sorted = [...combo].sort();
         const key = sorted.join(" | ");
-        const dayPL = sorted.reduce((sum, strat) => sum + (plByStrategy[strat] ?? 0), 0);
+        const dayPL = sorted.reduce(
+          (sum, strat) => sum + (plByStrategy[strat] ?? 0),
+          0
+        );
 
         let stats = comboMap.get(key);
         if (!stats) {
@@ -356,7 +432,10 @@ export default function CorrelationMatrixPage() {
             for (let j = i + 1; j < sorted.length; j++) {
               const si = strategies.indexOf(sorted[i]);
               const sj = strategies.indexOf(sorted[j]);
-              const c = si >= 0 && sj >= 0 ? Math.abs(correlationData[si]?.[sj] ?? 0) : 0;
+              const c =
+                si >= 0 && sj >= 0
+                  ? Math.abs(correlationData[si]?.[sj] ?? 0)
+                  : 0;
               corrSum += c;
               corrCount += 1;
             }
@@ -448,7 +527,14 @@ export default function CorrelationMatrixPage() {
       lines,
       generateExportFilename(activeBlock.name, "correlation", "csv")
     );
-  }, [correlationMatrix, method, alignment, normalization, dateBasis, activeBlock]);
+  }, [
+    correlationMatrix,
+    method,
+    alignment,
+    normalization,
+    dateBasis,
+    activeBlock,
+  ]);
 
   const handleDownloadJson = useCallback(() => {
     if (!correlationMatrix || !activeBlock) {
@@ -483,7 +569,15 @@ export default function CorrelationMatrixPage() {
       exportData,
       generateExportFilename(activeBlock.name, "correlation", "json")
     );
-  }, [correlationMatrix, analytics, method, alignment, normalization, dateBasis, activeBlock]);
+  }, [
+    correlationMatrix,
+    analytics,
+    method,
+    alignment,
+    normalization,
+    dateBasis,
+    activeBlock,
+  ]);
 
   if (loading) {
     return (
@@ -521,20 +615,31 @@ export default function CorrelationMatrixPage() {
             <div className="space-y-2">
               <h3 className="text-base font-semibold">What does this show?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                This heatmap shows how your trading strategies move together. High positive correlation (+1.0) means strategies
-                move in the same direction, while negative correlation (-1.0) means they move opposite. Low correlation (~0)
-                indicates good diversification.
+                This heatmap shows how your trading strategies move together.
+                High positive correlation (+1.0) means strategies move in the
+                same direction, while negative correlation (-1.0) means they
+                move opposite. Low correlation (~0) indicates good
+                diversification.
               </p>
               <div className="flex flex-wrap items-center gap-4 pt-2 text-xs">
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="font-medium">PEARSON</Badge>
-                  <span className="text-muted-foreground">Linear relationships</span>
+                  <Badge variant="secondary" className="font-medium">
+                    PEARSON
+                  </Badge>
+                  <span className="text-muted-foreground">
+                    Linear relationships
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-400 font-medium">
+                  <Badge
+                    variant="outline"
+                    className="border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-400 font-medium"
+                  >
                     KENDALL/SPEARMAN
                   </Badge>
-                  <span className="text-muted-foreground">Rank-based (handles outliers better)</span>
+                  <span className="text-muted-foreground">
+                    Rank-based (handles outliers better)
+                  </span>
                 </div>
               </div>
             </div>
@@ -560,16 +665,24 @@ export default function CorrelationMatrixPage() {
                   <HoverCardContent className="w-80 p-0 overflow-hidden">
                     <div className="space-y-3">
                       <div className="bg-primary/5 border-b px-4 py-3">
-                        <h4 className="text-sm font-semibold text-primary">Correlation Method</h4>
+                        <h4 className="text-sm font-semibold text-primary">
+                          Correlation Method
+                        </h4>
                       </div>
                       <div className="px-4 pb-4 space-y-3">
                         <p className="text-sm font-medium text-foreground leading-relaxed">
                           Choose how to measure strategy relationships
                         </p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
-                          <strong>Kendall (recommended):</strong> Rank-based, robust to outliers. Best for options strategies with non-linear payoffs.<br/>
-                          <strong>Spearman:</strong> Another rank-based method, similar to Kendall but faster for large datasets.<br/>
-                          <strong>Pearson:</strong> Measures linear relationships. Best for normally distributed returns.
+                          <strong>Kendall (recommended):</strong> Rank-based,
+                          robust to outliers. Best for options strategies with
+                          non-linear payoffs.
+                          <br />
+                          <strong>Spearman:</strong> Another rank-based method,
+                          similar to Kendall but faster for large datasets.
+                          <br />
+                          <strong>Pearson:</strong> Measures linear
+                          relationships. Best for normally distributed returns.
                         </p>
                       </div>
                     </div>
@@ -609,15 +722,22 @@ export default function CorrelationMatrixPage() {
                   <HoverCardContent className="w-80 p-0 overflow-hidden">
                     <div className="space-y-3">
                       <div className="bg-primary/5 border-b px-4 py-3">
-                        <h4 className="text-sm font-semibold text-primary">Date Alignment</h4>
+                        <h4 className="text-sm font-semibold text-primary">
+                          Date Alignment
+                        </h4>
                       </div>
                       <div className="px-4 pb-4 space-y-3">
                         <p className="text-sm font-medium text-foreground leading-relaxed">
                           How to handle days when strategies don&apos;t trade
                         </p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
-                          <strong>Shared days (recommended):</strong> Only correlates on days where both strategies traded. Avoids artificial zeros.<br/>
-                          <strong>Zero-fill:</strong> Treats non-trading days as $0 P/L. Can distort correlation for strategies that trade different frequencies.
+                          <strong>Shared days (recommended):</strong> Only
+                          correlates on days where both strategies traded.
+                          Avoids artificial zeros.
+                          <br />
+                          <strong>Zero-fill:</strong> Treats non-trading days as
+                          $0 P/L. Can distort correlation for strategies that
+                          trade different frequencies.
                         </p>
                       </div>
                     </div>
@@ -655,16 +775,25 @@ export default function CorrelationMatrixPage() {
                   <HoverCardContent className="w-80 p-0 overflow-hidden">
                     <div className="space-y-3">
                       <div className="bg-primary/5 border-b px-4 py-3">
-                        <h4 className="text-sm font-semibold text-primary">Return Normalization</h4>
+                        <h4 className="text-sm font-semibold text-primary">
+                          Return Normalization
+                        </h4>
                       </div>
                       <div className="px-4 pb-4 space-y-3">
                         <p className="text-sm font-medium text-foreground leading-relaxed">
                           How to scale returns for comparison
                         </p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
-                          <strong>Raw P/L:</strong> Absolute dollar returns (default).<br/>
-                          <strong>Margin-normalized:</strong> Returns divided by margin requirement. Better for comparing strategies with different capital requirements.<br/>
-                          <strong>1-lot normalized:</strong> Per-contract basis. Divides P/L by trade size (price × contracts) to show returns as if each trade was 1 lot.
+                          <strong>Raw P/L:</strong> Absolute dollar returns
+                          (default).
+                          <br />
+                          <strong>Margin-normalized:</strong> Returns divided by
+                          margin requirement. Better for comparing strategies
+                          with different capital requirements.
+                          <br />
+                          <strong>1-lot normalized:</strong> Per-contract basis.
+                          Divides P/L by trade size (price × contracts) to show
+                          returns as if each trade was 1 lot.
                         </p>
                       </div>
                     </div>
@@ -704,15 +833,22 @@ export default function CorrelationMatrixPage() {
                   <HoverCardContent className="w-80 p-0 overflow-hidden">
                     <div className="space-y-3">
                       <div className="bg-primary/5 border-b px-4 py-3">
-                        <h4 className="text-sm font-semibold text-primary">Date Basis</h4>
+                        <h4 className="text-sm font-semibold text-primary">
+                          Date Basis
+                        </h4>
                       </div>
                       <div className="px-4 pb-4 space-y-3">
                         <p className="text-sm font-medium text-foreground leading-relaxed">
                           Which date to use for grouping trades
                         </p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
-                          <strong>Opened date (recommended):</strong> Groups by when trades were entered. Shows entry timing correlation.<br/>
-                          <strong>Closed date:</strong> Groups by when trades were closed. Shows exit timing and P/L realization correlation.
+                          <strong>Opened date (recommended):</strong> Groups by
+                          when trades were entered. Shows entry timing
+                          correlation.
+                          <br />
+                          <strong>Closed date:</strong> Groups by when trades
+                          were closed. Shows exit timing and P/L realization
+                          correlation.
                         </p>
                       </div>
                     </div>
@@ -749,7 +885,8 @@ export default function CorrelationMatrixPage() {
             title="Correlation Heatmap"
             description="Visual representation of strategy correlations"
             tooltip={{
-              flavor: "Measures how your trading strategies move together over time.",
+              flavor:
+                "Measures how your trading strategies move together over time.",
               detailed:
                 "Warm colors indicate positive correlation (strategies tend to win/lose together), cool colors indicate negative correlation (strategies move opposite), and neutral indicates no correlation. Use this to identify diversification opportunities and understand portfolio risk.",
             }}
@@ -782,7 +919,14 @@ export default function CorrelationMatrixPage() {
         </div>
       </div>
 
-{/* Quick Analysis */}
+      {/* Cluster Analysis */}
+      {clusterResult && (
+        <div className="mb-6">
+          <ClusterExposureTable result={clusterResult} />
+        </div>
+      )}
+
+      {/* Quick Analysis */}
       {analytics && (
         <Card>
           <CardHeader>
@@ -794,7 +938,10 @@ export default function CorrelationMatrixPage() {
                 <div className="text-sm font-medium text-muted-foreground">
                   Strongest:
                 </div>
-                <div className="text-2xl font-bold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>
+                <div
+                  className="text-2xl font-bold"
+                  style={{ color: isDark ? "#fca5a5" : "#dc2626" }}
+                >
                   {analytics.strongest.value.toFixed(2)}
                 </div>
                 <div className="text-xs text-muted-foreground">
@@ -806,7 +953,10 @@ export default function CorrelationMatrixPage() {
                 <div className="text-sm font-medium text-muted-foreground">
                   Weakest:
                 </div>
-                <div className="text-2xl font-bold" style={{ color: isDark ? '#93c5fd' : '#2563eb' }}>
+                <div
+                  className="text-2xl font-bold"
+                  style={{ color: isDark ? "#93c5fd" : "#2563eb" }}
+                >
                   {analytics.weakest.value.toFixed(2)}
                 </div>
                 <div className="text-xs text-muted-foreground">
@@ -824,14 +974,19 @@ export default function CorrelationMatrixPage() {
                     <HoverCardContent className="w-80 p-0 overflow-hidden">
                       <div className="space-y-3">
                         <div className="bg-primary/5 border-b px-4 py-3">
-                          <h4 className="text-sm font-semibold text-primary">Average Correlation</h4>
+                          <h4 className="text-sm font-semibold text-primary">
+                            Average Correlation
+                          </h4>
                         </div>
                         <div className="px-4 pb-4 space-y-3">
                           <p className="text-sm font-medium text-foreground leading-relaxed">
                             Signed mean of all off-diagonal correlations
                           </p>
                           <p className="text-xs text-muted-foreground leading-relaxed">
-                            Positive values indicate strategies tend to move together on average. Negative values suggest strategies tend to offset each other. Values near zero indicate diverse, uncorrelated strategies.
+                            Positive values indicate strategies tend to move
+                            together on average. Negative values suggest
+                            strategies tend to offset each other. Values near
+                            zero indicate diverse, uncorrelated strategies.
                           </p>
                         </div>
                       </div>
@@ -860,7 +1015,9 @@ export default function CorrelationMatrixPage() {
             {comboPairs.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold">Multi-Correlation Combos</h3>
+                  <h3 className="text-sm font-semibold">
+                    Multi-Correlation Combos
+                  </h3>
                   <button
                     type="button"
                     className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-[10px] text-muted-foreground hover:bg-muted/60"
@@ -871,7 +1028,9 @@ export default function CorrelationMatrixPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Min combo triggers</span>
+                    <span className="text-xs text-muted-foreground">
+                      Min combo triggers
+                    </span>
                     <input
                       type="number"
                       min={1}
@@ -892,11 +1051,15 @@ export default function CorrelationMatrixPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Combo size</span>
+                    <span className="text-xs text-muted-foreground">
+                      Combo size
+                    </span>
                     <select
                       className="rounded-md border bg-background px-2 py-1 text-xs"
                       value={comboSize}
-                      onChange={(e) => setComboSize(Number(e.target.value) as ComboSize)}
+                      onChange={(e) =>
+                        setComboSize(Number(e.target.value) as ComboSize)
+                      }
                     >
                       <option value={2}>2-way</option>
                       <option value={3}>3-way</option>
@@ -905,7 +1068,9 @@ export default function CorrelationMatrixPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Sizing</span>
+                    <span className="text-xs text-muted-foreground">
+                      Sizing
+                    </span>
                     <div className="inline-flex gap-1 rounded-lg border border-border/60 bg-background px-1 py-0.5">
                       {[
                         { id: "actual", label: "Actual" },
@@ -931,7 +1096,9 @@ export default function CorrelationMatrixPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Sort by</span>
+                    <span className="text-xs text-muted-foreground">
+                      Sort by
+                    </span>
                     <Select
                       value={comboSortKey}
                       onValueChange={(v) => setComboSortKey(v as ComboSortKey)}
@@ -949,7 +1116,9 @@ export default function CorrelationMatrixPage() {
                   </div>
 
                   <div className="text-xs text-muted-foreground">
-                    Showing <span className="font-semibold">{comboPairs.length}</span> combos matching filters
+                    Showing{" "}
+                    <span className="font-semibold">{comboPairs.length}</span>{" "}
+                    combos matching filters
                   </div>
                 </div>
 
@@ -957,47 +1126,57 @@ export default function CorrelationMatrixPage() {
                   <table className="w-full text-xs">
                     <thead className="border-b border-border/60 text-[11px] uppercase text-muted-foreground">
                       <tr>
-                        <th className="py-1 pr-2 text-left">Combo (size {comboSize})</th>
+                        <th className="py-1 pr-2 text-left">
+                          Combo (size {comboSize})
+                        </th>
                         <th
                           className="cursor-pointer px-2 py-1 text-right hover:text-foreground"
                           onClick={() => handleComboSortClick("corr")}
                         >
                           Corr
-                          {comboSortKey === "corr" && (comboSortDir === "asc" ? " ↑" : " ↓")}
+                          {comboSortKey === "corr" &&
+                            (comboSortDir === "asc" ? " ↑" : " ↓")}
                         </th>
                         <th
                           className="cursor-pointer px-2 py-1 text-right hover:text-foreground"
                           onClick={() => handleComboSortClick("triggers")}
                         >
                           Triggers
-                          {comboSortKey === "triggers" && (comboSortDir === "asc" ? " ↑" : " ↓")}
+                          {comboSortKey === "triggers" &&
+                            (comboSortDir === "asc" ? " ↑" : " ↓")}
                         </th>
                         <th
                           className="cursor-pointer px-2 py-1 text-right hover:text-foreground"
                           onClick={() => handleComboSortClick("winRate")}
                         >
                           Wins/Losses
-                          {comboSortKey === "winRate" && (comboSortDir === "asc" ? " ↑" : " ↓")}
+                          {comboSortKey === "winRate" &&
+                            (comboSortDir === "asc" ? " ↑" : " ↓")}
                         </th>
                         <th
                           className="cursor-pointer px-2 py-1 text-right hover:text-foreground"
                           onClick={() => handleComboSortClick("winRate")}
                         >
                           Win%
-                          {comboSortKey === "winRate" && (comboSortDir === "asc" ? " ↑" : " ↓")}
+                          {comboSortKey === "winRate" &&
+                            (comboSortDir === "asc" ? " ↑" : " ↓")}
                         </th>
                         <th
                           className="cursor-pointer px-2 py-1 text-right hover:text-foreground"
                           onClick={() => handleComboSortClick("netPL")}
                         >
                           Net P/L
-                          {comboSortKey === "netPL" && (comboSortDir === "asc" ? " ↑" : " ↓")}
+                          {comboSortKey === "netPL" &&
+                            (comboSortDir === "asc" ? " ↑" : " ↓")}
                         </th>
                       </tr>
                     </thead>
                     <tbody>
                       {comboPairs.slice(0, 50).map((p, idx) => (
-                        <tr key={`${p.strategies.join("|")}-${idx}`} className={idx % 2 === 0 ? "bg-background/40" : ""}>
+                        <tr
+                          key={`${p.strategies.join("|")}-${idx}`}
+                          className={idx % 2 === 0 ? "bg-background/40" : ""}
+                        >
                           <td className="py-1 pr-2">
                             <div className="flex flex-col">
                               <span className="font-medium">
@@ -1005,16 +1184,22 @@ export default function CorrelationMatrixPage() {
                               </span>
                             </div>
                           </td>
-                          <td className="px-2 py-1 text-right">{p.correlation.toFixed(2)}</td>
+                          <td className="px-2 py-1 text-right">
+                            {p.correlation.toFixed(2)}
+                          </td>
                           <td className="px-2 py-1 text-right">{p.triggers}</td>
                           <td className="px-2 py-1 text-right">
                             {p.wins}/{p.losses}
                           </td>
-                          <td className="px-2 py-1 text-right">{(p.winRate * 100).toFixed(1)}%</td>
+                          <td className="px-2 py-1 text-right">
+                            {(p.winRate * 100).toFixed(1)}%
+                          </td>
                           <td
                             className={cn(
                               "px-2 py-1 text-right font-semibold",
-                              p.netPL >= 0 ? "text-emerald-400" : "text-rose-400"
+                              p.netPL >= 0
+                                ? "text-emerald-400"
+                                : "text-rose-400"
                             )}
                           >
                             {formatCompactUsd(p.netPL)}
@@ -1046,9 +1231,14 @@ export default function CorrelationMatrixPage() {
                     </thead>
                     <tbody>
                       {comboStats.slice(0, 30).map((row) => (
-                        <tr key={row.pair} className="border-t border-border/40">
+                        <tr
+                          key={row.pair}
+                          className="border-t border-border/40"
+                        >
                           <td className="px-2 py-1">{row.pair}</td>
-                          <td className="px-2 py-1 text-right font-mono text-xs">{row.triggered}</td>
+                          <td className="px-2 py-1 text-right font-mono text-xs">
+                            {row.triggered}
+                          </td>
                           <td className="px-2 py-1 text-right font-mono text-xs text-emerald-500">
                             {row.wins}
                           </td>
@@ -1143,5 +1333,7 @@ function formatAnalyticsContext({
 
   const dateLabel = dateBasis === "opened" ? "Opened dates" : "Closed dates";
 
-  return [methodLabel, alignmentLabel, normalizationLabel, dateLabel].join(", ");
+  return [methodLabel, alignmentLabel, normalizationLabel, dateLabel].join(
+    ", "
+  );
 }
