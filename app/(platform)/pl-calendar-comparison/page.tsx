@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import type { CalendarDayComparison } from "@/lib/analytics/calendar-comparison";
 import { buildCalendarDayComparisons } from "@/lib/analytics/calendar-comparison";
+import type { DailyPnLPoint } from "@/lib/analytics/pl-analytics";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { useMemo, useState } from "react";
 
