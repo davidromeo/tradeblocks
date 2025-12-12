@@ -77,21 +77,8 @@ export function SidebarFooterLegal() {
         {/* Attribution links in dialog for mobile */}
         {isMobile && (
           <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border/40 pt-4 text-[0.7rem] text-muted-foreground">
-            <a
-              href="https://www.buymeacoffee.com/davidromeo"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-                alt="Buy Me A Coffee"
-                className="h-8 w-auto"
-              />
-            </a>
-            <span className="text-muted-foreground/50">•</span>
             <Link
-              href="https://github.com/davidromeo/tradeblocks"
+              href="https://github.com/jeevansaims/Nemoblock"
               target="_blank"
               className="inline-flex items-center gap-1 transition hover:text-foreground"
             >
@@ -152,21 +139,8 @@ export function SidebarFooterLegal() {
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
-        <a
-          href="https://www.buymeacoffee.com/davidromeo"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-            alt="Buy Me A Coffee"
-            className="h-8 w-auto"
-          />
-        </a>
-        <span className="text-muted-foreground/50">•</span>
         <Link
-          href="https://github.com/davidromeo/tradeblocks"
+          href="https://github.com/jeevansaims/Nemoblock"
           target="_blank"
           className="inline-flex items-center gap-1.5 transition hover:text-foreground"
         >
