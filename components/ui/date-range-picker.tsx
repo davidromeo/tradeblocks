@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   endOfMonth,
   endOfYear,
@@ -30,6 +30,15 @@ interface DateRangePickerProps {
 
 export function DateRangePicker({ date, onDateChange, maxDate }: DateRangePickerProps) {
   const today = maxDate || new Date()
+  const [customFrom, setCustomFrom] = useState("")
+  const [customTo, setCustomTo] = useState("")
+
+  const toInputValue = (d: Date) => d.toISOString().slice(0, 10)
+  const parseInputDate = (value: string): Date | null => {
+    if (!value) return null
+    const parsed = new Date(value)
+    return isNaN(parsed.getTime()) ? null : parsed
+  }
 
   const presets = {
     today: {
@@ -76,6 +85,12 @@ export function DateRangePicker({ date, onDateChange, maxDate }: DateRangePicker
 
   const [month, setMonth] = useState(date?.to || today)
 
+  // Keep custom inputs in sync with the controlled date prop
+  useEffect(() => {
+    setCustomFrom(date?.from ? toInputValue(date.from) : "")
+    setCustomTo(date?.to ? toInputValue(date.to) : "")
+  }, [date])
+
   const handlePresetClick = (preset: DateRange) => {
     onDateChange(preset)
     if (preset.to) {
@@ -93,6 +108,24 @@ export function DateRangePicker({ date, onDateChange, maxDate }: DateRangePicker
       },
     } as React.ChangeEvent<HTMLSelectElement>
     _e(_event)
+  }
+
+  const handleCustomChange = (which: "from" | "to", value: string) => {
+    const nextFrom = which === "from" ? value : customFrom
+    const nextTo = which === "to" ? value : customTo
+    setCustomFrom(nextFrom)
+    setCustomTo(nextTo)
+
+    const parsedFrom = parseInputDate(nextFrom)
+    const parsedTo = parseInputDate(nextTo)
+
+    if (parsedFrom && parsedTo && parsedFrom <= parsedTo) {
+      onDateChange({ from: parsedFrom, to: parsedTo })
+      setMonth(parsedTo)
+    } else if (!value) {
+      onDateChange(undefined)
+      setMonth(today)
+    }
   }
 
   return (
@@ -192,6 +225,29 @@ export function DateRangePicker({ date, onDateChange, maxDate }: DateRangePicker
               >
                 All time
               </Button>
+              <div className="mt-2 space-y-2 rounded-md border border-border/50 p-2">
+                <p className="text-xs font-medium text-muted-foreground">Custom range</p>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Start</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-md border bg-background px-2 py-1 text-sm"
+                    value={customFrom}
+                    max={toInputValue(today)}
+                    onChange={(e) => handleCustomChange("from", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">End</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-md border bg-background px-2 py-1 text-sm"
+                    value={customTo}
+                    max={toInputValue(today)}
+                    onChange={(e) => handleCustomChange("to", e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
