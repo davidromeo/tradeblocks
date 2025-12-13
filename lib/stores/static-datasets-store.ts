@@ -142,9 +142,18 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
         return { success: false, error: 'No valid data rows found in file' }
       }
 
-      // Save to IndexedDB
+      // Save to IndexedDB - metadata first, then rows
+      // If row insertion fails mid-way (chunked), we need to clean up
       await createStaticDataset(result.dataset)
-      await addStaticDatasetRows(result.dataset.id, result.rows)
+
+      try {
+        await addStaticDatasetRows(result.dataset.id, result.rows)
+      } catch (rowError) {
+        // Row insertion failed - clean up the metadata and any partial rows
+        console.error('Failed to add dataset rows, cleaning up:', rowError)
+        await deleteStaticDatasetWithRows(result.dataset.id)
+        throw rowError
+      }
 
       // Update state
       set((state) => ({
@@ -342,6 +351,14 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
       // Calculate stats
       const stats = calculateMatchStats(trades, dataset, rows)
 
+      // Before caching, check if this computation was cancelled (invalidated)
+      // If the key was removed from computingMatchStats, don't write stale data
+      const currentState = get()
+      if (!currentState.computingMatchStats.has(cacheKey)) {
+        // Computation was cancelled - don't cache stale results
+        return null
+      }
+
       // Cache the result
       set((s) => {
         const newCache = new Map(s.cachedMatchStats)
@@ -380,6 +397,8 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
   invalidateMatchStatsForBlock: (blockId) => {
     set((state) => {
       const newCache = new Map<string, DatasetMatchStats>()
+      const newComputing = new Set<string>()
+
       for (const [key, value] of state.cachedMatchStats) {
         // Key format: datasetId:blockId:matchStrategy
         const parts = key.split(':')
@@ -387,7 +406,16 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
           newCache.set(key, value)
         }
       }
-      return { cachedMatchStats: newCache }
+
+      // Also clear in-flight computations for this block to prevent stale writes
+      for (const key of state.computingMatchStats) {
+        const parts = key.split(':')
+        if (parts[1] !== blockId) {
+          newComputing.add(key)
+        }
+      }
+
+      return { cachedMatchStats: newCache, computingMatchStats: newComputing }
     })
   },
 
@@ -395,13 +423,23 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
   invalidateMatchStatsForDataset: (datasetId) => {
     set((state) => {
       const newCache = new Map<string, DatasetMatchStats>()
+      const newComputing = new Set<string>()
+
       for (const [key, value] of state.cachedMatchStats) {
         // Key format: datasetId:blockId:matchStrategy
         if (!key.startsWith(datasetId + ':')) {
           newCache.set(key, value)
         }
       }
-      return { cachedMatchStats: newCache }
+
+      // Also clear in-flight computations for this dataset to prevent stale writes
+      for (const key of state.computingMatchStats) {
+        if (!key.startsWith(datasetId + ':')) {
+          newComputing.add(key)
+        }
+      }
+
+      return { cachedMatchStats: newCache, computingMatchStats: newComputing }
     })
   },
 }))

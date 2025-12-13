@@ -219,6 +219,24 @@ describe('Static Datasets Store - Match Stats Caching', () => {
       expect(state.cachedMatchStats.has(key2)).toBe(false)
       expect(state.cachedMatchStats.has(key3)).toBe(true) // Different block, should remain
     })
+
+    it('also clears in-flight computations for that block', () => {
+      const key1 = makeMatchStatsCacheKey('dataset-1', 'block-1', 'nearest-before')
+      const key2 = makeMatchStatsCacheKey('dataset-2', 'block-1', 'exact')
+      const key3 = makeMatchStatsCacheKey('dataset-1', 'block-2', 'nearest-before')
+
+      useStaticDatasetsStore.setState({
+        computingMatchStats: new Set([key1, key2, key3]),
+      })
+
+      const store = useStaticDatasetsStore.getState()
+      store.invalidateMatchStatsForBlock('block-1')
+
+      const state = useStaticDatasetsStore.getState()
+      expect(state.computingMatchStats.has(key1)).toBe(false)
+      expect(state.computingMatchStats.has(key2)).toBe(false)
+      expect(state.computingMatchStats.has(key3)).toBe(true) // Different block, should remain
+    })
   })
 
   describe('invalidateMatchStatsForDataset', () => {
@@ -245,6 +263,24 @@ describe('Static Datasets Store - Match Stats Caching', () => {
       expect(state.cachedMatchStats.has(key1)).toBe(false)
       expect(state.cachedMatchStats.has(key2)).toBe(false)
       expect(state.cachedMatchStats.has(key3)).toBe(true) // Different dataset, should remain
+    })
+
+    it('also clears in-flight computations for that dataset', () => {
+      const key1 = makeMatchStatsCacheKey('dataset-1', 'block-1', 'nearest-before')
+      const key2 = makeMatchStatsCacheKey('dataset-1', 'block-2', 'exact')
+      const key3 = makeMatchStatsCacheKey('dataset-2', 'block-1', 'nearest-before')
+
+      useStaticDatasetsStore.setState({
+        computingMatchStats: new Set([key1, key2, key3]),
+      })
+
+      const store = useStaticDatasetsStore.getState()
+      store.invalidateMatchStatsForDataset('dataset-1')
+
+      const state = useStaticDatasetsStore.getState()
+      expect(state.computingMatchStats.has(key1)).toBe(false)
+      expect(state.computingMatchStats.has(key2)).toBe(false)
+      expect(state.computingMatchStats.has(key3)).toBe(true) // Different dataset, should remain
     })
   })
 
