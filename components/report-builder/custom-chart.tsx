@@ -145,7 +145,7 @@ function buildCategoricalScatterTraces(
       x: winners.map(w => w.x),
       y: winners.map(w => w.y),
       mode: 'markers',
-      type: 'scatter',
+      type: 'scattergl',
       marker: {
         color: 'rgb(34, 197, 94)', // Green
         size: winners.map(w => w.size)
@@ -161,7 +161,7 @@ function buildCategoricalScatterTraces(
       x: losers.map(l => l.x),
       y: losers.map(l => l.y),
       mode: 'markers',
-      type: 'scatter',
+      type: 'scattergl',
       marker: {
         color: 'rgb(239, 68, 68)', // Red
         size: losers.map(l => l.size)
@@ -258,7 +258,7 @@ function buildScatterTraces(
     x: xValues,
     y: yValues,
     mode: 'markers',
-    type: 'scatter',
+    type: 'scattergl',
     marker: colorConfig,
     hovertemplate: hoverTexts.map(t => t + '<extra></extra>'),
     name: ''
@@ -475,7 +475,7 @@ function buildAdditionalAxisTraces(
       traces.push({
         x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
         y: points.map(p => p.y),
-        type: 'scatter',
+        type: 'scattergl',
         mode: isLine ? 'lines+markers' : 'markers',
         marker: {
           color: AXIS_COLORS.y2,
@@ -517,7 +517,7 @@ function buildAdditionalAxisTraces(
       traces.push({
         x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
         y: points.map(p => p.y),
-        type: 'scatter',
+        type: 'scattergl',
         mode: isLine ? 'lines+markers' : 'markers',
         marker: {
           color: AXIS_COLORS.y3,
@@ -591,7 +591,7 @@ export function CustomChart({
           chartTraces = [{
             x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
             y: points.map(p => p.y),
-            type: 'scatter',
+            type: 'scattergl',
             mode: 'markers',
             marker: {
               color: AXIS_COLORS.y1,
@@ -624,7 +624,7 @@ export function CustomChart({
           chartTraces = [{
             x: points.map(p => toPlotlyValue(p.x, xAxis.field)),
             y: points.map(p => p.y),
-            type: 'scatter',
+            type: 'scattergl',
             mode: 'lines+markers',
             line: { color: AXIS_COLORS.y1, width: 2 },
             marker: { color: AXIS_COLORS.y1, size: 6 },

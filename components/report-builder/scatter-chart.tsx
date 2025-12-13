@@ -183,7 +183,7 @@ export function ScatterChart({
         chartTraces.push({
           x: y1Points.map((p) => toPlotlyValue(p.x, xAxis.field)),
           y: y1Points.map((p) => p.y),
-          type: "scatter",
+          type: "scattergl",
           mode: "markers",
           marker: {
             color: AXIS_COLORS.y1,
@@ -215,7 +215,7 @@ export function ScatterChart({
           chartTraces.push({
             x: y2Points.map((p) => toPlotlyValue(p.x, xAxis.field)),
             y: y2Points.map((p) => p.y),
-            type: "scatter",
+            type: "scattergl",
             mode: "markers",
             marker: {
               color: AXIS_COLORS.y2,
@@ -249,7 +249,7 @@ export function ScatterChart({
           chartTraces.push({
             x: y3Points.map((p) => toPlotlyValue(p.x, xAxis.field)),
             y: y3Points.map((p) => p.y),
-            type: "scatter",
+            type: "scattergl",
             mode: "markers",
             marker: {
               color: AXIS_COLORS.y3,
@@ -464,7 +464,7 @@ export function ScatterChart({
           x: outOfRangePoints.map((p) => p.xPlotly),
           y: outOfRangePoints.map((p) => p.y),
           mode: "markers",
-          type: "scatter",
+          type: "scattergl",
           marker: {
             color: "rgba(148, 163, 184, 0.4)", // Gray/faded
             size: outOfRangePoints.map((p) => p.size ?? 8),
@@ -487,7 +487,7 @@ export function ScatterChart({
               x: losers.map((p) => p.xPlotly),
               y: losers.map((p) => p.y),
               mode: "markers",
-              type: "scatter",
+              type: "scattergl",
               marker: {
                 color: "rgb(239, 68, 68)", // Red
                 size: losers.map((p) => p.size ?? 8),
@@ -502,7 +502,7 @@ export function ScatterChart({
               x: winners.map((p) => p.xPlotly),
               y: winners.map((p) => p.y),
               mode: "markers",
-              type: "scatter",
+              type: "scattergl",
               marker: {
                 color: "rgb(34, 197, 94)", // Green
                 size: winners.map((p) => p.size ?? 8),
@@ -520,7 +520,7 @@ export function ScatterChart({
             x: inRangePoints.map((p) => p.xPlotly),
             y: inRangePoints.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: colorValues,
               colorscale: "RdYlBu",
@@ -541,7 +541,7 @@ export function ScatterChart({
             x: inRangePoints.map((p) => p.xPlotly),
             y: inRangePoints.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: "rgb(59, 130, 246)", // Blue
               size: inRangePoints.map((p) => p.size ?? 8),
@@ -566,7 +566,7 @@ export function ScatterChart({
             x: losers.map((p) => p.xPlotly),
             y: losers.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: "rgb(239, 68, 68)", // Red
               size: losers.map((p) => p.size ?? 8),
@@ -581,7 +581,7 @@ export function ScatterChart({
             x: winners.map((p) => p.xPlotly),
             y: winners.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: "rgb(34, 197, 94)", // Green
               size: winners.map((p) => p.size ?? 8),
@@ -599,7 +599,7 @@ export function ScatterChart({
           x: points.map((p) => p.xPlotly),
           y: points.map((p) => p.y),
           mode: "markers",
-          type: "scatter",
+          type: "scattergl",
           marker: {
             color: colorValues,
             colorscale: "RdYlBu",
@@ -620,7 +620,7 @@ export function ScatterChart({
           x: points.map((p) => p.xPlotly),
           y: points.map((p) => p.y),
           mode: "markers",
-          type: "scatter",
+          type: "scattergl",
           marker: {
             color: "rgb(59, 130, 246)",
             size: points.map((p) => p.size ?? 8),
