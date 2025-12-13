@@ -177,7 +177,7 @@ export function WalkForwardAnalysisChart({
     }
 
     const toLabel = (key: string) => {
-      if (key.startsWith("strategy:")) return `Strategy: ${key.replace("strategy:", "")}`;
+      if (key.startsWith("strategy:")) return `Weight: ${key.replace("strategy:", "")}`;
       switch (key) {
         case "kellyMultiplier":
           return "Kelly Multiplier";
@@ -194,18 +194,53 @@ export function WalkForwardAnalysisChart({
       }
     };
 
-    const traces: Data[] = parameterKeys.map((key) => {
-      const friendlyName = toLabel(key);
+    // Separate strategy weights from other parameters for distinct styling
+    const strategyWeightKeys = parameterKeys.filter((k) => k.startsWith("strategy:"));
+    const otherParamKeys = parameterKeys.filter((k) => !k.startsWith("strategy:"));
 
-      return {
-        type: "scatter",
-        mode: "lines+markers",
-        name: friendlyName,
-        x: paramPeriods.map((_, index) => `Period ${index + 1}`),
-        y: paramPeriods.map((period) => period.optimalParameters[key] ?? null),
-        connectgaps: true,
-      };
-    });
+    // Color palette for strategy weights (distinct from default Plotly colors)
+    const strategyColors = [
+      "#8b5cf6", // violet
+      "#06b6d4", // cyan
+      "#84cc16", // lime
+      "#f97316", // orange
+      "#ec4899", // pink
+    ];
+
+    const traces: Data[] = [
+      // Other parameters - solid lines
+      ...otherParamKeys.map((key) => {
+        const friendlyName = toLabel(key);
+        return {
+          type: "scatter" as const,
+          mode: "lines+markers" as const,
+          name: friendlyName,
+          x: paramPeriods.map((_, index) => `Period ${index + 1}`),
+          y: paramPeriods.map((period) => period.optimalParameters[key] ?? null),
+          connectgaps: true,
+        };
+      }),
+      // Strategy weights - dashed lines with distinct colors
+      ...strategyWeightKeys.map((key, idx) => {
+        const friendlyName = toLabel(key);
+        return {
+          type: "scatter" as const,
+          mode: "lines+markers" as const,
+          name: friendlyName,
+          x: paramPeriods.map((_, index) => `Period ${index + 1}`),
+          y: paramPeriods.map((period) => period.optimalParameters[key] ?? null),
+          connectgaps: true,
+          line: {
+            dash: "dash" as const,
+            color: strategyColors[idx % strategyColors.length],
+          },
+          marker: {
+            symbol: "diamond" as const,
+            color: strategyColors[idx % strategyColors.length],
+          },
+        };
+      }),
+    ];
 
     // Reduce tick clutter: show at most ~12 ticks across the window
     const tickStep = Math.max(1, Math.ceil(paramPeriods.length / 12));

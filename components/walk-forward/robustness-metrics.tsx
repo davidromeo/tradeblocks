@@ -1,7 +1,7 @@
 "use client"
 
 import { MetricCard } from "@/components/metric-card"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { WalkForwardResults } from "@/lib/models/walk-forward"
 
 interface RobustnessMetricsProps {
@@ -85,6 +85,63 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         className="md:col-span-2 lg:col-span-4"
         isPositive={summary.robustnessScore >= 0.6}
       />
+
+      {/* Diversification Metrics - only shown when diversification analysis was enabled */}
+      {(summary.avgCorrelationAcrossPeriods !== undefined ||
+        summary.avgTailDependenceAcrossPeriods !== undefined ||
+        summary.avgEffectiveFactors !== undefined) && (
+        <Card className="md:col-span-2 lg:col-span-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Diversification Metrics</CardTitle>
+            <CardDescription className="text-xs">
+              Average values across all walk-forward periods
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              {summary.avgCorrelationAcrossPeriods !== undefined && (
+                <MetricCard
+                  title="Avg Correlation"
+                  value={summary.avgCorrelationAcrossPeriods}
+                  format="decimal"
+                  decimalPlaces={3}
+                  tooltip={{
+                    flavor: "Average pairwise correlation between strategies across all periods.",
+                    detailed: "Lower values indicate better diversification. Values below 0.5 are generally good; below 0.3 is excellent.",
+                  }}
+                  isPositive={summary.avgCorrelationAcrossPeriods < 0.5}
+                />
+              )}
+              {summary.avgTailDependenceAcrossPeriods !== undefined && (
+                <MetricCard
+                  title="Avg Tail Dependence"
+                  value={summary.avgTailDependenceAcrossPeriods}
+                  format="decimal"
+                  decimalPlaces={3}
+                  tooltip={{
+                    flavor: "Average joint tail risk between strategies across all periods.",
+                    detailed: "Measures how often strategies experience extreme losses together. Lower is better.",
+                  }}
+                  isPositive={summary.avgTailDependenceAcrossPeriods < 0.4}
+                />
+              )}
+              {summary.avgEffectiveFactors !== undefined && (
+                <MetricCard
+                  title="Effective Factors"
+                  value={summary.avgEffectiveFactors}
+                  format="decimal"
+                  decimalPlaces={2}
+                  tooltip={{
+                    flavor: "Average number of independent risk factors across all periods.",
+                    detailed: "Higher values indicate better diversification. Close to the number of strategies means each contributes unique risk/return.",
+                  }}
+                  isPositive={summary.avgEffectiveFactors >= 2}
+                />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

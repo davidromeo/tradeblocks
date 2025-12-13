@@ -42,6 +42,7 @@ import { WalkForwardAnalysisChart } from "@/components/walk-forward/analysis-cha
 import { WalkForwardPeriodSelector } from "@/components/walk-forward/period-selector";
 import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics";
 import { RunSwitcher } from "@/components/walk-forward/run-switcher";
+import { WalkForwardVerdict } from "@/components/walk-forward/walk-forward-verdict";
 import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
@@ -218,11 +219,18 @@ export default function WalkForwardPage() {
         : 0;
       const status = getEfficiencyStatus(efficiencyPct);
 
-      const parameterSummary = Object.entries(period.optimalParameters).map(
-        ([key, value]) => {
+      // Separate strategy weights from other parameters
+      const strategyWeights: Array<{ strategy: string; weight: number }> = [];
+      const otherParameters: Array<{ key: string; prettyKey: string; value: number; formattedValue: string }> = [];
+
+      Object.entries(period.optimalParameters).forEach(([key, value]) => {
+        if (key.startsWith("strategy:")) {
+          strategyWeights.push({
+            strategy: key.replace("strategy:", ""),
+            weight: value,
+          });
+        } else {
           const prettyKey = (() => {
-            if (key.startsWith("strategy:"))
-              return `Strategy ${key.replace("strategy:", "")}`;
             switch (key) {
               case "kellyMultiplier":
                 return "Kelly Multiplier";
@@ -243,8 +251,13 @@ export default function WalkForwardPage() {
             ? `${value.toFixed(2)}%`
             : value.toFixed(2);
 
-          return `${prettyKey}: ${formattedValue}`;
+          otherParameters.push({ key, prettyKey, value, formattedValue });
         }
+      });
+
+      // Legacy parameters array for backward compatibility
+      const parameterSummary = otherParameters.map(
+        (p) => `${p.prettyKey}: ${p.formattedValue}`
       );
 
       return {
@@ -262,6 +275,8 @@ export default function WalkForwardPage() {
         oosDrawdown: period.outOfSampleMetrics.maxDrawdown,
         oosTrades: period.outOfSampleMetrics.totalTrades,
         parameters: parameterSummary,
+        strategyWeights,
+        diversificationMetrics: period.diversificationMetrics,
       };
     });
   }, [results]);
@@ -356,13 +371,6 @@ export default function WalkForwardPage() {
 
   return (
     <div className="space-y-6">
-      <RunSwitcher
-        history={history}
-        currentId={results?.id ?? null}
-        onSelect={selectAnalysis}
-        onDelete={deleteAnalysis}
-      />
-
       <WalkForwardPeriodSelector
         blockId={activeBlockId}
         addon={
@@ -397,10 +405,88 @@ export default function WalkForwardPage() {
         }
       />
 
+      <RunSwitcher
+        history={history}
+        currentId={results?.id ?? null}
+        onSelect={selectAnalysis}
+        onDelete={deleteAnalysis}
+      />
+
+      {/* Configuration Summary - shows key settings for the current analysis */}
+      {results && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Run Configuration</CardTitle>
+            <CardDescription className="text-xs">
+              Settings used for this walk-forward analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {results.config.inSampleDays}d IS / {results.config.outOfSampleDays}d OOS
+              </Badge>
+              <Badge variant="secondary" className="text-xs">
+                Target: {targetMetricLabel}
+              </Badge>
+              {results.config.normalizeTo1Lot && (
+                <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-950/30">
+                  1-Lot Normalized
+                </Badge>
+              )}
+              {results.config.selectedStrategies && results.config.selectedStrategies.length > 0 && (
+                <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950/30">
+                  {results.config.selectedStrategies.length} Strategies Selected
+                </Badge>
+              )}
+              {results.config.diversificationConfig?.enableCorrelationConstraint && (
+                <Badge variant="outline" className="text-xs bg-violet-50 dark:bg-violet-950/30">
+                  Correlation ≤ {results.config.diversificationConfig.maxCorrelationThreshold.toFixed(2)}
+                </Badge>
+              )}
+              {results.config.diversificationConfig?.enableTailRiskConstraint && (
+                <Badge variant="outline" className="text-xs bg-violet-50 dark:bg-violet-950/30">
+                  Tail Risk ≤ {results.config.diversificationConfig.maxTailDependenceThreshold.toFixed(2)}
+                </Badge>
+              )}
+              {results.config.strategyWeightSweep && results.config.strategyWeightSweep.configs.some(c => c.enabled) && (
+                <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950/30">
+                  Strategy Weight Sweep ({results.config.strategyWeightSweep.mode})
+                </Badge>
+              )}
+              {results.config.performanceFloor?.enableMinSharpe && (
+                <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
+                  Min Sharpe: {results.config.performanceFloor.minSharpeRatio.toFixed(2)}
+                </Badge>
+              )}
+              {results.config.performanceFloor?.enableMinProfitFactor && (
+                <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
+                  Min PF: {results.config.performanceFloor.minProfitFactor.toFixed(2)}
+                </Badge>
+              )}
+              {results.config.performanceFloor?.enablePositiveNetPl && (
+                <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
+                  Positive P/L Required
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Verdict - actionable summary at the top of results */}
+      {results && (
+        <WalkForwardVerdict
+          results={results.results}
+          targetMetricLabel={targetMetricLabel}
+        />
+      )}
+
       <RobustnessMetrics
         results={results?.results ?? null}
         targetMetricLabel={targetMetricLabel}
       />
+
       <Card>
         <CardHeader>
           <CardTitle>Analysis</CardTitle>
@@ -599,40 +685,33 @@ export default function WalkForwardPage() {
                         {isOpen && (
                           <TableRow>
                             <TableCell colSpan={9} className="bg-muted/30">
-                              <div className="grid gap-6 p-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span
-                                      className={cn(
-                                        "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs",
-                                        period.status.chipClass
-                                      )}
-                                    >
-                                      <period.status.icon className="h-3 w-3" />
-                                      {period.status.label}
+                              <div className="p-4 space-y-4">
+                                {/* Performance Summary Row */}
+                                <div className="flex flex-wrap items-center gap-6">
+                                  <span
+                                    className={cn(
+                                      "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs",
+                                      period.status.chipClass
+                                    )}
+                                  >
+                                    <period.status.icon className="h-3 w-3" />
+                                    {period.status.label}
+                                  </span>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="h-2 w-2 rounded-full bg-blue-500" />
+                                    <span>IS</span>
+                                    <span className="font-semibold text-foreground">
+                                      {formatMetricValue(period.inSampleMetric)}
                                     </span>
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                                    <div className="flex items-center gap-2">
-                                      <span className="h-2 w-2 rounded-full bg-blue-500" />
-                                      <span>IS</span>
-                                      <span className="font-semibold text-foreground">
-                                        {formatMetricValue(
-                                          period.inSampleMetric
-                                        )}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="h-2 w-2 rounded-full bg-orange-500" />
-                                      <span>OOS</span>
-                                      <span className="font-semibold text-foreground">
-                                        {formatMetricValue(
-                                          period.outSampleMetric
-                                        )}
-                                      </span>
-                                    </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="h-2 w-2 rounded-full bg-orange-500" />
+                                    <span>OOS</span>
+                                    <span className="font-semibold text-foreground">
+                                      {formatMetricValue(period.outSampleMetric)}
+                                    </span>
                                   </div>
-                                  <div className="space-y-2 w-full max-w-full">
+                                  <div className="flex-1 min-w-[200px] max-w-[400px] space-y-1">
                                     <div
                                       className="h-2 rounded-full bg-blue-500/15"
                                       title="IS P&L scaled within this window"
@@ -640,11 +719,7 @@ export default function WalkForwardPage() {
                                       <div
                                         className="h-2 rounded-full bg-blue-500"
                                         style={{
-                                          width: `${
-                                            miniBars.find(
-                                              (m) => m.label === period.label
-                                            )?.isWidth ?? 0
-                                          }%`,
+                                          width: `${miniBars.find((m) => m.label === period.label)?.isWidth ?? 0}%`,
                                         }}
                                       />
                                     </div>
@@ -655,56 +730,100 @@ export default function WalkForwardPage() {
                                       <div
                                         className="h-2 rounded-full bg-orange-500"
                                         style={{
-                                          width: `${
-                                            miniBars.find(
-                                              (m) => m.label === period.label
-                                            )?.oosWidth ?? 0
-                                          }%`,
+                                          width: `${miniBars.find((m) => m.label === period.label)?.oosWidth ?? 0}%`,
                                         }}
                                       />
                                     </div>
                                   </div>
                                 </div>
-                                <div className="space-y-2">
-                                  <p className="text-xs font-semibold text-muted-foreground">
-                                    Winning parameters
-                                  </p>
-                                  {period.parameters.length ? (
-                                    <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+
+                                {/* Winning Parameters - Full Width */}
+                                {period.parameters.length > 0 && (
+                                  <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground">
+                                      Winning Parameters
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
                                       {period.parameters.map((item) => (
                                         <div
                                           key={`${period.label}-${item}`}
-                                          className="flex items-center justify-between rounded-md bg-muted px-2 py-1 text-[11px]"
+                                          className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-xs"
                                         >
-                                          <span className="font-mono text-foreground/80">
+                                          <span className="text-muted-foreground">
                                             {item.split(":")[0]}:
                                           </span>
-                                          <span className="font-mono text-foreground">
-                                            {item
-                                              .split(":")
-                                              .slice(1)
-                                              .join(":")
-                                              .trim()}
+                                          <span className="font-semibold text-foreground">
+                                            {item.split(":").slice(1).join(":").trim()}
                                           </span>
                                         </div>
                                       ))}
                                     </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">
-                                      No parameter adjustments captured.
+                                  </div>
+                                )}
+
+                                {/* Strategy Weights */}
+                                {period.strategyWeights.length > 0 && (
+                                  <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground">
+                                      Strategy Weights
                                     </p>
-                                  )}
-                                </div>
-                                <div className="col-span-full text-[11px] text-muted-foreground space-y-1">
-                                  <div>
-                                    Bar length shows relative |P&L| within this
-                                    window (IS vs OOS).
+                                    <div className="flex flex-wrap gap-2">
+                                      {period.strategyWeights.map(({ strategy, weight }) => (
+                                        <div
+                                          key={`${period.label}-strategy-${strategy}`}
+                                          className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 dark:bg-blue-950/30 px-2.5 py-1 text-xs"
+                                        >
+                                          <span className="text-muted-foreground truncate max-w-[150px]" title={strategy}>
+                                            {strategy}:
+                                          </span>
+                                          <span className="font-semibold text-foreground">
+                                            {weight.toFixed(2)}x
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="text-muted-foreground/80">
-                                    Note: Only the winning combo per window is
-                                    stored; non-winning parameter tries are not
-                                    persisted.
+                                )}
+
+                                {/* Diversification Metrics */}
+                                {period.diversificationMetrics && (
+                                  <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground">
+                                      Diversification
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                      <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                        <span className="text-muted-foreground">Correlation:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {period.diversificationMetrics.avgCorrelation.toFixed(3)}
+                                        </span>
+                                      </div>
+                                      <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                        <span className="text-muted-foreground">Tail Risk:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {period.diversificationMetrics.avgTailDependence.toFixed(3)}
+                                        </span>
+                                      </div>
+                                      <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                        <span className="text-muted-foreground">Eff Factors:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {period.diversificationMetrics.effectiveFactors.toFixed(2)}
+                                        </span>
+                                      </div>
+                                      <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                        <span className="text-muted-foreground">High-Risk Pairs:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {(period.diversificationMetrics.highRiskPairsPct * 100).toFixed(1)}%
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
+                                )}
+
+                                {/* Footer Note */}
+                                <div className="text-[11px] text-muted-foreground/70 pt-1 border-t border-border/30">
+                                  Bar length shows relative |P&L| within this window.
+                                  Only the winning combo per window is stored.
                                 </div>
                               </div>
                             </TableCell>

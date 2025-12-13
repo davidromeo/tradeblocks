@@ -1,85 +1,84 @@
 "use client"
 
 import { IconPlayerPlay } from "@tabler/icons-react"
-import { HelpCircle, Loader2, Square, Sparkles } from "lucide-react"
-import { useEffect, useMemo } from "react"
+import { AlertCircle, ChevronDown, HelpCircle, Loader2, Square, Sparkles } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward"
-import { WALK_FORWARD_PRESETS, useWalkForwardStore } from "@/lib/stores/walk-forward-store"
+import { MultiSelect } from "@/components/multi-select"
+import type { CorrelationMethodOption, WalkForwardOptimizationTarget } from "@/lib/models/walk-forward"
+import {
+  PARAMETER_METADATA,
+  WALK_FORWARD_PRESETS,
+  suggestStepForRange,
+  useWalkForwardStore,
+} from "@/lib/stores/walk-forward-store"
+import { cn } from "@/lib/utils"
 
 interface PeriodSelectorProps {
   blockId?: string | null
   addon?: React.ReactNode
 }
 
-const TARGET_OPTIONS: Array<{ value: WalkForwardOptimizationTarget; label: string }> = [
-  { value: "netPl", label: "Net Profit" },
-  { value: "profitFactor", label: "Profit Factor" },
-  { value: "sharpeRatio", label: "Sharpe Ratio" },
-  { value: "sortinoRatio", label: "Sortino Ratio" },
-  { value: "calmarRatio", label: "Calmar Ratio" },
-  { value: "cagr", label: "CAGR" },
-  { value: "avgDailyPl", label: "Avg Daily P/L" },
-  { value: "winRate", label: "Win Rate" },
+const TARGET_OPTIONS: Array<{
+  value: WalkForwardOptimizationTarget
+  label: string
+  group: "performance" | "risk-adjusted" | "diversification"
+}> = [
+  // Performance targets
+  { value: "netPl", label: "Net Profit", group: "performance" },
+  { value: "profitFactor", label: "Profit Factor", group: "performance" },
+  { value: "cagr", label: "CAGR", group: "performance" },
+  { value: "avgDailyPl", label: "Avg Daily P/L", group: "performance" },
+  { value: "winRate", label: "Win Rate", group: "performance" },
+  // Risk-adjusted targets
+  { value: "sharpeRatio", label: "Sharpe Ratio", group: "risk-adjusted" },
+  { value: "sortinoRatio", label: "Sortino Ratio", group: "risk-adjusted" },
+  { value: "calmarRatio", label: "Calmar Ratio", group: "risk-adjusted" },
+  // Diversification targets
+  { value: "minAvgCorrelation", label: "Min Avg Correlation", group: "diversification" },
+  { value: "minTailRisk", label: "Min Tail Risk", group: "diversification" },
+  { value: "maxEffectiveFactors", label: "Max Effective Factors", group: "diversification" },
 ]
 
-const PARAMETER_METADATA: Record<
-  string,
-  { label: string; helper: string; min: number; max: number; step: number; precision?: number }
-> = {
-  kellyMultiplier: {
-    label: "Kelly Multiplier (x)",
-    helper: "Scale Kelly sizing to sweep risk appetite.",
-    min: 0.1,
-    max: 3,
-    step: 0.05,
-  },
-  fixedFractionPct: {
-    label: "Fixed Fraction %",
-    helper: "Percent of capital risked per trade.",
-    min: 1,
-    max: 20,
-    step: 0.5,
-  },
-  maxDrawdownPct: {
-    label: "Max Drawdown %",
-    helper: "Reject combos that breach this drawdown.",
-    min: 2,
-    max: 50,
-    step: 1,
-  },
-  maxDailyLossPct: {
-    label: "Max Daily Loss %",
-    helper: "Cut risk-off when day losses exceed cap.",
-    min: 1,
-    max: 25,
-    step: 1,
-  },
-  consecutiveLossLimit: {
-    label: "Consecutive Loss Limit",
-    helper: "Stops trading after N losing trades.",
-    min: 1,
-    max: 10,
-    step: 1,
-    precision: 0,
-  },
+// Helper text for parameters (extends the store's PARAMETER_METADATA)
+const PARAMETER_HELPERS: Record<string, string> = {
+  kellyMultiplier: "Scale Kelly sizing to sweep risk appetite.",
+  fixedFractionPct: "Percent of capital risked per trade.",
+  maxDrawdownPct: "Reject combos that breach this drawdown.",
+  maxDailyLossPct: "Cut risk-off when day losses exceed cap.",
+  consecutiveLossLimit: "Stops trading after N losing trades.",
+}
+
+// Check if target is a diversification target (requires performance floor)
+const isDiversificationTarget = (target: WalkForwardOptimizationTarget): boolean => {
+  return ["minAvgCorrelation", "minTailRisk", "maxEffectiveFactors"].includes(target)
 }
 
 export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProps) {
   const config = useWalkForwardStore((state) => state.config)
   const presets = useWalkForwardStore((state) => state.presets)
   const updateConfig = useWalkForwardStore((state) => state.updateConfig)
-  const setParameterRange = useWalkForwardStore((state) => state.setParameterRange)
   const applyPreset = useWalkForwardStore((state) => state.applyPreset)
   const autoConfigureFromBlock = useWalkForwardStore((state) => state.autoConfigureFromBlock)
   const tradeFrequency = useWalkForwardStore((state) => state.tradeFrequency)
@@ -90,12 +89,44 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const progress = useWalkForwardStore((state) => state.progress)
   const error = useWalkForwardStore((state) => state.error)
 
+  // Phase 1: Extended parameter ranges
+  const extendedParameterRanges = useWalkForwardStore((state) => state.extendedParameterRanges)
+  const setExtendedParameterRange = useWalkForwardStore((state) => state.setExtendedParameterRange)
+  const toggleParameter = useWalkForwardStore((state) => state.toggleParameter)
+  const combinationEstimate = useWalkForwardStore((state) => state.combinationEstimate)
+
+  // Phase 1: Strategy filter and normalization
+  const availableStrategies = useWalkForwardStore((state) => state.availableStrategies)
+  const selectedStrategies = useWalkForwardStore((state) => state.selectedStrategies)
+  const setSelectedStrategies = useWalkForwardStore((state) => state.setSelectedStrategies)
+  const loadAvailableStrategies = useWalkForwardStore((state) => state.loadAvailableStrategies)
+  const normalizeTo1Lot = useWalkForwardStore((state) => state.normalizeTo1Lot)
+  const setNormalizeTo1Lot = useWalkForwardStore((state) => state.setNormalizeTo1Lot)
+
+  // Phase 2: Diversification config and performance floor
+  const diversificationConfig = useWalkForwardStore((state) => state.diversificationConfig)
+  const updateDiversificationConfig = useWalkForwardStore((state) => state.updateDiversificationConfig)
+  const performanceFloor = useWalkForwardStore((state) => state.performanceFloor)
+  const updatePerformanceFloor = useWalkForwardStore((state) => state.updatePerformanceFloor)
+
+  // Phase 3: Strategy weight sweeps
+  const strategyWeightSweep = useWalkForwardStore((state) => state.strategyWeightSweep)
+  const setStrategyWeightMode = useWalkForwardStore((state) => state.setStrategyWeightMode)
+  const toggleStrategyWeight = useWalkForwardStore((state) => state.toggleStrategyWeight)
+  const setStrategyWeightConfig = useWalkForwardStore((state) => state.setStrategyWeightConfig)
+  const setTopNCount = useWalkForwardStore((state) => state.setTopNCount)
+
+  // Collapsible state
+  const [diversificationOpen, setDiversificationOpen] = useState(false)
+  const [strategyWeightsOpen, setStrategyWeightsOpen] = useState(false)
+
   // Auto-configure when block changes
   useEffect(() => {
     if (blockId) {
       autoConfigureFromBlock(blockId)
+      loadAvailableStrategies(blockId)
     }
-  }, [blockId, autoConfigureFromBlock])
+  }, [blockId, autoConfigureFromBlock, loadAvailableStrategies])
 
   const disableRun = !blockId || isRunning
 
@@ -119,86 +150,158 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
     [presets, applyPreset]
   )
 
+  // Build strategy options for multi-select
+  const strategyOptions = useMemo(
+    () =>
+      availableStrategies.map((strategy) => ({
+        label: strategy,
+        value: strategy,
+      })),
+    [availableStrategies]
+  )
+
+  // Strategies eligible for weight sweeps = selected strategies (if any), otherwise all available
+  const strategiesForWeightSweep = useMemo(
+    () => (selectedStrategies.length > 0 ? selectedStrategies : availableStrategies),
+    [selectedStrategies, availableStrategies]
+  )
+
+  // Filter strategy weight configs to only show strategies in the current filter
+  const filteredWeightConfigs = useMemo(
+    () =>
+      strategyWeightSweep.configs.filter((config) =>
+        strategiesForWeightSweep.includes(config.strategy)
+      ),
+    [strategyWeightSweep.configs, strategiesForWeightSweep]
+  )
+
   const renderParameterControls = () => {
-    return Object.entries(config.parameterRanges).map(([key, range]) => {
+    return Object.entries(extendedParameterRanges).map(([key, range]) => {
       const metadata = PARAMETER_METADATA[key]
       if (!metadata) return null
 
-      const [minValue, maxValue, stepValue] = range
+      const [minValue, maxValue, stepValue, enabled] = range
+      const helperText = PARAMETER_HELPERS[key] || ""
 
       const sliderMin = Math.min(metadata.min, minValue)
       const sliderMax = Math.max(metadata.max, maxValue)
-      const precision = metadata.precision ?? 2
+      const precision = metadata.precision
+
+      // Check if step size suggestion is needed
+      const suggestedStep = suggestStepForRange(key, minValue, maxValue)
+      const currentValueCount = Math.floor((maxValue - minValue) / stepValue) + 1
+      const showStepSuggestion = enabled && stepValue < suggestedStep * 0.5 && currentValueCount > 20
 
       return (
-        <div key={key} className="space-y-2 rounded-lg border border-border/40 p-3">
+        <div
+          key={key}
+          className={cn(
+            "space-y-2 rounded-lg border p-3 transition-opacity",
+            enabled ? "border-border/40" : "border-border/20 opacity-60"
+          )}
+        >
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold">{metadata.label}</p>
-              <p className="text-xs text-muted-foreground">{metadata.helper}</p>
+            <div className="flex items-center gap-3">
+              {/* Enable/Disable Checkbox */}
+              <Checkbox
+                checked={enabled}
+                onCheckedChange={(checked) => toggleParameter(key, Boolean(checked))}
+                aria-label={`Enable ${metadata.label}`}
+              />
+              <div>
+                <p className="text-sm font-semibold">{metadata.label}</p>
+                <p className="text-xs text-muted-foreground">{helperText}</p>
+              </div>
             </div>
-            <Badge variant="secondary">
-              {minValue.toFixed(precision)} - {maxValue.toFixed(precision)}
-            </Badge>
+            {enabled && (
+              <Badge variant="secondary">
+                {minValue.toFixed(precision)} - {maxValue.toFixed(precision)}
+              </Badge>
+            )}
           </div>
-          <Slider
-            min={sliderMin}
-            max={sliderMax}
-            step={stepValue}
-            value={[minValue, maxValue]}
-            onValueChange={(values) => {
-              if (!values || values.length < 2) return
-              const nextMin = Number(values[0].toFixed(precision))
-              const nextMax = Number(values[1].toFixed(precision))
-              setParameterRange(key, [nextMin, nextMax, stepValue])
-            }}
-          />
-          <div className="grid grid-cols-3 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Min</Label>
-              <Input
-                type="number"
-                value={minValue}
+
+          {enabled && (
+            <>
+              <Slider
+                min={sliderMin}
+                max={sliderMax}
                 step={stepValue}
-                onChange={(event) => {
-                  const next = Number.parseFloat(event.target.value)
-                  if (Number.isFinite(next)) {
-                    setParameterRange(key, [next, maxValue, stepValue])
-                  }
+                value={[minValue, maxValue]}
+                onValueChange={(values) => {
+                  if (!values || values.length < 2) return
+                  const nextMin = Number(values[0].toFixed(precision))
+                  const nextMax = Number(values[1].toFixed(precision))
+                  setExtendedParameterRange(key, [nextMin, nextMax, stepValue, true])
                 }}
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Max</Label>
-              <Input
-                type="number"
-                value={maxValue}
-                step={stepValue}
-                onChange={(event) => {
-                  const next = Number.parseFloat(event.target.value)
-                  if (Number.isFinite(next)) {
-                    setParameterRange(key, [minValue, next, stepValue])
-                  }
-                }}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Step</Label>
-              <Input
-                type="number"
-                value={stepValue}
-                step={metadata.step}
-                min={metadata.step}
-                onChange={(event) => {
-                  const parsed = Number.parseFloat(event.target.value)
-                  if (Number.isFinite(parsed) && parsed > 0) {
-                    const next = Math.max(parsed, metadata.step)
-                    setParameterRange(key, [minValue, maxValue, next])
-                  }
-                }}
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Min</Label>
+                  <Input
+                    type="number"
+                    value={minValue}
+                    step={stepValue}
+                    onChange={(event) => {
+                      const next = Number.parseFloat(event.target.value)
+                      if (Number.isFinite(next)) {
+                        setExtendedParameterRange(key, [next, maxValue, stepValue, true])
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Max</Label>
+                  <Input
+                    type="number"
+                    value={maxValue}
+                    step={stepValue}
+                    onChange={(event) => {
+                      const next = Number.parseFloat(event.target.value)
+                      if (Number.isFinite(next)) {
+                        setExtendedParameterRange(key, [minValue, next, stepValue, true])
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Step</Label>
+                  <Input
+                    type="number"
+                    value={stepValue}
+                    step={metadata.step}
+                    min={metadata.step}
+                    onChange={(event) => {
+                      const parsed = Number.parseFloat(event.target.value)
+                      if (Number.isFinite(parsed) && parsed > 0) {
+                        const next = Math.max(parsed, metadata.step)
+                        setExtendedParameterRange(key, [minValue, maxValue, next, true])
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Step suggestion alert */}
+              {showStepSuggestion && (
+                <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  <span>
+                    Consider step size of {suggestedStep} for this range ({currentValueCount} values)
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 text-xs px-2"
+                    onClick={() =>
+                      setExtendedParameterRange(key, [minValue, maxValue, suggestedStep, true])
+                    }
+                  >
+                    Apply
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )
     })
@@ -350,6 +453,82 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
           </div>
         </div>
 
+        {/* Strategy Filter & Normalization Section */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Label>Strategy Filter</Label>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80 p-0 overflow-hidden">
+                  <div className="space-y-3">
+                    <div className="bg-primary/5 border-b px-4 py-3">
+                      <h4 className="text-sm font-semibold text-primary">Strategy Filter</h4>
+                    </div>
+                    <div className="px-4 pb-4 space-y-3">
+                      <p className="text-sm font-medium text-foreground leading-relaxed">
+                        Select which strategies to include in the analysis.
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Leave empty to include all strategies. Filter to focus on specific
+                        strategy subsets or exclude strategies that don't fit your analysis.
+                      </p>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
+            <MultiSelect
+              options={strategyOptions}
+              defaultValue={selectedStrategies}
+              onValueChange={setSelectedStrategies}
+              placeholder={availableStrategies.length > 0 ? "All strategies" : "Loading..."}
+              disabled={availableStrategies.length === 0}
+              maxCount={2}
+              searchable={availableStrategies.length > 5}
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="normalize-1lot">Normalize to 1-Lot</Label>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80 p-0 overflow-hidden">
+                  <div className="space-y-3">
+                    <div className="bg-primary/5 border-b px-4 py-3">
+                      <h4 className="text-sm font-semibold text-primary">1-Lot Normalization</h4>
+                    </div>
+                    <div className="px-4 pb-4 space-y-3">
+                      <p className="text-sm font-medium text-foreground leading-relaxed">
+                        Normalize all trades to single contracts before analysis.
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Useful when your backtest uses cumulative position scaling. This removes
+                        position size variations so you can evaluate the pure edge of your strategy
+                        independent of sizing decisions.
+                      </p>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
+            <div className="flex items-center gap-3 h-9 px-3 border rounded-md bg-background">
+              <Switch
+                id="normalize-1lot"
+                checked={normalizeTo1Lot}
+                onCheckedChange={setNormalizeTo1Lot}
+              />
+              <Label htmlFor="normalize-1lot" className="text-sm text-muted-foreground cursor-pointer">
+                {normalizeTo1Lot ? "Enabled" : "Disabled"}
+              </Label>
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -388,11 +567,30 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                 <SelectValue placeholder="Select metric" />
               </SelectTrigger>
               <SelectContent>
-                {TARGET_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectLabel>Performance</SelectLabel>
+                  {TARGET_OPTIONS.filter((o) => o.group === "performance").map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Risk-Adjusted</SelectLabel>
+                  {TARGET_OPTIONS.filter((o) => o.group === "risk-adjusted").map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Diversification</SelectLabel>
+                  {TARGET_OPTIONS.filter((o) => o.group === "diversification").map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -502,11 +700,615 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                   </div>
                 </HoverCardContent>
               </HoverCard>
+              {/* Combination Estimate Badge */}
+              {combinationEstimate && (
+                <Badge
+                  variant={
+                    combinationEstimate.warningLevel === "danger"
+                      ? "destructive"
+                      : combinationEstimate.warningLevel === "warning"
+                        ? "secondary"
+                        : "outline"
+                  }
+                  className={cn(
+                    "text-xs",
+                    combinationEstimate.warningLevel === "warning" &&
+                      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                  )}
+                >
+                  {combinationEstimate.count.toLocaleString()} combinations
+                  {combinationEstimate.warningLevel === "danger" && " ⚠️"}
+                  {combinationEstimate.warningLevel === "warning" && " ⚡"}
+                </Badge>
+              )}
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">{presetButtons}</div>
           </div>
+
+          {/* Combination breakdown */}
+          {combinationEstimate && combinationEstimate.enabledParameters.length > 0 && (
+            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+              <span className="font-medium">Breakdown: </span>
+              {combinationEstimate.enabledParameters.map((param, idx) => (
+                <span key={param}>
+                  {PARAMETER_METADATA[param]?.label ?? param}: {combinationEstimate.breakdown[param]}
+                  {idx < combinationEstimate.enabledParameters.length - 1 && " × "}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Warning for high combination count */}
+          {combinationEstimate?.warningLevel === "danger" && (
+            <Alert variant="destructive" className="py-2">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                High combination count may cause slow analysis. Consider disabling parameters,
+                narrowing ranges, or increasing step sizes.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid gap-3 md:grid-cols-2">{renderParameterControls()}</div>
         </div>
+
+        {/* Performance Floor (shown when diversification target selected) */}
+        {isDiversificationTarget(config.optimizationTarget) && (
+          <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 p-4">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                Performance Floor
+              </p>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-amber-600/60 cursor-help" />
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80 p-0 overflow-hidden">
+                  <div className="space-y-3">
+                    <div className="bg-amber-500/10 border-b px-4 py-3">
+                      <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                        Performance Floor
+                      </h4>
+                    </div>
+                    <div className="px-4 pb-4 space-y-3">
+                      <p className="text-sm font-medium text-foreground leading-relaxed">
+                        Required when optimizing for diversification metrics.
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Ensures combinations meet minimum profitability before optimizing for
+                        diversification. This prevents selecting "diversified but unprofitable"
+                        combinations. At least one floor must be enabled.
+                      </p>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="floor-sharpe"
+                    checked={performanceFloor.enableMinSharpe}
+                    onCheckedChange={(checked) =>
+                      updatePerformanceFloor({ enableMinSharpe: Boolean(checked) })
+                    }
+                  />
+                  <Label htmlFor="floor-sharpe" className="text-sm cursor-pointer">
+                    Min Sharpe Ratio
+                  </Label>
+                </div>
+                <Input
+                  type="number"
+                  step={0.1}
+                  min={0}
+                  value={performanceFloor.minSharpeRatio}
+                  onChange={(e) =>
+                    updatePerformanceFloor({ minSharpeRatio: Number(e.target.value) })
+                  }
+                  disabled={!performanceFloor.enableMinSharpe}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="floor-pf"
+                    checked={performanceFloor.enableMinProfitFactor}
+                    onCheckedChange={(checked) =>
+                      updatePerformanceFloor({ enableMinProfitFactor: Boolean(checked) })
+                    }
+                  />
+                  <Label htmlFor="floor-pf" className="text-sm cursor-pointer">
+                    Min Profit Factor
+                  </Label>
+                </div>
+                <Input
+                  type="number"
+                  step={0.1}
+                  min={1}
+                  value={performanceFloor.minProfitFactor}
+                  onChange={(e) =>
+                    updatePerformanceFloor({ minProfitFactor: Number(e.target.value) })
+                  }
+                  disabled={!performanceFloor.enableMinProfitFactor}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 h-8">
+                  <Checkbox
+                    id="floor-positive"
+                    checked={performanceFloor.enablePositiveNetPl}
+                    onCheckedChange={(checked) =>
+                      updatePerformanceFloor({ enablePositiveNetPl: Boolean(checked) })
+                    }
+                  />
+                  <Label htmlFor="floor-positive" className="text-sm cursor-pointer">
+                    Require Positive Net P/L
+                  </Label>
+                </div>
+              </div>
+            </div>
+            {!performanceFloor.enableMinSharpe &&
+              !performanceFloor.enableMinProfitFactor &&
+              !performanceFloor.enablePositiveNetPl && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ At least one floor must be enabled for diversification targets.
+                </p>
+              )}
+          </div>
+        )}
+
+        {/* Diversification Constraints */}
+        <Collapsible open={diversificationOpen} onOpenChange={setDiversificationOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-lg border border-border/40 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold">Diversification Constraints</p>
+                <Badge variant="outline" className="text-xs">
+                  {diversificationConfig.enableCorrelationConstraint ||
+                  diversificationConfig.enableTailRiskConstraint
+                    ? "Active"
+                    : "Inactive"}
+                </Badge>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                  diversificationOpen && "rotate-180"
+                )}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3 space-y-4">
+            {/* Correlation Constraint */}
+            <div
+              className={cn(
+                "space-y-3 rounded-lg border p-3",
+                diversificationConfig.enableCorrelationConstraint
+                  ? "border-border/40"
+                  : "border-border/20 opacity-70"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="corr-constraint"
+                    checked={diversificationConfig.enableCorrelationConstraint}
+                    onCheckedChange={(checked) =>
+                      updateDiversificationConfig({ enableCorrelationConstraint: Boolean(checked) })
+                    }
+                  />
+                  <Label htmlFor="corr-constraint" className="text-sm font-medium cursor-pointer">
+                    Correlation Constraint
+                  </Label>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80 p-0 overflow-hidden">
+                      <div className="space-y-3">
+                        <div className="bg-primary/5 border-b px-4 py-3">
+                          <h4 className="text-sm font-semibold text-primary">Correlation Constraint</h4>
+                        </div>
+                        <div className="px-4 pb-4 space-y-3">
+                          <p className="text-sm font-medium text-foreground leading-relaxed">
+                            Reject parameter combinations with highly correlated strategies.
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            If any pair of strategies exceeds the max correlation threshold,
+                            that parameter combination is rejected. This helps ensure portfolio
+                            diversification.
+                          </p>
+                        </div>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
+                </div>
+              </div>
+              {diversificationConfig.enableCorrelationConstraint && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Max Correlation: {diversificationConfig.maxCorrelationThreshold}</Label>
+                    <Slider
+                      min={0.3}
+                      max={0.95}
+                      step={0.05}
+                      value={[diversificationConfig.maxCorrelationThreshold]}
+                      onValueChange={([value]) =>
+                        updateDiversificationConfig({ maxCorrelationThreshold: value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Method</Label>
+                    <Select
+                      value={diversificationConfig.correlationMethod}
+                      onValueChange={(value: CorrelationMethodOption) =>
+                        updateDiversificationConfig({ correlationMethod: value })
+                      }
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pearson">Pearson</SelectItem>
+                        <SelectItem value="spearman">Spearman</SelectItem>
+                        <SelectItem value="kendall">Kendall</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tail Risk Constraint */}
+            <div
+              className={cn(
+                "space-y-3 rounded-lg border p-3",
+                diversificationConfig.enableTailRiskConstraint
+                  ? "border-border/40"
+                  : "border-border/20 opacity-70"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="tail-constraint"
+                    checked={diversificationConfig.enableTailRiskConstraint}
+                    onCheckedChange={(checked) =>
+                      updateDiversificationConfig({ enableTailRiskConstraint: Boolean(checked) })
+                    }
+                  />
+                  <Label htmlFor="tail-constraint" className="text-sm font-medium cursor-pointer">
+                    Tail Risk Constraint
+                  </Label>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80 p-0 overflow-hidden">
+                      <div className="space-y-3">
+                        <div className="bg-primary/5 border-b px-4 py-3">
+                          <h4 className="text-sm font-semibold text-primary">Tail Risk Constraint</h4>
+                        </div>
+                        <div className="px-4 pb-4 space-y-3">
+                          <p className="text-sm font-medium text-foreground leading-relaxed">
+                            Reject combinations with high joint tail risk.
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Measures how likely strategies are to experience extreme losses together.
+                            High tail dependence means strategies may all fail simultaneously during
+                            market stress.
+                          </p>
+                        </div>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
+                </div>
+              </div>
+              {diversificationConfig.enableTailRiskConstraint && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs">
+                      Max Tail Dependence: {diversificationConfig.maxTailDependenceThreshold}
+                    </Label>
+                    <Slider
+                      min={0.2}
+                      max={0.9}
+                      step={0.05}
+                      value={[diversificationConfig.maxTailDependenceThreshold]}
+                      onValueChange={([value]) =>
+                        updateDiversificationConfig({ maxTailDependenceThreshold: value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">
+                      Tail Threshold: {(diversificationConfig.tailThreshold * 100).toFixed(0)}%
+                    </Label>
+                    <Slider
+                      min={0.05}
+                      max={0.25}
+                      step={0.01}
+                      value={[diversificationConfig.tailThreshold]}
+                      onValueChange={([value]) =>
+                        updateDiversificationConfig({ tailThreshold: value })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Shared Options */}
+            {(diversificationConfig.enableCorrelationConstraint ||
+              diversificationConfig.enableTailRiskConstraint) && (
+              <div className="grid gap-4 md:grid-cols-2 pt-2 border-t border-border/40">
+                <div className="space-y-2">
+                  <Label className="text-xs">Return Normalization</Label>
+                  <Select
+                    value={diversificationConfig.normalization}
+                    onValueChange={(value: "raw" | "margin" | "notional") =>
+                      updateDiversificationConfig({ normalization: value })
+                    }
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="raw">Raw P&L</SelectItem>
+                      <SelectItem value="margin">Return on Margin</SelectItem>
+                      <SelectItem value="notional">Return on Notional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Date Basis</Label>
+                  <Select
+                    value={diversificationConfig.dateBasis}
+                    onValueChange={(value: "opened" | "closed") =>
+                      updateDiversificationConfig({ dateBasis: value })
+                    }
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="opened">Trade Open Date</SelectItem>
+                      <SelectItem value="closed">Trade Close Date</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Strategy Weight Sweeps - only show when multiple strategies are in the analysis */}
+        {strategiesForWeightSweep.length > 1 && (
+          <Collapsible open={strategyWeightsOpen} onOpenChange={setStrategyWeightsOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-lg border border-border/40 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">Strategy Weight Sweeps</p>
+                  <Badge variant="outline" className="text-xs">
+                    {filteredWeightConfigs.some((c) => c.enabled)
+                      ? `${filteredWeightConfigs.filter((c) => c.enabled).length} active`
+                      : "Inactive"}
+                  </Badge>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform",
+                    strategyWeightsOpen && "rotate-180"
+                  )}
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3 space-y-4">
+              {/* Mode Selection (only shown for >3 strategies in the filter) */}
+              {strategiesForWeightSweep.length > 3 && (
+                <div className="space-y-2 p-3 rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium">Sweep Mode</Label>
+                    <HoverCard>
+                      <HoverCardTrigger asChild>
+                        <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      </HoverCardTrigger>
+                      <HoverCardContent className="w-80 p-0 overflow-hidden">
+                        <div className="space-y-3">
+                          <div className="bg-primary/5 border-b px-4 py-3">
+                            <h4 className="text-sm font-semibold text-primary">Sweep Mode</h4>
+                          </div>
+                          <div className="px-4 pb-4 space-y-3">
+                            <p className="text-sm font-medium text-foreground leading-relaxed">
+                              With {strategiesForWeightSweep.length} strategies, full range sweeps
+                              would create too many combinations.
+                            </p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              <strong>Binary:</strong> Include (1.0) or exclude (0.0) each strategy.
+                              <br />
+                              <strong>Top N:</strong> Only sweep weight ranges for top N strategies,
+                              others fixed at 1.0.
+                            </p>
+                          </div>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  </div>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="sweep-mode"
+                        checked={strategyWeightSweep.mode === "binary"}
+                        onChange={() => setStrategyWeightMode("binary")}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm">Binary (Include/Exclude)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="sweep-mode"
+                        checked={strategyWeightSweep.mode === "topN"}
+                        onChange={() => setStrategyWeightMode("topN")}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm">Top N Auto-Select</span>
+                    </label>
+                  </div>
+                  {strategyWeightSweep.mode === "topN" && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Label className="text-xs">Top strategies to sweep:</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={Math.min(5, strategiesForWeightSweep.length)}
+                        value={strategyWeightSweep.topNCount}
+                        onChange={(e) => setTopNCount(Number(e.target.value))}
+                        className="h-7 w-16"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Strategy Selection via MultiSelect */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Strategies to Sweep</Label>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80 p-0 overflow-hidden">
+                      <div className="space-y-3">
+                        <div className="bg-primary/5 border-b px-4 py-3">
+                          <h4 className="text-sm font-semibold text-primary">Strategy Weight Sweeps</h4>
+                        </div>
+                        <div className="px-4 pb-4 space-y-3">
+                          <p className="text-sm font-medium text-foreground leading-relaxed">
+                            Optimize allocation weights for selected strategies.
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Select which strategies should have their weights swept during
+                            optimization. Weights range from 0 (exclude) to 2 (double weight).
+                            Strategies not selected will use weight 1.0.
+                          </p>
+                        </div>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
+                </div>
+                <MultiSelect
+                  options={strategiesForWeightSweep.map((s) => ({ label: s, value: s }))}
+                  defaultValue={filteredWeightConfigs.filter((c) => c.enabled).map((c) => c.strategy)}
+                  onValueChange={(selected) => {
+                    // Update enabled state for all strategies
+                    filteredWeightConfigs.forEach((config) => {
+                      const shouldEnable = selected.includes(config.strategy)
+                      if (config.enabled !== shouldEnable) {
+                        toggleStrategyWeight(config.strategy, shouldEnable)
+                      }
+                    })
+                  }}
+                  placeholder="Select strategies to sweep weights..."
+                  maxCount={3}
+                  searchable={strategiesForWeightSweep.length > 5}
+                />
+              </div>
+
+              {/* Weight Range Controls - only show when strategies are enabled */}
+              {filteredWeightConfigs.some((c) => c.enabled) && (
+                <div className="space-y-3">
+                  <Label className="text-xs text-muted-foreground">Weight Ranges</Label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {filteredWeightConfigs
+                      .filter((config) => config.enabled)
+                      .map((config) => (
+                        <div
+                          key={config.strategy}
+                          className="rounded-lg border border-border/40 p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{config.strategy}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {config.range[0]} – {config.range[1]}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Min</Label>
+                              <Input
+                                type="number"
+                                step={0.25}
+                                min={0}
+                                max={2}
+                                value={config.range[0]}
+                                onChange={(e) =>
+                                  setStrategyWeightConfig(config.strategy, {
+                                    range: [Number(e.target.value), config.range[1], config.range[2]],
+                                  })
+                                }
+                                className="h-7"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Max</Label>
+                              <Input
+                                type="number"
+                                step={0.25}
+                                min={0}
+                                max={2}
+                                value={config.range[1]}
+                                onChange={(e) =>
+                                  setStrategyWeightConfig(config.strategy, {
+                                    range: [config.range[0], Number(e.target.value), config.range[2]],
+                                  })
+                                }
+                                className="h-7"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Step</Label>
+                              <Input
+                                type="number"
+                                step={0.05}
+                                min={0.05}
+                                max={0.5}
+                                value={config.range[2]}
+                                onChange={(e) =>
+                                  setStrategyWeightConfig(config.strategy, {
+                                    range: [config.range[0], config.range[1], Number(e.target.value)],
+                                  })
+                                }
+                                className="h-7"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {strategiesForWeightSweep.length <= 3 && (
+                <p className="text-xs text-muted-foreground">
+                  With ≤3 strategies, full range sweeps are available for all selected strategies.
+                </p>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
         <div className="space-y-3 rounded-lg border border-dashed border-primary/40 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
