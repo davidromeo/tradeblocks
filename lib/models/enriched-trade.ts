@@ -56,6 +56,11 @@ export interface EnrichedTrade extends Trade {
   // Custom fields from daily log, joined by trade date
   // Prefixed with "daily." in field references for Report Builder
   dailyCustomFields?: Record<string, number | string>
+
+  // Static dataset fields, matched by timestamp
+  // Keyed by dataset name, containing matched column values
+  // Field references use format "datasetName.column"
+  staticDatasetFields?: Record<string, Record<string, number | string>>
 }
 
 /**
@@ -82,6 +87,13 @@ export function getEnrichedTradeValue(trade: EnrichedTrade, field: string): numb
   else if (field.startsWith('daily.')) {
     const dailyFieldName = field.slice(6) // Remove 'daily.' prefix
     value = trade.dailyCustomFields?.[dailyFieldName]
+  }
+  // Handle static dataset fields (datasetName.column) - contains a dot but not custom. or daily.
+  else if (field.includes('.')) {
+    const dotIndex = field.indexOf('.')
+    const datasetName = field.substring(0, dotIndex)
+    const columnName = field.substring(dotIndex + 1)
+    value = trade.staticDatasetFields?.[datasetName]?.[columnName]
   }
   // Handle standard fields
   else {
