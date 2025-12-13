@@ -1,4 +1,4 @@
-import { enrichTrades, StaticDatasetWithRows } from '@/lib/calculations/enrich-trades'
+import { enrichTrades } from '@/lib/calculations/enrich-trades'
 import { DailyLogEntry } from '@/lib/models/daily-log'
 import { EnrichedTrade } from '@/lib/models/enriched-trade'
 import { PortfolioStats } from '@/lib/models/portfolio-stats'
@@ -174,23 +174,12 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
         getDailyLogsByBlock,
         getBlock,
         getPerformanceSnapshotCache,
-        getEnrichedTradesCache,
-        getAllStaticDatasets,
-        getStaticDatasetRows
+        getEnrichedTradesCache
       } = await import('@/lib/db')
 
       // Fetch block to get analysis config
   const block = await getBlock(blockId)
   const combineLegGroups = block?.analysisConfig?.combineLegGroups ?? false
-
-  // Load all static datasets with their rows for enrichment
-  const staticDatasets = await getAllStaticDatasets()
-  const staticDatasetsWithRows: StaticDatasetWithRows[] = await Promise.all(
-    staticDatasets.map(async (dataset) => ({
-      dataset,
-      rows: await getStaticDatasetRows(dataset.id)
-    }))
-  )
 
   const state = get()
   const riskFreeRate = 2.0
@@ -214,13 +203,11 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
           const chartDataWithRom = ensureRomDetails(cachedSnapshot.chartData, cachedSnapshot.filteredTrades)
 
           // Try to get cached enriched trades, fall back to computing them
-          // Note: Static datasets aren't cached - always compute fresh to pick up new datasets
           let enrichedTradesData = await getEnrichedTradesCache(blockId)
-          if (!enrichedTradesData || staticDatasetsWithRows.length > 0) {
-            // Cache miss or static datasets present - compute enriched trades
+          if (!enrichedTradesData) {
+            // Cache miss - compute enriched trades (will be cached on next upload)
             enrichedTradesData = enrichTrades(cachedSnapshot.filteredTrades, {
-              dailyLogs: cachedSnapshot.filteredDailyLogs,
-              staticDatasets: staticDatasetsWithRows
+              dailyLogs: cachedSnapshot.filteredDailyLogs
             })
           }
 
@@ -266,8 +253,7 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
 
       // Compute enriched trades for filtered result (smaller set = faster)
       const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
-        dailyLogs: snapshot.filteredDailyLogs,
-        staticDatasets: staticDatasetsWithRows
+        dailyLogs: snapshot.filteredDailyLogs
       })
 
       set({
@@ -309,20 +295,9 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
 
     const filteredRawTrades = filterTradesForSnapshot(data.allRawTrades, filters)
 
-    // Load static datasets for enrichment
-    const { getAllStaticDatasets, getStaticDatasetRows } = await import('@/lib/db')
-    const staticDatasets = await getAllStaticDatasets()
-    const staticDatasetsWithRows: StaticDatasetWithRows[] = await Promise.all(
-      staticDatasets.map(async (dataset) => ({
-        dataset,
-        rows: await getStaticDatasetRows(dataset.id)
-      }))
-    )
-
     // Compute enriched trades for the filtered result
     const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
-      dailyLogs: snapshot.filteredDailyLogs,
-      staticDatasets: staticDatasetsWithRows
+      dailyLogs: snapshot.filteredDailyLogs
     })
 
     set(state => ({

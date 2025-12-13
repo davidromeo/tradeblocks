@@ -30,7 +30,6 @@ import {
   CHART_TYPE_LABELS,
   ChartAxisConfig,
   ChartType,
-  StaticDatasetFieldInfo,
   TABLE_COLUMN_OPTIONS,
   THRESHOLD_METRIC_LABELS,
   ThresholdMetric,
@@ -136,7 +135,6 @@ interface ResultsPanelProps {
   thresholdMetric: ThresholdMetric;
   reportName?: string; // Name of loaded/saved report
   showWhatIf: boolean;
-  staticDatasets?: StaticDatasetFieldInfo[];
   onShowWhatIfChange: (show: boolean) => void;
   onChartTypeChange: (type: ChartType) => void;
   onXAxisChange: (field: string) => void;
@@ -166,7 +164,6 @@ export const ResultsPanel = memo(function ResultsPanel({
   thresholdMetric,
   reportName,
   showWhatIf,
-  staticDatasets,
   onShowWhatIfChange,
   onChartTypeChange,
   onXAxisChange,
@@ -232,7 +229,6 @@ export const ResultsPanel = memo(function ResultsPanel({
                 value={xAxis.field}
                 onChange={onXAxisChange}
                 trades={trades}
-                staticDatasets={staticDatasets}
               />
 
               {/* Y axes on the same row for better balance */}
@@ -241,7 +237,6 @@ export const ResultsPanel = memo(function ResultsPanel({
                 value={yAxis.field}
                 onChange={onYAxisChange}
                 trades={trades}
-                staticDatasets={staticDatasets}
               />
               <ChartAxisSelector
                 label="Y Axis 2 (Right)"
@@ -249,7 +244,6 @@ export const ResultsPanel = memo(function ResultsPanel({
                 onChange={onYAxis2Change}
                 allowNone
                 trades={trades}
-                staticDatasets={staticDatasets}
               />
               <ChartAxisSelector
                 label="Y Axis 3 (Far Right)"
@@ -257,7 +251,6 @@ export const ResultsPanel = memo(function ResultsPanel({
                 onChange={onYAxis3Change}
                 allowNone
                 trades={trades}
-                staticDatasets={staticDatasets}
               />
             </div>
           ) : (
@@ -297,7 +290,6 @@ export const ResultsPanel = memo(function ResultsPanel({
                 value={xAxis.field}
                 onChange={onXAxisChange}
                 trades={trades}
-                staticDatasets={staticDatasets}
               />
 
               {/* Y Axis (for bar, box) */}
