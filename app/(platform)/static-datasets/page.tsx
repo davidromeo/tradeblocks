@@ -23,6 +23,7 @@ export default function StaticDatasetsPage() {
   const datasets = useStaticDatasetsStore((state) => state.datasets)
   const isInitialized = useStaticDatasetsStore((state) => state.isInitialized)
   const loadDatasets = useStaticDatasetsStore((state) => state.loadDatasets)
+  const invalidateMatchStatsForBlock = useStaticDatasetsStore((state) => state.invalidateMatchStatsForBlock)
 
   const activeBlockId = useBlockStore((state) => state.activeBlockId)
   const blocks = useBlockStore((state) => state.blocks)
@@ -36,11 +37,16 @@ export default function StaticDatasetsPage() {
   }, [isInitialized, loadDatasets])
 
   // Load active block trades for match stats
+  // Re-fetch when trade count changes (after import/recalculation)
+  const activeBlockTradeCount = activeBlock?.tradeLog.rowCount
   useEffect(() => {
     if (!activeBlockId) {
       setActiveBlockTrades([])
       return
     }
+
+    // Invalidate cached match stats for this block since trades may have changed
+    invalidateMatchStatsForBlock(activeBlockId)
 
     const loadTrades = async () => {
       try {
@@ -53,7 +59,7 @@ export default function StaticDatasetsPage() {
     }
 
     loadTrades()
-  }, [activeBlockId])
+  }, [activeBlockId, activeBlockTradeCount, invalidateMatchStatsForBlock])
 
   // Filter datasets based on search query
   const filteredDatasets = searchQuery.trim()

@@ -538,8 +538,53 @@ describe('calculateMatchStats', () => {
 
     expect(stats.totalTrades).toBe(3)
     expect(stats.matchedTrades).toBe(2) // 10:00 and 11:00 match
-    expect(stats.outsideDateRange).toBe(1) // 12:00 is outside
+    // 12:00 is within the same calendar day (date range extended to end-of-day)
+    // but won't find a match with 'exact' strategy
+    expect(stats.outsideDateRange).toBe(0)
     expect(stats.matchPercentage).toBeCloseTo(66.7, 0)
+  })
+
+  it('marks trades before dataset start as outside range', () => {
+    const trades = [
+      createTrade('2024-01-14', '23:00:00'), // Day before
+      createTrade('2024-01-15', '10:00:00'),
+    ]
+    const dataset = createDataset('exact', {
+      start: createTimestamp('2024-01-15', '10:00:00'),
+      end: createTimestamp('2024-01-15', '11:00:00'),
+    })
+    const rows = createRows(
+      [createTimestamp('2024-01-15', '10:00:00')],
+      [{ close: 14.5 }]
+    )
+
+    const stats = calculateMatchStats(trades, dataset, rows)
+
+    expect(stats.totalTrades).toBe(2)
+    expect(stats.matchedTrades).toBe(1)
+    expect(stats.outsideDateRange).toBe(1) // 23:00 on Jan 14 is before start
+  })
+
+  it('includes trades on final day of dataset even after last timestamp', () => {
+    // This tests the fix for daily datasets where trades during the day
+    // should still be considered "in range" even if the dataset timestamp is midnight
+    const trades = [
+      createTrade('2024-01-15', '14:30:00'), // Afternoon trade on last day
+    ]
+    const dataset = createDataset('same-day', {
+      start: createTimestamp('2024-01-15', '00:00:00'), // Midnight timestamp
+      end: createTimestamp('2024-01-15', '00:00:00'),   // Same midnight
+    })
+    const rows = createRows(
+      [createTimestamp('2024-01-15', '00:00:00')],
+      [{ close: 14.5 }]
+    )
+
+    const stats = calculateMatchStats(trades, dataset, rows)
+
+    expect(stats.totalTrades).toBe(1)
+    expect(stats.matchedTrades).toBe(1) // Should match with same-day strategy
+    expect(stats.outsideDateRange).toBe(0) // Should NOT be outside range
   })
 
   it('handles empty trades', () => {
