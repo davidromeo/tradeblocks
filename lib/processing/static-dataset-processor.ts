@@ -33,8 +33,46 @@ export interface ProcessStaticDatasetOptions {
 }
 
 /**
+ * Get the Eastern Time offset in minutes for a given date
+ * Returns the offset from UTC in minutes (e.g., -300 for EST, -240 for EDT)
+ */
+function getEasternTimeOffset(date: Date): number {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'shortOffset',
+  })
+  const parts = formatter.formatToParts(date)
+  const tzPart = parts.find((p) => p.type === 'timeZoneName')
+
+  if (tzPart) {
+    const match = tzPart.value.match(/GMT([+-]\d+)/)
+    if (match) {
+      return parseInt(match[1], 10) * 60
+    }
+  }
+  return -300 // Fallback to EST
+}
+
+/**
+ * Convert a date/time in Eastern Time to UTC
+ * Used for date-only formats where we want midnight Eastern Time, not UTC
+ */
+function easternToUtc(year: number, month: number, day: number, hours = 0, minutes = 0, seconds = 0): Date {
+  // Create a UTC timestamp with the given components
+  const utcDate = Date.UTC(year, month, day, hours, minutes, seconds, 0)
+  const testDate = new Date(utcDate)
+  const etOffset = getEasternTimeOffset(testDate)
+
+  // Convert Eastern Time to UTC by subtracting the offset
+  return new Date(utcDate - etOffset * 60 * 1000)
+}
+
+/**
  * Parse a timestamp string into a Date object
- * Supports common formats: ISO 8601, US date formats, etc.
+ * Supports common formats: ISO 8601, US date formats, Unix timestamps (seconds)
+ *
+ * IMPORTANT: Date-only formats (without time) are interpreted as midnight Eastern Time,
+ * not UTC, since static datasets typically contain market data in US market time.
  */
 function parseTimestamp(value: string): Date | null {
   if (!value || value.trim() === '') {
@@ -43,44 +81,82 @@ function parseTimestamp(value: string): Date | null {
 
   const trimmed = value.trim()
 
-  // Try ISO 8601 format first (most reliable)
-  const isoDate = new Date(trimmed)
-  if (!isNaN(isoDate.getTime())) {
-    return isoDate
-  }
-
-  // Try common date formats
-  // MM/DD/YYYY or MM-DD-YYYY
-  const usDateMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/)
-  if (usDateMatch) {
-    const [, month, day, year, hours, minutes, seconds] = usDateMatch
-    const date = new Date(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day),
-      hours ? parseInt(hours) : 0,
-      minutes ? parseInt(minutes) : 0,
-      seconds ? parseInt(seconds) : 0
-    )
+  // Check for Unix timestamp (all digits, typically 10+ digits for seconds since epoch)
+  // Unix timestamps in seconds are ~10 digits (e.g., 1755541800 = Aug 2025)
+  // Unix timestamps in milliseconds are ~13 digits
+  if (/^\d{9,13}$/.test(trimmed)) {
+    const num = parseInt(trimmed, 10)
+    // If it's 13 digits, treat as milliseconds; otherwise treat as seconds
+    const timestamp = trimmed.length >= 13 ? num : num * 1000
+    const date = new Date(timestamp)
     if (!isNaN(date.getTime())) {
       return date
     }
   }
 
-  // Try YYYY/MM/DD or YYYY-MM-DD
+  // Check for date-only YYYY-MM-DD format (no time component)
+  // These should be interpreted as midnight Eastern Time, not UTC
+  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch
+    return easternToUtc(parseInt(year), parseInt(month) - 1, parseInt(day))
+  }
+
+  // Try ISO 8601 format with time (includes timezone info)
+  // Only use native parsing if there's a time component (T or space followed by time)
+  if (/T\d|^\d{4}-\d{2}-\d{2}\s+\d/.test(trimmed)) {
+    const isoDate = new Date(trimmed)
+    if (!isNaN(isoDate.getTime())) {
+      return isoDate
+    }
+  }
+
+  // Try common date formats
+  // MM/DD/YYYY or MM-DD-YYYY (with optional time)
+  const usDateMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/)
+  if (usDateMatch) {
+    const [, month, day, year, hours, minutes, seconds] = usDateMatch
+    const hasTime = hours !== undefined
+    if (hasTime) {
+      // Has time component - use local time (same as before)
+      const date = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours),
+        parseInt(minutes),
+        seconds ? parseInt(seconds) : 0
+      )
+      if (!isNaN(date.getTime())) {
+        return date
+      }
+    } else {
+      // Date only - use Eastern Time midnight
+      return easternToUtc(parseInt(year), parseInt(month) - 1, parseInt(day))
+    }
+  }
+
+  // Try YYYY/MM/DD or YYYY-MM-DD (with optional time)
   const isoDateMatch = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/)
   if (isoDateMatch) {
     const [, year, month, day, hours, minutes, seconds] = isoDateMatch
-    const date = new Date(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day),
-      hours ? parseInt(hours) : 0,
-      minutes ? parseInt(minutes) : 0,
-      seconds ? parseInt(seconds) : 0
-    )
-    if (!isNaN(date.getTime())) {
-      return date
+    const hasTime = hours !== undefined
+    if (hasTime) {
+      // Has time component - use local time (same as before)
+      const date = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours),
+        parseInt(minutes),
+        seconds ? parseInt(seconds) : 0
+      )
+      if (!isNaN(date.getTime())) {
+        return date
+      }
+    } else {
+      // Date only - use Eastern Time midnight
+      return easternToUtc(parseInt(year), parseInt(month) - 1, parseInt(day))
     }
   }
 
@@ -234,6 +310,28 @@ export async function processStaticDatasetFile(
   // Sort rows by timestamp
   rows.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
 
+  // Filter out empty columns (columns where all values are empty strings)
+  const nonEmptyColumns = dataColumns.filter((column) => {
+    return rows.some((row) => {
+      const value = row.values[column]
+      return value !== '' && value !== undefined && value !== null
+    })
+  })
+
+  // Remove empty columns from row values
+  if (nonEmptyColumns.length < dataColumns.length) {
+    const emptyColumnCount = dataColumns.length - nonEmptyColumns.length
+    warnings.push(`Skipped ${emptyColumnCount} empty column${emptyColumnCount > 1 ? 's' : ''}`)
+
+    for (const row of rows) {
+      const filteredValues: Record<string, number | string> = {}
+      for (const column of nonEmptyColumns) {
+        filteredValues[column] = row.values[column]
+      }
+      row.values = filteredValues
+    }
+  }
+
   // Create dataset metadata
   const dataset: StaticDataset = {
     id: generateDatasetId(),
@@ -245,7 +343,7 @@ export async function processStaticDatasetFile(
       start: minTimestamp!,
       end: maxTimestamp!,
     },
-    columns: dataColumns,
+    columns: nonEmptyColumns,
     matchStrategy: options.matchStrategy ?? 'nearest-before',
   }
 
@@ -384,6 +482,28 @@ export async function processStaticDatasetContent(
   // Sort rows by timestamp
   rows.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
 
+  // Filter out empty columns (columns where all values are empty strings)
+  const nonEmptyColumns = dataColumns.filter((column) => {
+    return rows.some((row) => {
+      const value = row.values[column]
+      return value !== '' && value !== undefined && value !== null
+    })
+  })
+
+  // Remove empty columns from row values
+  if (nonEmptyColumns.length < dataColumns.length) {
+    const emptyColumnCount = dataColumns.length - nonEmptyColumns.length
+    warnings.push(`Skipped ${emptyColumnCount} empty column${emptyColumnCount > 1 ? 's' : ''}`)
+
+    for (const row of rows) {
+      const filteredValues: Record<string, number | string> = {}
+      for (const column of nonEmptyColumns) {
+        filteredValues[column] = row.values[column]
+      }
+      row.values = filteredValues
+    }
+  }
+
   // Create dataset metadata
   const dataset: StaticDataset = {
     id: generateDatasetId(),
@@ -395,7 +515,7 @@ export async function processStaticDatasetContent(
       start: minTimestamp!,
       end: maxTimestamp!,
     },
-    columns: dataColumns,
+    columns: nonEmptyColumns,
     matchStrategy: options.matchStrategy ?? 'nearest-before',
   }
 
@@ -423,10 +543,11 @@ export function validateDatasetName(name: string): { valid: boolean; error?: str
   }
 
   // Check for valid characters (alphanumeric, spaces, underscore, hyphen)
-  if (!/^[a-zA-Z][a-zA-Z0-9_ -]*$/.test(trimmed)) {
+  // Names can start with a letter or number
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_ -]*$/.test(trimmed)) {
     return {
       valid: false,
-      error: 'Name must start with a letter and contain only letters, numbers, spaces, underscores, and hyphens',
+      error: 'Name must start with a letter or number and contain only letters, numbers, spaces, underscores, and hyphens',
     }
   }
 
@@ -453,8 +574,8 @@ export function suggestDatasetName(fileName: string): string {
     .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
     .replace(/_+/g, '_') // Collapse multiple underscores
 
-  // Ensure it starts with a letter
-  if (!/^[a-z]/.test(suggested)) {
+  // Ensure it starts with a letter or number
+  if (!/^[a-z0-9]/.test(suggested)) {
     return 'data_' + suggested
   }
 
