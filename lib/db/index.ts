@@ -200,18 +200,50 @@ export function closeDatabase(): void {
 
 /**
  * Delete the entire database (for testing/reset)
+ * This version is more robust for corrupted databases:
+ * - Doesn't require opening the database first
+ * - Has timeout to prevent hanging forever
+ * - Resolves on blocked (since deletion completes after reload)
  */
 export async function deleteDatabase(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    closeDatabase();
+  return new Promise((resolve) => {
+    // Close any existing connection (don't wait for it)
+    if (dbInstance) {
+      try {
+        dbInstance.close();
+      } catch {
+        // Ignore close errors - database might be in bad state
+      }
+      dbInstance = null;
+    }
 
     const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
 
-    deleteRequest.onsuccess = () => resolve();
-    deleteRequest.onerror = () =>
-      reject(new Error("Failed to delete database"));
-    deleteRequest.onblocked = () =>
-      reject(new Error("Database deletion blocked"));
+    // Timeout to prevent hanging forever on corrupted database
+    const timeout = setTimeout(() => {
+      console.warn("Database deletion timed out - will retry after reload");
+      resolve(); // Resolve anyway so we can reload
+    }, 5000);
+
+    deleteRequest.onsuccess = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+
+    deleteRequest.onerror = () => {
+      clearTimeout(timeout);
+      console.error("Failed to delete database:", deleteRequest.error);
+      // Still resolve - user can retry after page reload
+      resolve();
+    };
+
+    deleteRequest.onblocked = () => {
+      clearTimeout(timeout);
+      console.warn("Database deletion blocked - will complete after reload");
+      // Resolve instead of reject - the deletion will complete once all connections close
+      // After page reload, there will be no connections blocking it
+      resolve();
+    };
   });
 }
 
