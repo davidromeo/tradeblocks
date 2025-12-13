@@ -13,7 +13,7 @@
 
 // Database configuration
 export const DB_NAME = "TradeBlocksDB";
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 // Object store names
 export const STORES = {
@@ -23,6 +23,8 @@ export const STORES = {
   CALCULATIONS: "calculations",
   REPORTING_LOGS: "reportingLogs",
   WALK_FORWARD: "walkForwardAnalyses",
+  STATIC_DATASETS: "staticDatasets",
+  STATIC_DATASET_ROWS: "staticDatasetRows",
 } as const;
 
 // Index names
@@ -36,6 +38,8 @@ export const INDEXES = {
   REPORTING_LOGS_BY_BLOCK: "blockId",
   REPORTING_LOGS_BY_STRATEGY: "strategy",
   WALK_FORWARD_BY_BLOCK: "blockId",
+  STATIC_DATASET_ROWS_BY_DATASET: "datasetId",
+  STATIC_DATASET_ROWS_BY_TIMESTAMP: "timestamp",
 } as const;
 
 /**
@@ -168,6 +172,37 @@ export async function initializeDatabase(): Promise<IDBDatabase> {
           unique: false,
         });
         walkForwardStore.createIndex("createdAt", "createdAt", { unique: false });
+      }
+
+      // Create static datasets store (metadata)
+      if (!db.objectStoreNames.contains(STORES.STATIC_DATASETS)) {
+        const staticDatasetsStore = db.createObjectStore(STORES.STATIC_DATASETS, {
+          keyPath: "id",
+        });
+        staticDatasetsStore.createIndex("name", "name", { unique: true });
+        staticDatasetsStore.createIndex("uploadedAt", "uploadedAt", { unique: false });
+      }
+
+      // Create static dataset rows store (data rows)
+      if (!db.objectStoreNames.contains(STORES.STATIC_DATASET_ROWS)) {
+        const staticDatasetRowsStore = db.createObjectStore(STORES.STATIC_DATASET_ROWS, {
+          autoIncrement: true,
+        });
+        staticDatasetRowsStore.createIndex(
+          INDEXES.STATIC_DATASET_ROWS_BY_DATASET,
+          "datasetId",
+          { unique: false }
+        );
+        staticDatasetRowsStore.createIndex(
+          INDEXES.STATIC_DATASET_ROWS_BY_TIMESTAMP,
+          "timestamp",
+          { unique: false }
+        );
+        staticDatasetRowsStore.createIndex(
+          "composite_dataset_timestamp",
+          ["datasetId", "timestamp"],
+          { unique: false }
+        );
       }
 
       transaction.oncomplete = () => {
@@ -392,3 +427,23 @@ export {
   deleteEnrichedTradesCache,
   hasEnrichedTradesCache,
 } from "./enriched-trades-cache";
+export {
+  createStaticDataset,
+  getStaticDataset,
+  getStaticDatasetByName,
+  getAllStaticDatasets,
+  updateStaticDatasetMatchStrategy,
+  updateStaticDatasetName,
+  deleteStaticDataset,
+  isDatasetNameTaken,
+  getStaticDatasetCount,
+} from "./static-datasets-store";
+export {
+  addStaticDatasetRows,
+  getStaticDatasetRows,
+  getStaticDatasetRowsByRange,
+  getStaticDatasetRowCount,
+  deleteStaticDatasetRows,
+  deleteStaticDatasetWithRows,
+  getStaticDatasetDateRange,
+} from "./static-dataset-rows-store";

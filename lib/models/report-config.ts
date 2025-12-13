@@ -305,6 +305,20 @@ export function getFieldInfo(field: string): FieldInfo | undefined {
     }
   }
 
+  // Check if it's a static dataset field (datasetName.columnName)
+  // Static dataset fields contain a dot but don't start with 'custom.' or 'daily.'
+  if (field.includes('.')) {
+    const dotIndex = field.indexOf('.')
+    const datasetName = field.substring(0, dotIndex)
+    const columnName = field.substring(dotIndex + 1)
+    return {
+      field: field as ReportField,
+      label: `${datasetName}.${columnName}`,
+      category: 'market',
+      description: `Static dataset field: ${columnName} from ${datasetName}`,
+    }
+  }
+
   return undefined
 }
 
@@ -330,6 +344,7 @@ export function getFieldsByCategory(): Map<FieldCategory, FieldInfo[]> {
 
 /**
  * Custom field category for organizing custom fields in UI
+ * Note: Static datasets use their dataset name as the category dynamically
  */
 export type CustomFieldCategory = 'custom' | 'dailyCustom'
 
@@ -440,6 +455,48 @@ export function getAllCategoryLabels(): Record<FieldCategory | CustomFieldCatego
     ...FIELD_CATEGORY_LABELS,
     ...CUSTOM_FIELD_CATEGORY_LABELS,
   }
+}
+
+/**
+ * Static dataset info for field discovery
+ */
+export interface StaticDatasetFieldInfo {
+  datasetName: string
+  columns: string[]
+}
+
+/**
+ * Get fields grouped by category, including custom fields AND static dataset fields
+ * This is the full dynamic version for Report Builder
+ * Static datasets each get their own category named after the dataset
+ */
+export function getFieldsByCategoryWithAll(
+  trades: Array<{
+    customFields?: Record<string, number | string>
+    dailyCustomFields?: Record<string, number | string>
+  }>,
+  staticDatasets?: StaticDatasetFieldInfo[]
+): Map<string, FieldInfo[]> {
+  // Start with the version that includes custom fields
+  const grouped: Map<string, FieldInfo[]> = getFieldsByCategoryWithCustom(trades)
+
+  // Add static dataset fields - each dataset becomes its own category
+  if (staticDatasets && staticDatasets.length > 0) {
+    for (const dataset of staticDatasets) {
+      const datasetFields: FieldInfo[] = dataset.columns.map((column) => ({
+        field: `${dataset.datasetName}.${column}` as ReportField,
+        label: column,
+        category: 'market' as FieldCategory,
+        description: `${column} from static dataset "${dataset.datasetName}"`,
+      }))
+
+      if (datasetFields.length > 0) {
+        grouped.set(dataset.datasetName, datasetFields)
+      }
+    }
+  }
+
+  return grouped
 }
 
 /**
