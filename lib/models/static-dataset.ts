@@ -29,7 +29,7 @@ export const MATCH_STRATEGY_DESCRIPTIONS: Record<MatchStrategy, string> = {
   'same-day': 'Match to the row on the same calendar day (for daily data)',
   'nearest-before': 'Match to the most recent row at or before the trade time',
   'nearest-after': 'Match to the earliest row at or after the trade time',
-  nearest: 'Match to the closest row by absolute time difference',
+  nearest: 'Match to the closest row on the same day',
 }
 
 /**

@@ -8,11 +8,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle2, AlertTriangle, Info } from "lucide-react"
-import type { StaticDataset, StaticDatasetRow, DatasetMatchResult } from "@/lib/models/static-dataset"
-import { MATCH_STRATEGY_LABELS } from "@/lib/models/static-dataset"
+import { Button } from "@/components/ui/button"
+import { Loader2, CheckCircle2, AlertTriangle, Filter } from "lucide-react"
+import type { StaticDataset, StaticDatasetRow, DatasetMatchResult, MatchStrategy } from "@/lib/models/static-dataset"
+import { MATCH_STRATEGY_LABELS, MATCH_STRATEGY_DESCRIPTIONS } from "@/lib/models/static-dataset"
 import type { Trade } from "@/lib/models/trade"
 import {
   matchTradesToDataset,
@@ -42,12 +50,18 @@ interface PreviewData {
   }
 }
 
+type FilterMode = "all" | "matched" | "unmatched"
+
 export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [previewData, setPreviewData] = useState<PreviewData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedColumn, setSelectedColumn] = useState<string>("")
+  const [filterMode, setFilterMode] = useState<FilterMode>("all")
+  const [matchStrategy, setMatchStrategy] = useState<MatchStrategy>("nearest-before")
 
   const getDatasetRows = useStaticDatasetsStore((state) => state.getDatasetRows)
+  const updateMatchStrategy = useStaticDatasetsStore((state) => state.updateMatchStrategy)
   const activeBlockId = useBlockStore((state) => state.activeBlockId)
   const blocks = useBlockStore((state) => state.blocks)
 
@@ -56,7 +70,17 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
     [blocks, activeBlockId]
   )
 
-  // Load preview data when modal opens
+  // Reset selected column and match strategy when dataset changes
+  useEffect(() => {
+    if (dataset) {
+      if (dataset.columns.length) {
+        setSelectedColumn(dataset.columns[0])
+      }
+      setMatchStrategy(dataset.matchStrategy)
+    }
+  }, [dataset])
+
+  // Load preview data when modal opens or match strategy changes
   useEffect(() => {
     if (!open || !dataset) {
       setPreviewData(null)
@@ -86,9 +110,12 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
           return
         }
 
-        // Calculate matches
-        const matchResults = matchTradesToDataset(trades, dataset, rows)
-        const stats = calculateMatchStats(trades, dataset, rows)
+        // Create a dataset object with the current match strategy for calculations
+        const datasetWithStrategy = { ...dataset, matchStrategy }
+
+        // Calculate matches using the current match strategy
+        const matchResults = matchTradesToDataset(trades, datasetWithStrategy, rows)
+        const stats = calculateMatchStats(trades, datasetWithStrategy, rows)
 
         setPreviewData({
           trades,
@@ -105,13 +132,14 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
     }
 
     loadPreviewData()
-  }, [open, dataset, activeBlockId, getDatasetRows])
+  }, [open, dataset, activeBlockId, getDatasetRows, matchStrategy])
 
   const formatTradeTime = (trade: Trade) => {
     const timestamp = combineDateAndTime(trade.dateOpened, trade.timeOpened)
     return new Intl.DateTimeFormat("en-US", {
       month: "short",
       day: "numeric",
+      year: "numeric",
       hour: "numeric",
       minute: "2-digit",
     }).format(timestamp)
@@ -122,23 +150,73 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
     return new Intl.DateTimeFormat("en-US", {
       month: "short",
       day: "numeric",
+      year: "numeric",
       hour: "numeric",
       minute: "2-digit",
     }).format(new Date(date))
   }
 
-  // Get first data column for preview
-  const previewColumn = dataset?.columns[0] || "value"
+  const formatDateRange = (date: Date) => {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(date))
+  }
+
+  // Use selected column or fall back to first column
+  const previewColumn = selectedColumn || dataset?.columns[0] || "value"
+
+  // Handle match strategy change - update local state and persist to store
+  const handleMatchStrategyChange = async (newStrategy: MatchStrategy) => {
+    setMatchStrategy(newStrategy)
+    if (dataset) {
+      await updateMatchStrategy(dataset.id, newStrategy)
+    }
+  }
+
+  // Filter results based on filter mode
+  const filteredResults = useMemo(() => {
+    if (!previewData) return []
+
+    return previewData.matchResults
+      .map((result, index) => ({ result, trade: previewData.trades[index] }))
+      .filter(({ result }) => {
+        if (filterMode === "matched") return result.matchedRow !== null
+        if (filterMode === "unmatched") return result.matchedRow === null
+        return true
+      })
+  }, [previewData, filterMode])
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+      <DialogContent className="w-[90vw] sm:max-w-[720px] md:max-w-[900px] lg:max-w-[1100px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             Preview: {dataset?.name} → &quot;{activeBlock?.name || "No Block"}&quot;
           </DialogTitle>
-          <DialogDescription>
-            Match Strategy: {dataset ? MATCH_STRATEGY_LABELS[dataset.matchStrategy] : ""}
+          <DialogDescription asChild>
+            <div className="flex items-center gap-2">
+              <span>Match Strategy:</span>
+              <Select value={matchStrategy} onValueChange={(v) => handleMatchStrategyChange(v as MatchStrategy)}>
+                <SelectTrigger className="h-7 w-[160px] text-xs">
+                  <SelectValue>{MATCH_STRATEGY_LABELS[matchStrategy]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(MATCH_STRATEGY_LABELS) as MatchStrategy[]).map((strategy) => (
+                    <SelectItem key={strategy} value={strategy}>
+                      <div className="flex flex-col">
+                        <span>{MATCH_STRATEGY_LABELS[strategy]}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {MATCH_STRATEGY_DESCRIPTIONS[strategy]}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -171,22 +249,66 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
                   {previewData.stats.matchedTrades}/{previewData.stats.totalTrades} trades matched (
                   {previewData.stats.matchPercentage}%)
                 </Badge>
-                {previewData.stats.outsideDateRange > 0 && (
+                {dataset && (
                   <Badge variant="outline" className="text-sm py-1 px-3">
+                    Dataset: {formatDateRange(dataset.dateRange.start)} - {formatDateRange(dataset.dateRange.end)}
+                  </Badge>
+                )}
+                {previewData.stats.outsideDateRange > 0 && (
+                  <Badge variant="outline" className="text-sm py-1 px-3 text-amber-600 dark:text-amber-400 border-amber-300">
                     <AlertTriangle className="w-4 h-4 mr-1" />
                     {previewData.stats.outsideDateRange} trades outside dataset date range
                   </Badge>
                 )}
               </div>
 
-              {/* Info about preview */}
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  Showing how trades in &quot;{activeBlock?.name}&quot; would match to {dataset?.name} data.
-                  Column shown: <code className="text-xs bg-muted px-1 rounded">{dataset?.name}.{previewColumn}</code>
-                </AlertDescription>
-              </Alert>
+              {/* Controls Row: Column Selector + Filter Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Column:</span>
+                  <Select value={selectedColumn} onValueChange={setSelectedColumn}>
+                    <SelectTrigger className="w-[180px] h-8 text-sm">
+                      <SelectValue>{selectedColumn}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {dataset?.columns.map((col) => (
+                        <SelectItem key={col} value={col}>
+                          {col}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex rounded-md border">
+                    <Button
+                      variant={filterMode === "all" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 px-2 text-xs rounded-r-none"
+                      onClick={() => setFilterMode("all")}
+                    >
+                      All ({previewData.stats.totalTrades})
+                    </Button>
+                    <Button
+                      variant={filterMode === "matched" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 px-2 text-xs rounded-none border-x"
+                      onClick={() => setFilterMode("matched")}
+                    >
+                      Matched ({previewData.stats.matchedTrades})
+                    </Button>
+                    <Button
+                      variant={filterMode === "unmatched" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 px-2 text-xs rounded-l-none"
+                      onClick={() => setFilterMode("unmatched")}
+                    >
+                      Unmatched ({previewData.stats.totalTrades - previewData.stats.matchedTrades})
+                    </Button>
+                  </div>
+                </div>
+              </div>
 
               {/* Match Table */}
               <div className="flex-1 overflow-auto border rounded-lg">
@@ -194,6 +316,7 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
                   <thead className="bg-muted sticky top-0">
                     <tr>
                       <th className="text-left p-3 font-medium">Trade Open Time</th>
+                      <th className="text-left p-3 font-medium">Strategy</th>
                       <th className="text-left p-3 font-medium">Matched Timestamp</th>
                       <th className="text-left p-3 font-medium">Offset</th>
                       <th className="text-right p-3 font-medium">
@@ -202,8 +325,7 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
                     </tr>
                   </thead>
                   <tbody>
-                    {previewData.matchResults.slice(0, 100).map((result, index) => {
-                      const trade = previewData.trades[index]
+                    {filteredResults.slice(0, 100).map(({ result, trade }, index) => {
                       const value = result.matchedRow?.values[previewColumn]
 
                       return (
@@ -213,6 +335,9 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
                         >
                           <td className="p-3 font-mono text-xs">
                             {formatTradeTime(trade)}
+                          </td>
+                          <td className="p-3 text-xs truncate max-w-[120px]" title={trade.strategy}>
+                            {trade.strategy}
                           </td>
                           <td className="p-3 font-mono text-xs">
                             {formatMatchedTime(result.matchedTimestamp)}
@@ -237,9 +362,14 @@ export function PreviewModal({ open, onOpenChange, dataset }: PreviewModalProps)
                     })}
                   </tbody>
                 </table>
-                {previewData.matchResults.length > 100 && (
+                {filteredResults.length > 100 && (
                   <div className="p-3 text-center text-sm text-muted-foreground bg-muted border-t">
-                    Showing first 100 of {previewData.matchResults.length} trades
+                    Showing first 100 of {filteredResults.length} trades
+                  </div>
+                )}
+                {filteredResults.length === 0 && (
+                  <div className="p-8 text-center text-sm text-muted-foreground">
+                    No {filterMode === "matched" ? "matched" : filterMode === "unmatched" ? "unmatched" : ""} trades to display
                   </div>
                 )}
               </div>

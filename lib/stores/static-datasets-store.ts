@@ -23,7 +23,18 @@ import {
   processStaticDatasetFile,
   validateDatasetName,
 } from '../processing/static-dataset-processor'
+import { calculateMatchStats } from '../calculations/static-dataset-matcher'
 import type { ParseProgress } from '../processing/csv-parser'
+import type { Trade } from '../models/trade'
+import type { DatasetMatchStats } from '../models/static-dataset'
+
+/**
+ * Cache key format: datasetId:blockId:matchStrategy
+ * Exported for use in components that subscribe to specific cache entries
+ */
+export function makeMatchStatsCacheKey(datasetId: string, blockId: string, matchStrategy: MatchStrategy): string {
+  return `${datasetId}:${blockId}:${matchStrategy}`
+}
 
 interface StaticDatasetsState {
   // State
@@ -34,6 +45,12 @@ interface StaticDatasetsState {
 
   // Cached rows for preview (loaded on demand)
   cachedRows: Map<string, StaticDatasetRow[]>
+
+  // Cached match stats: key = datasetId:blockId:matchStrategy
+  cachedMatchStats: Map<string, DatasetMatchStats>
+
+  // Track which stats are currently being computed to avoid duplicates
+  computingMatchStats: Set<string>
 
   // Actions
   loadDatasets: () => Promise<void>
@@ -48,6 +65,13 @@ interface StaticDatasetsState {
   getDatasetRows: (id: string) => Promise<StaticDatasetRow[]>
   clearCachedRows: (id?: string) => void
   validateName: (name: string, excludeId?: string) => Promise<{ valid: boolean; error?: string }>
+
+  // Match stats caching
+  getMatchStats: (datasetId: string, blockId: string, matchStrategy: MatchStrategy) => DatasetMatchStats | null
+  computeMatchStats: (datasetId: string, blockId: string, trades: Trade[], matchStrategy: MatchStrategy) => Promise<DatasetMatchStats | null>
+  isComputingMatchStats: (datasetId: string, blockId: string, matchStrategy: MatchStrategy) => boolean
+  invalidateMatchStatsForBlock: (blockId: string) => void
+  invalidateMatchStatsForDataset: (datasetId: string) => void
 }
 
 export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => ({
@@ -57,6 +81,8 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
   isInitialized: false,
   error: null,
   cachedRows: new Map(),
+  cachedMatchStats: new Map(),
+  computingMatchStats: new Set(),
 
   // Load all datasets from IndexedDB
   loadDatasets: async () => {
@@ -165,6 +191,9 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
           d.id === id ? { ...d, matchStrategy: strategy } : d
         ),
       }))
+
+      // Invalidate cached match stats for this dataset since strategy changed
+      get().invalidateMatchStatsForDataset(id)
     } catch (error) {
       console.error('Failed to update match strategy:', error)
       set({
@@ -256,6 +285,112 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
     }
 
     return { valid: true }
+  },
+
+  // Get cached match stats (returns null if not cached)
+  getMatchStats: (datasetId: string, blockId: string, matchStrategy: MatchStrategy) => {
+    const state = get()
+    const cacheKey = makeMatchStatsCacheKey(datasetId, blockId, matchStrategy)
+    return state.cachedMatchStats.get(cacheKey) ?? null
+  },
+
+  // Compute and cache match stats
+  computeMatchStats: async (datasetId, blockId, trades, matchStrategy) => {
+    const state = get()
+    const cacheKey = makeMatchStatsCacheKey(datasetId, blockId, matchStrategy)
+
+    // Return cached if available
+    const cached = state.cachedMatchStats.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+
+    // Skip if already computing
+    if (state.computingMatchStats.has(cacheKey)) {
+      return null
+    }
+
+    // Mark as computing
+    set((s) => {
+      const newSet = new Set(s.computingMatchStats)
+      newSet.add(cacheKey)
+      return { computingMatchStats: newSet }
+    })
+
+    try {
+      // Find the dataset to get date range for the calculation
+      const dataset = state.datasets.find((d) => d.id === datasetId)
+      if (!dataset) {
+        return null
+      }
+
+      // Load rows (uses cache if available)
+      const rows = await get().getDatasetRows(datasetId)
+
+      // Calculate stats
+      const stats = calculateMatchStats(trades, dataset, rows)
+
+      // Cache the result
+      set((s) => {
+        const newCache = new Map(s.cachedMatchStats)
+        newCache.set(cacheKey, stats)
+        const newComputing = new Set(s.computingMatchStats)
+        newComputing.delete(cacheKey)
+        return {
+          cachedMatchStats: newCache,
+          computingMatchStats: newComputing,
+        }
+      })
+
+      return stats
+    } catch (err) {
+      console.error('Failed to compute match stats:', err)
+
+      // Clear computing flag
+      set((s) => {
+        const newComputing = new Set(s.computingMatchStats)
+        newComputing.delete(cacheKey)
+        return { computingMatchStats: newComputing }
+      })
+
+      return null
+    }
+  },
+
+  // Check if stats are being computed
+  isComputingMatchStats: (datasetId, blockId, matchStrategy) => {
+    const state = get()
+    const cacheKey = makeMatchStatsCacheKey(datasetId, blockId, matchStrategy)
+    return state.computingMatchStats.has(cacheKey)
+  },
+
+  // Invalidate all cached stats for a block (when trades change)
+  invalidateMatchStatsForBlock: (blockId) => {
+    set((state) => {
+      const newCache = new Map<string, DatasetMatchStats>()
+      for (const [key, value] of state.cachedMatchStats) {
+        // Key format: datasetId:blockId:matchStrategy
+        const parts = key.split(':')
+        if (parts[1] !== blockId) {
+          newCache.set(key, value)
+        }
+      }
+      return { cachedMatchStats: newCache }
+    })
+  },
+
+  // Invalidate all cached stats for a dataset (when dataset changes)
+  invalidateMatchStatsForDataset: (datasetId) => {
+    set((state) => {
+      const newCache = new Map<string, DatasetMatchStats>()
+      for (const [key, value] of state.cachedMatchStats) {
+        // Key format: datasetId:blockId:matchStrategy
+        if (!key.startsWith(datasetId + ':')) {
+          newCache.set(key, value)
+        }
+      }
+      return { cachedMatchStats: newCache }
+    })
   },
 }))
 

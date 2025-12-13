@@ -11,11 +11,14 @@ import { DatasetCard } from "@/components/static-datasets/dataset-card"
 import { UploadDialog } from "@/components/static-datasets/upload-dialog"
 import { PreviewModal } from "@/components/static-datasets/preview-modal"
 import type { StaticDataset } from "@/lib/models/static-dataset"
+import type { Trade } from "@/lib/models/trade"
+import { getTradesByBlock } from "@/lib/db"
 
 export default function StaticDatasetsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [previewDataset, setPreviewDataset] = useState<StaticDataset | null>(null)
+  const [activeBlockTrades, setActiveBlockTrades] = useState<Trade[]>([])
 
   const datasets = useStaticDatasetsStore((state) => state.datasets)
   const isInitialized = useStaticDatasetsStore((state) => state.isInitialized)
@@ -31,6 +34,26 @@ export default function StaticDatasetsPage() {
       loadDatasets()
     }
   }, [isInitialized, loadDatasets])
+
+  // Load active block trades for match stats
+  useEffect(() => {
+    if (!activeBlockId) {
+      setActiveBlockTrades([])
+      return
+    }
+
+    const loadTrades = async () => {
+      try {
+        const trades = await getTradesByBlock(activeBlockId)
+        setActiveBlockTrades(trades)
+      } catch (err) {
+        console.error("Failed to load trades for match stats:", err)
+        setActiveBlockTrades([])
+      }
+    }
+
+    loadTrades()
+  }, [activeBlockId])
 
   // Filter datasets based on search query
   const filteredDatasets = searchQuery.trim()
@@ -149,6 +172,8 @@ export default function StaticDatasetsPage() {
                 key={dataset.id}
                 dataset={dataset}
                 onPreview={handlePreview}
+                trades={activeBlockTrades}
+                blockId={activeBlockId ?? undefined}
               />
             ))}
           </div>

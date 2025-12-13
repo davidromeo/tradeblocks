@@ -16,23 +16,94 @@ import type {
 
 /**
  * Combine trade date and time into a single timestamp
+ *
+ * IMPORTANT: Trade dates from CSV parsing are stored as UTC midnight (e.g., 2025-03-18T00:00:00Z)
+ * because JavaScript parses YYYY-MM-DD format as UTC. The time string is in Eastern Time
+ * (US market time from the trading platform).
+ *
+ * This function handles both:
+ * 1. UTC midnight dates (from ISO string parsing) - uses UTC methods to extract calendar date
+ * 2. Local midnight dates (from new Date(y,m,d)) - uses local methods to extract calendar date
+ *
+ * We then create the timestamp treating the time as Eastern Time, ensuring matching works
+ * correctly regardless of the user's local timezone.
  */
 export function combineDateAndTime(dateOpened: Date, timeOpened: string): Date {
-  const date = new Date(dateOpened)
+  const d = new Date(dateOpened)
+
+  // Determine if this is a UTC midnight date (from ISO string parsing)
+  // or a local midnight date (from new Date(y,m,d))
+  const isUtcMidnight = d.getUTCHours() === 0 && d.getUTCMinutes() === 0 &&
+                        d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0
+
+  // Extract calendar date using appropriate methods based on how date was created
+  let year: number
+  let month: number
+  let day: number
+
+  if (isUtcMidnight) {
+    // Date was created from ISO string (e.g., new Date('2025-03-18'))
+    // Use UTC methods to get the calendar date
+    year = d.getUTCFullYear()
+    month = d.getUTCMonth()
+    day = d.getUTCDate()
+  } else {
+    // Date was created from components (e.g., new Date(2024, 0, 15))
+    // Use local methods to get the calendar date
+    year = d.getFullYear()
+    month = d.getMonth()
+    day = d.getDate()
+  }
 
   // Parse time string (HH:mm:ss or H:mm:ss)
+  let hours = 0
+  let minutes = 0
+  let seconds = 0
+
   const timeParts = timeOpened.split(':')
   if (timeParts.length >= 2) {
-    const hours = parseInt(timeParts[0], 10)
-    const minutes = parseInt(timeParts[1], 10)
-    const seconds = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0
+    hours = parseInt(timeParts[0], 10) || 0
+    minutes = parseInt(timeParts[1], 10) || 0
+    seconds = timeParts.length > 2 ? parseInt(timeParts[2], 10) || 0 : 0
+  }
 
-    if (!isNaN(hours) && !isNaN(minutes) && !isNaN(seconds)) {
-      date.setHours(hours, minutes, seconds, 0)
+  // Create the timestamp in UTC, treating the input time as Eastern Time
+  // Eastern Time is UTC-5 (EST) or UTC-4 (EDT)
+  const utcDate = Date.UTC(year, month, day, hours, minutes, seconds, 0)
+
+  // Get the Eastern Time offset for this date (handles DST correctly)
+  const testDate = new Date(utcDate)
+  const etOffset = getEasternTimeOffset(testDate)
+
+  // Convert Eastern Time to UTC by subtracting the offset
+  // (offset is negative for west of UTC, so we subtract)
+  return new Date(utcDate - etOffset * 60 * 1000)
+}
+
+/**
+ * Get the Eastern Time offset in minutes for a given date
+ * Returns the offset from UTC in minutes (e.g., -300 for EST, -240 for EDT)
+ */
+function getEasternTimeOffset(date: Date): number {
+  // Use Intl to get the actual offset for America/New_York
+  // This correctly handles DST transitions
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'shortOffset',
+  })
+  const parts = formatter.formatToParts(date)
+  const tzPart = parts.find((p) => p.type === 'timeZoneName')
+
+  if (tzPart) {
+    // Parse offset like "GMT-5" or "GMT-4"
+    const match = tzPart.value.match(/GMT([+-]\d+)/)
+    if (match) {
+      return parseInt(match[1], 10) * 60
     }
   }
 
-  return date
+  // Fallback: assume EST (-5 hours = -300 minutes)
+  return -300
 }
 
 /**
@@ -72,12 +143,18 @@ export function matchTradeToDataset(
 }
 
 /**
- * Get the date-only portion of a timestamp as YYYY-MM-DD string
- * This normalizes both Date objects and date strings to a comparable format
+ * Get the date-only portion of a timestamp as YYYY-MM-DD string in Eastern Time
+ * This ensures we're comparing calendar dates in the trading timezone
  */
 function getDateOnly(date: Date): string {
-  const d = new Date(date)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  // Format the date in Eastern Time to get the correct calendar date
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  return formatter.format(date) // Returns YYYY-MM-DD format
 }
 
 /**
@@ -181,6 +258,8 @@ function matchNearestAfter(rows: StaticDatasetRow[], tradeTime: number): StaticD
 
 /**
  * Find the nearest row by absolute time difference
+ * Constrained to the same calendar day (in Eastern Time) to prevent
+ * matching to data from days away when trade is outside dataset range
  */
 function matchNearest(rows: StaticDatasetRow[], tradeTime: number): StaticDatasetRow | null {
   // Find candidates using binary search
@@ -191,19 +270,30 @@ function matchNearest(rows: StaticDatasetRow[], tradeTime: number): StaticDatase
     return null
   }
 
-  if (!before) {
-    return after
+  // Get the trade's calendar date in Eastern Time
+  const tradeDateStr = getDateOnly(new Date(tradeTime))
+
+  // Filter candidates to same day only
+  const beforeSameDay = before && getDateOnly(new Date(before.timestamp)) === tradeDateStr ? before : null
+  const afterSameDay = after && getDateOnly(new Date(after.timestamp)) === tradeDateStr ? after : null
+
+  if (!beforeSameDay && !afterSameDay) {
+    return null
   }
 
-  if (!after) {
-    return before
+  if (!beforeSameDay) {
+    return afterSameDay
+  }
+
+  if (!afterSameDay) {
+    return beforeSameDay
   }
 
   // Compare distances
-  const beforeDiff = Math.abs(tradeTime - new Date(before.timestamp).getTime())
-  const afterDiff = Math.abs(new Date(after.timestamp).getTime() - tradeTime)
+  const beforeDiff = Math.abs(tradeTime - new Date(beforeSameDay.timestamp).getTime())
+  const afterDiff = Math.abs(new Date(afterSameDay.timestamp).getTime() - tradeTime)
 
-  return beforeDiff <= afterDiff ? before : after
+  return beforeDiff <= afterDiff ? beforeSameDay : afterSameDay
 }
 
 /**

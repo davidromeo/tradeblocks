@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,17 +38,25 @@ import {
   Check,
   X,
   HelpCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react"
 import type { StaticDataset, MatchStrategy } from "@/lib/models/static-dataset"
 import { MATCH_STRATEGY_LABELS, MATCH_STRATEGY_DESCRIPTIONS } from "@/lib/models/static-dataset"
-import { useStaticDatasetsStore } from "@/lib/stores/static-datasets-store"
+import { useStaticDatasetsStore, makeMatchStatsCacheKey } from "@/lib/stores/static-datasets-store"
+import type { Trade } from "@/lib/models/trade"
 
 interface DatasetCardProps {
   dataset: StaticDataset
   onPreview: (dataset: StaticDataset) => void
+  /** Trades from the active block for computing match stats */
+  trades?: Trade[]
+  /** Block ID for caching match stats */
+  blockId?: string
 }
 
-export function DatasetCard({ dataset, onPreview }: DatasetCardProps) {
+export function DatasetCard({ dataset, onPreview, trades, blockId }: DatasetCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(dataset.name)
   const [nameError, setNameError] = useState<string | null>(null)
@@ -58,6 +66,39 @@ export function DatasetCard({ dataset, onPreview }: DatasetCardProps) {
   const renameDataset = useStaticDatasetsStore((state) => state.renameDataset)
   const deleteDataset = useStaticDatasetsStore((state) => state.deleteDataset)
   const validateName = useStaticDatasetsStore((state) => state.validateName)
+  const computeMatchStats = useStaticDatasetsStore((state) => state.computeMatchStats)
+
+  // Build the cache key for this specific dataset/block/strategy combo
+  const cacheKey = blockId ? makeMatchStatsCacheKey(dataset.id, blockId, dataset.matchStrategy) : null
+
+  // Subscribe directly to the cached stats for this specific key
+  // This ensures re-render when this specific cache entry changes
+  const matchStats = useStaticDatasetsStore((state) =>
+    cacheKey && trades && trades.length > 0
+      ? state.cachedMatchStats.get(cacheKey) ?? null
+      : null
+  )
+
+  // Subscribe directly to computing state for this specific key
+  const isLoadingStats = useStaticDatasetsStore((state) =>
+    cacheKey ? state.computingMatchStats.has(cacheKey) : false
+  )
+
+  // Trigger computation if not cached and not already computing
+  useEffect(() => {
+    if (!trades || trades.length === 0 || !blockId || !cacheKey) {
+      return
+    }
+
+    // Check current state and trigger computation if needed
+    const state = useStaticDatasetsStore.getState()
+    const cached = state.cachedMatchStats.get(cacheKey)
+    const computing = state.computingMatchStats.has(cacheKey)
+
+    if (!cached && !computing) {
+      computeMatchStats(dataset.id, blockId, trades, dataset.matchStrategy)
+    }
+  }, [trades, blockId, dataset.id, dataset.matchStrategy, cacheKey, computeMatchStats])
 
   const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("en-US", {
@@ -191,6 +232,38 @@ export function DatasetCard({ dataset, onPreview }: DatasetCardProps) {
             <Calendar className="w-3 h-3 mr-1" />
             {formatDate(dataset.dateRange.start)} - {formatDate(dataset.dateRange.end)}
           </Badge>
+          {/* Match Stats Badge */}
+          {isLoadingStats && (
+            <Badge variant="outline" className="text-xs">
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+              Matching...
+            </Badge>
+          )}
+          {!isLoadingStats && matchStats && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant={matchStats.matchPercentage >= 90 ? "default" : matchStats.matchPercentage >= 50 ? "secondary" : "outline"}
+                    className={`text-xs ${matchStats.matchPercentage < 50 ? "text-amber-600 dark:text-amber-400 border-amber-300" : ""}`}
+                  >
+                    {matchStats.matchPercentage >= 90 ? (
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                    ) : matchStats.matchPercentage < 50 ? (
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                    ) : null}
+                    {matchStats.matchPercentage}% matched
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  <p>{matchStats.matchedTrades} of {matchStats.totalTrades} trades matched</p>
+                  {matchStats.outsideDateRange > 0 && (
+                    <p className="text-muted-foreground">{matchStats.outsideDateRange} outside date range</p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
 
         {/* Columns */}

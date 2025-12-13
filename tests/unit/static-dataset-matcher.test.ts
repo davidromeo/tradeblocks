@@ -14,11 +14,32 @@ import {
 import type { Trade } from '@/lib/models/trade'
 import type { StaticDataset, StaticDatasetRow, MatchStrategy } from '@/lib/models/static-dataset'
 
-// Helper to create a minimal trade with consistent timezone handling
+/**
+ * Get Eastern Time offset in minutes for a given date
+ * Returns the offset from UTC in minutes (e.g., -300 for EST, -240 for EDT)
+ */
+function getEasternTimeOffset(date: Date): number {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'shortOffset',
+  })
+  const parts = formatter.formatToParts(date)
+  const tzPart = parts.find((p) => p.type === 'timeZoneName')
+
+  if (tzPart) {
+    const match = tzPart.value.match(/GMT([+-]\d+)/)
+    if (match) {
+      return parseInt(match[1], 10) * 60
+    }
+  }
+  return -300 // Fallback to EST
+}
+
+// Helper to create a minimal trade
+// Creates date as UTC midnight (matching how app parses 'YYYY-MM-DD' from CSV)
 function createTrade(dateOpened: string, timeOpened: string): Trade {
-  // Parse date as local date (matching how the app handles it)
-  const [year, month, day] = dateOpened.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
+  // Parse date as UTC midnight (same as new Date('YYYY-MM-DD') in the app)
+  const date = new Date(dateOpened)
 
   return {
     dateOpened: date,
@@ -38,11 +59,18 @@ function createTrade(dateOpened: string, timeOpened: string): Trade {
 }
 
 // Helper to create a timestamp for dataset rows
-// Uses local timezone to match how the app combines dates and times
+// Creates timestamp in Eastern Time (like TradingView exports)
 function createTimestamp(dateStr: string, timeStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(Number)
   const [hours, minutes, seconds = 0] = timeStr.split(':').map(Number)
-  return new Date(year, month - 1, day, hours, minutes, seconds)
+
+  // Create as UTC with the given time components
+  const utcDate = Date.UTC(year, month - 1, day, hours, minutes, seconds, 0)
+  const testDate = new Date(utcDate)
+  const etOffset = getEasternTimeOffset(testDate)
+
+  // Convert Eastern Time to UTC by subtracting the offset
+  return new Date(utcDate - etOffset * 60 * 1000)
 }
 
 // Helper to create dataset rows
@@ -74,41 +102,54 @@ function createDataset(
   }
 }
 
+/**
+ * Helper to format date in Eastern Time for verification
+ */
+function formatInEastern(date: Date): string {
+  return date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
 describe('combineDateAndTime', () => {
-  it('combines date and time correctly', () => {
-    // Use local date (year, month-1, day) to avoid timezone issues
-    const date = new Date(2024, 0, 15) // Jan 15, 2024
+  it('combines date and time correctly - treating time as Eastern Time', () => {
+    // Use UTC midnight date (same as new Date('2024-01-15') from CSV parsing)
+    const date = new Date('2024-01-15') // UTC midnight
     const time = '10:37:00'
 
     const result = combineDateAndTime(date, time)
 
-    expect(result.getFullYear()).toBe(2024)
-    expect(result.getMonth()).toBe(0) // January
-    expect(result.getDate()).toBe(15)
-    expect(result.getHours()).toBe(10)
-    expect(result.getMinutes()).toBe(37)
-    expect(result.getSeconds()).toBe(0)
+    // Verify the result represents 10:37 AM Eastern Time on Jan 15
+    const etFormatted = formatInEastern(result)
+    expect(etFormatted).toMatch(/01\/15\/2024/)
+    expect(etFormatted).toMatch(/10:37:00/)
   })
 
   it('handles single-digit hours', () => {
-    const date = new Date(2024, 0, 15)
+    const date = new Date('2024-01-15')
     const time = '9:30:00'
 
     const result = combineDateAndTime(date, time)
 
-    expect(result.getHours()).toBe(9)
-    expect(result.getMinutes()).toBe(30)
+    const etFormatted = formatInEastern(result)
+    expect(etFormatted).toMatch(/09:30:00/)
   })
 
   it('handles time without seconds', () => {
-    const date = new Date(2024, 0, 15)
+    const date = new Date('2024-01-15')
     const time = '10:30'
 
     const result = combineDateAndTime(date, time)
 
-    expect(result.getHours()).toBe(10)
-    expect(result.getMinutes()).toBe(30)
-    expect(result.getSeconds()).toBe(0)
+    const etFormatted = formatInEastern(result)
+    expect(etFormatted).toMatch(/10:30:00/)
   })
 })
 
@@ -308,7 +349,7 @@ describe('matchTradeToDataset', () => {
   })
 
   describe('nearest matching', () => {
-    it('finds the closest row by absolute time', () => {
+    it('finds the closest row by absolute time on the same day', () => {
       // 10:50 is closer to 11:00 (10 min) than to 10:00 (50 min)
       const trade = createTrade('2024-01-15', '10:50:00')
       const rows = createRows(hourlyTimestamps, hourlyValues)
@@ -330,26 +371,114 @@ describe('matchTradeToDataset', () => {
       expect(result?.values.close).toBe(14.5) // 10:00 row (before, ties go to before)
     })
 
-    it('finds row before when no after exists', () => {
+    it('finds row before when no after exists on same day', () => {
       const trade = createTrade('2024-01-15', '17:00:00')
       const rows = createRows(hourlyTimestamps, hourlyValues)
 
       const result = matchTradeToDataset(trade, rows, 'nearest')
 
       expect(result).not.toBeNull()
-      // Should match last row (13:00)
+      // Should match last row on same day (13:00)
       expect(result?.values.close).toBe(16.0)
     })
 
-    it('finds row after when no before exists', () => {
+    it('finds row after when no before exists on same day', () => {
       const trade = createTrade('2024-01-15', '08:00:00')
       const rows = createRows(hourlyTimestamps, hourlyValues)
 
       const result = matchTradeToDataset(trade, rows, 'nearest')
 
       expect(result).not.toBeNull()
-      // Should match first row (09:00)
+      // Should match first row on same day (09:00)
       expect(result?.values.close).toBe(14.0)
+    })
+
+    it('returns null when trade is on a different day from all dataset rows', () => {
+      // Trade on Jan 16, but all rows are on Jan 15
+      const trade = createTrade('2024-01-16', '10:00:00')
+      const rows = createRows(hourlyTimestamps, hourlyValues) // All Jan 15
+
+      const result = matchTradeToDataset(trade, rows, 'nearest')
+
+      // Should NOT match across days - this is the same-day constraint
+      expect(result).toBeNull()
+    })
+
+    it('does not match to rows from previous day even if closer in absolute time', () => {
+      // Dataset has rows at end of Jan 14 and start of Jan 15
+      const crossDayTimestamps = [
+        createTimestamp('2024-01-14', '15:00:00'),
+        createTimestamp('2024-01-14', '16:00:00'), // 4 PM Jan 14
+        createTimestamp('2024-01-15', '09:00:00'), // 9 AM Jan 15
+        createTimestamp('2024-01-15', '10:00:00'),
+      ]
+      const crossDayValues = [
+        { close: 100 },
+        { close: 101 },
+        { close: 102 },
+        { close: 103 },
+      ]
+      const rows = createRows(crossDayTimestamps, crossDayValues)
+
+      // Trade at 8:00 AM Jan 15 - closer to 4 PM Jan 14 (16h) than 9 AM Jan 15 (1h)
+      // but should match to 9 AM Jan 15 because of same-day constraint
+      const trade = createTrade('2024-01-15', '08:00:00')
+
+      const result = matchTradeToDataset(trade, rows, 'nearest')
+
+      expect(result).not.toBeNull()
+      expect(result?.values.close).toBe(102) // 9 AM Jan 15, not 4 PM Jan 14
+    })
+  })
+
+  describe('DST edge cases', () => {
+    it('correctly matches trades during DST spring-forward (March)', () => {
+      // 2024 DST starts March 10 at 2 AM
+      const dstTimestamps = [
+        createTimestamp('2024-03-08', '10:00:00'),
+        createTimestamp('2024-03-11', '10:00:00'), // After DST change
+      ]
+      const dstValues = [{ close: 100 }, { close: 101 }]
+      const rows = createRows(dstTimestamps, dstValues)
+
+      const trade = createTrade('2024-03-11', '10:00:00')
+      const result = matchTradeToDataset(trade, rows, 'exact')
+
+      expect(result).not.toBeNull()
+      expect(result?.values.close).toBe(101)
+    })
+
+    it('correctly matches trades during DST fall-back (November)', () => {
+      // 2024 DST ends November 3 at 2 AM
+      const dstTimestamps = [
+        createTimestamp('2024-11-01', '10:00:00'),
+        createTimestamp('2024-11-04', '10:00:00'), // After DST change
+      ]
+      const dstValues = [{ close: 100 }, { close: 101 }]
+      const rows = createRows(dstTimestamps, dstValues)
+
+      const trade = createTrade('2024-11-04', '10:00:00')
+      const result = matchTradeToDataset(trade, rows, 'exact')
+
+      expect(result).not.toBeNull()
+      expect(result?.values.close).toBe(101)
+    })
+
+    it('same-day matching works correctly around DST transition', () => {
+      // Daily data around DST spring-forward
+      const dailyTimestamps = [
+        createTimestamp('2024-03-08', '00:00:00'),
+        createTimestamp('2024-03-11', '00:00:00'), // Skips weekend + DST
+      ]
+      const dailyValues = [{ close: 100 }, { close: 101 }]
+      const rows = createRows(dailyTimestamps, dailyValues)
+
+      // Trade on March 11 should match March 11 data
+      const trade = createTrade('2024-03-11', '10:30:00')
+      const result = matchTradeToDataset(trade, rows, 'same-day')
+
+      expect(result).not.toBeNull()
+      expect(result?.values.close).toBe(101)
     })
   })
 })
