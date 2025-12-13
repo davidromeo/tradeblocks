@@ -3,6 +3,7 @@
 import {
   IconCalendar,
   IconChartHistogram,
+  IconDatabase,
   IconGauge,
   IconLayoutDashboard,
   IconLink,
@@ -40,6 +41,11 @@ const navData = {
       icon: IconStack2,
     },
     {
+      title: "Static Datasets",
+      href: "/static-datasets",
+      icon: IconDatabase,
+    },
+    {
       title: "Block Stats",
       href: "/block-stats",
       icon: IconLayoutDashboard,
@@ -69,7 +75,6 @@ const navData = {
       title: "Tail Risk Analysis",
       href: "/tail-risk-analysis",
       icon: IconTrendingDown,
-      badge: "New",
     },
 
     {
@@ -106,7 +111,6 @@ const navData = {
       title: "NemoBlocks Assistant",
       href: "/assistant",
       icon: IconSparkles,
-      badge: "New",
     },
   ],
 };

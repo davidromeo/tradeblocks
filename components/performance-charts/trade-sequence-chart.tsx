@@ -46,7 +46,7 @@ export function TradeSequenceChart({ className, showTrend = true }: TradeSequenc
     traces.push({
       x: tradeNumbers,
       y: returns,
-      type: 'scatter',
+      type: 'scattergl',
       mode: 'markers',
       name: 'Trade Returns',
       marker: {

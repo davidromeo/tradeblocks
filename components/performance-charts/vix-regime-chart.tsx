@@ -132,7 +132,7 @@ export function VixRegimeChart({ className }: VixRegimeChartProps) {
         entry.rom ?? null
       ]),
       mode: 'markers',
-      type: 'scatter',
+      type: 'scattergl',
       name: isOpening ? 'Opening VIX' : 'Closing VIX',
       marker: {
         size: entries.map(entry => bubbleSize(entry.pl)),
