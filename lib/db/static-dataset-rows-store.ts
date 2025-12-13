@@ -6,7 +6,8 @@ import type { StaticDatasetRow, StoredStaticDatasetRow } from '../models/static-
 import { STORES, INDEXES, withReadTransaction, withWriteTransaction, promisifyRequest } from './index'
 
 /**
- * Add rows for a static dataset (batch operation)
+ * Add rows for a static dataset (batch operation with chunking)
+ * Processes in batches to avoid memory issues with large datasets
  */
 export async function addStaticDatasetRows(
   datasetId: string,
@@ -14,17 +15,24 @@ export async function addStaticDatasetRows(
 ): Promise<void> {
   if (rows.length === 0) return
 
-  await withWriteTransaction(STORES.STATIC_DATASET_ROWS, async (transaction) => {
-    const store = transaction.objectStore(STORES.STATIC_DATASET_ROWS)
+  // Process in chunks to avoid overwhelming memory/transaction
+  // 10,000 rows per chunk is a safe balance for most browsers
+  const CHUNK_SIZE = 10000
 
-    // Use Promise.all for better performance with large datasets
-    const promises = rows.map((row) => {
-      const storedRow: StoredStaticDatasetRow = { ...row, datasetId }
-      return promisifyRequest(store.add(storedRow))
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE)
+
+    await withWriteTransaction(STORES.STATIC_DATASET_ROWS, async (transaction) => {
+      const store = transaction.objectStore(STORES.STATIC_DATASET_ROWS)
+
+      const promises = chunk.map((row) => {
+        const storedRow: StoredStaticDatasetRow = { ...row, datasetId }
+        return promisifyRequest(store.add(storedRow))
+      })
+
+      await Promise.all(promises)
     })
-
-    await Promise.all(promises)
-  })
+  }
 }
 
 /**

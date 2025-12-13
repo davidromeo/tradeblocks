@@ -355,7 +355,16 @@ export function calculateMatchStats(
   }
 
   const datasetStart = new Date(dataset.dateRange.start).getTime()
-  const datasetEnd = new Date(dataset.dateRange.end).getTime()
+  // Extend end date to end-of-day (23:59:59.999 Eastern) so trades during the final day match
+  // Get the date in Eastern Time, then calculate end-of-day in that timezone
+  const endDate = new Date(dataset.dateRange.end)
+  const endDateStr = getDateOnly(endDate) // Gets YYYY-MM-DD in Eastern Time
+  const [year, month, day] = endDateStr.split('-').map(Number)
+  // Create 23:59:59.999 in Eastern Time
+  const endOfDayUtc = Date.UTC(year, month - 1, day, 23, 59, 59, 999)
+  // Convert from Eastern to UTC
+  const etOffset = getEasternTimeOffset(new Date(endOfDayUtc))
+  const datasetEnd = endOfDayUtc - etOffset * 60 * 1000
 
   let matchedTrades = 0
   let outsideDateRange = 0

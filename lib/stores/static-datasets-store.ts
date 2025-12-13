@@ -110,22 +110,25 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
 
   // Upload a new dataset
   uploadDataset: async (file, name, onProgress) => {
+    // Trim name to prevent whitespace-only or padded names
+    const trimmedName = name.trim()
+
     // Validate name format
-    const nameValidation = validateDatasetName(name)
+    const nameValidation = validateDatasetName(trimmedName)
     if (!nameValidation.valid) {
       return { success: false, error: nameValidation.error }
     }
 
     // Check if name is taken
-    const nameTaken = await isDatasetNameTaken(name)
+    const nameTaken = await isDatasetNameTaken(trimmedName)
     if (nameTaken) {
-      return { success: false, error: `A dataset named "${name}" already exists` }
+      return { success: false, error: `A dataset named "${trimmedName}" already exists` }
     }
 
     try {
       // Process the CSV file
       const result = await processStaticDatasetFile(file, {
-        name,
+        name: trimmedName,
         fileName: file.name,
         progressCallback: onProgress,
       })
@@ -204,24 +207,27 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
 
   // Rename a dataset
   renameDataset: async (id, newName) => {
+    // Trim name to prevent whitespace-only or padded names
+    const trimmedName = newName.trim()
+
     // Validate name format
-    const nameValidation = validateDatasetName(newName)
+    const nameValidation = validateDatasetName(trimmedName)
     if (!nameValidation.valid) {
       return { success: false, error: nameValidation.error }
     }
 
     // Check if name is taken (excluding current dataset)
-    const nameTaken = await isDatasetNameTaken(newName, id)
+    const nameTaken = await isDatasetNameTaken(trimmedName, id)
     if (nameTaken) {
-      return { success: false, error: `A dataset named "${newName}" already exists` }
+      return { success: false, error: `A dataset named "${trimmedName}" already exists` }
     }
 
     try {
-      await updateStaticDatasetName(id, newName)
+      await updateStaticDatasetName(id, trimmedName)
 
       set((state) => ({
         datasets: state.datasets.map((d) =>
-          d.id === id ? { ...d, name: newName } : d
+          d.id === id ? { ...d, name: trimmedName } : d
         ),
       }))
 
@@ -321,6 +327,12 @@ export const useStaticDatasetsStore = create<StaticDatasetsState>((set, get) => 
       // Find the dataset to get date range for the calculation
       const dataset = state.datasets.find((d) => d.id === datasetId)
       if (!dataset) {
+        // Clear computing flag before returning
+        set((s) => {
+          const newComputing = new Set(s.computingMatchStats)
+          newComputing.delete(cacheKey)
+          return { computingMatchStats: newComputing }
+        })
         return null
       }
 
