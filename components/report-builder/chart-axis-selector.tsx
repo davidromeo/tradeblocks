@@ -22,11 +22,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import {
-  getFieldsByCategoryWithCustom,
+  getFieldsByCategoryWithAll,
   getFieldInfo,
   getAllCategoryLabels,
   FieldCategory,
-  CustomFieldCategory
+  CustomFieldCategory,
+  StaticDatasetFieldInfo
 } from '@/lib/models/report-config'
 import { EnrichedTrade } from '@/lib/models/enriched-trade'
 
@@ -38,6 +39,8 @@ interface ChartAxisSelectorProps {
   className?: string
   /** Enriched trades to extract custom fields from */
   trades?: EnrichedTrade[]
+  /** Static datasets for field discovery */
+  staticDatasets?: StaticDatasetFieldInfo[]
 }
 
 export function ChartAxisSelector({
@@ -46,10 +49,14 @@ export function ChartAxisSelector({
   onChange,
   allowNone = false,
   className,
-  trades = []
+  trades = [],
+  staticDatasets
 }: ChartAxisSelectorProps) {
   const [open, setOpen] = useState(false)
-  const fieldsByCategory = useMemo(() => getFieldsByCategoryWithCustom(trades), [trades])
+  const fieldsByCategory = useMemo(
+    () => getFieldsByCategoryWithAll(trades, staticDatasets),
+    [trades, staticDatasets]
+  )
   const allCategoryLabels = getAllCategoryLabels()
 
   // Get the display label for the current value
@@ -89,10 +96,13 @@ export function ChartAxisSelector({
           {Array.from(fieldsByCategory.entries()).map(([category, fields]) => {
             if (fields.length === 0) return null
 
+            // Use category label from known categories, or the category name itself (for static datasets)
+            const categoryLabel = allCategoryLabels[category as FieldCategory | CustomFieldCategory] ?? category
+
             return (
               <DropdownMenuSub key={category}>
                 <DropdownMenuSubTrigger>
-                  {allCategoryLabels[category as FieldCategory | CustomFieldCategory]}
+                  {categoryLabel}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="w-52">
                   {fields.map(field => (

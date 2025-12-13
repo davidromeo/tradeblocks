@@ -33,8 +33,9 @@ import {
   FilterOperator,
   FieldCategory,
   CustomFieldCategory,
+  StaticDatasetFieldInfo,
   getFieldInfo,
-  getFieldsByCategoryWithCustom,
+  getFieldsByCategoryWithAll,
   getAllCategoryLabels,
 } from "@/lib/models/report-config";
 import { EnrichedTrade } from "@/lib/models/enriched-trade";
@@ -46,6 +47,8 @@ interface FilterConditionRowProps {
   onRemove: () => void;
   /** Enriched trades to extract custom fields from */
   trades?: EnrichedTrade[];
+  /** Static datasets for field discovery */
+  staticDatasets?: StaticDatasetFieldInfo[];
 }
 
 export function FilterConditionRow({
@@ -53,6 +56,7 @@ export function FilterConditionRow({
   onChange,
   onRemove,
   trades = [],
+  staticDatasets,
 }: FilterConditionRowProps) {
   const [valueInput, setValueInput] = useState(condition.value.toString());
   const [value2Input, setValue2Input] = useState(
@@ -60,7 +64,7 @@ export function FilterConditionRow({
   );
   const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
 
-  const fieldsByCategory = useMemo(() => getFieldsByCategoryWithCustom(trades), [trades]);
+  const fieldsByCategory = useMemo(() => getFieldsByCategoryWithAll(trades, staticDatasets), [trades, staticDatasets]);
   const allCategoryLabels = getAllCategoryLabels();
 
   // Get the display label for the current field
@@ -135,10 +139,12 @@ export function FilterConditionRow({
             {Array.from(fieldsByCategory.entries()).map(
               ([category, fields]) => {
                 if (fields.length === 0) return null;
+                // Use category label from known categories, or the category name itself (for static datasets)
+                const categoryLabel = allCategoryLabels[category as FieldCategory | CustomFieldCategory] ?? category;
                 return (
                   <DropdownMenuSub key={category}>
                     <DropdownMenuSubTrigger>
-                      {allCategoryLabels[category as FieldCategory | CustomFieldCategory]}
+                      {categoryLabel}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-52">
                       {fields.map((field) => (
