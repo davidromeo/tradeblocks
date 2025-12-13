@@ -28,7 +28,7 @@ export function MarginUtilizationChart({ className }: MarginUtilizationChartProp
       y: entries.map(entry => entry.pl),
       customdata: entries.map(entry => [entry.numContracts, entry.fundsAtClose]),
       mode: 'markers',
-      type: 'scatter',
+      type: 'scattergl',
       name: 'Margin Usage',
       marker: {
         size: entries.map(entry => Math.min(30, Math.max(8, entry.numContracts * 2 || 6))),
