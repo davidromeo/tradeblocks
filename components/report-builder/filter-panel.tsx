@@ -21,7 +21,6 @@ import { Separator } from '@/components/ui/separator'
 import {
   FilterConfig,
   FilterCondition,
-  StaticDatasetFieldInfo,
   createFilterCondition
 } from '@/lib/models/report-config'
 import { FlexibleFilterResult } from '@/lib/calculations/flexible-filter'
@@ -34,8 +33,6 @@ interface FilterPanelProps {
   filterResult: FlexibleFilterResult | null
   /** Enriched trades to extract custom fields from */
   trades?: EnrichedTrade[]
-  /** Static datasets for field discovery */
-  staticDatasets?: StaticDatasetFieldInfo[]
   /** Whether to keep filters when loading reports */
   keepFilters: boolean
   onKeepFiltersChange: (value: boolean) => void
@@ -46,7 +43,6 @@ export const FilterPanel = memo(function FilterPanel({
   onFilterChange,
   filterResult,
   trades = [],
-  staticDatasets,
   keepFilters,
   onKeepFiltersChange
 }: FilterPanelProps) {
@@ -130,7 +126,6 @@ export const FilterPanel = memo(function FilterPanel({
                 onChange={handleConditionChange}
                 onRemove={() => handleRemoveCondition(condition.id)}
                 trades={trades}
-                staticDatasets={staticDatasets}
               />
             ))}
           </div>

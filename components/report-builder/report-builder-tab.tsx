@@ -11,7 +11,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Filter, ChevronRight } from 'lucide-react'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
 import { useSettingsStore } from '@/lib/stores/settings-store'
-import { useStaticDatasetsStore } from '@/lib/stores/static-datasets-store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -20,7 +19,6 @@ import {
   ChartAxisConfig,
   ReportConfig,
   ThresholdMetric,
-  StaticDatasetFieldInfo,
   createEmptyFilterConfig,
   DEFAULT_TABLE_COLUMNS
 } from '@/lib/models/report-config'
@@ -36,25 +34,11 @@ import { SaveReportDialog } from './save-report-dialog'
 export function ReportBuilderTab() {
   const data = usePerformanceStore((state) => state.data)
   const initialize = useSettingsStore((state) => state.initialize)
-  const staticDatasets = useStaticDatasetsStore((state) => state.datasets)
-  const loadStaticDatasets = useStaticDatasetsStore((state) => state.loadDatasets)
-  const isStaticDatasetsInitialized = useStaticDatasetsStore((state) => state.isInitialized)
 
-  // Initialize settings store and static datasets on mount
+  // Initialize settings store on mount
   useEffect(() => {
     initialize()
-    if (!isStaticDatasetsInitialized) {
-      loadStaticDatasets()
-    }
-  }, [initialize, loadStaticDatasets, isStaticDatasetsInitialized])
-
-  // Convert static datasets to field info format for Report Builder
-  const staticDatasetFieldInfo: StaticDatasetFieldInfo[] = useMemo(() => {
-    return staticDatasets.map(ds => ({
-      datasetName: ds.name,
-      columns: ds.columns
-    }))
-  }, [staticDatasets])
+  }, [initialize])
 
   // Filter state
   const [filterConfig, setFilterConfig] = useState<FilterConfig>(createEmptyFilterConfig())
@@ -257,7 +241,6 @@ export function ReportBuilderTab() {
           thresholdMetric={thresholdMetric}
           reportName={reportName}
           showWhatIf={showWhatIf}
-          staticDatasets={staticDatasetFieldInfo}
           onShowWhatIfChange={setShowWhatIf}
           onChartTypeChange={handleChartTypeChange}
           onXAxisChange={handleXAxisChange}
@@ -278,7 +261,6 @@ export function ReportBuilderTab() {
             onFilterChange={handleFilterChange}
             filterResult={filterResult}
             trades={enrichedTrades}
-            staticDatasets={staticDatasetFieldInfo}
             keepFilters={keepFilters}
             onKeepFiltersChange={setKeepFilters}
           />
