@@ -1,5 +1,6 @@
 "use client";
 
+import { format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import {
   Area,
@@ -199,7 +200,7 @@ export function PLAnalyticsPanel({ trades }: PLAnalyticsPanelProps) {
     };
 
     const byStrategy = new Map<string, StratAgg>();
-    const dateKey = (d: Date) => d.toISOString().split("T")[0];
+    const dateKey = (d: Date) => format(d, "yyyy-MM-dd");
 
     normalizedTrades.forEach((t) => {
       const strategy = t.strategy || "Uncategorized";
