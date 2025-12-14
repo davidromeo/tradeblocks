@@ -8,6 +8,7 @@ interface MetricSectionProps {
   icon?: React.ReactNode;
   badge?: string | React.ReactNode;
   badgeVariant?: "default" | "secondary" | "destructive" | "outline";
+  actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   gridCols?: 2 | 3 | 4 | 5;
@@ -18,6 +19,7 @@ export function MetricSection({
   icon,
   badge,
   badgeVariant = "secondary",
+  actions,
   children,
   className,
   gridCols = 3,
@@ -50,6 +52,14 @@ export function MetricSection({
             )
           )}
         </div>
+        {actions && (
+          <>
+            <div className="flex-1" />
+            <div className="flex items-end gap-3">
+              {actions}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Metrics Grid */}

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  IconCalendar,
   IconChartHistogram,
   IconDatabase,
   IconGauge,
@@ -80,6 +81,12 @@ const navData = {
       href: "/walk-forward",
       icon: IconTimelineEvent,
       badge: "Beta",
+    },
+    {
+      title: "Trading Calendar",
+      href: "/trading-calendar",
+      icon: IconCalendar,
+      badge: "New",
     },
     {
       title: "Comparison Blocks",
