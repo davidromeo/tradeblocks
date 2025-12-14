@@ -2,8 +2,23 @@
 
 // PLCalendarPanel: Main component for the P/L Calendar feature
 // Note: sizingMode now supports Kelly / Half-Kelly; keep this file as the single source of truth for sizing logic.
-import { endOfWeek, format, getISOWeek, getISOWeekYear, getMonth, getYear, parseISO, startOfWeek } from "date-fns";
-import { Check, ChevronDown, Download, Filter, Table as TableIcon } from "lucide-react";
+import {
+  endOfWeek,
+  format,
+  getISOWeek,
+  getISOWeekYear,
+  getMonth,
+  getYear,
+  parseISO,
+  startOfWeek,
+} from "date-fns";
+import {
+  Check,
+  ChevronDown,
+  Download,
+  Filter,
+  Table as TableIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -11,23 +26,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-    Command,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
@@ -67,10 +82,11 @@ const formatCompactUsd = (value: number) => {
     return `${sign}$${(abs / 1_000_000_000_000).toFixed(2)}T`;
   if (abs >= 1_000_000_000)
     return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`;
-  if (abs >= 1_000_000)
-    return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
   if (abs >= 10_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
-  return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return `${sign}$${abs.toLocaleString(undefined, {
+    maximumFractionDigits: 0,
+  })}`;
 };
 
 const getTradeLots = (trade: Trade) => {
@@ -98,7 +114,10 @@ const normalizeTradeDate = (trade: Trade): Date => {
   return base;
 };
 
-const classifyRegime = (netPL: number, romPct: number | undefined): MarketRegime => {
+const classifyRegime = (
+  netPL: number,
+  romPct: number | undefined
+): MarketRegime => {
   if (romPct !== undefined && romPct > 8) return "TREND_UP";
   if (romPct !== undefined && romPct < -8) return "TREND_DOWN";
   if (netPL > 0) return "TREND_UP";
@@ -189,8 +208,12 @@ const computeSizedPLMap = (
   sorted.forEach((t) => {
     const lots = getTradeLots(t);
     const perLotPL = lots > 0 ? t.pl / lots : t.pl;
-    const marginPerLot = lots > 0 ? (t.marginReq || 0) / lots : t.marginReq || 0;
-    const kBase = kellyFraction > 0 ? kellyFraction : fractions.get(t.strategy || "Custom") ?? 0;
+    const marginPerLot =
+      lots > 0 ? (t.marginReq || 0) / lots : t.marginReq || 0;
+    const kBase =
+      kellyFraction > 0
+        ? kellyFraction
+        : fractions.get(t.strategy || "Custom") ?? 0;
     const k =
       sizingMode === "kelly"
         ? kBase
@@ -215,23 +238,16 @@ interface WeekSummary extends DaySummary {
   regimeCounts?: Partial<Record<MarketRegime, number>>;
 }
 
-type MarketRegime =
-  | "TREND_UP"
-  | "TREND_DOWN"
-  | "CHOPPY"
-  | "HIGH_IV"
-  | "LOW_IV";
+type MarketRegime = "TREND_UP" | "TREND_DOWN" | "CHOPPY" | "HIGH_IV" | "LOW_IV";
 
 export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
   // DEBUG: Log what we receive
 
-
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "year">("month");
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
-  const [selectedWeekStats, setSelectedWeekStats] = useState<WeekSummary | null>(
-    null
-  );
+  const [selectedWeekStats, setSelectedWeekStats] =
+    useState<WeekSummary | null>(null);
   const [modalMode, setModalMode] = useState<"day" | "week">("day");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
@@ -290,9 +306,13 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       trades: b.trades?.map((t) => ({
         ...t,
         dateOpened:
-          t.dateOpened instanceof Date ? t.dateOpened.toISOString() : t.dateOpened,
+          t.dateOpened instanceof Date
+            ? t.dateOpened.toISOString()
+            : t.dateOpened,
         dateClosed:
-          t.dateClosed instanceof Date ? t.dateClosed.toISOString() : t.dateClosed,
+          t.dateClosed instanceof Date
+            ? t.dateClosed.toISOString()
+            : t.dateClosed,
       })),
     }));
 
@@ -334,7 +354,11 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
     );
   };
 
-  const updateYearBlockTrades = (id: string, newTrades: Trade[], name?: string) => {
+  const updateYearBlockTrades = (
+    id: string,
+    newTrades: Trade[],
+    name?: string
+  ) => {
     setYearBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, trades: newTrades, name } : b))
     );
@@ -375,7 +399,11 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
 
       const calculator = new PortfolioStatsCalculator();
       // Use the same public portfolio stats pipeline that Block Stats relies on.
-      const stats = calculator.calculatePortfolioStats(sizedTrades, undefined, false);
+      const stats = calculator.calculatePortfolioStats(
+        sizedTrades,
+        undefined,
+        false
+      );
       const ddFromCalculator = Math.abs(stats.maxDrawdown ?? 0);
 
       return Number.isFinite(ddFromCalculator) ? ddFromCalculator : 0;
@@ -412,7 +440,10 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       const explicitDdValues = tradesForSummary
         .map((t) => t.drawdownPct)
         .filter((v): v is number => Number.isFinite(v));
-      const explicitMaxDd = explicitDdValues.length > 0 ? Math.max(...explicitDdValues.map(Math.abs)) : 0;
+      const explicitMaxDd =
+        explicitDdValues.length > 0
+          ? Math.max(...explicitDdValues.map(Math.abs))
+          : 0;
 
       // 2. Legacy Logic (99268ce): Calculate P/L curve-based Max DD as fallback/safety.
       const tradesSorted = [...tradesForSummary].sort((a, b) => {
@@ -441,7 +472,7 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
         const sizedPL = sizedPLMap.get(t) ?? t.pl ?? 0;
         totalPL += sizedPL;
         if (sizedPL > 0) wins += 1;
-        
+
         equity += sizedPL;
         peak = Math.max(peak, equity);
         if (peak > 0) {
@@ -451,12 +482,14 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       });
 
       const tradeCount = tradesForSummary.length;
-      const winRate = tradeCount > 0 ? Math.round((wins / tradeCount) * 100) : 0;
-      
+      const winRate =
+        tradeCount > 0 ? Math.round((wins / tradeCount) * 100) : 0;
+
       // Hybrid Decision:
       // If we have explicit positive drawdown data from the CSV, use it (exact).
       // Otherwise, use the legacy curve calculation (approximate but robust).
-      const maxDrawdownPct = explicitMaxDd > 0 ? explicitMaxDd : (legacyMaxDdVar * 100);
+      const maxDrawdownPct =
+        explicitMaxDd > 0 ? explicitMaxDd : legacyMaxDdVar * 100;
 
       return { totalPL, tradeCount, winRate, maxDrawdownPct };
     },
@@ -480,15 +513,14 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
     );
   }, [trades, selectedStrategies, dateRange]);
 
-
-
   // DEBUG: Log filtered results
-
 
   // Debug helper: compare active vs first uploaded block trades to catch ordering/field mismatches that affect Max DD.
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return;
-    const uploaded = yearBlocks.find((b) => !b.isPrimary && b.trades && b.trades.length);
+    const uploaded = yearBlocks.find(
+      (b) => !b.isPrimary && b.trades && b.trades.length
+    );
     if (!uploaded?.trades?.length) return;
 
     const activeTrades = filteredTrades;
@@ -505,7 +537,12 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       });
 
     const sumPL = (arr: Trade[]) => {
-      const sizedMap = computeSizedPLMap(arr, sizingMode, KELLY_BASE_EQUITY, kellyFraction);
+      const sizedMap = computeSizedPLMap(
+        arr,
+        sizingMode,
+        KELLY_BASE_EQUITY,
+        kellyFraction
+      );
       return arr.reduce((acc, t) => acc + (sizedMap.get(t) ?? t.pl ?? 0), 0);
     };
 
@@ -513,19 +550,30 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
     const uSorted = sortTrades(uploadedTrades);
 
     console.groupCollapsed("P/L Calendar Debug: active vs uploaded trades");
-    console.log("Active length", aSorted.length, "Uploaded length", uSorted.length);
+    console.log(
+      "Active length",
+      aSorted.length,
+      "Uploaded length",
+      uSorted.length
+    );
     console.log("Active total PL (sized)", sumPL(aSorted));
     console.log("Uploaded total PL (sized)", sumPL(uSorted));
-    console.log("First 5 active", aSorted.slice(0, 5).map((t) => ({
-      closedOn: t.dateClosed ?? t.dateOpened,
-      pl: t.pl,
-      fundsAtClose: t.fundsAtClose,
-    })));
-    console.log("First 5 uploaded", uSorted.slice(0, 5).map((t) => ({
-      closedOn: t.dateClosed ?? t.dateOpened,
-      pl: t.pl,
-      fundsAtClose: t.fundsAtClose,
-    })));
+    console.log(
+      "First 5 active",
+      aSorted.slice(0, 5).map((t) => ({
+        closedOn: t.dateClosed ?? t.dateOpened,
+        pl: t.pl,
+        fundsAtClose: t.fundsAtClose,
+      }))
+    );
+    console.log(
+      "First 5 uploaded",
+      uSorted.slice(0, 5).map((t) => ({
+        closedOn: t.dateClosed ?? t.dateOpened,
+        pl: t.pl,
+        fundsAtClose: t.fundsAtClose,
+      }))
+    );
 
     const n = Math.min(aSorted.length, uSorted.length);
     for (let i = 0; i < n; i++) {
@@ -556,7 +604,12 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
   }, [filteredTrades, kellyFraction, sizingMode, yearBlocks]);
 
   const totalPLAll = useMemo(() => {
-    const sizedPLMap = computeSizedPLMap(filteredTrades, sizingMode, KELLY_BASE_EQUITY, kellyFraction);
+    const sizedPLMap = computeSizedPLMap(
+      filteredTrades,
+      sizingMode,
+      KELLY_BASE_EQUITY,
+      kellyFraction
+    );
     let total = 0;
     filteredTrades.forEach((t) => {
       total += sizedPLMap.get(t) ?? t.pl;
@@ -603,14 +656,22 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("plCalendarKellyPct", String(Math.round(kellyFraction * 100)));
+    window.localStorage.setItem(
+      "plCalendarKellyPct",
+      String(Math.round(kellyFraction * 100))
+    );
   }, [kellyFraction]);
 
   // Aggregate trades by day
   // This useMemo calculates daily stats including win/loss counts and rolling metrics
   const dailyStats = useMemo(() => {
     const stats = new Map<string, DaySummary>();
-    const sizedPLMap = computeSizedPLMap(filteredTrades, sizingMode, KELLY_BASE_EQUITY, kellyFraction);
+    const sizedPLMap = computeSizedPLMap(
+      filteredTrades,
+      sizingMode,
+      KELLY_BASE_EQUITY,
+      kellyFraction
+    );
 
     tradesByDay.forEach((dayTrades, dateKey) => {
       if (!dateKey || dateKey === "1970-01-01") return;
@@ -640,10 +701,11 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
         if (trade.pl > 0) dayStat.winCount += 1;
         dayStat.maxMargin = Math.max(dayStat.maxMargin, trade.marginReq || 0);
         dayStat.marginUsed = (dayStat.marginUsed ?? 0) + (trade.marginReq || 0);
-        
+
         // Map Trade to DailyTrade, keeping the actual opened timestamp (date + time).
         const marginUsed = trade.marginReq || 0;
-        const romPct = marginUsed > 0 ? (sizedPL / marginUsed) * 100 : undefined;
+        const romPct =
+          marginUsed > 0 ? (sizedPL / marginUsed) * 100 : undefined;
         const openedAt = (() => {
           const [hRaw, mRaw, sRaw] = (trade.timeOpened || "").split(":");
           // Default to noon if no time to avoid TZ shifting the date backwards.
@@ -668,14 +730,12 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
         });
       });
     });
-    
+
     // Calculate win rates
     stats.forEach((stat) => {
       const wins = stat.winCount;
       stat.winRate =
-        stat.tradeCount > 0
-          ? Math.round((wins / stat.tradeCount) * 100)
-          : 0;
+        stat.tradeCount > 0 ? Math.round((wins / stat.tradeCount) * 100) : 0;
       const dayMargin = stat.marginUsed ?? 0;
       stat.romPct = dayMargin > 0 ? (stat.netPL / dayMargin) * 100 : 0;
     });
@@ -707,7 +767,10 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
           break;
         }
       }
-      const rollingSum = rollingWindow.reduce((sum, k) => sum + (stats.get(k)?.netPL ?? 0), 0);
+      const rollingSum = rollingWindow.reduce(
+        (sum, k) => sum + (stats.get(k)?.netPL ?? 0),
+        0
+      );
       rollingWeeklyMap.set(key, rollingSum);
       stat.rollingWeeklyPL = rollingSum;
 
@@ -748,19 +811,26 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
   const maxMarginForMonth = useMemo(() => {
     let max = 0;
     const currentMonthStr = format(currentDate, "yyyy-MM");
-    
+
     dailyStats.forEach((stat, dateKey) => {
       if (dateKey.startsWith(currentMonthStr)) {
         max = Math.max(max, stat.maxMargin);
       }
     });
-    
+
     return max;
   }, [dailyStats, currentDate]);
 
   const exportMonthCsv = () => {
     const currentMonthStr = format(currentDate, "yyyy-MM");
-    const headers = ["Date", "NetPL", "Trades", "WinRate", "DrawdownPct", "RollingWeeklyPL"];
+    const headers = [
+      "Date",
+      "NetPL",
+      "Trades",
+      "WinRate",
+      "DrawdownPct",
+      "RollingWeeklyPL",
+    ];
     const rows: string[] = [];
     dailyStats.forEach((stat, key) => {
       if (key.startsWith(currentMonthStr)) {
@@ -865,11 +935,11 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       weekStat.winCount += stat.winCount;
       weekStat.maxMargin = Math.max(weekStat.maxMargin, stat.maxMargin);
       weekStat.marginUsed = (weekStat.marginUsed || 0) + (stat.marginUsed || 0);
-        weekStat.trades.push(...stat.trades);
-        weekStat.dailyBreakdown?.push({
-          date: stat.date,
-          netPL: stat.netPL,
-          tradeCount: stat.tradeCount,
+      weekStat.trades.push(...stat.trades);
+      weekStat.dailyBreakdown?.push({
+        date: stat.date,
+        netPL: stat.netPL,
+        tradeCount: stat.tradeCount,
         winRate:
           stat.tradeCount > 0
             ? Math.round((stat.winCount / stat.tradeCount) * 100)
@@ -878,9 +948,7 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
         margin: stat.trades.reduce((sum, t) => sum + (t.margin || 0), 0),
       });
       if (stat.regime) {
-        weekStat.regime =
-          weekStat.regime ??
-          stat.regime; // set a default; we will finalize later with dominant regime
+        weekStat.regime = weekStat.regime ?? stat.regime; // set a default; we will finalize later with dominant regime
         weekStat.regimeCounts = weekStat.regimeCounts || {};
         const key = stat.regime as MarketRegime;
         weekStat.regimeCounts[key] = (weekStat.regimeCounts[key] || 0) + 1;
@@ -922,7 +990,12 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       winRate: 0,
     }));
 
-    const sizedPLMap = computeSizedPLMap(filteredTrades, sizingMode, KELLY_BASE_EQUITY, kellyFraction);
+    const sizedPLMap = computeSizedPLMap(
+      filteredTrades,
+      sizingMode,
+      KELLY_BASE_EQUITY,
+      kellyFraction
+    );
 
     filteredTrades.forEach((t) => {
       const dateKey = resolveDayKey(t);
@@ -985,14 +1058,14 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
   const years = useMemo(() => {
     const yearsSet = new Set<number>();
     trades.forEach((t) => {
-        const key = resolveDayKey(t);
-        if (key && key !== "1970-01-01") {
-          yearsSet.add(getYear(parseISO(key)));
-          return;
-        }
-        const fallback =
-          t.dateOpened instanceof Date ? t.dateOpened : new Date(t.dateOpened);
-        if (!isNaN(fallback.getTime())) yearsSet.add(getYear(fallback));
+      const key = resolveDayKey(t);
+      if (key && key !== "1970-01-01") {
+        yearsSet.add(getYear(parseISO(key)));
+        return;
+      }
+      const fallback =
+        t.dateOpened instanceof Date ? t.dateOpened : new Date(t.dateOpened);
+      if (!isNaN(fallback.getTime())) yearsSet.add(getYear(fallback));
     });
     // Ensure current year is always available
     yearsSet.add(new Date().getFullYear());
@@ -1019,7 +1092,9 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
                   : "text-rose-500"
               )}
             >
-              {formatCompactUsd(view === "year" ? totalPLAll : periodStats.netPL)}
+              {formatCompactUsd(
+                view === "year" ? totalPLAll : periodStats.netPL
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1100,7 +1175,9 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
           </div>
 
           <div className="inline-flex items-center gap-2 rounded-full border bg-muted/40 p-1 text-xs">
-            <span className="text-[11px] text-muted-foreground px-2">Sizing</span>
+            <span className="text-[11px] text-muted-foreground px-2">
+              Sizing
+            </span>
             <Button
               size="sm"
               variant={sizingMode === "actual" ? "default" : "ghost"}
@@ -1186,12 +1263,16 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-sm text-muted-foreground">Drawdown &gt; %</label>
+            <label className="text-sm text-muted-foreground">
+              Drawdown &gt; %
+            </label>
             <input
               type="number"
               className="w-20 rounded border bg-background px-2 py-1 text-sm"
               value={drawdownThreshold}
-              onChange={(e) => setDrawdownThreshold(Number(e.target.value) || 0)}
+              onChange={(e) =>
+                setDrawdownThreshold(Number(e.target.value) || 0)
+              }
             />
           </div>
 
@@ -1232,7 +1313,6 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
             {weekdayAlpha.length > 0 && (
               <WeekdayAlphaMap stats={weekdayAlpha} sizingMode={sizingMode} />
             )}
-
           </div>
         ) : (
           <div className="space-y-4">
@@ -1262,19 +1342,29 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
                     block={block}
                     baseTrades={filteredTrades}
                     dateRange={dateRange}
-                    onUpdateTrades={(newTrades, name) => updateYearBlockTrades(block.id, newTrades, name)}
+                    onUpdateTrades={(newTrades, name) =>
+                      updateYearBlockTrades(block.id, newTrades, name)
+                    }
                     onClose={() => removeYearBlock(block.id)}
                     renderContent={(blockTrades) => (
                       <div className="space-y-4">
                         {!block.isPrimary && (
                           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                             {(() => {
-                              const summaryRaw = computeBlockSummary(blockTrades);
+                              const summaryRaw =
+                                computeBlockSummary(blockTrades);
                               const summary =
-                                summaryRaw.tradeCount === baseSummary.tradeCount &&
-                                Math.abs(summaryRaw.totalPL - baseSummary.totalPL) < 1 &&
+                                summaryRaw.tradeCount ===
+                                  baseSummary.tradeCount &&
+                                Math.abs(
+                                  summaryRaw.totalPL - baseSummary.totalPL
+                                ) < 1 &&
                                 summaryRaw.winRate === baseSummary.winRate
-                                  ? { ...summaryRaw, maxDrawdownPct: baseSummary.maxDrawdownPct }
+                                  ? {
+                                      ...summaryRaw,
+                                      maxDrawdownPct:
+                                        baseSummary.maxDrawdownPct,
+                                    }
                                   : summaryRaw;
                               return (
                                 <>
@@ -1283,13 +1373,17 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
                                       <CardTitle className="text-sm font-medium">
                                         Net P/L (All Data)
                                       </CardTitle>
-                                      <span className="text-muted-foreground">$</span>
+                                      <span className="text-muted-foreground">
+                                        $
+                                      </span>
                                     </CardHeader>
                                     <CardContent>
                                       <div
                                         className={cn(
                                           "text-2xl font-bold",
-                                          summary.totalPL >= 0 ? "text-emerald-500" : "text-rose-500"
+                                          summary.totalPL >= 0
+                                            ? "text-emerald-500"
+                                            : "text-rose-500"
                                         )}
                                       >
                                         {formatCompactUsd(summary.totalPL)}
@@ -1298,26 +1392,40 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
                                   </Card>
                                   <Card>
                                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                      <CardTitle className="text-sm font-medium">Total Trades</CardTitle>
+                                      <CardTitle className="text-sm font-medium">
+                                        Total Trades
+                                      </CardTitle>
                                       <TableIcon className="h-4 w-4 text-muted-foreground" />
                                     </CardHeader>
                                     <CardContent>
-                                      <div className="text-2xl font-bold">{summary.tradeCount}</div>
+                                      <div className="text-2xl font-bold">
+                                        {summary.tradeCount}
+                                      </div>
                                     </CardContent>
                                   </Card>
                                   <Card>
                                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                      <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-                                      <div className="text-muted-foreground">%</div>
+                                      <CardTitle className="text-sm font-medium">
+                                        Win Rate
+                                      </CardTitle>
+                                      <div className="text-muted-foreground">
+                                        %
+                                      </div>
                                     </CardHeader>
                                     <CardContent>
-                                      <div className="text-2xl font-bold">{summary.winRate}%</div>
+                                      <div className="text-2xl font-bold">
+                                        {summary.winRate}%
+                                      </div>
                                     </CardContent>
                                   </Card>
                                   <Card>
                                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                      <CardTitle className="text-sm font-medium">Max Drawdown</CardTitle>
-                                      <div className="text-muted-foreground">%</div>
+                                      <CardTitle className="text-sm font-medium">
+                                        Max Drawdown
+                                      </CardTitle>
+                                      <div className="text-muted-foreground">
+                                        %
+                                      </div>
                                     </CardHeader>
                                     <CardContent>
                                       <div className="text-2xl font-bold text-rose-500">
@@ -1377,7 +1485,9 @@ function WeeklySummaryGrid({
     const sign = value < 0 ? "-" : "";
     if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
     if (abs >= 10_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
-    return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    return `${sign}$${abs.toLocaleString(undefined, {
+      maximumFractionDigits: 0,
+    })}`;
   };
 
   return (
@@ -1412,11 +1522,17 @@ function WeeklySummaryGrid({
                 "bg-gradient-to-br",
                 tone
               )}
-              title={`P/L: ${formatCompactUsd(week.netPL)} • Trades: ${week.tradeCount} • Max Margin: ${formatCompactUsd(week.maxMargin)}`}
+              title={`P/L: ${formatCompactUsd(week.netPL)} • Trades: ${
+                week.tradeCount
+              } • Max Margin: ${formatCompactUsd(week.maxMargin)}`}
             >
               <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
                 <span className="text-white/70">{rangeLabel}</span>
-                <span className={week.netPL >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                <span
+                  className={
+                    week.netPL >= 0 ? "text-emerald-300" : "text-rose-300"
+                  }
+                >
                   {week.netPL >= 0 ? "+" : "-"}
                   {formatCompactUsd(Math.abs(week.netPL))}
                 </span>
@@ -1430,43 +1546,53 @@ function WeeklySummaryGrid({
 
               <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-white/80">
                 <div className="rounded-lg bg-black/20 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wide text-white/50">Trades</div>
+                  <div className="text-[10px] uppercase tracking-wide text-white/50">
+                    Trades
+                  </div>
                   <div className="text-sm font-semibold">{week.tradeCount}</div>
                 </div>
                 <div className="rounded-lg bg-black/20 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wide text-white/50">Win Rate</div>
+                  <div className="text-[10px] uppercase tracking-wide text-white/50">
+                    Win Rate
+                  </div>
                   <div className="text-sm font-semibold">{week.winRate}%</div>
                 </div>
                 <div className="rounded-lg bg-black/20 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wide text-white/50">Max Margin</div>
-                <div className="text-sm font-semibold">
-                  {formatCompactUsd(week.maxMargin)}
+                  <div className="text-[10px] uppercase tracking-wide text-white/50">
+                    Max Margin
+                  </div>
+                  <div className="text-sm font-semibold">
+                    {formatCompactUsd(week.maxMargin)}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-black/20 px-3 py-2 col-span-3 flex items-center justify-between">
+                  <div className="text-[10px] uppercase tracking-wide text-white/50">
+                    Margin Used
+                  </div>
+                  <div className="text-sm font-semibold">
+                    {formatCompactUsd(week.marginUsed || 0)}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wide text-white/50">
+                    ROM
+                  </div>
+                  <div
+                    className={cn(
+                      "text-sm font-semibold",
+                      (week.romPct || 0) >= 0
+                        ? "text-emerald-300"
+                        : "text-rose-300"
+                    )}
+                  >
+                    {week.romPct !== undefined
+                      ? `${week.romPct.toFixed(1)}%`
+                      : "—"}
+                  </div>
                 </div>
               </div>
-              <div className="rounded-lg bg-black/20 px-3 py-2 col-span-3 flex items-center justify-between">
-                <div className="text-[10px] uppercase tracking-wide text-white/50">
-                  Margin Used
-                </div>
-                <div className="text-sm font-semibold">
-                  {formatCompactUsd(week.marginUsed || 0)}
-                </div>
-                <div className="text-[10px] uppercase tracking-wide text-white/50">
-                  ROM
-                </div>
-                <div
-                  className={cn(
-                    "text-sm font-semibold",
-                    (week.romPct || 0) >= 0 ? "text-emerald-300" : "text-rose-300"
-                  )}
-                >
-                  {week.romPct !== undefined ? `${week.romPct.toFixed(1)}%` : "—"}
-                </div>
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1490,18 +1616,27 @@ function YearlyPLOutput({
 }: YearlyPLOutputProps) {
   // DEBUG: Log what YearlyPLOutput receives
 
-
   const filtered = useMemo(() => {
     if (selectedStrategies.length === 0) return trades;
-    return trades.filter((t) => selectedStrategies.includes(t.strategy || "Custom"));
+    return trades.filter((t) =>
+      selectedStrategies.includes(t.strategy || "Custom")
+    );
   }, [trades, selectedStrategies]);
 
   const yearlySnapshot = useMemo<YearlyCalendarSnapshot>(() => {
     const yearMap = new Map<
       number,
-      Map<number, { netPL: number; trades: number; wins: number; margin: number }>
+      Map<
+        number,
+        { netPL: number; trades: number; wins: number; margin: number }
+      >
     >();
-    const sizedPLMap = computeSizedPLMap(filtered, sizingMode, KELLY_BASE_EQUITY, kellyFraction);
+    const sizedPLMap = computeSizedPLMap(
+      filtered,
+      sizingMode,
+      KELLY_BASE_EQUITY,
+      kellyFraction
+    );
 
     filtered.forEach((trade) => {
       const dayKey = resolveDayKey(trade);
@@ -1512,7 +1647,8 @@ function YearlyPLOutput({
 
       if (!yearMap.has(y)) yearMap.set(y, new Map());
       const monthMap = yearMap.get(y)!;
-      if (!monthMap.has(m)) monthMap.set(m, { netPL: 0, trades: 0, wins: 0, margin: 0 });
+      if (!monthMap.has(m))
+        monthMap.set(m, { netPL: 0, trades: 0, wins: 0, margin: 0 });
       const entry = monthMap.get(m)!;
       const sizedPL = sizedPLMap.get(trade) ?? trade.pl;
       entry.netPL += sizedPL;
@@ -1523,7 +1659,9 @@ function YearlyPLOutput({
 
     const years = Array.from(yearMap.entries())
       .map(([year, monthsMap]) => {
-        const sortedMonths = Array.from(monthsMap.entries()).sort((a, b) => a[0] - b[0]);
+        const sortedMonths = Array.from(monthsMap.entries()).sort(
+          (a, b) => a[0] - b[0]
+        );
         let running = 0;
         const months = sortedMonths.map(([month, vals]) => {
           running += vals.netPL;
@@ -1531,7 +1669,8 @@ function YearlyPLOutput({
             month,
             netPL: vals.netPL,
             trades: vals.trades,
-            winRate: vals.trades > 0 ? Math.round((vals.wins / vals.trades) * 100) : 0,
+            winRate:
+              vals.trades > 0 ? Math.round((vals.wins / vals.trades) * 100) : 0,
             romPct: vals.margin > 0 ? (vals.netPL / vals.margin) * 100 : 0,
             runningNetPL: running,
           };
@@ -1554,7 +1693,10 @@ function YearlyPLOutput({
           total: {
             netPL: total.netPL,
             trades: total.trades,
-            winRate: total.trades > 0 ? Math.round((total.wins / total.trades) * 100) : 0,
+            winRate:
+              total.trades > 0
+                ? Math.round((total.wins / total.trades) * 100)
+                : 0,
             romPct: total.margin > 0 ? (total.netPL / total.margin) * 100 : 0,
           },
         };
@@ -1589,16 +1731,33 @@ function YearlyPLOutput({
 
   return (
     <>
-      <YearHeatmap data={yearlySnapshot} metric={heatmapMetric} onMonthClick={onMonthClick} />
+      <YearHeatmap
+        data={yearlySnapshot}
+        metric={heatmapMetric}
+        onMonthClick={onMonthClick}
+      />
       <div className="space-y-2 mt-4">
-        <h3 className="text-sm font-medium text-muted-foreground">Average Monthly P/L (across visible years)</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">
+          Average Monthly P/L (across visible years)
+        </h3>
         <div className="grid grid-cols-2 gap-1 text-xs sm:grid-cols-3 lg:grid-cols-6">
-          {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((label, idx) => {
+          {[
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+          ].map((label, idx) => {
             const stats = averageMonthlyStats[idx];
             const value =
-              heatmapMetric === "rom"
-                ? stats?.avgRom ?? 0
-                : stats?.avgPL ?? 0;
+              heatmapMetric === "rom" ? stats?.avgRom ?? 0 : stats?.avgPL ?? 0;
             const positive = value >= 0;
             const formatted =
               heatmapMetric === "rom"
@@ -1609,8 +1768,16 @@ function YearlyPLOutput({
                 key={label}
                 className="rounded-md bg-muted/40 px-1.5 py-1 text-center"
               >
-                <div className="mb-0.5 text-[10px] text-muted-foreground">{label}</div>
-                <div className={positive ? "font-semibold text-emerald-400" : "font-semibold text-rose-400"}>
+                <div className="mb-0.5 text-[10px] text-muted-foreground">
+                  {label}
+                </div>
+                <div
+                  className={
+                    positive
+                      ? "font-semibold text-emerald-400"
+                      : "font-semibold text-rose-400"
+                  }
+                >
                   {formatted}
                 </div>
               </div>
