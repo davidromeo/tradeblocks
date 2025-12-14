@@ -77,7 +77,9 @@ export function simulateCapitalPath(
     grouped.get(key)!.push(t);
   });
 
-  const days = Array.from(grouped.keys()).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  const days = Array.from(grouped.keys()).sort(
+    (a, b) => new Date(a).getTime() - new Date(b).getTime()
+  );
 
   let equity = startingCapital;
   let monthStartEquity = startingCapital;
@@ -97,7 +99,10 @@ export function simulateCapitalPath(
         const allocPct = 0.04;
         const basisPerLot = t.marginReq ?? t.premium ?? 1;
         const effectiveBasis = basisPerLot > 0 ? basisPerLot : 1;
-        const lots = Math.max(0, Math.floor((equity * allocPct) / effectiveBasis));
+        const lots = Math.max(
+          0,
+          Math.floor((equity * allocPct) / effectiveBasis)
+        );
         dayPL += (t.pl || 0) * lots;
       }
     });
@@ -113,8 +118,7 @@ export function simulateCapitalPath(
 
     // Apply withdrawals on the last day of the month.
     const isLastDayOfMonth =
-      idx === days.length - 1 ||
-      monthKey(dayKey) !== monthKey(days[idx + 1]);
+      idx === days.length - 1 || monthKey(dayKey) !== monthKey(days[idx + 1]);
 
     let withdrawalToday = 0;
     if (isLastDayOfMonth) {
@@ -168,9 +172,11 @@ export function simulateCapitalPath(
   };
 }
 
+import { format } from "date-fns";
+
 function toDateKey(dateInput: string): string {
   const d = new Date(dateInput);
-  return d.toISOString().slice(0, 10);
+  return format(d, "yyyy-MM-dd");
 }
 
 function monthKey(dateKey: string): string {
