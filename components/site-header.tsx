@@ -49,6 +49,10 @@ const routeMeta: Record<
     title: "Walk-Forward Analysis",
     description: "Validate performance across shifting regimes with rolling IS/OOS windows.",
   },
+  "/static-datasets": {
+    title: "Static Datasets",
+    description: "Upload and manage time-series data to match against your trades.",
+  },
   "/settings": {
     title: "Settings",
     description:
