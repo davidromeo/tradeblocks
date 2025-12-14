@@ -443,7 +443,8 @@ function calculatePerformanceStats(
   viewMode: CalendarViewMode,
   dailyLogs: DailyLogEntry[],
   backtestTrades: Trade[],
-  scalingMode: ScalingMode = 'raw'
+  scalingMode: ScalingMode = 'raw',
+  dateDisplayMode: DateDisplayMode = 'exit'
 ): CalendarPerformanceStats {
   // Get date range based on view mode
   const year = viewDate.getFullYear()
@@ -487,9 +488,9 @@ function calculatePerformanceStats(
   const useTradeBasedCalculation = scalingMode === 'perContract' || dailyLogs.length < 2
 
   if (useTradeBasedCalculation && backtestTrades.length > 0) {
-    // Filter trades to date range
+    // Filter trades to date range using the appropriate date based on display mode
     const tradesInRange = backtestTrades.filter(t => {
-      const tradeDate = formatDateKey(t.dateClosed || t.dateOpened)
+      const tradeDate = formatDateKey(getTradeDate(t, dateDisplayMode))
       return tradeDate >= startKey && tradeDate <= endKey
     })
 
@@ -712,7 +713,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
         'month',
         dailyLogs,
         backtestTrades,
-        defaultScalingMode
+        defaultScalingMode,
+        defaultDateDisplayMode
       )
       const comparisonStats = calculateComparisonStats(
         calendarDays,
@@ -755,7 +757,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.calendarViewMode,
       state.dailyLogs,
       state.backtestTrades,
-      mode
+      mode,
+      state.dateDisplayMode
     )
     const comparisonStats = calculateComparisonStats(
       state.calendarDays,
@@ -777,7 +780,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       mode,
       state.dailyLogs,
       state.backtestTrades,
-      state.scalingMode
+      state.scalingMode,
+      state.dateDisplayMode
     )
     const comparisonStats = calculateComparisonStats(
       state.calendarDays,
@@ -800,14 +804,15 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.strategyMatches,
       mode
     )
-    // Recalculate stats
+    // Recalculate stats with the new date display mode
     const performanceStats = calculatePerformanceStats(
       calendarDays,
       state.viewDate,
       state.calendarViewMode,
       state.dailyLogs,
       state.backtestTrades,
-      state.scalingMode
+      state.scalingMode,
+      mode
     )
     const comparisonStats = calculateComparisonStats(
       calendarDays,
@@ -833,7 +838,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.calendarViewMode,
       state.dailyLogs,
       state.backtestTrades,
-      state.scalingMode
+      state.scalingMode,
+      state.dateDisplayMode
     )
     const comparisonStats = calculateComparisonStats(
       state.calendarDays,
@@ -901,7 +907,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.calendarViewMode,
       state.dailyLogs,
       state.backtestTrades,
-      state.scalingMode
+      state.scalingMode,
+      state.dateDisplayMode
     )
     const comparisonStats = calculateComparisonStats(
       calendarDays,
@@ -984,7 +991,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.calendarViewMode,
       state.dailyLogs,
       state.backtestTrades,
-      state.scalingMode
+      state.scalingMode,
+      state.dateDisplayMode
     )
     const comparisonStats = calculateComparisonStats(
       calendarDays,
