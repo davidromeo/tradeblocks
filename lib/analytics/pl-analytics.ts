@@ -1,4 +1,5 @@
-import { format, getISOWeek, getISOWeekYear } from "date-fns";
+import { getTradingDayKey } from "@/lib/utils/trading-day";
+import { getISOWeek, getISOWeekYear } from "date-fns";
 
 export type LogType = "sized" | "oneLot";
 
@@ -358,7 +359,7 @@ export function computeEquityAndWithdrawals(
 }
 
 function toDateKey(date: Date): string {
-  return format(date, "yyyy-MM-dd");
+  return getTradingDayKey(date);
 }
 
 function computeCAGR(

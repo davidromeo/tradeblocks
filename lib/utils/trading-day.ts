@@ -1,4 +1,5 @@
 import { format, parse } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 
 // Convert a raw opened-on value (string or Date) plus optional time into a stable ET trading-day key.
 // Returns yyyy-MM-dd; falls back to 1970-01-01 if parsing fails so callers can skip invalid rows.
@@ -42,5 +43,6 @@ export function getTradingDayKey(
 
   if (!base || isNaN(base.getTime())) return "1970-01-01";
 
-  return format(base, "yyyy-MM-dd");
+  const et = toZonedTime(base, "America/New_York");
+  return format(et, "yyyy-MM-dd");
 }

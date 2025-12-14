@@ -15,7 +15,7 @@
  * This ensures our calculations match the legacy Python implementation exactly.
  */
 
-import { format } from "date-fns";
+import { getTradingDayKey } from "@/lib/utils/trading-day";
 import { max, mean, min, std } from "mathjs";
 import { DailyLogEntry } from "../models/daily-log";
 import {
@@ -342,7 +342,7 @@ export class PortfolioStatsCalculator {
       runningEquity = equity;
 
       const closeDate = new Date(trade.dateClosed as Date);
-      const dayKey = format(closeDate, "yyyy-MM-dd");
+      const dayKey = getTradingDayKey(closeDate);
       const isoDate = closeDate.toISOString();
 
       const lastPoint = dailyEquity[dailyEquity.length - 1];
@@ -396,7 +396,7 @@ export class PortfolioStatsCalculator {
       try {
         const date = new Date(trade.dateOpened);
         if (!isNaN(date.getTime())) {
-          const dateKey = format(date, "yyyy-MM-dd");
+          const dateKey = getTradingDayKey(date);
           const currentPl = dailyPl.get(dateKey) || 0;
           dailyPl.set(dateKey, currentPl + trade.pl);
         }
@@ -442,7 +442,7 @@ export class PortfolioStatsCalculator {
         try {
           const date = new Date(trade.dateOpened);
           if (!isNaN(date.getTime())) {
-            const dateKey = format(date, "yyyy-MM-dd");
+            const dateKey = getTradingDayKey(date);
             const currentPl = dailyPl.get(dateKey) || 0;
             dailyPl.set(dateKey, currentPl + trade.pl);
           }
@@ -842,7 +842,7 @@ export class PortfolioStatsCalculator {
 
     // Group trades by date
     for (const trade of sortedTrades) {
-      const dateKey = format(new Date(trade.dateOpened), "yyyy-MM-dd");
+      const dateKey = getTradingDayKey(new Date(trade.dateOpened));
       if (!tradesByDate.has(dateKey)) {
         tradesByDate.set(dateKey, []);
       }
