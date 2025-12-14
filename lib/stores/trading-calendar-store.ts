@@ -3,6 +3,8 @@ import { Trade } from '@/lib/models/trade'
 import { ReportingTrade } from '@/lib/models/reporting-trade'
 import { DailyLogEntry } from '@/lib/models/daily-log'
 import { calculateAdvancedMetrics, calculateTradeMetrics } from '@/lib/services/calendar-data'
+import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
+import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
 
 /**
  * Scaling modes for P&L display
@@ -383,46 +385,6 @@ function buildCalendarDays(
 }
 
 /**
- * Get scaled P/L for a calendar day based on scaling mode
- *
- * When actual trades exist, shows actual P/L (possibly scaled).
- * When only backtest exists, shows backtest P/L (possibly scaled).
- *
- * Scaling modes:
- * - raw: Show P/L as-is
- * - perContract: Normalize to per-contract
- * - toReported: Scale actual DOWN to match backtest contract counts
- */
-function getScaledDayPl(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  // If only backtest data, show backtest P/L (scaled if applicable)
-  if (!dayData.hasActual) {
-    if (scalingMode === 'perContract') {
-      const totalContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-      return totalContracts > 0 ? dayData.backtestPl / totalContracts : 0
-    }
-    return dayData.backtestPl
-  }
-
-  // If actual data exists, show actual P/L (scaled if applicable)
-  if (scalingMode === 'perContract') {
-    const totalContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.actualPl / totalContracts : 0
-  }
-
-  if (scalingMode === 'toReported' && dayData.hasBacktest) {
-    // Scale actual DOWN to match backtest contract counts
-    const btContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    const actualContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    if (actualContracts > 0 && btContracts > 0) {
-      return dayData.actualPl * (btContracts / actualContracts)
-    }
-  }
-
-  // raw shows actual P/L as-is
-  return dayData.actualPl
-}
-
-/**
  * Get scaled backtest P/L for comparison stats
  *
  * Scaling modes:
@@ -480,7 +442,8 @@ function calculatePerformanceStats(
   viewDate: Date,
   viewMode: CalendarViewMode,
   dailyLogs: DailyLogEntry[],
-  _scalingMode: ScalingMode = 'raw'
+  backtestTrades: Trade[],
+  scalingMode: ScalingMode = 'raw'
 ): CalendarPerformanceStats {
   // Get date range based on view mode
   const year = viewDate.getFullYear()
@@ -518,7 +481,45 @@ function calculatePerformanceStats(
   // Calculate trade-based metrics
   const tradeMetrics = calculateTradeMetrics(days, startKey, endKey, useActual)
 
-  // Calculate advanced metrics from daily logs
+  // When scaling is active (perContract), we must use trade-based calculations
+  // because daily logs represent raw portfolio values that don't scale properly.
+  // This matches the behavior in performance-snapshot.ts
+  const useTradeBasedCalculation = scalingMode === 'perContract' || dailyLogs.length < 2
+
+  if (useTradeBasedCalculation && backtestTrades.length > 0) {
+    // Filter trades to date range
+    const tradesInRange = backtestTrades.filter(t => {
+      const tradeDate = formatDateKey(t.dateClosed || t.dateOpened)
+      return tradeDate >= startKey && tradeDate <= endKey
+    })
+
+    if (tradesInRange.length >= 2) {
+      // Use normalizeTradesToOneLot for proper equity curve reconstruction
+      // This matches what block stats does when "normalize to 1 lot" is enabled
+      const scaledTrades = scalingMode === 'perContract'
+        ? normalizeTradesToOneLot(tradesInRange)
+        : tradesInRange
+
+      const calculator = new PortfolioStatsCalculator()
+      const portfolioStats = calculator.calculatePortfolioStats(scaledTrades)
+
+      return {
+        totalPl: tradeMetrics.totalPl,
+        winRate: tradeMetrics.winRate,
+        tradeCount: tradeMetrics.tradeCount,
+        tradingDays: tradeMetrics.tradingDays,
+        sharpe: portfolioStats.sharpeRatio ?? null,
+        sortino: portfolioStats.sortinoRatio ?? null,
+        maxDrawdown: portfolioStats.maxDrawdown ?? null,
+        cagr: portfolioStats.cagr ?? null,
+        calmar: portfolioStats.calmarRatio ?? null,
+        avgRom: tradeMetrics.avgRom,
+        avgPremiumCapture: tradeMetrics.avgPremiumCapture
+      }
+    }
+  }
+
+  // Use daily logs for advanced metrics when not scaling
   const advancedMetrics = calculateAdvancedMetrics(dailyLogs, startKey, endKey)
 
   return {
@@ -710,6 +711,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
         viewDate,
         'month',
         dailyLogs,
+        backtestTrades,
         defaultScalingMode
       )
       const comparisonStats = calculateComparisonStats(
@@ -752,6 +754,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.viewDate,
       state.calendarViewMode,
       state.dailyLogs,
+      state.backtestTrades,
       mode
     )
     const comparisonStats = calculateComparisonStats(
@@ -773,6 +776,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.viewDate,
       mode,
       state.dailyLogs,
+      state.backtestTrades,
       state.scalingMode
     )
     const comparisonStats = calculateComparisonStats(
@@ -802,6 +806,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.viewDate,
       state.calendarViewMode,
       state.dailyLogs,
+      state.backtestTrades,
       state.scalingMode
     )
     const comparisonStats = calculateComparisonStats(
@@ -827,6 +832,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       date,
       state.calendarViewMode,
       state.dailyLogs,
+      state.backtestTrades,
       state.scalingMode
     )
     const comparisonStats = calculateComparisonStats(
@@ -894,6 +900,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.viewDate,
       state.calendarViewMode,
       state.dailyLogs,
+      state.backtestTrades,
       state.scalingMode
     )
     const comparisonStats = calculateComparisonStats(
@@ -976,6 +983,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.viewDate,
       state.calendarViewMode,
       state.dailyLogs,
+      state.backtestTrades,
       state.scalingMode
     )
     const comparisonStats = calculateComparisonStats(

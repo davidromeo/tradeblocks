@@ -545,8 +545,10 @@ export interface TradeBasedMetrics {
 }
 
 /**
- * Calculate advanced metrics from daily log entries filtered to a date range
- * These metrics require a time series of daily returns
+ * Calculate advanced metrics from daily log entries filtered to a date range.
+ * If daily logs don't have enough data, returns null values - the caller is
+ * responsible for falling back to trade-based calculations (using PortfolioStatsCalculator).
+ * These metrics require a time series of daily returns.
  */
 export function calculateAdvancedMetrics(
   dailyLogs: DailyLogEntry[],
@@ -559,16 +561,27 @@ export function calculateAdvancedMetrics(
     return logKey >= startDate && logKey <= endDate
   }).sort((a, b) => a.date.getTime() - b.date.getTime())
 
-  if (filteredLogs.length < 2) {
-    return {
-      sharpe: null,
-      sortino: null,
-      maxDrawdown: null,
-      cagr: null,
-      calmar: null
-    }
+  // If we have daily logs, use them
+  if (filteredLogs.length >= 2) {
+    return calculateMetricsFromDailyLogs(filteredLogs)
   }
 
+  // No data available - caller should fall back to trade-based calculation
+  return {
+    sharpe: null,
+    sortino: null,
+    maxDrawdown: null,
+    cagr: null,
+    calmar: null
+  }
+}
+
+/**
+ * Calculate advanced metrics from daily log entries
+ */
+function calculateMetricsFromDailyLogs(
+  filteredLogs: DailyLogEntry[]
+): AdvancedPerformanceMetrics {
   // Calculate daily returns from net liquidity
   const dailyReturns: number[] = []
   for (let i = 1; i < filteredLogs.length; i++) {
