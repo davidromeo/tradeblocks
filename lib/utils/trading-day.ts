@@ -40,9 +40,7 @@ export function getTradingDayKey(
       base = isNaN(fallback.getTime()) ? null : fallback;
     }
   }
-
   if (!base || isNaN(base.getTime())) return "1970-01-01";
-
   const et = toZonedTime(base, "America/New_York");
   return format(et, "yyyy-MM-dd");
 }

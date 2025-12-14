@@ -58,6 +58,7 @@ export interface Trade {
    * Raw "Date Opened" string from CSV for traceability.
    */
   openedOnRaw?: string;
+
   /**
    * Optional per-trade drawdown percentage if provided by source logs (e.g., Option Omega).
    * This is not required for core calculations but can be used for debugging uploaded logs.
