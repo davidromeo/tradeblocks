@@ -4,17 +4,24 @@ import { MetricCard } from "@/components/metric-card";
 import { MetricSection } from "@/components/metric-section";
 import { MultiSelect } from "@/components/multi-select";
 import { NoActiveBlock } from "@/components/no-active-block";
+import { SizingModeToggle } from "@/components/sizing-mode-toggle";
 import { StrategyBreakdownTable } from "@/components/strategy-breakdown-table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SizingModeToggle } from "@/components/sizing-mode-toggle";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
 import {
   getBlock,
   getDailyLogsByBlock,
-  getTradesByBlockWithOptions,
   getPerformanceSnapshotCache,
+  getTradesByBlockWithOptions,
 } from "@/lib/db";
 import {
   calculatePremiumEfficiencyPercent,
@@ -25,12 +32,14 @@ import { PortfolioStats, StrategyStats } from "@/lib/models/portfolio-stats";
 import { Trade } from "@/lib/models/trade";
 import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
 import { useBlockStore } from "@/lib/stores/block-store";
+import { cn } from "@/lib/utils";
 import {
   downloadCsv,
   downloadJson,
   generateExportFilename,
   toCsvRow,
 } from "@/lib/utils/export-helpers";
+import { format } from "date-fns";
 import {
   AlertTriangle,
   BarChart3,
@@ -41,15 +50,6 @@ import {
   Target,
   TrendingUp,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { DateRange } from "react-day-picker";
 
@@ -159,7 +159,9 @@ export default function BlockStatsPage() {
           !dateRange?.to;
 
         if (isDefaultView) {
-          const cachedSnapshot = await getPerformanceSnapshotCache(activeBlock.id);
+          const cachedSnapshot = await getPerformanceSnapshotCache(
+            activeBlock.id
+          );
           if (cachedSnapshot) {
             // Use cached data directly - much faster!
             setTrades(cachedSnapshot.filteredTrades);
@@ -168,8 +170,12 @@ export default function BlockStatsPage() {
             setPortfolioStats(cachedSnapshot.portfolioStats);
 
             // Calculate strategy stats from cached trades
-            const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 });
-            const strategies = calculator.calculateStrategyStats(cachedSnapshot.filteredTrades);
+            const calculator = new PortfolioStatsCalculator({
+              riskFreeRate: 2.0,
+            });
+            const strategies = calculator.calculateStrategyStats(
+              cachedSnapshot.filteredTrades
+            );
             setStrategyStats(strategies);
 
             setIsLoadingData(false);
@@ -214,9 +220,7 @@ export default function BlockStatsPage() {
       try {
         const riskFree = parseFloat(riskFreeRate) || 2.0;
         const hasFilters =
-          selectedStrategies.length > 0 ||
-          dateRange?.from ||
-          dateRange?.to;
+          selectedStrategies.length > 0 || dateRange?.from || dateRange?.to;
 
         const snapshot = await buildPerformanceSnapshot({
           trades,
@@ -258,7 +262,14 @@ export default function BlockStatsPage() {
     // Use a small delay to avoid closing the popover during selection
     const timeoutId = setTimeout(calculateMetrics, 0);
     return () => clearTimeout(timeoutId);
-  }, [trades, dailyLogs, riskFreeRate, selectedStrategies, normalizeTo1Lot, dateRange]);
+  }, [
+    trades,
+    dailyLogs,
+    riskFreeRate,
+    selectedStrategies,
+    normalizeTo1Lot,
+    dateRange,
+  ]);
 
   // Helper functions
   const getDateRange = () => {
@@ -529,7 +540,9 @@ export default function BlockStatsPage() {
       toCsvRow([
         "Date Range Filter",
         dateRange?.from || dateRange?.to
-          ? `${dateRange?.from ? format(dateRange.from, "LLL dd, y") : "Start"} - ${dateRange?.to ? format(dateRange.to, "LLL dd, y") : "End"}`
+          ? `${
+              dateRange?.from ? format(dateRange.from, "LLL dd, y") : "Start"
+            } - ${dateRange?.to ? format(dateRange.to, "LLL dd, y") : "End"}`
           : "All time",
       ])
     );
@@ -547,7 +560,9 @@ export default function BlockStatsPage() {
     lines.push("# Portfolio Statistics");
     lines.push("Metric,Value");
     lines.push(toCsvRow(["Total Trades", portfolioStats.totalTrades]));
-    lines.push(toCsvRow(["Total P/L", `$${portfolioStats.totalPl.toFixed(2)}`]));
+    lines.push(
+      toCsvRow(["Total P/L", `$${portfolioStats.totalPl.toFixed(2)}`])
+    );
     lines.push(toCsvRow(["Net P/L", `$${portfolioStats.netPl.toFixed(2)}`]));
     lines.push(
       toCsvRow(["Win Rate", `${(portfolioStats.winRate * 100).toFixed(2)}%`])
@@ -586,9 +601,7 @@ export default function BlockStatsPage() {
         `${(portfolioStats.kellyPercentage || 0).toFixed(2)}%`,
       ])
     );
-    lines.push(
-      toCsvRow(["Max Win Streak", portfolioStats.maxWinStreak || 0])
-    );
+    lines.push(toCsvRow(["Max Win Streak", portfolioStats.maxWinStreak || 0]));
     lines.push(
       toCsvRow(["Max Loss Streak", portfolioStats.maxLossStreak || 0])
     );
@@ -605,7 +618,10 @@ export default function BlockStatsPage() {
       ])
     );
     lines.push(
-      toCsvRow(["Avg Return on Margin", `${getAvgReturnOnMargin().toFixed(2)}%`])
+      toCsvRow([
+        "Avg Return on Margin",
+        `${getAvgReturnOnMargin().toFixed(2)}%`,
+      ])
     );
     lines.push(
       toCsvRow(["Commission vs Premium", `${commissionShare.toFixed(2)}%`])
@@ -698,7 +714,7 @@ export default function BlockStatsPage() {
               <Button
                 variant="outline"
                 className={cn(
-                  "w-[280px] justify-start text-left font-normal",
+                  "w-[300px] justify-start text-left font-normal",
                   !dateRange && "text-muted-foreground"
                 )}
               >
