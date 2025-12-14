@@ -457,13 +457,11 @@ function calculatePerformanceStats(
     startDate = new Date(year, month, 1)
     endDate = new Date(year, month + 1, 0)
   } else {
-    // Week view - get Monday to Sunday
-    const day = viewDate.getDay()
-    const diff = viewDate.getDate() - day + (day === 0 ? -6 : 1) // Adjust for Sunday
+    // Week view - get Sunday to Saturday (matching getWeekGridDates in calendar-data.ts)
     startDate = new Date(viewDate)
-    startDate.setDate(diff)
+    startDate.setDate(viewDate.getDate() - viewDate.getDay()) // Go to Sunday
     endDate = new Date(startDate)
-    endDate.setDate(startDate.getDate() + 6)
+    endDate.setDate(startDate.getDate() + 6) // Saturday
   }
 
   const startKey = formatDateKey(startDate)
@@ -481,6 +479,24 @@ function calculatePerformanceStats(
 
   // Calculate trade-based metrics
   const tradeMetrics = calculateTradeMetrics(days, startKey, endKey, useActual)
+
+  // If no trades in the date range, return null for advanced metrics
+  // We shouldn't show performance stats for empty periods
+  if (tradeMetrics.tradeCount === 0) {
+    return {
+      totalPl: 0,
+      winRate: 0,
+      tradeCount: 0,
+      tradingDays: 0,
+      sharpe: null,
+      sortino: null,
+      maxDrawdown: null,
+      cagr: null,
+      calmar: null,
+      avgRom: null,
+      avgPremiumCapture: null
+    }
+  }
 
   // When scaling is active (perContract), we must use trade-based calculations
   // because daily logs represent raw portfolio values that don't scale properly.
@@ -561,12 +577,11 @@ function calculateComparisonStats(
     startDate = new Date(year, month, 1)
     endDate = new Date(year, month + 1, 0)
   } else {
-    const day = viewDate.getDay()
-    const diff = viewDate.getDate() - day + (day === 0 ? -6 : 1)
+    // Week view - get Sunday to Saturday (matching getWeekGridDates in calendar-data.ts)
     startDate = new Date(viewDate)
-    startDate.setDate(diff)
+    startDate.setDate(viewDate.getDate() - viewDate.getDay()) // Go to Sunday
     endDate = new Date(startDate)
-    endDate.setDate(startDate.getDate() + 6)
+    endDate.setDate(startDate.getDate() + 6) // Saturday
   }
 
   const startKey = formatDateKey(startDate)
