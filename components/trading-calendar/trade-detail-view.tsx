@@ -16,6 +16,8 @@ interface ComparisonRowProps {
   actualValue: string | number | null | undefined
   format?: 'currency' | 'number' | 'text' | 'percent'
   highlightDiff?: boolean
+  /** Scale factor to apply to backtest value (for toReported/perContract modes) */
+  scaleFactor?: number | null
 }
 
 function ComparisonRow({
@@ -23,7 +25,8 @@ function ComparisonRow({
   backtestValue,
   actualValue,
   format = 'text',
-  highlightDiff = false
+  highlightDiff = false,
+  scaleFactor = null
 }: ComparisonRowProps) {
   const formatValue = (value: string | number | null | undefined): string => {
     if (value === null || value === undefined) return '-'
@@ -34,22 +37,38 @@ function ComparisonRow({
     return String(value)
   }
 
-  const btFormatted = formatValue(backtestValue)
+  // Calculate scaled backtest value if scale factor provided
+  // Show SCALED value as primary, RAW value in parentheses
+  const hasScaling = scaleFactor !== null && scaleFactor !== 1 && typeof backtestValue === 'number'
+  const scaledBtValue = hasScaling ? (backtestValue as number) * scaleFactor! : null
+
+  // Primary display: scaled value if scaling, otherwise raw value
+  const btPrimaryValue = scaledBtValue ?? backtestValue
+  const btPrimaryFormatted = formatValue(btPrimaryValue)
+
+  // Secondary display: raw value in parentheses when scaling is active
+  const btRawFormatted = hasScaling ? formatValue(backtestValue) : null
+
   const actualFormatted = formatValue(actualValue)
 
-  // Calculate if there's a meaningful difference for highlighting
+  // Calculate diff using scaled (primary) value for proper comparison
   const showDiff = highlightDiff &&
-    typeof backtestValue === 'number' &&
+    typeof btPrimaryValue === 'number' &&
     typeof actualValue === 'number' &&
-    backtestValue !== actualValue
+    btPrimaryValue !== actualValue
 
-  const diff = showDiff ? (actualValue as number) - (backtestValue as number) : 0
+  const diff = showDiff ? (actualValue as number) - (btPrimaryValue as number) : 0
 
   return (
     <div className="grid grid-cols-3 gap-4 py-2 border-b border-border/50">
       <div className="text-sm text-muted-foreground">{label}</div>
       <div className="text-sm font-medium text-center">
-        {btFormatted}
+        {btPrimaryFormatted}
+        {btRawFormatted && (
+          <span className="text-xs text-muted-foreground ml-1">
+            (raw: {btRawFormatted})
+          </span>
+        )}
       </div>
       <div className={cn(
         "text-sm font-medium text-center",
@@ -122,6 +141,28 @@ export function TradeDetailView() {
     }
   }, [actualTrades])
 
+  // Calculate scale factor for detail rows based on scaling mode
+  const detailScaleFactor = useMemo(() => {
+    if (scalingMode === 'raw') return null // No scaling
+
+    const btContracts = backtestTrade?.numContracts ?? 0
+    const actualContracts = actualTrade?.numContracts ?? 0
+
+    if (scalingMode === 'perContract') {
+      // Divide by backtest contracts to get per-contract value
+      return btContracts > 0 ? 1 / btContracts : null
+    }
+
+    if (scalingMode === 'toReported') {
+      // Scale backtest down to match actual contract count
+      return btContracts > 0 && actualContracts > 0
+        ? actualContracts / btContracts
+        : null
+    }
+
+    return null
+  }, [scalingMode, backtestTrade, actualTrade])
+
   // Early return after all hooks
   if (!selectedDate || !selectedStrategy) return null
   if (!dayData) return null
@@ -136,102 +177,109 @@ export function TradeDetailView() {
   return (
     <div className="space-y-4">
       {/* Trade summary header */}
-      <Card className="py-4">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xl">{selectedStrategy}</CardTitle>
-            <div className="flex gap-2">
-              {backtestTrade && (
-                <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/50">
-                  Backtest
-                </Badge>
-              )}
-              {actualTrade && (
-                <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/50">
-                  Actual
-                </Badge>
+      <Card className="py-3">
+        <CardContent className="pt-0">
+          {/* Compact single-row header */}
+          <div className="flex items-center justify-between gap-6">
+            {/* Left: Strategy name and badges */}
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold">{selectedStrategy}</h2>
+              <div className="flex gap-1.5">
+                {backtestTrade && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/50 text-xs">
+                    Backtest
+                  </Badge>
+                )}
+                {actualTrade && (
+                  <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/50 text-xs">
+                    Actual
+                  </Badge>
+                )}
+              </div>
+              {scalingMode !== 'raw' && (
+                <span className="text-xs text-muted-foreground">
+                  {scalingMode === 'perContract' ? '(per contract)' : '(scaled to actual)'}
+                </span>
               )}
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Scaling mode indicator */}
-          {scalingMode !== 'raw' && (
-            <div className="text-xs text-muted-foreground mb-3">
-              {scalingMode === 'perContract' && '* Values normalized to 1 contract'}
-              {scalingMode === 'toReported' && '* Backtest scaled to match actual contract count'}
+
+            {/* Right: P&L values inline */}
+            <div className="flex items-center gap-6">
+              {scaledValues.backtest && (
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground">Backtest</div>
+                  <div className={cn(
+                    "text-lg font-bold",
+                    scaledValues.backtest.pl > 0 && "text-green-500",
+                    scaledValues.backtest.pl < 0 && "text-red-500"
+                  )}>
+                    {formatCurrency(scaledValues.backtest.pl)}
+                  </div>
+                  {scalingMode === 'raw' && btTotals && (
+                    <div className="text-xs text-muted-foreground">
+                      {btTotals.contracts}c · {btTotals.tradeCount}t
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {scaledValues.actual && (
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground">Actual</div>
+                  <div className={cn(
+                    "text-lg font-bold",
+                    scaledValues.actual.pl > 0 && "text-green-500",
+                    scaledValues.actual.pl < 0 && "text-red-500"
+                  )}>
+                    {formatCurrency(scaledValues.actual.pl)}
+                  </div>
+                  {scalingMode === 'raw' && actualTotals && (
+                    <div className="text-xs text-muted-foreground">
+                      {actualTotals.contracts}c · {actualTotals.tradeCount}t
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {scaledValues.slippage !== null && (
+                <div className="text-right border-l border-border pl-6">
+                  <div className="text-xs text-muted-foreground">Slippage</div>
+                  <div className={cn(
+                    "text-lg font-bold",
+                    scaledValues.slippage > 0 && "text-green-500",
+                    scaledValues.slippage < 0 && "text-red-500"
+                  )}>
+                    {formatCurrency(scaledValues.slippage)}
+                  </div>
+                  {scaledValues.backtest && scaledValues.backtest.pl !== 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {((scaledValues.slippage / Math.abs(scaledValues.backtest.pl)) * 100).toFixed(1)}%
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-
-          {/* P&L Summary */}
-          <div className="flex items-center gap-8">
-            {scaledValues.backtest && (
-              <div>
-                <span className="text-sm text-muted-foreground">Backtest P&L</span>
-                <div className={cn(
-                  "text-2xl font-bold",
-                  scaledValues.backtest.pl > 0 && "text-green-500",
-                  scaledValues.backtest.pl < 0 && "text-red-500"
-                )}>
-                  {formatCurrency(scaledValues.backtest.pl)}
-                </div>
-                {scalingMode === 'raw' && btTotals && (
-                  <span className="text-xs text-muted-foreground">
-                    {btTotals.contracts} contracts, {btTotals.tradeCount} trades
-                  </span>
-                )}
-              </div>
-            )}
-
-            {scaledValues.actual && (
-              <div>
-                <span className="text-sm text-muted-foreground">Actual P&L</span>
-                <div className={cn(
-                  "text-2xl font-bold",
-                  scaledValues.actual.pl > 0 && "text-green-500",
-                  scaledValues.actual.pl < 0 && "text-red-500"
-                )}>
-                  {formatCurrency(scaledValues.actual.pl)}
-                </div>
-                {scalingMode === 'raw' && actualTotals && (
-                  <span className="text-xs text-muted-foreground">
-                    {actualTotals.contracts} contracts, {actualTotals.tradeCount} trades
-                  </span>
-                )}
-              </div>
-            )}
-
-            {scaledValues.slippage !== null && (
-              <div>
-                <span className="text-sm text-muted-foreground">Slippage</span>
-                <div className={cn(
-                  "text-2xl font-bold",
-                  scaledValues.slippage > 0 && "text-green-500",
-                  scaledValues.slippage < 0 && "text-red-500"
-                )}>
-                  {formatCurrency(scaledValues.slippage)}
-                </div>
-                {scaledValues.backtest && scaledValues.backtest.pl !== 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {((scaledValues.slippage / Math.abs(scaledValues.backtest.pl)) * 100).toFixed(1)}%
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Detailed comparison table */}
-      <Card className="py-4">
-        <CardHeader className="pb-2">
+      <Card className="pt-2 pb-4">
+        <CardHeader className="pt-2 pb-2">
           <CardTitle className="text-base">Trade Details</CardTitle>
         </CardHeader>
         <CardContent>
           {/* Column headers */}
           <div className="grid grid-cols-3 gap-4 py-2 border-b-2 border-border">
             <div className="text-sm font-medium text-muted-foreground">Field</div>
-            <div className="text-sm font-medium text-center text-blue-500">Backtest</div>
+            <div className="text-sm font-medium text-center text-blue-500">
+              Backtest
+              {detailScaleFactor !== null && detailScaleFactor !== 1 && (
+                <span className="text-xs text-muted-foreground font-normal ml-1">
+                  ({scalingMode === 'perContract' ? 'per contract' : 'scaled to actual'})
+                </span>
+              )}
+            </div>
             <div className="text-sm font-medium text-center text-purple-500">Actual</div>
           </div>
 
@@ -265,6 +313,7 @@ export function TradeDetailView() {
             actualValue={actualTrade?.initialPremium}
             format="currency"
             highlightDiff
+            scaleFactor={detailScaleFactor}
           />
 
           {/* Contracts */}
@@ -291,6 +340,7 @@ export function TradeDetailView() {
             actualValue={actualTrade?.avgClosingCost}
             format="currency"
             highlightDiff
+            scaleFactor={detailScaleFactor}
           />
 
           {/* Reason for Close */}
@@ -307,6 +357,7 @@ export function TradeDetailView() {
             actualValue={actualTrade?.pl}
             format="currency"
             highlightDiff
+            scaleFactor={detailScaleFactor}
           />
 
           <Separator className="my-2" />
@@ -323,6 +374,7 @@ export function TradeDetailView() {
                 backtestValue={backtestTrade.openingCommissionsFees}
                 actualValue={null}
                 format="currency"
+                scaleFactor={detailScaleFactor}
               />
 
               <ComparisonRow
@@ -330,6 +382,7 @@ export function TradeDetailView() {
                 backtestValue={backtestTrade.closingCommissionsFees}
                 actualValue={null}
                 format="currency"
+                scaleFactor={detailScaleFactor}
               />
 
               <ComparisonRow
@@ -337,6 +390,7 @@ export function TradeDetailView() {
                 backtestValue={backtestTrade.marginReq}
                 actualValue={null}
                 format="currency"
+                scaleFactor={detailScaleFactor}
               />
 
               {backtestTrade.openingVix && (
