@@ -226,13 +226,13 @@ export function CalendarNavigation() {
         )}
       </div>
 
-      {/* Back button when viewing day/trade - placed after date for layout stability */}
+      {/* Back button when viewing day or trade - placed after date for layout stability */}
       {isViewingDay && (
         <div className="space-y-2">
           <Label className="invisible">Back</Label>
           <Button variant="ghost" size="sm" onClick={navigateBack}>
             <ChevronLeft className="h-4 w-4 mr-1" />
-            Back to Calendar
+            {navigationView === "trade" ? "Back to Day" : "Back to Calendar"}
           </Button>
         </div>
       )}
@@ -327,58 +327,60 @@ export function CalendarNavigation() {
         </div>
       )}
 
-      {/* Date Display Mode - always visible */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-1">
-          <Label>Show By</Label>
-          <HoverCard>
-            <HoverCardTrigger asChild>
-              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-            </HoverCardTrigger>
-            <HoverCardContent className="w-64 p-0 overflow-hidden">
-              <div className="space-y-3">
-                <div className="bg-primary/5 border-b px-4 py-3">
-                  <h4 className="text-sm font-semibold text-primary">
-                    Date Display
-                  </h4>
+      {/* Date Display Mode - hide when viewing trade detail */}
+      {navigationView !== "trade" && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1">
+            <Label>Show By</Label>
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+              </HoverCardTrigger>
+              <HoverCardContent className="w-64 p-0 overflow-hidden">
+                <div className="space-y-3">
+                  <div className="bg-primary/5 border-b px-4 py-3">
+                    <h4 className="text-sm font-semibold text-primary">
+                      Date Display
+                    </h4>
+                  </div>
+                  <div className="px-4 pb-4 space-y-3">
+                    <p className="text-sm text-foreground leading-relaxed">
+                      Choose which date to use for placing trades on the calendar.
+                    </p>
+                    <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+                      <li>
+                        <strong>Entry Date:</strong> Show trades by when they were
+                        opened
+                      </li>
+                      <li>
+                        <strong>Close Date:</strong> Show trades by when they were
+                        closed
+                      </li>
+                    </ul>
+                  </div>
                 </div>
-                <div className="px-4 pb-4 space-y-3">
-                  <p className="text-sm text-foreground leading-relaxed">
-                    Choose which date to use for placing trades on the calendar.
-                  </p>
-                  <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
-                    <li>
-                      <strong>Entry Date:</strong> Show trades by when they were
-                      opened
-                    </li>
-                    <li>
-                      <strong>Close Date:</strong> Show trades by when they were
-                      closed
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </HoverCardContent>
-          </HoverCard>
+              </HoverCardContent>
+            </HoverCard>
+          </div>
+          <Select
+            value={dateDisplayMode}
+            onValueChange={(value) =>
+              setDateDisplayMode(value as DateDisplayMode)
+            }
+          >
+            <SelectTrigger className="w-[150px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entry">Entry Date</SelectItem>
+              <SelectItem value="exit">Close Date</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select
-          value={dateDisplayMode}
-          onValueChange={(value) =>
-            setDateDisplayMode(value as DateDisplayMode)
-          }
-        >
-          <SelectTrigger className="w-[150px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="entry">Entry Date</SelectItem>
-            <SelectItem value="exit">Close Date</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      )}
 
-      {/* Data Display Mode Toggle (only shown when both data sources exist) - always visible */}
-      {hasBothDataSources && (
+      {/* Data Display Mode Toggle (only shown when both data sources exist) - hide when viewing trade detail */}
+      {hasBothDataSources && navigationView !== "trade" && (
         <div className="space-y-2">
           <div className="flex items-center gap-1">
             <Label>Show Data</Label>

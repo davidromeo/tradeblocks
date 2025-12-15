@@ -2,10 +2,8 @@
 
 import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { ChevronLeft } from 'lucide-react'
 import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
 import { Trade } from '@/lib/models/trade'
 import { ReportingTrade } from '@/lib/models/reporting-trade'
@@ -74,8 +72,7 @@ export function TradeDetailView() {
     selectedDate,
     selectedStrategy,
     calendarDays,
-    scalingMode,
-    navigateBack
+    scalingMode
   } = useTradingCalendarStore()
 
   const dayData = selectedDate ? calendarDays.get(selectedDate) : undefined
@@ -129,14 +126,6 @@ export function TradeDetailView() {
   if (!selectedDate || !selectedStrategy) return null
   if (!dayData) return null
 
-  // Format date for display
-  const displayDate = new Date(selectedDate).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
-
   // Format time
   const formatTime = (date: Date | undefined, time?: string): string => {
     if (!date) return '-'
@@ -146,18 +135,6 @@ export function TradeDetailView() {
 
   return (
     <div className="space-y-4">
-      {/* Header with breadcrumb */}
-      <div className="flex items-center gap-2 text-sm">
-        <Button variant="ghost" size="sm" onClick={navigateBack}>
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Back
-        </Button>
-        <span className="text-muted-foreground">/</span>
-        <span className="text-muted-foreground">{displayDate}</span>
-        <span className="text-muted-foreground">/</span>
-        <span className="font-medium">{selectedStrategy}</span>
-      </div>
-
       {/* Trade summary header */}
       <Card className="py-4">
         <CardHeader className="pb-2">
