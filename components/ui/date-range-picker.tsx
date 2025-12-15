@@ -85,7 +85,7 @@ export function DateRangePicker({ date, onDateChange, maxDate }: DateRangePicker
 
   const [month, setMonth] = useState(date?.to || today)
 
-  // Keep custom inputs in sync with the controlled date prop
+  // Keep custom inputs aligned with the controlled date prop
   useEffect(() => {
     setCustomFrom(date?.from ? toInputValue(date.from) : "")
     setCustomTo(date?.to ? toInputValue(date.to) : "")
