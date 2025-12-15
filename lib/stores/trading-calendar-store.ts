@@ -115,6 +115,9 @@ export interface CalendarPerformanceStats {
   // Trade-based metrics
   avgRom: number | null // Return on Margin - only available for backtest trades (Trade type)
   avgPremiumCapture: number | null
+
+  // Data source indicator - which trades are being used for calculations
+  dataSource: 'backtest' | 'actual' | 'none'
 }
 
 /**
@@ -183,6 +186,7 @@ interface TradingCalendarState {
   navigateToDay: (date: string) => void
   navigateToTrade: (strategy: string, date: string) => void
   navigateBack: () => void
+  setNavigationFromUrl: (view: NavigationView, date: string | null, strategy: string | null) => void
 
   // Strategy matching actions
   linkStrategies: (backtestStrategy: string, actualStrategy: string) => void
@@ -494,7 +498,8 @@ function calculatePerformanceStats(
       cagr: null,
       calmar: null,
       avgRom: null,
-      avgPremiumCapture: null
+      avgPremiumCapture: null,
+      dataSource: 'none'
     }
   }
 
@@ -531,7 +536,8 @@ function calculatePerformanceStats(
         cagr: portfolioStats.cagr ?? null,
         calmar: portfolioStats.calmarRatio ?? null,
         avgRom: tradeMetrics.avgRom,
-        avgPremiumCapture: tradeMetrics.avgPremiumCapture
+        avgPremiumCapture: tradeMetrics.avgPremiumCapture,
+        dataSource: useActual ? 'actual' : 'backtest'
       }
     }
   }
@@ -550,7 +556,8 @@ function calculatePerformanceStats(
     cagr: advancedMetrics.cagr,
     calmar: advancedMetrics.calmar,
     avgRom: tradeMetrics.avgRom,
-    avgPremiumCapture: tradeMetrics.avgPremiumCapture
+    avgPremiumCapture: tradeMetrics.avgPremiumCapture,
+    dataSource: useActual ? 'actual' : 'backtest'
   }
 }
 
@@ -887,6 +894,14 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
     } else if (state.navigationView === 'day') {
       set({ navigationView: 'calendar', selectedDate: null })
     }
+  },
+
+  setNavigationFromUrl: (view, date, strategy) => {
+    set({
+      navigationView: view,
+      selectedDate: date,
+      selectedStrategy: strategy
+    })
   },
 
   linkStrategies: async (backtestStrategy, actualStrategy) => {

@@ -50,6 +50,7 @@ export function CalendarNavigation() {
     setDataDisplayMode,
     setViewDate,
     navigateBack,
+    navigateToDay,
   } = useTradingCalendarStore();
 
   const hasActualTrades = actualTrades.length > 0;
@@ -90,9 +91,30 @@ export function CalendarNavigation() {
       ? format(viewDate, "MMMM yyyy")
       : `Week of ${format(viewDate, "MMM d, yyyy")}`;
 
-  // Format selected date for day view
-  const selectedDateLabel = selectedDate
-    ? new Date(selectedDate).toLocaleDateString("en-US", {
+  // Parse YYYY-MM-DD to local Date (avoids UTC timezone shift)
+  const parseDateKey = (dateKey: string): Date => {
+    const match = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    }
+    return new Date(dateKey);
+  };
+
+  // Format Date to YYYY-MM-DD in local timezone
+  const formatDateKey = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Parse selected date for day navigation (local timezone)
+  const selectedDateObj = selectedDate ? parseDateKey(selectedDate) : null;
+
+  // Format selected date for day view display
+  const selectedDateLabel = selectedDateObj
+    ? selectedDateObj.toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -100,30 +122,67 @@ export function CalendarNavigation() {
       })
     : "";
 
+  // Day navigation handlers
+  const navigatePrevDay = () => {
+    if (selectedDateObj) {
+      const prevDay = new Date(selectedDateObj);
+      prevDay.setDate(prevDay.getDate() - 1);
+      navigateToDay(formatDateKey(prevDay));
+    }
+  };
+
+  const navigateNextDay = () => {
+    if (selectedDateObj) {
+      const nextDay = new Date(selectedDateObj);
+      nextDay.setDate(nextDay.getDate() + 1);
+      navigateToDay(formatDateKey(nextDay));
+    }
+  };
+
+  // Handle date selection from calendar picker in day view
+  const handleDaySelect = (date: Date | undefined) => {
+    if (date) {
+      navigateToDay(formatDateKey(date));
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-end gap-6">
-      {/* Back button when viewing day/trade */}
-      {isViewingDay && (
-        <div className="space-y-2">
-          <Label className="invisible">Back</Label>
-          <Button variant="ghost" size="sm" onClick={navigateBack}>
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Back to Calendar
-          </Button>
-        </div>
-      )}
-
       {/* Date Navigation - takes up ~2 columns worth of space */}
       <div className="space-y-2 flex-shrink-0">
         <Label>Date Range</Label>
         {isViewingDay ? (
-          <Button
-            variant="outline"
-            className="min-w-[280px] justify-start text-left font-semibold pointer-events-none"
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {selectedDateLabel}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={navigatePrevDay}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Day Picker Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="min-w-[280px] justify-start text-left font-semibold"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDateLabel}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDateObj ?? undefined}
+                  onSelect={handleDaySelect}
+                  defaultMonth={selectedDateObj ?? undefined}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Button variant="outline" size="icon" onClick={navigateNextDay}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         ) : (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={navigatePrev}>
@@ -163,6 +222,17 @@ export function CalendarNavigation() {
           </div>
         )}
       </div>
+
+      {/* Back button when viewing day/trade - placed after date for layout stability */}
+      {isViewingDay && (
+        <div className="space-y-2">
+          <Label className="invisible">Back</Label>
+          <Button variant="ghost" size="sm" onClick={navigateBack}>
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back to Calendar
+          </Button>
+        </div>
+      )}
 
       {/* Spacer to push controls to the right */}
       <div className="flex-1" />
@@ -219,61 +289,59 @@ export function CalendarNavigation() {
         </div>
       )}
 
-      {/* Date Display Mode - hide when viewing day */}
-      {!isViewingDay && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-1">
-            <Label>Show By</Label>
-            <HoverCard>
-              <HoverCardTrigger asChild>
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-              </HoverCardTrigger>
-              <HoverCardContent className="w-64 p-0 overflow-hidden">
-                <div className="space-y-3">
-                  <div className="bg-primary/5 border-b px-4 py-3">
-                    <h4 className="text-sm font-semibold text-primary">
-                      Date Display
-                    </h4>
-                  </div>
-                  <div className="px-4 pb-4 space-y-3">
-                    <p className="text-sm text-foreground leading-relaxed">
-                      Choose which date to use for placing trades on the
-                      calendar.
-                    </p>
-                    <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
-                      <li>
-                        <strong>Entry Date:</strong> Show trades by when they
-                        were opened
-                      </li>
-                      <li>
-                        <strong>Close Date:</strong> Show trades by when they
-                        were closed
-                      </li>
-                    </ul>
-                  </div>
+      {/* Date Display Mode - always visible */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-1">
+          <Label>Show By</Label>
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+            </HoverCardTrigger>
+            <HoverCardContent className="w-64 p-0 overflow-hidden">
+              <div className="space-y-3">
+                <div className="bg-primary/5 border-b px-4 py-3">
+                  <h4 className="text-sm font-semibold text-primary">
+                    Date Display
+                  </h4>
                 </div>
-              </HoverCardContent>
-            </HoverCard>
-          </div>
-          <Select
-            value={dateDisplayMode}
-            onValueChange={(value) =>
-              setDateDisplayMode(value as DateDisplayMode)
-            }
-          >
-            <SelectTrigger className="w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="entry">Entry Date</SelectItem>
-              <SelectItem value="exit">Close Date</SelectItem>
-            </SelectContent>
-          </Select>
+                <div className="px-4 pb-4 space-y-3">
+                  <p className="text-sm text-foreground leading-relaxed">
+                    Choose which date to use for placing trades on the
+                    calendar.
+                  </p>
+                  <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+                    <li>
+                      <strong>Entry Date:</strong> Show trades by when they
+                      were opened
+                    </li>
+                    <li>
+                      <strong>Close Date:</strong> Show trades by when they
+                      were closed
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
         </div>
-      )}
+        <Select
+          value={dateDisplayMode}
+          onValueChange={(value) =>
+            setDateDisplayMode(value as DateDisplayMode)
+          }
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="entry">Entry Date</SelectItem>
+            <SelectItem value="exit">Close Date</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-      {/* Data Display Mode Toggle (only shown when both data sources exist) - hide when viewing day */}
-      {!isViewingDay && hasBothDataSources && (
+      {/* Data Display Mode Toggle (only shown when both data sources exist) - always visible */}
+      {hasBothDataSources && (
         <div className="space-y-2">
           <div className="flex items-center gap-1">
             <Label>Show Data</Label>

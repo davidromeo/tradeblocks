@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import {
   aggregateTradesByStrategy,
+  calculateDayMetrics,
   formatPercent,
   scaleStrategyComparison,
 } from "@/lib/services/calendar-data";
@@ -101,6 +102,9 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
         ? (winningStrategies / scaledComparisons.length) * 100
         : 0;
 
+    // Calculate day-specific performance metrics
+    const dayMetrics = calculateDayMetrics(dayData);
+
     return {
       backtestPl: scaledBacktestPl,
       actualPl: scaledActualPl,
@@ -113,6 +117,10 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
       strategyCount: scaledComparisons.length,
       matchedCount,
       winRate,
+      // Day-specific metrics
+      maxDrawdown: dayMetrics.maxDrawdown,
+      avgRom: dayMetrics.avgRom,
+      avgPremiumCapture: dayMetrics.avgPremiumCapture,
     };
   }, [isViewingDay, dayData, strategyMatches, scalingMode]);
 
@@ -346,17 +354,21 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
         <MetricCard
           title="Win Rate"
           value={
-            isViewingDay && dayStats
-              ? `${dayStats.winRate.toFixed(0)}%`
+            isViewingDay
+              ? dayStats
+                ? `${dayStats.winRate.toFixed(0)}%`
+                : "-"
               : performanceStats
               ? `${performanceStats.winRate.toFixed(0)}%`
               : "-"
           }
           subtitle={
-            isViewingDay && dayStats
-              ? `${dayStats.strategyCount} strategies`
+            isViewingDay
+              ? dayStats
+                ? `${dayStats.strategyCount} strategies`
+                : "0 strategies"
               : performanceStats
-              ? `${performanceStats.tradingDays} days`
+              ? `${performanceStats.tradingDays} days · ${performanceStats.dataSource === 'actual' ? 'Actual' : 'Backtest'}`
               : undefined
           }
           tooltip={{
@@ -422,24 +434,34 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
           title="Max Drawdown"
           value={
             isViewingDay
-              ? "-"
-              : performanceStats?.maxDrawdown !== null
-              ? formatPct(performanceStats?.maxDrawdown)
+              ? dayStats?.maxDrawdown != null
+                ? formatPct(dayStats.maxDrawdown)
+                : "-"
+              : performanceStats?.maxDrawdown != null
+              ? formatPct(performanceStats.maxDrawdown)
               : "-"
+          }
+          subtitle={
+            !isViewingDay && performanceStats?.maxDrawdown != null
+              ? "Backtest"
+              : undefined
           }
           isPositive={false}
           tooltip={{
-            flavor: "Largest peak-to-trough decline",
-            detailed:
-              "Maximum percentage drop from a peak to a trough. Lower is better.",
+            flavor: isViewingDay
+              ? "Intraday peak-to-trough decline"
+              : "Largest peak-to-trough decline",
+            detailed: isViewingDay
+              ? "Maximum percentage drop from intraday equity peak. Based on trade close times."
+              : "Maximum percentage drop from a peak to a trough. Lower is better.",
           }}
         />
         <MetricCard
           title="Calmar"
           value={isViewingDay ? "-" : formatRatio(performanceStats?.calmar)}
           isPositive={
-            !isViewingDay && performanceStats?.calmar !== null
-              ? isPositive(performanceStats?.calmar ?? 0)
+            !isViewingDay && performanceStats?.calmar != null
+              ? isPositive(performanceStats.calmar)
               : undefined
           }
           tooltip={{
@@ -452,14 +474,25 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
           title="Avg RoM"
           value={
             isViewingDay
-              ? "-"
-              : performanceStats?.avgRom !== null
-              ? formatPct(performanceStats?.avgRom)
+              ? dayStats?.avgRom != null
+                ? formatPct(dayStats.avgRom)
+                : "-"
+              : performanceStats?.avgRom != null
+              ? formatPct(performanceStats.avgRom)
               : "-"
           }
+          subtitle={
+            (isViewingDay ? dayStats?.avgRom : performanceStats?.avgRom) != null
+              ? "Backtest"
+              : undefined
+          }
           isPositive={
-            !isViewingDay && performanceStats?.avgRom !== null
-              ? isPositive(performanceStats?.avgRom ?? 0)
+            isViewingDay
+              ? dayStats?.avgRom != null
+                ? isPositive(dayStats.avgRom)
+                : undefined
+              : performanceStats?.avgRom != null
+              ? isPositive(performanceStats.avgRom)
               : undefined
           }
           tooltip={{
@@ -472,14 +505,25 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
           title="Premium Capture"
           value={
             isViewingDay
-              ? "-"
-              : performanceStats?.avgPremiumCapture !== null
-              ? formatPct(performanceStats?.avgPremiumCapture)
+              ? dayStats?.avgPremiumCapture != null
+                ? formatPct(dayStats.avgPremiumCapture)
+                : "-"
+              : performanceStats?.avgPremiumCapture != null
+              ? formatPct(performanceStats.avgPremiumCapture)
               : "-"
           }
+          subtitle={
+            !isViewingDay && performanceStats?.avgPremiumCapture != null
+              ? performanceStats.dataSource === 'actual' ? 'Actual' : 'Backtest'
+              : undefined
+          }
           isPositive={
-            !isViewingDay && performanceStats?.avgPremiumCapture !== null
-              ? isPositive(performanceStats?.avgPremiumCapture ?? 0)
+            isViewingDay
+              ? dayStats?.avgPremiumCapture != null
+                ? isPositive(dayStats.avgPremiumCapture)
+                : undefined
+              : performanceStats?.avgPremiumCapture != null
+              ? isPositive(performanceStats.avgPremiumCapture)
               : undefined
           }
           tooltip={{

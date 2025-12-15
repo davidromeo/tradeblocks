@@ -9,18 +9,97 @@ import { StatsHeader } from "@/components/trading-calendar/stats-header";
 import { TradeDetailView } from "@/components/trading-calendar/trade-detail-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { useBlockStore } from "@/lib/stores/block-store";
-import { useTradingCalendarStore } from "@/lib/stores/trading-calendar-store";
+import { useTradingCalendarStore, NavigationView } from "@/lib/stores/trading-calendar-store";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function TradingCalendarPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { activeBlockId, blocks } = useBlockStore();
-  const { isLoading, error, navigationView, loadCalendarData, reset } =
-    useTradingCalendarStore();
+  const {
+    isLoading,
+    error,
+    navigationView,
+    selectedDate,
+    selectedStrategy,
+    loadCalendarData,
+    reset,
+    setNavigationFromUrl
+  } = useTradingCalendarStore();
 
   const [matchDialogOpen, setMatchDialogOpen] = useState(false);
+  const [initialUrlApplied, setInitialUrlApplied] = useState(false);
+
+  // Track whether we're updating from URL (to prevent sync loop)
+  const isUpdatingFromUrl = useRef(false);
 
   const activeBlock = blocks.find((b) => b.id === activeBlockId);
+
+  // Sync URL to store on initial load and URL changes
+  useEffect(() => {
+    const view = searchParams.get('view') as NavigationView | null;
+    const date = searchParams.get('date');
+    const strategy = searchParams.get('strategy');
+
+    // Set flag to prevent store->URL sync from firing
+    isUpdatingFromUrl.current = true;
+
+    if (view && setNavigationFromUrl) {
+      setNavigationFromUrl(view, date, strategy);
+    } else if (setNavigationFromUrl) {
+      // No view param means calendar view
+      setNavigationFromUrl('calendar', null, null);
+    }
+
+    // Mark initial URL as applied after first render
+    if (!initialUrlApplied) {
+      setInitialUrlApplied(true);
+    }
+
+    // Reset flag after a tick to allow future store changes to sync to URL
+    setTimeout(() => {
+      isUpdatingFromUrl.current = false;
+    }, 0);
+  }, [searchParams, setNavigationFromUrl, initialUrlApplied]);
+
+  // Sync store state to URL when navigation changes
+  const syncUrlToState = useCallback(() => {
+    // Don't sync if we're currently updating from URL (prevents loop)
+    if (isUpdatingFromUrl.current) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+
+    if (navigationView !== 'calendar') {
+      params.set('view', navigationView);
+      if (selectedDate) {
+        params.set('date', selectedDate);
+      }
+      if (navigationView === 'trade' && selectedStrategy) {
+        params.set('strategy', selectedStrategy);
+      }
+    }
+
+    const newUrl = params.toString()
+      ? `/trading-calendar?${params.toString()}`
+      : '/trading-calendar';
+
+    // Only update if URL actually changed
+    const currentParams = searchParams.toString();
+    if (params.toString() !== currentParams) {
+      router.push(newUrl, { scroll: false });
+    }
+  }, [navigationView, selectedDate, selectedStrategy, router, searchParams]);
+
+  // Update URL when store state changes (but not on initial load)
+  useEffect(() => {
+    if (initialUrlApplied) {
+      syncUrlToState();
+    }
+  }, [navigationView, selectedDate, selectedStrategy, syncUrlToState, initialUrlApplied]);
 
   // Load calendar data when active block changes
   useEffect(() => {

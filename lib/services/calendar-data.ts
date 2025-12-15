@@ -10,6 +10,7 @@ import { Trade } from '@/lib/models/trade'
 import { ReportingTrade } from '@/lib/models/reporting-trade'
 import { DailyLogEntry } from '@/lib/models/daily-log'
 import { ScalingMode, StrategyMatch, CalendarDayData } from '@/lib/stores/trading-calendar-store'
+import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
 
 /**
  * Configuration for risk metric calculations
@@ -656,6 +657,9 @@ function calculateMetricsFromDailyLogs(
 /**
  * Calculate trade-based metrics from trades in a date range
  * Works with both actual trades (Trade) and backtest trades (ReportingTrade)
+ *
+ * Note: avgRom is ALWAYS calculated from backtest trades (Trade type) since only
+ * they have marginReq. This ensures RoM is available even when useActual is true.
  */
 export function calculateTradeMetrics(
   calendarDays: Map<string, CalendarDayData>,
@@ -694,16 +698,9 @@ export function calculateTradeMetrics(
         }
       }
     } else {
-      // Backtest trades (Trade) - calculate RoM and premium capture
+      // Backtest trades (Trade) - calculate premium capture and count
       for (const trade of day.backtestTrades) {
         tradeCount++
-
-        // Return on Margin (only for Trade which has marginReq)
-        if (trade.marginReq > 0) {
-          const rom = (trade.pl / trade.marginReq) * 100
-          totalRom += rom
-          romCount++
-        }
 
         // Premium capture
         if (trade.premium !== 0) {
@@ -711,6 +708,16 @@ export function calculateTradeMetrics(
           totalPremiumCapture += capture
           premiumCaptureCount++
         }
+      }
+    }
+
+    // ALWAYS calculate RoM from backtest trades since only Trade type has marginReq
+    // This ensures avgRom is available regardless of useActual setting
+    for (const trade of day.backtestTrades) {
+      if (trade.marginReq > 0) {
+        const rom = (trade.pl / trade.marginReq) * 100
+        totalRom += rom
+        romCount++
       }
     }
   }
@@ -766,5 +773,69 @@ export function calculateAvgPremiumCapture(
     }, 0)
 
     return totalCapture / tradesWithPremium.length
+  }
+}
+
+/**
+ * Day-specific performance metrics
+ * These are metrics that can be calculated for a single day of trading
+ * Uses the same calculation approach as the block stats page
+ */
+export interface DayPerformanceMetrics {
+  maxDrawdown: number | null  // Max drawdown for the day's trades
+  avgRom: number | null       // Average Return on Margin
+  avgPremiumCapture: number | null  // Average premium captured
+}
+
+/**
+ * Calculate performance metrics for a single day
+ * Uses PortfolioStatsCalculator for consistency with block stats page
+ */
+export function calculateDayMetrics(
+  dayData: CalendarDayData
+): DayPerformanceMetrics {
+  // Use backtest trades (Trade type) since they have the full data needed for calculations
+  // (marginReq, premium, fundsAtClose, etc.)
+  const trades = dayData.backtestTrades
+
+  if (trades.length === 0) {
+    return {
+      maxDrawdown: null,
+      avgRom: null,
+      avgPremiumCapture: null
+    }
+  }
+
+  // Use PortfolioStatsCalculator for max drawdown - same as block stats
+  const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 })
+  const portfolioStats = calculator.calculatePortfolioStats(trades)
+
+  // Max drawdown from portfolio stats
+  const maxDrawdown = portfolioStats.maxDrawdown > 0 ? portfolioStats.maxDrawdown : null
+
+  // Calculate Avg RoM (same approach as block stats)
+  let avgRom: number | null = null
+  const tradesWithMargin = trades.filter(t => t.marginReq > 0)
+  if (tradesWithMargin.length > 0) {
+    const totalRom = tradesWithMargin.reduce((sum, t) => {
+      return sum + (t.pl / t.marginReq) * 100
+    }, 0)
+    avgRom = totalRom / tradesWithMargin.length
+  }
+
+  // Calculate Avg Premium Capture
+  let avgPremiumCapture: number | null = null
+  const tradesWithPremium = trades.filter(t => t.premium !== 0)
+  if (tradesWithPremium.length > 0) {
+    const totalCapture = tradesWithPremium.reduce((sum, t) => {
+      return sum + (t.pl / Math.abs(t.premium)) * 100
+    }, 0)
+    avgPremiumCapture = totalCapture / tradesWithPremium.length
+  }
+
+  return {
+    maxDrawdown,
+    avgRom,
+    avgPremiumCapture
   }
 }
