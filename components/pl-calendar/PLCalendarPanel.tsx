@@ -296,6 +296,14 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       return [{ id: "block-1", isPrimary: true }];
     }
   });
+  const [activeCalendarBlockId, setActiveCalendarBlockId] = useState<string>(() => {
+    const primaryBlock = yearBlocks.find((b) => b.isPrimary);
+    return primaryBlock?.id ?? "block-1";
+  });
+  const [monthViewBlock, setMonthViewBlock] = useState<{
+    id: string;
+    trades: Trade[];
+  } | null>(null);
 
   // Persist non-primary blocks (including uploaded trades) to localStorage.
   useEffect(() => {
@@ -330,6 +338,16 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
       console.warn("[PLCalendar] Failed to persist year blocks:", err);
     }
   }, [yearBlocks]);
+  useEffect(() => {
+    const exists = yearBlocks.some((b) => b.id === activeCalendarBlockId);
+    if (!exists) {
+      const primary = yearBlocks.find((b) => b.isPrimary);
+      if (primary) {
+        setActiveCalendarBlockId(primary.id);
+        setMonthViewBlock(null);
+      }
+    }
+  }, [activeCalendarBlockId, yearBlocks]);
 
   const strategies = useMemo(() => {
     const s = new Set<string>();
@@ -497,21 +515,28 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
   );
 
   // Filter trades and daily logs by date range, then by selected strategies
-  const filteredTrades = useMemo(() => {
-    // First filter by date range if specified
-    let result = trades;
-    if (dateRange?.from && dateRange?.to) {
-      result = result.filter((t) => {
-        const d = new Date(t.dateClosed ?? t.dateOpened);
-        return isWithinRange(d, dateRange);
-      });
-    }
-    // Then filter by selected strategies
-    if (selectedStrategies.length === 0) return result;
-    return result.filter((t) =>
-      selectedStrategies.includes(t.strategy || "Custom")
-    );
-  }, [trades, selectedStrategies, dateRange]);
+  const filterTradesForDisplay = useCallback(
+    (inputTrades: Trade[]) => {
+      let result = inputTrades;
+      if (dateRange?.from && dateRange?.to) {
+        result = result.filter((t) => {
+          const d = new Date(t.dateClosed ?? t.dateOpened);
+          return isWithinRange(d, dateRange);
+        });
+      }
+      if (selectedStrategies.length > 0) {
+        result = result.filter((t) =>
+          selectedStrategies.includes(t.strategy || "Custom")
+        );
+      }
+      return result;
+    },
+    [dateRange, selectedStrategies]
+  );
+  const filteredTrades = useMemo(
+    () => filterTradesForDisplay(trades),
+    [filterTradesForDisplay, trades]
+  );
 
   // DEBUG: Log filtered results
 
@@ -603,30 +628,47 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
     console.groupEnd();
   }, [filteredTrades, kellyFraction, sizingMode, yearBlocks]);
 
+  // Active trade set that should drive the Month view and header stats.
+  const monthViewTrades = useMemo(() => {
+    if (monthViewBlock) {
+      return filterTradesForDisplay(monthViewBlock.trades);
+    }
+    const block = yearBlocks.find((b) => b.id === activeCalendarBlockId);
+    if (!block) return filteredTrades;
+    if (block.isPrimary) return filteredTrades;
+    const tradesForBlock = block.trades ?? [];
+    return filterTradesForDisplay(tradesForBlock);
+  }, [activeCalendarBlockId, filterTradesForDisplay, filteredTrades, monthViewBlock, yearBlocks]);
+
+  const tradesForView = useMemo(
+    () => (view === "month" ? monthViewTrades : filteredTrades),
+    [filteredTrades, monthViewTrades, view]
+  );
+
   const totalPLAll = useMemo(() => {
     const sizedPLMap = computeSizedPLMap(
-      filteredTrades,
+      tradesForView,
       sizingMode,
       KELLY_BASE_EQUITY,
       kellyFraction
     );
     let total = 0;
-    filteredTrades.forEach((t) => {
+    tradesForView.forEach((t) => {
       total += sizedPLMap.get(t) ?? t.pl;
     });
     return total;
-  }, [filteredTrades, sizingMode, kellyFraction]);
+  }, [sizingMode, kellyFraction, tradesForView]);
 
   const tradesByDay = useMemo(() => {
     const map = new Map<string, Trade[]>();
-    filteredTrades.forEach((t) => {
+    tradesForView.forEach((t) => {
       const key = resolveDayKey(t);
       if (!key || key === "1970-01-01") return;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     });
     return map;
-  }, [filteredTrades]);
+  }, [tradesForView]);
 
   // Persist sizing mode
   useEffect(() => {
@@ -667,7 +709,7 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
   const dailyStats = useMemo(() => {
     const stats = new Map<string, DaySummary>();
     const sizedPLMap = computeSizedPLMap(
-      filteredTrades,
+      tradesForView,
       sizingMode,
       KELLY_BASE_EQUITY,
       kellyFraction
@@ -800,12 +842,12 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
     });
 
     return stats;
-  }, [tradesByDay, filteredTrades, sizingMode, kellyFraction]);
+  }, [tradesByDay, tradesForView, sizingMode, kellyFraction]);
 
   const maxDrawdownPctAll = useMemo(() => {
-    if (filteredTrades.length === 0) return 0;
-    return computeMaxDrawdownForTrades(filteredTrades);
-  }, [computeMaxDrawdownForTrades, filteredTrades]);
+    if (tradesForView.length === 0) return 0;
+    return computeMaxDrawdownForTrades(tradesForView);
+  }, [computeMaxDrawdownForTrades, tradesForView]);
 
   // Calculate max margin for the current month to scale utilization bars
   const maxMarginForMonth = useMemo(() => {
@@ -991,13 +1033,13 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
     }));
 
     const sizedPLMap = computeSizedPLMap(
-      filteredTrades,
+      tradesForView,
       sizingMode,
       KELLY_BASE_EQUITY,
       kellyFraction
     );
 
-    filteredTrades.forEach((t) => {
+    tradesForView.forEach((t) => {
       const dateKey = resolveDayKey(t);
       if (!dateKey || dateKey === "1970-01-01") return;
       const d = parseISO(dateKey);
@@ -1023,7 +1065,7 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
     });
 
     return buckets.filter((b) => b.trades > 0);
-  }, [filteredTrades, sizingMode, kellyFraction]);
+  }, [sizingMode, kellyFraction, tradesForView]);
 
   const selectedSummary = useMemo(() => {
     if (modalMode === "week") return selectedWeekStats;
@@ -1446,6 +1488,8 @@ export function PLCalendarPanel({ trades, dateRange }: PLCalendarPanelProps) {
                           kellyFraction={kellyFraction}
                           heatmapMetric={heatmapMetric}
                           onMonthClick={(year, monthIndex) => {
+                            setActiveCalendarBlockId(block.id);
+                            setMonthViewBlock({ id: block.id, trades: blockTrades });
                             const newDate = new Date(currentDate);
                             newDate.setFullYear(year);
                             newDate.setMonth(monthIndex);
