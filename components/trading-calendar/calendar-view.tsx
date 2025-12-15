@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useTradingCalendarStore, CalendarDayData, ScalingMode } from '@/lib/stores/trading-calendar-store'
 import {
   formatCurrency,
-  getPlBackgroundClass,
+  getDayBackgroundStyle,
   getMonthGridDates,
   getWeekGridDates
 } from '@/lib/services/calendar-data'
@@ -20,50 +20,6 @@ function formatDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-/**
- * Calculate max absolute P/L across calendar days for heatmap scaling
- * Uses the primary display value (actual if available, otherwise backtest)
- */
-function calculateMaxAbsPlScaled(days: Map<string, CalendarDayData>, scalingMode: ScalingMode): number {
-  let maxAbs = 0
-  for (const day of days.values()) {
-    // Use actual if available, otherwise backtest (same logic as primaryPl in cell)
-    const pl = day.hasActual
-      ? getScaledActualPlForMax(day, scalingMode)
-      : getScaledBacktestPlForMax(day, scalingMode)
-    maxAbs = Math.max(maxAbs, Math.abs(pl))
-  }
-  return maxAbs
-}
-
-// Helper functions for max calculation (defined before usage)
-function getScaledBacktestPlForMax(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  if (!dayData.hasBacktest) return 0
-  if (scalingMode === 'perContract') {
-    const totalContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.backtestPl / totalContracts : 0
-  }
-  if (scalingMode === 'toReported' && dayData.hasActual) {
-    // Scale backtest DOWN to match actual (reported) contract counts
-    const btContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    const actualContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    if (btContracts > 0 && actualContracts > 0) {
-      return dayData.backtestPl * (actualContracts / btContracts)
-    }
-  }
-  return dayData.backtestPl
-}
-
-function getScaledActualPlForMax(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  if (!dayData.hasActual) return 0
-  if (scalingMode === 'perContract') {
-    const totalContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.actualPl / totalContracts : 0
-  }
-  // For 'toReported', actual stays as-is (we scale backtest down to match actual)
-  return dayData.actualPl
 }
 
 interface CalendarDayCellProps {
@@ -144,9 +100,6 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
   const dateKey = formatDateKey(date)
   const dayData = calendarDays.get(dateKey)
 
-  // Calculate max P/L for heatmap scaling (using the primary display value)
-  const maxAbsPl = useMemo(() => calculateMaxAbsPlScaled(calendarDays, scalingMode), [calendarDays, scalingMode])
-
   const hasTrades = dayData && (dayData.hasBacktest || dayData.hasActual)
   const hasBacktestData = dayData?.hasBacktest ?? false
   const hasActualData = dayData?.hasActual ?? false
@@ -159,15 +112,19 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
   const backtestPl = dayData ? getScaledBacktestPl(dayData, scalingMode) : 0
   const actualPl = dayData ? getScaledActualPl(dayData, scalingMode) : 0
 
-  // Primary P/L for heatmap based on display mode
-  const primaryPl = dataDisplayMode === 'backtest'
-    ? backtestPl
-    : dataDisplayMode === 'actual'
-      ? actualPl
-      : (hasActualData ? actualPl : backtestPl)
-
-  // Get background color based on primary P/L
-  const bgClass = hasTrades ? getPlBackgroundClass(primaryPl, maxAbsPl) : ''
+  // Get background style - handles mismatch cases with stripes when showing both
+  const bgStyle = useMemo(() => {
+    if (!hasTrades) return {}
+    // Only check for mismatch when in 'both' mode and both data sources exist
+    if (dataDisplayMode === 'both' && hasBacktestData && hasActualData) {
+      return getDayBackgroundStyle(backtestPl, actualPl)
+    }
+    // Single mode - just use the displayed value
+    const displayedPl = dataDisplayMode === 'backtest' ? backtestPl :
+                        dataDisplayMode === 'actual' ? actualPl :
+                        (hasActualData ? actualPl : backtestPl)
+    return getDayBackgroundStyle(null, displayedPl)
+  }, [hasTrades, dataDisplayMode, hasBacktestData, hasActualData, backtestPl, actualPl])
 
   return (
     <button
@@ -178,103 +135,86 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
         isCurrentMonth ? "bg-background" : "bg-muted/30",
         hasTrades && "hover:bg-accent cursor-pointer",
         !hasTrades && "cursor-default",
-        bgClass,
+        bgStyle.className,
         isToday && "ring-2 ring-primary ring-inset"
       )}
     >
-      {/* Date number */}
-      <span className={cn(
-        "text-sm font-medium",
-        !isCurrentMonth && "text-muted-foreground",
-        isToday && "text-primary font-bold"
-      )}>
-        {date.getDate()}
-      </span>
+      {/* Top section: Date and P&L */}
+      <div className="w-full flex-1 flex flex-col items-start">
+        {/* Date number */}
+        <span className={cn(
+          "text-sm font-medium",
+          !isCurrentMonth && "text-muted-foreground",
+          isToday && "text-primary font-bold"
+        )}>
+          {date.getDate()}
+        </span>
 
-      {/* Trade data */}
-      {hasTrades && (
-        <div className="flex flex-col items-start mt-1 w-full gap-0.5">
-          {/* Single data source mode - larger, simpler display */}
-          {dataDisplayMode !== 'both' ? (
-            <>
-              {showBacktest && (
-                <div className="flex flex-col">
-                  <span className={cn(
-                    "text-lg font-semibold",
-                    backtestPl > 0 && "text-green-500",
-                    backtestPl < 0 && "text-red-500",
-                    backtestPl === 0 && "text-muted-foreground"
-                  )}>
-                    {formatCurrency(backtestPl, true)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {dayData?.backtestTradeCount} {dayData?.backtestTradeCount === 1 ? 'trade' : 'trades'}
-                  </span>
-                </div>
-              )}
-              {showActual && (
-                <div className="flex flex-col">
-                  <span className={cn(
-                    "text-lg font-semibold",
-                    actualPl > 0 && "text-green-500",
-                    actualPl < 0 && "text-red-500",
-                    actualPl === 0 && "text-muted-foreground"
-                  )}>
-                    {formatCurrency(actualPl, true)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {dayData?.actualTradeCount} {dayData?.actualTradeCount === 1 ? 'trade' : 'trades'}
-                  </span>
-                </div>
-              )}
-            </>
-          ) : (
-            /* Both mode - compact with dots */
-            <>
-              {showBacktest && (
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
-                  <span className={cn(
-                    "text-sm font-medium",
-                    backtestPl > 0 && "text-green-500",
-                    backtestPl < 0 && "text-red-500",
-                    backtestPl === 0 && "text-muted-foreground"
-                  )}>
-                    {formatCurrency(backtestPl, true)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    ({dayData?.backtestTradeCount})
-                  </span>
-                </div>
-              )}
-              {showActual && (
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 flex-shrink-0" />
-                  <span className={cn(
-                    "text-sm font-medium",
-                    actualPl > 0 && "text-green-500",
-                    actualPl < 0 && "text-red-500",
-                    actualPl === 0 && "text-muted-foreground"
-                  )}>
-                    {formatCurrency(actualPl, true)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    ({dayData?.actualTradeCount})
-                  </span>
-                </div>
-              )}
-            </>
-          )}
+        {/* Trade data */}
+        {hasTrades && (
+          <div className="flex flex-col items-start mt-1 w-full gap-0.5">
+            {/* Single data source mode - larger, simpler display */}
+            {dataDisplayMode !== 'both' ? (
+              <>
+                {showBacktest && (
+                  <div className="flex flex-col">
+                    <span className="text-lg font-semibold text-foreground">
+                      {formatCurrency(backtestPl, true)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {dayData?.backtestTradeCount} {dayData?.backtestTradeCount === 1 ? 'trade' : 'trades'}
+                    </span>
+                  </div>
+                )}
+                {showActual && (
+                  <div className="flex flex-col">
+                    <span className="text-lg font-semibold text-foreground">
+                      {formatCurrency(actualPl, true)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {dayData?.actualTradeCount} {dayData?.actualTradeCount === 1 ? 'trade' : 'trades'}
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Both mode - compact with dots */
+              <>
+                {showBacktest && (
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-foreground">
+                      {formatCurrency(backtestPl, true)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ({dayData?.backtestTradeCount})
+                    </span>
+                  </div>
+                )}
+                {showActual && (
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-foreground">
+                      {formatCurrency(actualPl, true)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ({dayData?.actualTradeCount})
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
-          {/* Margin row - only show when toggle is on and we have margin data */}
-          {showMargin && dayData && dayData.totalMargin > 0 && (
-            <div className="flex items-center gap-1 mt-1 pt-1 border-t border-border/30 w-full">
-              <span className="text-xs text-muted-foreground">Margin:</span>
-              <span className="text-xs font-medium text-orange-500">
-                {formatCurrency(getScaledMargin(dayData, scalingMode))}
-              </span>
-            </div>
-          )}
+      {/* Bottom section: Margin - pinned to bottom */}
+      {showMargin && dayData && dayData.totalMargin > 0 && (
+        <div className="flex items-center gap-1 pt-1 border-t border-border/30 w-full mt-auto">
+          <span className="text-xs text-muted-foreground">Margin:</span>
+          <span className="text-xs font-medium text-foreground">
+            {formatCurrency(getScaledMargin(dayData, scalingMode))}
+          </span>
         </div>
       )}
     </button>
@@ -343,8 +283,8 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
             <div className="flex flex-col">
               <span className={cn(
                 "text-lg font-bold",
-                weekStats.backtestPl > 0 && "text-green-500",
-                weekStats.backtestPl < 0 && "text-red-500"
+                weekStats.backtestPl > 0 && "text-green-600 dark:text-green-400",
+                weekStats.backtestPl < 0 && "text-red-600 dark:text-red-400"
               )}>
                 {formatCurrency(weekStats.backtestPl, true)}
               </span>
@@ -357,8 +297,8 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
             <div className="flex flex-col">
               <span className={cn(
                 "text-lg font-bold",
-                weekStats.actualPl > 0 && "text-green-500",
-                weekStats.actualPl < 0 && "text-red-500"
+                weekStats.actualPl > 0 && "text-green-600 dark:text-green-400",
+                weekStats.actualPl < 0 && "text-red-600 dark:text-red-400"
               )}>
                 {formatCurrency(weekStats.actualPl, true)}
               </span>
@@ -376,8 +316,8 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
               <span className={cn(
                 "text-sm font-bold",
-                weekStats.backtestPl > 0 && "text-green-500",
-                weekStats.backtestPl < 0 && "text-red-500"
+                weekStats.backtestPl > 0 && "text-green-600 dark:text-green-400",
+                weekStats.backtestPl < 0 && "text-red-600 dark:text-red-400"
               )}>
                 {formatCurrency(weekStats.backtestPl, true)}
               </span>
@@ -391,8 +331,8 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500 flex-shrink-0" />
               <span className={cn(
                 "text-sm font-bold",
-                weekStats.actualPl > 0 && "text-green-500",
-                weekStats.actualPl < 0 && "text-red-500"
+                weekStats.actualPl > 0 && "text-green-600 dark:text-green-400",
+                weekStats.actualPl < 0 && "text-red-600 dark:text-red-400"
               )}>
                 {formatCurrency(weekStats.actualPl, true)}
               </span>
@@ -408,7 +348,7 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
       {showMargin && weekStats.maxMargin > 0 && (
         <div className="flex items-center gap-1 mt-1 pt-1 border-t border-border/30 w-full">
           <span className="text-xs text-muted-foreground">Max Margin:</span>
-          <span className="text-xs font-medium text-orange-500">
+          <span className="text-xs font-medium text-foreground">
             {formatCurrency(weekStats.maxMargin)}
           </span>
         </div>
@@ -488,19 +428,39 @@ export function CalendarView() {
         ))}
       </div>
 
-      {/* Legend - only show when in "both" mode */}
-      {dataDisplayMode === 'both' && (
-        <div className="flex items-center gap-4 p-3 bg-muted/30 border-t text-xs text-muted-foreground">
+      {/* Legend */}
+      <div className="flex items-center gap-6 p-3 bg-muted/30 border-t text-xs text-muted-foreground">
+        {/* Data source legend - only show when in "both" mode */}
+        {dataDisplayMode === 'both' && (
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <span>Backtest</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-purple-500" />
+              <span>Actual</span>
+            </div>
+          </div>
+        )}
+        {/* Background color legend */}
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <span>Backtest</span>
+            <span className="w-4 h-3 rounded-sm bg-green-900/25" />
+            <span>Profit</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-purple-500" />
-            <span>Actual</span>
+            <span className="w-4 h-3 rounded-sm bg-red-900/25" />
+            <span>Loss</span>
           </div>
+          {dataDisplayMode === 'both' && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-3 rounded-sm bg-violet-900/25" />
+              <span>Mixed</span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

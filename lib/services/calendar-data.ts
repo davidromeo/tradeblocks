@@ -408,22 +408,36 @@ export function getPlColorClass(pl: number): string {
 }
 
 /**
- * Get background color intensity based on P/L magnitude
- * Returns a tailwind class for background color
+ * Get background style for calendar day cells
+ * Handles mismatch cases (backtest vs actual disagree) with a distinct color
+ * Returns a className string
  */
-export function getPlBackgroundClass(pl: number, maxAbsPl: number): string {
-  if (pl === 0 || maxAbsPl === 0) return ''
+export function getDayBackgroundStyle(
+  backtestPl: number | null,
+  actualPl: number | null
+): { className?: string } {
+  const btPositive = backtestPl !== null && backtestPl > 0
+  const btNegative = backtestPl !== null && backtestPl < 0
+  const actPositive = actualPl !== null && actualPl > 0
+  const actNegative = actualPl !== null && actualPl < 0
 
-  const intensity = Math.min(Math.abs(pl) / maxAbsPl, 1)
+  // Check for mismatch: one positive, one negative
+  const isMismatch =
+    (btPositive && actNegative) || (btNegative && actPositive)
 
-  if (pl > 0) {
-    if (intensity > 0.7) return 'bg-green-900/40'
-    if (intensity > 0.4) return 'bg-green-900/25'
-    return 'bg-green-900/15'
+  if (isMismatch) {
+    // Muted violet for mismatch - visually distinct from green/red
+    return { className: 'bg-violet-900/25' }
+  }
+
+  // No mismatch - use single color based on available data (prefer actual)
+  const primaryPl = actualPl !== null ? actualPl : backtestPl
+  if (primaryPl === null || primaryPl === 0) return {}
+
+  if (primaryPl > 0) {
+    return { className: 'bg-green-900/25' }
   } else {
-    if (intensity > 0.7) return 'bg-red-900/40'
-    if (intensity > 0.4) return 'bg-red-900/25'
-    return 'bg-red-900/15'
+    return { className: 'bg-red-900/25' }
   }
 }
 
