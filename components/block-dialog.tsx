@@ -1011,6 +1011,14 @@ export function BlockDialog({
                 uploadedAt: now,
               }
             : undefined,
+          dateRange:
+            processedPreview.trades?.stats.dateRange.start &&
+            processedPreview.trades?.stats.dateRange.end
+              ? {
+                  start: processedPreview.trades.stats.dateRange.start,
+                  end: processedPreview.trades.stats.dateRange.end,
+                }
+              : undefined,
           processingStatus: "completed" as const,
           dataReferences: {
             tradesStorageKey: `block_${timestamp}_trades`,
@@ -1492,6 +1500,17 @@ export function BlockDialog({
             processedRowCount: processedData.trades.trades.length,
             uploadedAt: new Date(),
           };
+
+          // Update dateRange when trades are replaced
+          if (
+            processedData.trades.stats.dateRange.start &&
+            processedData.trades.stats.dateRange.end
+          ) {
+            metadataUpdates.dateRange = {
+              start: processedData.trades.stats.dateRange.start,
+              end: processedData.trades.stats.dateRange.end,
+            };
+          }
 
           // Save trades to IndexedDB (replace all existing trades)
           await updateTradesForBlock(block.id, processedData.trades.trades);
