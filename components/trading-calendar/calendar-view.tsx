@@ -112,8 +112,34 @@ function getScaledActualPl(dayData: CalendarDayData, scalingMode: ScalingMode): 
   return dayData.actualPl
 }
 
+/**
+ * Get scaled margin for display
+ * Margin comes from backtest trades only, so we apply similar scaling logic
+ */
+function getScaledMargin(dayData: CalendarDayData, scalingMode: ScalingMode): number {
+  if (!dayData.hasBacktest || dayData.totalMargin === 0) return 0
+
+  if (scalingMode === 'perContract') {
+    // Divide margin by contract count
+    const totalContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
+    return totalContracts > 0 ? dayData.totalMargin / totalContracts : 0
+  }
+
+  if (scalingMode === 'toReported' && dayData.hasActual) {
+    // Scale margin DOWN to match actual (reported) contract counts
+    const btContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
+    const actualContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
+    if (btContracts > 0 && actualContracts > 0) {
+      return dayData.totalMargin * (actualContracts / btContracts)
+    }
+  }
+
+  // raw shows margin as-is
+  return dayData.totalMargin
+}
+
 function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDayCellProps) {
-  const { calendarDays, scalingMode, dataDisplayMode } = useTradingCalendarStore()
+  const { calendarDays, scalingMode, dataDisplayMode, showMargin } = useTradingCalendarStore()
 
   const dateKey = formatDateKey(date)
   const dayData = calendarDays.get(dateKey)
@@ -239,6 +265,16 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
               )}
             </>
           )}
+
+          {/* Margin row - only show when toggle is on and we have margin data */}
+          {showMargin && dayData && dayData.totalMargin > 0 && (
+            <div className="flex items-center gap-1 mt-1 pt-1 border-t border-border/30 w-full">
+              <span className="text-xs text-muted-foreground">Margin:</span>
+              <span className="text-xs font-medium text-orange-500">
+                {formatCurrency(getScaledMargin(dayData, scalingMode))}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </button>
@@ -250,7 +286,7 @@ interface WeeklySummaryProps {
 }
 
 function WeeklySummary({ dates }: WeeklySummaryProps) {
-  const { calendarDays, scalingMode, dataDisplayMode } = useTradingCalendarStore()
+  const { calendarDays, scalingMode, dataDisplayMode, showMargin } = useTradingCalendarStore()
 
   // Calculate week totals for both backtest and actual (using scaled values)
   const weekStats = useMemo(() => {
@@ -258,6 +294,7 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
     let actualPl = 0
     let backtestDays = 0
     let actualDays = 0
+    let maxMargin = 0
 
     for (const date of dates) {
       const dateKey = formatDateKey(date)
@@ -272,10 +309,15 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
           actualPl += getScaledActualPl(dayData, scalingMode)
           actualDays++
         }
+        // Track max scaled margin for the week
+        const scaledMargin = getScaledMargin(dayData, scalingMode)
+        if (scaledMargin > maxMargin) {
+          maxMargin = scaledMargin
+        }
       }
     }
 
-    return { backtestPl, actualPl, backtestDays, actualDays }
+    return { backtestPl, actualPl, backtestDays, actualDays, maxMargin }
   }, [dates, calendarDays, scalingMode])
 
   // Determine what to show based on display mode
@@ -360,6 +402,16 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
             </div>
           )}
         </>
+      )}
+
+      {/* Max margin for the week - only show when toggle is on and we have margin data */}
+      {showMargin && weekStats.maxMargin > 0 && (
+        <div className="flex items-center gap-1 mt-1 pt-1 border-t border-border/30 w-full">
+          <span className="text-xs text-muted-foreground">Max Margin:</span>
+          <span className="text-xs font-medium text-orange-500">
+            {formatCurrency(weekStats.maxMargin)}
+          </span>
+        </div>
       )}
     </div>
   )

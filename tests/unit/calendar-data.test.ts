@@ -69,6 +69,10 @@ function createDayData(overrides: Partial<CalendarDayData> = {}): CalendarDayDat
     actualTradeCount: 0,
     hasBacktest: false,
     hasActual: false,
+    matchedStrategies: [],
+    unmatchedBacktestStrategies: [],
+    unmatchedActualStrategies: [],
+    totalMargin: 0,
     ...overrides,
   }
 }

@@ -11,10 +11,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { useTradingCalendarStore, NavigationView } from "@/lib/stores/trading-calendar-store";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+// Wrapper component to handle Suspense boundary for useSearchParams
 export default function TradingCalendarPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <TradingCalendarContent />
+    </Suspense>
+  );
+}
+
+function TradingCalendarContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { activeBlockId, blocks } = useBlockStore();

@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   CalendarViewMode,
   DataDisplayMode,
@@ -40,6 +41,7 @@ export function CalendarNavigation() {
     calendarViewMode,
     dateDisplayMode,
     dataDisplayMode,
+    showMargin,
     viewDate,
     navigationView,
     selectedDate,
@@ -48,6 +50,7 @@ export function CalendarNavigation() {
     setCalendarViewMode,
     setDateDisplayMode,
     setDataDisplayMode,
+    setShowMargin,
     setViewDate,
     navigateBack,
     navigateToDay,
@@ -288,6 +291,41 @@ export function CalendarNavigation() {
           </Select>
         </div>
       )}
+      {/* Show Margin Toggle (only when backtest trades exist since margin only comes from backtest) */}
+      {hasBacktestTrades && !isViewingDay && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1">
+            <Label>Show Margin</Label>
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+              </HoverCardTrigger>
+              <HoverCardContent className="w-64 p-0 overflow-hidden">
+                <div className="space-y-3">
+                  <div className="bg-primary/5 border-b px-4 py-3">
+                    <h4 className="text-sm font-semibold text-primary">
+                      Margin Display
+                    </h4>
+                  </div>
+                  <div className="px-4 pb-4 space-y-3">
+                    <p className="text-sm text-foreground leading-relaxed">
+                      Show total margin requirement for trades on each day.
+                    </p>
+                    <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+                      <li>Daily cells show sum of margin for all trades</li>
+                      <li>Weekly column shows maximum daily margin</li>
+                      <li>Only available from backtest data</li>
+                    </ul>
+                  </div>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          </div>
+          <div className="flex items-center h-9">
+            <Switch checked={showMargin} onCheckedChange={setShowMargin} />
+          </div>
+        </div>
+      )}
 
       {/* Date Display Mode - always visible */}
       <div className="space-y-2">
@@ -306,17 +344,16 @@ export function CalendarNavigation() {
                 </div>
                 <div className="px-4 pb-4 space-y-3">
                   <p className="text-sm text-foreground leading-relaxed">
-                    Choose which date to use for placing trades on the
-                    calendar.
+                    Choose which date to use for placing trades on the calendar.
                   </p>
                   <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
                     <li>
-                      <strong>Entry Date:</strong> Show trades by when they
-                      were opened
+                      <strong>Entry Date:</strong> Show trades by when they were
+                      opened
                     </li>
                     <li>
-                      <strong>Close Date:</strong> Show trades by when they
-                      were closed
+                      <strong>Close Date:</strong> Show trades by when they were
+                      closed
                     </li>
                   </ul>
                 </div>

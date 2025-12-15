@@ -66,6 +66,8 @@ export interface CalendarDayData {
   matchedStrategies: string[]
   unmatchedBacktestStrategies: string[]
   unmatchedActualStrategies: string[]
+  // Margin data - sum of marginReq for trades open on this day (only from backtest/Trade type)
+  totalMargin: number
 }
 
 /**
@@ -161,6 +163,7 @@ interface TradingCalendarState {
   dateDisplayMode: DateDisplayMode
   dataDisplayMode: DataDisplayMode
   navigationView: NavigationView
+  showMargin: boolean
 
   // Current month/date being viewed
   viewDate: Date // The month/week being displayed
@@ -180,6 +183,7 @@ interface TradingCalendarState {
   setCalendarViewMode: (mode: CalendarViewMode) => void
   setDateDisplayMode: (mode: DateDisplayMode) => void
   setDataDisplayMode: (mode: DataDisplayMode) => void
+  setShowMargin: (show: boolean) => void
   setViewDate: (date: Date) => void
 
   // Navigation actions
@@ -316,7 +320,8 @@ function buildCalendarDays(
         hasActual: false,
         matchedStrategies: [],
         unmatchedBacktestStrategies: [],
-        unmatchedActualStrategies: []
+        unmatchedActualStrategies: [],
+        totalMargin: 0
       })
     }
 
@@ -325,6 +330,8 @@ function buildCalendarDays(
     day.backtestPl += trade.pl
     day.backtestTradeCount++
     day.hasBacktest = true
+    // Add margin from backtest trades (only Trade type has marginReq)
+    day.totalMargin += trade.marginReq || 0
   }
 
   // Group actual trades by date
@@ -344,7 +351,8 @@ function buildCalendarDays(
         hasActual: false,
         matchedStrategies: [],
         unmatchedBacktestStrategies: [],
-        unmatchedActualStrategies: []
+        unmatchedActualStrategies: [],
+        totalMargin: 0
       })
     }
 
@@ -641,6 +649,7 @@ const initialState = {
   dateDisplayMode: 'exit' as DateDisplayMode,
   dataDisplayMode: 'both' as DataDisplayMode,
   navigationView: 'calendar' as NavigationView,
+  showMargin: false,
   viewDate: new Date(),
   selectedDate: null,
   selectedTradeId: null,
@@ -850,6 +859,10 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
 
   setDataDisplayMode: (mode) => {
     set({ dataDisplayMode: mode })
+  },
+
+  setShowMargin: (show) => {
+    set({ showMargin: show })
   },
 
   setViewDate: (date) => {
