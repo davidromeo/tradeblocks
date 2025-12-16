@@ -127,6 +127,7 @@ export const TRADE_COLUMN_ALIASES = {
   "Opening Commissions & Fees": "Opening Commissions + Fees",
   "Closing comms & fees": "Closing Commissions + Fees",
   "Closing Commissions & Fees": "Closing Commissions + Fees",
+  "P/L %": "P/L %", // Recognized but ignored (we calculate our own plPct)
 } as const
 
 /**
