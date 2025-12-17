@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ChevronDown } from 'lucide-react'
 import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
@@ -118,9 +117,10 @@ interface CombinedActualTradeGroupProps {
   combined: CombinedReportingTrade
   originalTrades: ReportingTrade[]
   scalingMode: 'raw' | 'perContract' | 'toReported'
+  sideBySide?: boolean
 }
 
-function CombinedActualTradeGroup({ combined, originalTrades, scalingMode }: CombinedActualTradeGroupProps) {
+function CombinedActualTradeGroup({ combined, originalTrades, scalingMode, sideBySide = false }: CombinedActualTradeGroupProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const scaleFactor = useMemo(() => {
@@ -166,6 +166,11 @@ function CombinedActualTradeGroup({ combined, originalTrades, scalingMode }: Com
           <DetailRow label="Reason for Close" value={combined.reasonForClose} />
           <DetailRow label="P&L" value={combined.pl} format="currency" scaleFactor={scaleFactor} />
 
+          {/* Spacer to match "Show Backtest Details" button height when side-by-side */}
+          {sideBySide && (
+            <div className="w-full mt-4 py-2 border-t border-border/50 h-[36px]" aria-hidden="true" />
+          )}
+
           {legCount > 1 && (
             <CollapsibleTrigger asChild>
               <button type="button" className="w-full mt-4 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 border-t border-border/50">
@@ -201,7 +206,8 @@ interface CombinedBacktestTradeGroupProps {
 }
 
 function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, actualContracts }: CombinedBacktestTradeGroupProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isLegsExpanded, setIsLegsExpanded] = useState(false)
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false)
 
   const scaleFactor = useMemo(() => {
     if (scalingMode === 'raw') return null
@@ -217,79 +223,86 @@ function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, act
   const legCount = combined.originalTradeCount
 
   return (
-    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <Card className="pt-2 pb-4">
-        <CardHeader className="pt-2 pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              {legCount > 1 ? `Combined Trade (${legCount} legs)` : 'Trade Details'}
-              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/50 text-xs">
-                Backtest
-              </Badge>
-            </CardTitle>
-            <div className={cn(
-              "text-lg font-bold",
-              combined.pl > 0 && "text-green-500",
-              combined.pl < 0 && "text-red-500"
-            )}>
-              {formatCurrency(scaleFactor ? combined.pl * scaleFactor : combined.pl)}
-            </div>
+    <Card className="pt-2 pb-4">
+      <CardHeader className="pt-2 pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            {legCount > 1 ? `Combined Trade (${legCount} legs)` : 'Trade Details'}
+            <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/50 text-xs">
+              Backtest
+            </Badge>
+          </CardTitle>
+          <div className={cn(
+            "text-lg font-bold",
+            combined.pl > 0 && "text-green-500",
+            combined.pl < 0 && "text-red-500"
+          )}>
+            {formatCurrency(scaleFactor ? combined.pl * scaleFactor : combined.pl)}
           </div>
-        </CardHeader>
+        </div>
+      </CardHeader>
 
-        <CardContent>
-          <DetailRow label="Time Opened" value={combined.timeOpened ?? '-'} />
-          <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
-          <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
-          <DetailRow label="Legs" value={combined.legs} />
-          <DetailRow label="Premium" value={combined.premium} format="premium" />
-          <DetailRow label="Contracts" value={combined.numContracts} format="number" />
-          <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
-          <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
-          <DetailRow label="Reason for Close" value={combined.reasonForClose} />
-          <DetailRow label="P&L" value={combined.pl} format="currency" scaleFactor={scaleFactor} />
+      <CardContent>
+        <DetailRow label="Time Opened" value={combined.timeOpened ?? '-'} />
+        <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
+        <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
+        <DetailRow label="Legs" value={combined.legs} />
+        <DetailRow label="Premium" value={combined.premium} format="premium" />
+        <DetailRow label="Contracts" value={combined.numContracts} format="number" />
+        <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
+        <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
+        <DetailRow label="Reason for Close" value={combined.reasonForClose} />
+        <DetailRow label="P&L" value={combined.pl} format="currency" scaleFactor={scaleFactor} />
 
-          <Separator className="my-2" />
-
-          <div className="text-xs text-muted-foreground uppercase tracking-wide py-2">
-            Additional Backtest Details
-          </div>
-
-          <DetailRow label="Opening Commissions" value={combined.openingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
-          <DetailRow label="Closing Commissions" value={combined.closingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
-          <DetailRow label="Margin Requirement" value={combined.marginReq} format="currency" scaleFactor={scaleFactor} />
-
-          {combined.openingVix && <DetailRow label="Opening VIX" value={combined.openingVix} format="number" />}
-          {combined.closingVix && <DetailRow label="Closing VIX" value={combined.closingVix} format="number" />}
-          {combined.gap !== undefined && <DetailRow label="Gap" value={combined.gap} format="percent" />}
-          {combined.movement !== undefined && <DetailRow label="Movement" value={combined.movement} format="percent" />}
-          {combined.maxProfit !== undefined && <DetailRow label="Max Profit" value={combined.maxProfit} format="percent" />}
-          {combined.maxLoss !== undefined && <DetailRow label="Max Loss" value={combined.maxLoss} format="percent" />}
-
-          {legCount > 1 && (
-            <CollapsibleTrigger asChild>
-              <button type="button" className="w-full mt-4 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 border-t border-border/50">
-                <ChevronDown className={cn(
-                  "h-4 w-4 transition-transform",
-                  isExpanded && "rotate-180"
-                )} />
-                {isExpanded ? 'Hide Leg Details' : 'Show Leg Details'}
-              </button>
-            </CollapsibleTrigger>
-          )}
-        </CardContent>
-
-        {legCount > 1 && (
+        {/* Additional Backtest Details - Collapsible */}
+        <Collapsible open={isDetailsExpanded} onOpenChange={setIsDetailsExpanded}>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="w-full mt-4 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 border-t border-border/50">
+              <ChevronDown className={cn(
+                "h-4 w-4 transition-transform",
+                isDetailsExpanded && "rotate-180"
+              )} />
+              {isDetailsExpanded ? 'Hide Backtest Details' : 'Show Backtest Details'}
+            </button>
+          </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="px-4 pb-2 space-y-3">
-              {originalTrades.map((trade, idx) => (
-                <IndividualLegCard key={idx} trade={trade} index={idx} type="backtest" />
-              ))}
+            <div className="pt-2">
+              <DetailRow label="Opening Commissions" value={combined.openingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+              <DetailRow label="Closing Commissions" value={combined.closingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+              <DetailRow label="Margin Requirement" value={combined.marginReq} format="currency" scaleFactor={scaleFactor} />
+              {combined.openingVix && <DetailRow label="Opening VIX" value={combined.openingVix} format="number" />}
+              {combined.closingVix && <DetailRow label="Closing VIX" value={combined.closingVix} format="number" />}
+              {combined.gap !== undefined && <DetailRow label="Gap" value={combined.gap} format="percent" />}
+              {combined.movement !== undefined && <DetailRow label="Movement" value={combined.movement} format="percent" />}
+              {combined.maxProfit !== undefined && <DetailRow label="Max Profit" value={combined.maxProfit} format="percent" />}
+              {combined.maxLoss !== undefined && <DetailRow label="Max Loss" value={combined.maxLoss} format="percent" />}
             </div>
           </CollapsibleContent>
+        </Collapsible>
+
+        {/* Leg Details - Collapsible */}
+        {legCount > 1 && (
+          <Collapsible open={isLegsExpanded} onOpenChange={setIsLegsExpanded}>
+            <CollapsibleTrigger asChild>
+              <button type="button" className="w-full mt-2 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 border-t border-border/50">
+                <ChevronDown className={cn(
+                  "h-4 w-4 transition-transform",
+                  isLegsExpanded && "rotate-180"
+                )} />
+                {isLegsExpanded ? 'Hide Leg Details' : 'Show Leg Details'}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pt-2 space-y-3">
+                {originalTrades.map((trade, idx) => (
+                  <IndividualLegCard key={idx} trade={trade} index={idx} type="backtest" />
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         )}
-      </Card>
-    </Collapsible>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -302,9 +315,10 @@ interface SingleTradeCardProps {
   tradeIndex: number
   totalTrades: number
   scalingMode: 'raw' | 'perContract' | 'toReported'
+  sideBySide?: boolean
 }
 
-function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode }: SingleTradeCardProps) {
+function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode, sideBySide = false }: SingleTradeCardProps) {
   const scaleFactor = useMemo(() => {
     if (scalingMode === 'raw') return null
     if (scalingMode === 'perContract') {
@@ -345,6 +359,11 @@ function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode }: Single
         <DetailRow label="Avg Closing Cost" value={trade.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
         <DetailRow label="Reason for Close" value={trade.reasonForClose} />
         <DetailRow label="P&L" value={trade.pl} format="currency" scaleFactor={scaleFactor} />
+
+        {/* Spacer to match "Show Backtest Details" button height when side-by-side */}
+        {sideBySide && (
+          <div className="w-full mt-4 py-2 border-t border-border/50 h-[36px]" aria-hidden="true" />
+        )}
       </CardContent>
     </Card>
   )
@@ -359,6 +378,8 @@ interface BacktestTradeCardProps {
 }
 
 function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actualContracts }: BacktestTradeCardProps) {
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false)
+
   const scaleFactor = useMemo(() => {
     if (scalingMode === 'raw') return null
     if (scalingMode === 'perContract') {
@@ -403,25 +424,85 @@ function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actual
         <DetailRow label="Reason for Close" value={trade.reasonForClose} />
         <DetailRow label="P&L" value={trade.pl} format="currency" scaleFactor={scaleFactor} />
 
-        <Separator className="my-2" />
-
-        <div className="text-xs text-muted-foreground uppercase tracking-wide py-2">
-          Additional Backtest Details
-        </div>
-
-        <DetailRow label="Opening Commissions" value={trade.openingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
-        <DetailRow label="Closing Commissions" value={trade.closingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
-        <DetailRow label="Margin Requirement" value={trade.marginReq} format="currency" scaleFactor={scaleFactor} />
-
-        {trade.openingVix && <DetailRow label="Opening VIX" value={trade.openingVix} format="number" />}
-        {trade.closingVix && <DetailRow label="Closing VIX" value={trade.closingVix} format="number" />}
-        {trade.gap !== undefined && <DetailRow label="Gap" value={trade.gap} format="percent" />}
-        {trade.movement !== undefined && <DetailRow label="Movement" value={trade.movement} format="percent" />}
-        {trade.maxProfit !== undefined && <DetailRow label="Max Profit" value={trade.maxProfit} format="percent" />}
-        {trade.maxLoss !== undefined && <DetailRow label="Max Loss" value={trade.maxLoss} format="percent" />}
+        {/* Additional Backtest Details - Collapsible */}
+        <Collapsible open={isDetailsExpanded} onOpenChange={setIsDetailsExpanded}>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="w-full mt-4 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 border-t border-border/50">
+              <ChevronDown className={cn(
+                "h-4 w-4 transition-transform",
+                isDetailsExpanded && "rotate-180"
+              )} />
+              {isDetailsExpanded ? 'Hide Backtest Details' : 'Show Backtest Details'}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="pt-2">
+              <DetailRow label="Opening Commissions" value={trade.openingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+              <DetailRow label="Closing Commissions" value={trade.closingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+              <DetailRow label="Margin Requirement" value={trade.marginReq} format="currency" scaleFactor={scaleFactor} />
+              {trade.openingVix && <DetailRow label="Opening VIX" value={trade.openingVix} format="number" />}
+              {trade.closingVix && <DetailRow label="Closing VIX" value={trade.closingVix} format="number" />}
+              {trade.gap !== undefined && <DetailRow label="Gap" value={trade.gap} format="percent" />}
+              {trade.movement !== undefined && <DetailRow label="Movement" value={trade.movement} format="percent" />}
+              {trade.maxProfit !== undefined && <DetailRow label="Max Profit" value={trade.maxProfit} format="percent" />}
+              {trade.maxLoss !== undefined && <DetailRow label="Max Loss" value={trade.maxLoss} format="percent" />}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   )
+}
+
+// =============================================================================
+// Trade Matching Utilities
+// =============================================================================
+
+interface MatchedTradePair {
+  actual: ReportingTrade | null
+  backtest: Trade | null
+  pairIndex: number
+}
+
+/**
+ * Match actual and backtest trades by premium sign (credit vs debit)
+ * This helps align corresponding positions in side-by-side view
+ */
+function matchTradesByPremiumSign(
+  actualTrades: ReportingTrade[],
+  backtestTrades: Trade[]
+): MatchedTradePair[] {
+  const pairs: MatchedTradePair[] = []
+
+  // Separate trades by premium sign
+  const actualCredits = actualTrades.filter(t => t.initialPremium >= 0)
+  const actualDebits = actualTrades.filter(t => t.initialPremium < 0)
+  const btCredits = backtestTrades.filter(t => t.premium >= 0)
+  const btDebits = backtestTrades.filter(t => t.premium < 0)
+
+  let pairIndex = 0
+
+  // Match credits first
+  const maxCredits = Math.max(actualCredits.length, btCredits.length)
+  for (let i = 0; i < maxCredits; i++) {
+    pairs.push({
+      actual: actualCredits[i] ?? null,
+      backtest: btCredits[i] ?? null,
+      pairIndex: pairIndex++
+    })
+  }
+
+  // Then match debits
+  const maxDebits = Math.max(actualDebits.length, btDebits.length)
+  for (let i = 0; i < maxDebits; i++) {
+    pairs.push({
+      actual: actualDebits[i] ?? null,
+      backtest: btDebits[i] ?? null,
+      pairIndex: pairIndex++
+    })
+  }
+
+  return pairs
 }
 
 // =============================================================================
@@ -533,6 +614,14 @@ export function TradeDetailView() {
     }
   }, [backtestTrades, actualTrades, scalingMode])
 
+  // Match trades by premium sign for side-by-side alignment
+  const matchedPairs = useMemo(() => {
+    if (!combineLegGroups && backtestTrades.length > 0 && actualTrades.length > 0) {
+      return matchTradesByPremiumSign(actualTrades, backtestTrades)
+    }
+    return []
+  }, [actualTrades, backtestTrades, combineLegGroups])
+
   // Early return after all hooks
   if (!selectedDate || !selectedStrategy) return null
   if (!dayData) return null
@@ -628,55 +717,119 @@ export function TradeDetailView() {
         </CardContent>
       </Card>
 
-      {/* Trade cards - combined or individual based on toggle */}
+      {/* Trade cards - side by side when both exist, full width when only one */}
       {combineLegGroups ? (
-        <>
-          {/* Combined actual trade groups */}
-          {combinedActualGroups.map((group, index) => (
-            <CombinedActualTradeGroup
-              key={`actual-group-${index}`}
-              combined={group.combined}
-              originalTrades={group.original}
-              scalingMode={scalingMode}
-            />
-          ))}
-
-          {/* Combined backtest trade groups */}
-          {combinedBacktestGroups.map((group, index) => (
-            <CombinedBacktestTradeGroup
-              key={`backtest-group-${index}`}
-              combined={group.combined}
-              originalTrades={group.original}
-              scalingMode={scalingMode}
-              actualContracts={actualTotals?.contracts}
-            />
-          ))}
-        </>
+        hasActual && hasBacktest ? (
+          /* Side-by-side layout for matched strategies */
+          <div className="grid grid-cols-2 gap-4">
+            {/* Actual column */}
+            <div className="space-y-4">
+              {combinedActualGroups.map((group, index) => (
+                <CombinedActualTradeGroup
+                  key={`actual-group-${index}`}
+                  combined={group.combined}
+                  originalTrades={group.original}
+                  scalingMode={scalingMode}
+                  sideBySide
+                />
+              ))}
+            </div>
+            {/* Backtest column */}
+            <div className="space-y-4">
+              {combinedBacktestGroups.map((group, index) => (
+                <CombinedBacktestTradeGroup
+                  key={`backtest-group-${index}`}
+                  combined={group.combined}
+                  originalTrades={group.original}
+                  scalingMode={scalingMode}
+                  actualContracts={actualTotals?.contracts}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* Full width for unmatched (only actual or only backtest) */
+          <>
+            {combinedActualGroups.map((group, index) => (
+              <CombinedActualTradeGroup
+                key={`actual-group-${index}`}
+                combined={group.combined}
+                originalTrades={group.original}
+                scalingMode={scalingMode}
+              />
+            ))}
+            {combinedBacktestGroups.map((group, index) => (
+              <CombinedBacktestTradeGroup
+                key={`backtest-group-${index}`}
+                combined={group.combined}
+                originalTrades={group.original}
+                scalingMode={scalingMode}
+                actualContracts={actualTotals?.contracts}
+              />
+            ))}
+          </>
+        )
       ) : (
-        <>
-          {/* Individual actual trade cards */}
-          {actualTrades.map((trade, index) => (
-            <ActualTradeCard
-              key={`actual-${index}`}
-              trade={trade}
-              tradeIndex={index}
-              totalTrades={actualTrades.length}
-              scalingMode={scalingMode}
-            />
-          ))}
-
-          {/* Individual backtest trade cards */}
-          {backtestTrades.map((trade, index) => (
-            <BacktestTradeCard
-              key={`backtest-${index}`}
-              trade={trade}
-              tradeIndex={index}
-              totalTrades={backtestTrades.length}
-              scalingMode={scalingMode}
-              actualContracts={actualTotals?.contracts}
-            />
-          ))}
-        </>
+        hasActual && hasBacktest && matchedPairs.length > 0 ? (
+          /* Side-by-side layout with matched pairs (by premium sign) */
+          <div className="space-y-4">
+            {matchedPairs.map((pair) => (
+              <div key={`pair-${pair.pairIndex}`} className="grid grid-cols-2 gap-4">
+                {/* Actual (left) */}
+                <div>
+                  {pair.actual ? (
+                    <ActualTradeCard
+                      trade={pair.actual}
+                      tradeIndex={pair.pairIndex}
+                      totalTrades={matchedPairs.length}
+                      scalingMode={scalingMode}
+                      sideBySide
+                    />
+                  ) : (
+                    <div className="h-full" /> /* Empty placeholder */
+                  )}
+                </div>
+                {/* Backtest (right) */}
+                <div>
+                  {pair.backtest ? (
+                    <BacktestTradeCard
+                      trade={pair.backtest}
+                      tradeIndex={pair.pairIndex}
+                      totalTrades={matchedPairs.length}
+                      scalingMode={scalingMode}
+                      actualContracts={actualTotals?.contracts}
+                    />
+                  ) : (
+                    <div className="h-full" /> /* Empty placeholder */
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* Full width for unmatched (only actual or only backtest) */
+          <>
+            {actualTrades.map((trade, index) => (
+              <ActualTradeCard
+                key={`actual-${index}`}
+                trade={trade}
+                tradeIndex={index}
+                totalTrades={actualTrades.length}
+                scalingMode={scalingMode}
+              />
+            ))}
+            {backtestTrades.map((trade, index) => (
+              <BacktestTradeCard
+                key={`backtest-${index}`}
+                trade={trade}
+                tradeIndex={index}
+                totalTrades={backtestTrades.length}
+                scalingMode={scalingMode}
+                actualContracts={actualTotals?.contracts}
+              />
+            ))}
+          </>
+        )
       )}
     </div>
   )
