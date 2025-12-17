@@ -1,12 +1,15 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useTradingCalendarStore, CalendarDayData, ScalingMode } from '@/lib/stores/trading-calendar-store'
+import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
 import {
   formatCurrency,
   getDayBackgroundStyle,
   getMonthGridDates,
-  getWeekGridDates
+  getWeekGridDates,
+  getScaledDayBacktestPl,
+  getScaledDayActualPl,
+  getScaledDayMargin
 } from '@/lib/services/calendar-data'
 import { cn } from '@/lib/utils'
 
@@ -29,71 +32,6 @@ interface CalendarDayCellProps {
   onClick: () => void
 }
 
-/**
- * Get scaled backtest P/L for display
- */
-function getScaledBacktestPl(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  if (!dayData.hasBacktest) return 0
-
-  if (scalingMode === 'perContract') {
-    const totalContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.backtestPl / totalContracts : 0
-  }
-
-  if (scalingMode === 'toReported' && dayData.hasActual) {
-    // Scale backtest DOWN to match actual (reported) contract counts
-    const btContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    const actualContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    if (btContracts > 0 && actualContracts > 0) {
-      return dayData.backtestPl * (actualContracts / btContracts)
-    }
-  }
-
-  // raw shows backtest as-is
-  return dayData.backtestPl
-}
-
-/**
- * Get scaled actual P/L for display
- */
-function getScaledActualPl(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  if (!dayData.hasActual) return 0
-
-  if (scalingMode === 'perContract') {
-    const totalContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.actualPl / totalContracts : 0
-  }
-
-  // For 'raw' and 'toReported', actual stays as-is (we scale backtest down to match actual)
-  return dayData.actualPl
-}
-
-/**
- * Get scaled margin for display
- * Margin comes from backtest trades only, so we apply similar scaling logic
- */
-function getScaledMargin(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  if (!dayData.hasBacktest || dayData.totalMargin === 0) return 0
-
-  if (scalingMode === 'perContract') {
-    // Divide margin by contract count
-    const totalContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.totalMargin / totalContracts : 0
-  }
-
-  if (scalingMode === 'toReported' && dayData.hasActual) {
-    // Scale margin DOWN to match actual (reported) contract counts
-    const btContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    const actualContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    if (btContracts > 0 && actualContracts > 0) {
-      return dayData.totalMargin * (actualContracts / btContracts)
-    }
-  }
-
-  // raw shows margin as-is
-  return dayData.totalMargin
-}
-
 function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDayCellProps) {
   const { calendarDays, scalingMode, dataDisplayMode, showMargin } = useTradingCalendarStore()
 
@@ -109,8 +47,8 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
   const showActual = (dataDisplayMode === 'actual' || dataDisplayMode === 'both') && hasActualData
 
   // Get both P/L values
-  const backtestPl = dayData ? getScaledBacktestPl(dayData, scalingMode) : 0
-  const actualPl = dayData ? getScaledActualPl(dayData, scalingMode) : 0
+  const backtestPl = dayData ? getScaledDayBacktestPl(dayData, scalingMode) : 0
+  const actualPl = dayData ? getScaledDayActualPl(dayData, scalingMode) : 0
 
   // Get background style - handles mismatch cases with stripes when showing both
   const bgStyle = useMemo(() => {
@@ -213,7 +151,7 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
         <div className="flex items-center gap-1 pt-1 border-t border-border/30 w-full mt-auto">
           <span className="text-xs text-muted-foreground">Margin:</span>
           <span className="text-xs font-medium text-foreground">
-            {formatCurrency(getScaledMargin(dayData, scalingMode))}
+            {formatCurrency(getScaledDayMargin(dayData, scalingMode))}
           </span>
         </div>
       )}
@@ -242,15 +180,15 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
 
       if (dayData) {
         if (dayData.hasBacktest) {
-          backtestPl += getScaledBacktestPl(dayData, scalingMode)
+          backtestPl += getScaledDayBacktestPl(dayData, scalingMode)
           backtestDays++
         }
         if (dayData.hasActual) {
-          actualPl += getScaledActualPl(dayData, scalingMode)
+          actualPl += getScaledDayActualPl(dayData, scalingMode)
           actualDays++
         }
         // Track max scaled margin for the week
-        const scaledMargin = getScaledMargin(dayData, scalingMode)
+        const scaledMargin = getScaledDayMargin(dayData, scalingMode)
         if (scaledMargin > maxMargin) {
           maxMargin = scaledMargin
         }

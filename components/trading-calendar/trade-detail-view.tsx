@@ -8,7 +8,11 @@ import { ChevronDown } from 'lucide-react'
 import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
 import { Trade } from '@/lib/models/trade'
 import { ReportingTrade } from '@/lib/models/reporting-trade'
-import { formatCurrency } from '@/lib/services/calendar-data'
+import {
+  formatCurrency,
+  createScalingContext,
+  getScaleFactor
+} from '@/lib/services/calendar-data'
 import {
   groupTradesByEntry,
   combineLegGroup,
@@ -550,61 +554,54 @@ export function TradeDetailView() {
     }))
   }, [actualTrades, combineLegGroups])
 
-  // Calculate actual totals for passing contract count to backtest cards
-  // Use first trade's contract count as the "unit size" for scaling, not the sum
-  const actualTotals = useMemo(() => {
-    if (actualTrades.length === 0) return null
-    return {
-      pl: actualTrades.reduce((sum, t) => sum + t.pl, 0),
-      contracts: actualTrades[0]?.numContracts ?? 0,
-      tradeCount: actualTrades.length
-    }
-  }, [actualTrades])
+  // Create centralized scaling context - uses first trade's contract count as "unit size"
+  const scalingContext = useMemo(() =>
+    createScalingContext(backtestTrades, actualTrades),
+    [backtestTrades, actualTrades]
+  )
 
-  // Scale totals based on scaling mode
-  // Sum P&L across all trades first, then apply scaling
+  // Get scale factors from centralized functions
+  const btScaleFactor = useMemo(() =>
+    getScaleFactor(scalingContext, scalingMode, 'backtest'),
+    [scalingContext, scalingMode]
+  )
+  const actualScaleFactor = useMemo(() =>
+    getScaleFactor(scalingContext, scalingMode, 'actual'),
+    [scalingContext, scalingMode]
+  )
+
+  // Scale totals based on scaling mode using centralized scaling
   const scaledTotals = useMemo(() => {
     const totalBtPl = backtestTrades.reduce((sum, t) => sum + t.pl, 0)
     const totalActualPl = actualTrades.reduce((sum, t) => sum + t.pl, 0)
-    const btContracts = backtestTrades[0]?.numContracts ?? 0
-    const actualContracts = actualTrades[0]?.numContracts ?? 0
 
-    if (scalingMode === 'raw') {
-      return {
-        backtest: backtestTrades.length > 0 ? { pl: totalBtPl, contracts: btContracts } : null,
-        actual: actualTrades.length > 0 ? { pl: totalActualPl, contracts: actualContracts } : null,
-        slippage: null
+    // Apply scaling using centralized scale factors
+    const scaledBtPl = btScaleFactor !== null ? totalBtPl * btScaleFactor : totalBtPl
+    const scaledActualPl = actualScaleFactor !== null ? totalActualPl * actualScaleFactor : totalActualPl
+
+    // Determine display contracts based on scaling mode
+    const displayContracts = scalingMode === 'perContract' ? 1 :
+      scalingMode === 'toReported' && scalingContext.hasActual ? scalingContext.actualContracts :
+      scalingContext.btContracts
+
+    // Calculate slippage only when we can meaningfully compare
+    let slippage: number | null = null
+    if (backtestTrades.length > 0 && actualTrades.length > 0) {
+      if (scalingMode === 'raw') {
+        // Raw mode: slippage isn't meaningful with different contract counts
+        slippage = null
+      } else {
+        // perContract or toReported: values are on same scale, slippage is meaningful
+        slippage = scaledActualPl - scaledBtPl
       }
     }
 
-    if (scalingMode === 'perContract') {
-      const btPerContract = btContracts > 0 ? totalBtPl / btContracts : 0
-      const actualPerContract = actualContracts > 0 ? totalActualPl / actualContracts : 0
-      return {
-        backtest: backtestTrades.length > 0 ? { pl: btPerContract, contracts: 1 } : null,
-        actual: actualTrades.length > 0 ? { pl: actualPerContract, contracts: 1 } : null,
-        slippage: backtestTrades.length > 0 && actualTrades.length > 0 ? actualPerContract - btPerContract : null
-      }
-    }
-
-    // scalingMode === 'toReported' - scale backtest DOWN to actual contract count
-    if (backtestTrades.length > 0 && actualTrades.length > 0 && btContracts > 0) {
-      const scaleFactor = actualContracts / btContracts
-      const scaledBtPl = totalBtPl * scaleFactor
-      return {
-        backtest: { pl: scaledBtPl, contracts: actualContracts },
-        actual: { pl: totalActualPl, contracts: actualContracts },
-        slippage: totalActualPl - scaledBtPl
-      }
-    }
-
-    // Fallback for unmatched trades
     return {
-      backtest: backtestTrades.length > 0 ? { pl: totalBtPl, contracts: btContracts } : null,
-      actual: actualTrades.length > 0 ? { pl: totalActualPl, contracts: actualContracts } : null,
-      slippage: null
+      backtest: backtestTrades.length > 0 ? { pl: scaledBtPl, contracts: displayContracts } : null,
+      actual: actualTrades.length > 0 ? { pl: scaledActualPl, contracts: scalingMode === 'perContract' ? 1 : scalingContext.actualContracts } : null,
+      slippage
     }
-  }, [backtestTrades, actualTrades, scalingMode])
+  }, [backtestTrades, actualTrades, scalingMode, btScaleFactor, actualScaleFactor, scalingContext])
 
   // Match trades by premium sign for side-by-side alignment
   const matchedPairs = useMemo(() => {
@@ -724,7 +721,7 @@ export function TradeDetailView() {
                   combined={group.combined}
                   originalTrades={group.original}
                   scalingMode={scalingMode}
-                  actualContracts={actualTotals?.contracts}
+                  actualContracts={scalingContext.actualContracts}
                 />
               ))}
             </div>
@@ -746,7 +743,7 @@ export function TradeDetailView() {
                 combined={group.combined}
                 originalTrades={group.original}
                 scalingMode={scalingMode}
-                actualContracts={actualTotals?.contracts}
+                actualContracts={scalingContext.actualContracts}
               />
             ))}
           </>
@@ -779,7 +776,7 @@ export function TradeDetailView() {
                       tradeIndex={pair.pairIndex}
                       totalTrades={matchedPairs.length}
                       scalingMode={scalingMode}
-                      actualContracts={actualTotals?.contracts}
+                      actualContracts={scalingContext.actualContracts}
                     />
                   ) : (
                     <div className="h-full" /> /* Empty placeholder */
@@ -807,7 +804,7 @@ export function TradeDetailView() {
                 tradeIndex={index}
                 totalTrades={backtestTrades.length}
                 scalingMode={scalingMode}
-                actualContracts={actualTotals?.contracts}
+                actualContracts={scalingContext.actualContracts}
               />
             ))}
           </>

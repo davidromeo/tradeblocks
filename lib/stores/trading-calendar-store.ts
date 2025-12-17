@@ -2,7 +2,12 @@ import { create } from 'zustand'
 import { Trade } from '@/lib/models/trade'
 import { ReportingTrade } from '@/lib/models/reporting-trade'
 import { DailyLogEntry } from '@/lib/models/daily-log'
-import { calculateAdvancedMetrics, calculateTradeMetrics } from '@/lib/services/calendar-data'
+import {
+  calculateAdvancedMetrics,
+  calculateTradeMetrics,
+  getScaledDayBacktestPl,
+  getScaledDayActualPl
+} from '@/lib/services/calendar-data'
 import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
 import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
 
@@ -399,56 +404,6 @@ function buildCalendarDays(
 }
 
 /**
- * Get scaled backtest P/L for comparison stats
- *
- * Scaling modes:
- * - raw: Show backtest P/L as-is
- * - perContract: Normalize to per-contract (divide by contract count)
- * - toReported: Scale backtest DOWN to match actual (reported) contract counts
- */
-function getScaledBacktestPl(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  if (!dayData.hasBacktest) return 0
-
-  if (scalingMode === 'perContract') {
-    const totalContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.backtestPl / totalContracts : 0
-  }
-
-  if (scalingMode === 'toReported' && dayData.hasActual) {
-    // Scale backtest DOWN to match actual (reported) contract counts
-    // Backtest (Trade) typically has more contracts, actual (ReportingTrade) has fewer
-    const btContracts = dayData.backtestTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    const actualContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    if (btContracts > 0 && actualContracts > 0) {
-      return dayData.backtestPl * (actualContracts / btContracts)
-    }
-  }
-
-  // raw shows backtest as-is
-  return dayData.backtestPl
-}
-
-/**
- * Get scaled actual P/L for comparison stats
- *
- * Scaling modes:
- * - raw: Show actual P/L as-is
- * - perContract: Normalize to per-contract (divide by contract count)
- * - toReported: Show actual P/L as-is (backtest is scaled down to match)
- */
-function getScaledActualPl(dayData: CalendarDayData, scalingMode: ScalingMode): number {
-  if (!dayData.hasActual) return 0
-
-  if (scalingMode === 'perContract') {
-    const totalContracts = dayData.actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
-    return totalContracts > 0 ? dayData.actualPl / totalContracts : 0
-  }
-
-  // For 'raw' and 'toReported', show actual as-is
-  return dayData.actualPl
-}
-
-/**
  * Calculate performance stats for visible date range
  */
 function calculatePerformanceStats(
@@ -610,8 +565,8 @@ function calculateComparisonStats(
 
   for (const [dateKey, day] of days) {
     if (dateKey >= startKey && dateKey <= endKey) {
-      backtestPl += getScaledBacktestPl(day, scalingMode)
-      actualPl += getScaledActualPl(day, scalingMode)
+      backtestPl += getScaledDayBacktestPl(day, scalingMode)
+      actualPl += getScaledDayActualPl(day, scalingMode)
       if (day.hasActual) hasAnyActual = true
     }
   }
