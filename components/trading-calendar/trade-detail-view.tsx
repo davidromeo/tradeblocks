@@ -550,21 +550,13 @@ export function TradeDetailView() {
     }))
   }, [actualTrades, combineLegGroups])
 
-  // Calculate totals for the summary header
-  const btTotals = useMemo(() => {
-    if (backtestTrades.length === 0) return null
-    return {
-      pl: backtestTrades.reduce((sum, t) => sum + t.pl, 0),
-      contracts: backtestTrades.reduce((sum, t) => sum + t.numContracts, 0),
-      tradeCount: backtestTrades.length
-    }
-  }, [backtestTrades])
-
+  // Calculate actual totals for passing contract count to backtest cards
+  // Use first trade's contract count as the "unit size" for scaling, not the sum
   const actualTotals = useMemo(() => {
     if (actualTrades.length === 0) return null
     return {
       pl: actualTrades.reduce((sum, t) => sum + t.pl, 0),
-      contracts: actualTrades.reduce((sum, t) => sum + t.numContracts, 0),
+      contracts: actualTrades[0]?.numContracts ?? 0,
       tradeCount: actualTrades.length
     }
   }, [actualTrades])
@@ -669,11 +661,6 @@ export function TradeDetailView() {
                   )}>
                     {formatCurrency(scaledTotals.backtest.pl)}
                   </div>
-                  {scalingMode === 'raw' && btTotals && (
-                    <div className="text-xs text-muted-foreground">
-                      {btTotals.contracts}c · {btTotals.tradeCount}t
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -687,11 +674,6 @@ export function TradeDetailView() {
                   )}>
                     {formatCurrency(scaledTotals.actual.pl)}
                   </div>
-                  {scalingMode === 'raw' && actualTotals && (
-                    <div className="text-xs text-muted-foreground">
-                      {actualTotals.contracts}c · {actualTotals.tradeCount}t
-                    </div>
-                  )}
                 </div>
               )}
 
