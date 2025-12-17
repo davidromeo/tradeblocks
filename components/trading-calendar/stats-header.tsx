@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   aggregateTradesByStrategy,
   calculateDayMetrics,
@@ -45,7 +46,9 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     unmatchedBacktestStrategies,
     unmatchedActualStrategies,
     actualTrades,
+    combineLegGroups,
     setScalingMode,
+    setCombineLegGroups,
   } = useTradingCalendarStore();
 
   const hasActualTrades = actualTrades.length > 0;
@@ -348,6 +351,18 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
         title="Performance"
         icon={<TrendingUp className="h-4 w-4" />}
         gridCols={4}
+        actions={
+          <div className="flex items-center gap-2">
+            <Switch
+              id="combine-legs"
+              checked={combineLegGroups}
+              onCheckedChange={setCombineLegGroups}
+            />
+            <Label htmlFor="combine-legs" className="text-xs text-muted-foreground cursor-pointer">
+              Combine legs
+            </Label>
+          </div>
+        }
       >
         {/* Row 1: CAGR, Win Rate, Sharpe, Sortino */}
 

@@ -164,6 +164,7 @@ interface TradingCalendarState {
   dataDisplayMode: DataDisplayMode
   navigationView: NavigationView
   showMargin: boolean
+  combineLegGroups: boolean
 
   // Current month/date being viewed
   viewDate: Date // The month/week being displayed
@@ -184,6 +185,7 @@ interface TradingCalendarState {
   setDateDisplayMode: (mode: DateDisplayMode) => void
   setDataDisplayMode: (mode: DataDisplayMode) => void
   setShowMargin: (show: boolean) => void
+  setCombineLegGroups: (combine: boolean) => void
   setViewDate: (date: Date) => void
 
   // Navigation actions
@@ -650,6 +652,7 @@ const initialState = {
   dataDisplayMode: 'both' as DataDisplayMode,
   navigationView: 'calendar' as NavigationView,
   showMargin: false,
+  combineLegGroups: true,
   viewDate: new Date(),
   selectedDate: null,
   selectedTradeId: null,
@@ -863,6 +866,10 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
 
   setShowMargin: (show) => {
     set({ showMargin: show })
+  },
+
+  setCombineLegGroups: (combine) => {
+    set({ combineLegGroups: combine })
   },
 
   setViewDate: (date) => {

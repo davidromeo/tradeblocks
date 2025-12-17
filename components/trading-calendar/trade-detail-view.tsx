@@ -1,13 +1,23 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ChevronDown } from 'lucide-react'
 import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
 import { Trade } from '@/lib/models/trade'
 import { ReportingTrade } from '@/lib/models/reporting-trade'
-import { formatCurrency, scaleTradeValues } from '@/lib/services/calendar-data'
+import { formatCurrency } from '@/lib/services/calendar-data'
+import {
+  groupTradesByEntry,
+  combineLegGroup,
+  groupReportingTradesByEntry,
+  combineReportingLegGroup,
+  CombinedTrade,
+  CombinedReportingTrade
+} from '@/lib/utils/combine-leg-groups'
 import { cn } from '@/lib/utils'
 
 interface DetailRowProps {
@@ -61,6 +71,232 @@ function DetailRow({
   )
 }
 
+// =============================================================================
+// Individual Leg Card (compact version for inside combined groups)
+// =============================================================================
+
+interface IndividualLegCardProps {
+  trade: Trade | ReportingTrade
+  index: number
+  type: 'backtest' | 'actual'
+}
+
+function IndividualLegCard({ trade, index, type }: IndividualLegCardProps) {
+  const isBacktest = type === 'backtest'
+  const premium = isBacktest ? (trade as Trade).premium : (trade as ReportingTrade).initialPremium
+
+  return (
+    <div className="p-3 bg-muted/30 rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium">Leg {index + 1}</span>
+        <span className={cn(
+          "text-sm font-semibold",
+          trade.pl > 0 && "text-green-500",
+          trade.pl < 0 && "text-red-500"
+        )}>
+          {formatCurrency(trade.pl)}
+        </span>
+      </div>
+      <div className="text-xs text-muted-foreground space-y-1">
+        <div className="truncate">Legs: {trade.legs}</div>
+        <div>Premium: {Math.abs(premium).toFixed(2)} {premium < 0 ? 'db' : 'cr'}</div>
+        <div>
+          Close: {'timeClosed' in trade ? (trade.timeClosed ?? '-') : '-'}
+          {' - '}
+          {trade.reasonForClose ?? '-'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Combined Trade Group (expandable/collapsible)
+// =============================================================================
+
+interface CombinedActualTradeGroupProps {
+  combined: CombinedReportingTrade
+  originalTrades: ReportingTrade[]
+  scalingMode: 'raw' | 'perContract' | 'toReported'
+}
+
+function CombinedActualTradeGroup({ combined, originalTrades, scalingMode }: CombinedActualTradeGroupProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const scaleFactor = useMemo(() => {
+    if (scalingMode === 'raw') return null
+    if (scalingMode === 'perContract') {
+      return combined.numContracts > 0 ? 1 / combined.numContracts : null
+    }
+    return null
+  }, [scalingMode, combined.numContracts])
+
+  const legCount = combined.originalTradeCount
+
+  return (
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <Card className="pt-2 pb-4">
+        <CardHeader className="pt-2 pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              {legCount > 1 ? `Combined Trade (${legCount} legs)` : 'Trade Details'}
+              <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/50 text-xs">
+                Actual
+              </Badge>
+            </CardTitle>
+            <div className={cn(
+              "text-lg font-bold",
+              combined.pl > 0 && "text-green-500",
+              combined.pl < 0 && "text-red-500"
+            )}>
+              {formatCurrency(combined.pl)}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          <DetailRow label="Time Opened" value={combined.timeOpened ?? '-'} />
+          <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
+          <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
+          <DetailRow label="Legs" value={combined.legs} />
+          <DetailRow label="Premium" value={combined.initialPremium} format="premium" />
+          <DetailRow label="Contracts" value={combined.numContracts} format="number" />
+          <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
+          <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
+          <DetailRow label="Reason for Close" value={combined.reasonForClose} />
+          <DetailRow label="P&L" value={combined.pl} format="currency" scaleFactor={scaleFactor} />
+
+          {legCount > 1 && (
+            <CollapsibleTrigger asChild>
+              <button type="button" className="w-full mt-4 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 border-t border-border/50">
+                <ChevronDown className={cn(
+                  "h-4 w-4 transition-transform",
+                  isExpanded && "rotate-180"
+                )} />
+                {isExpanded ? 'Hide Leg Details' : 'Show Leg Details'}
+              </button>
+            </CollapsibleTrigger>
+          )}
+        </CardContent>
+
+        {legCount > 1 && (
+          <CollapsibleContent>
+            <div className="px-4 pb-2 space-y-3">
+              {originalTrades.map((trade, idx) => (
+                <IndividualLegCard key={idx} trade={trade} index={idx} type="actual" />
+              ))}
+            </div>
+          </CollapsibleContent>
+        )}
+      </Card>
+    </Collapsible>
+  )
+}
+
+interface CombinedBacktestTradeGroupProps {
+  combined: CombinedTrade
+  originalTrades: Trade[]
+  scalingMode: 'raw' | 'perContract' | 'toReported'
+  actualContracts?: number
+}
+
+function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, actualContracts }: CombinedBacktestTradeGroupProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const scaleFactor = useMemo(() => {
+    if (scalingMode === 'raw') return null
+    if (scalingMode === 'perContract') {
+      return combined.numContracts > 0 ? 1 / combined.numContracts : null
+    }
+    if (scalingMode === 'toReported' && actualContracts) {
+      return combined.numContracts > 0 ? actualContracts / combined.numContracts : null
+    }
+    return null
+  }, [scalingMode, combined.numContracts, actualContracts])
+
+  const legCount = combined.originalTradeCount
+
+  return (
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <Card className="pt-2 pb-4">
+        <CardHeader className="pt-2 pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              {legCount > 1 ? `Combined Trade (${legCount} legs)` : 'Trade Details'}
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/50 text-xs">
+                Backtest
+              </Badge>
+            </CardTitle>
+            <div className={cn(
+              "text-lg font-bold",
+              combined.pl > 0 && "text-green-500",
+              combined.pl < 0 && "text-red-500"
+            )}>
+              {formatCurrency(scaleFactor ? combined.pl * scaleFactor : combined.pl)}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          <DetailRow label="Time Opened" value={combined.timeOpened ?? '-'} />
+          <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
+          <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
+          <DetailRow label="Legs" value={combined.legs} />
+          <DetailRow label="Premium" value={combined.premium} format="premium" />
+          <DetailRow label="Contracts" value={combined.numContracts} format="number" />
+          <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
+          <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
+          <DetailRow label="Reason for Close" value={combined.reasonForClose} />
+          <DetailRow label="P&L" value={combined.pl} format="currency" scaleFactor={scaleFactor} />
+
+          <Separator className="my-2" />
+
+          <div className="text-xs text-muted-foreground uppercase tracking-wide py-2">
+            Additional Backtest Details
+          </div>
+
+          <DetailRow label="Opening Commissions" value={combined.openingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+          <DetailRow label="Closing Commissions" value={combined.closingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+          <DetailRow label="Margin Requirement" value={combined.marginReq} format="currency" scaleFactor={scaleFactor} />
+
+          {combined.openingVix && <DetailRow label="Opening VIX" value={combined.openingVix} format="number" />}
+          {combined.closingVix && <DetailRow label="Closing VIX" value={combined.closingVix} format="number" />}
+          {combined.gap !== undefined && <DetailRow label="Gap" value={combined.gap} format="percent" />}
+          {combined.movement !== undefined && <DetailRow label="Movement" value={combined.movement} format="percent" />}
+          {combined.maxProfit !== undefined && <DetailRow label="Max Profit" value={combined.maxProfit} format="percent" />}
+          {combined.maxLoss !== undefined && <DetailRow label="Max Loss" value={combined.maxLoss} format="percent" />}
+
+          {legCount > 1 && (
+            <CollapsibleTrigger asChild>
+              <button type="button" className="w-full mt-4 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 border-t border-border/50">
+                <ChevronDown className={cn(
+                  "h-4 w-4 transition-transform",
+                  isExpanded && "rotate-180"
+                )} />
+                {isExpanded ? 'Hide Leg Details' : 'Show Leg Details'}
+              </button>
+            </CollapsibleTrigger>
+          )}
+        </CardContent>
+
+        {legCount > 1 && (
+          <CollapsibleContent>
+            <div className="px-4 pb-2 space-y-3">
+              {originalTrades.map((trade, idx) => (
+                <IndividualLegCard key={idx} trade={trade} index={idx} type="backtest" />
+              ))}
+            </div>
+          </CollapsibleContent>
+        )}
+      </Card>
+    </Collapsible>
+  )
+}
+
+// =============================================================================
+// Individual Trade Cards (for when combining is disabled)
+// =============================================================================
+
 interface SingleTradeCardProps {
   trade: ReportingTrade
   tradeIndex: number
@@ -99,54 +335,16 @@ function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode }: Single
         </div>
       </CardHeader>
       <CardContent>
-        <DetailRow
-          label="Time Opened"
-          value={trade.timeOpened ?? '-'}
-        />
-        <DetailRow
-          label="Time Closed"
-          value={trade.timeClosed ?? '-'}
-        />
-        <DetailRow
-          label="Opening Price"
-          value={trade.openingPrice}
-          format="number"
-        />
-        <DetailRow
-          label="Legs"
-          value={trade.legs}
-        />
-        <DetailRow
-          label="Premium"
-          value={trade.initialPremium}
-          format="premium"
-        />
-        <DetailRow
-          label="Contracts"
-          value={trade.numContracts}
-          format="number"
-        />
-        <DetailRow
-          label="Closing Price"
-          value={trade.closingPrice}
-          format="number"
-        />
-        <DetailRow
-          label="Avg Closing Cost"
-          value={trade.avgClosingCost}
-          format="currency"
-          scaleFactor={scaleFactor}
-        />
-        <DetailRow
-          label="Reason for Close"
-          value={trade.reasonForClose}
-        />
-        <DetailRow
-          label="P&L"
-          value={trade.pl}
-          format="currency"
-          scaleFactor={scaleFactor}
-        />
+        <DetailRow label="Time Opened" value={trade.timeOpened ?? '-'} />
+        <DetailRow label="Time Closed" value={trade.timeClosed ?? '-'} />
+        <DetailRow label="Opening Price" value={trade.openingPrice} format="number" />
+        <DetailRow label="Legs" value={trade.legs} />
+        <DetailRow label="Premium" value={trade.initialPremium} format="premium" />
+        <DetailRow label="Contracts" value={trade.numContracts} format="number" />
+        <DetailRow label="Closing Price" value={trade.closingPrice} format="number" />
+        <DetailRow label="Avg Closing Cost" value={trade.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
+        <DetailRow label="Reason for Close" value={trade.reasonForClose} />
+        <DetailRow label="P&L" value={trade.pl} format="currency" scaleFactor={scaleFactor} />
       </CardContent>
     </Card>
   )
@@ -194,54 +392,16 @@ function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actual
         </div>
       </CardHeader>
       <CardContent>
-        <DetailRow
-          label="Time Opened"
-          value={trade.timeOpened ?? '-'}
-        />
-        <DetailRow
-          label="Time Closed"
-          value={trade.timeClosed ?? '-'}
-        />
-        <DetailRow
-          label="Opening Price"
-          value={trade.openingPrice}
-          format="number"
-        />
-        <DetailRow
-          label="Legs"
-          value={trade.legs}
-        />
-        <DetailRow
-          label="Premium"
-          value={trade.premium}
-          format="premium"
-        />
-        <DetailRow
-          label="Contracts"
-          value={trade.numContracts}
-          format="number"
-        />
-        <DetailRow
-          label="Closing Price"
-          value={trade.closingPrice}
-          format="number"
-        />
-        <DetailRow
-          label="Avg Closing Cost"
-          value={trade.avgClosingCost}
-          format="currency"
-          scaleFactor={scaleFactor}
-        />
-        <DetailRow
-          label="Reason for Close"
-          value={trade.reasonForClose}
-        />
-        <DetailRow
-          label="P&L"
-          value={trade.pl}
-          format="currency"
-          scaleFactor={scaleFactor}
-        />
+        <DetailRow label="Time Opened" value={trade.timeOpened ?? '-'} />
+        <DetailRow label="Time Closed" value={trade.timeClosed ?? '-'} />
+        <DetailRow label="Opening Price" value={trade.openingPrice} format="number" />
+        <DetailRow label="Legs" value={trade.legs} />
+        <DetailRow label="Premium" value={trade.premium} format="premium" />
+        <DetailRow label="Contracts" value={trade.numContracts} format="number" />
+        <DetailRow label="Closing Price" value={trade.closingPrice} format="number" />
+        <DetailRow label="Avg Closing Cost" value={trade.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
+        <DetailRow label="Reason for Close" value={trade.reasonForClose} />
+        <DetailRow label="P&L" value={trade.pl} format="currency" scaleFactor={scaleFactor} />
 
         <Separator className="my-2" />
 
@@ -249,78 +409,32 @@ function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actual
           Additional Backtest Details
         </div>
 
-        <DetailRow
-          label="Opening Commissions"
-          value={trade.openingCommissionsFees}
-          format="currency"
-          scaleFactor={scaleFactor}
-        />
-        <DetailRow
-          label="Closing Commissions"
-          value={trade.closingCommissionsFees}
-          format="currency"
-          scaleFactor={scaleFactor}
-        />
-        <DetailRow
-          label="Margin Requirement"
-          value={trade.marginReq}
-          format="currency"
-          scaleFactor={scaleFactor}
-        />
+        <DetailRow label="Opening Commissions" value={trade.openingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+        <DetailRow label="Closing Commissions" value={trade.closingCommissionsFees} format="currency" scaleFactor={scaleFactor} />
+        <DetailRow label="Margin Requirement" value={trade.marginReq} format="currency" scaleFactor={scaleFactor} />
 
-        {trade.openingVix && (
-          <DetailRow
-            label="Opening VIX"
-            value={trade.openingVix}
-            format="number"
-          />
-        )}
-        {trade.closingVix && (
-          <DetailRow
-            label="Closing VIX"
-            value={trade.closingVix}
-            format="number"
-          />
-        )}
-        {trade.gap !== undefined && (
-          <DetailRow
-            label="Gap"
-            value={trade.gap}
-            format="percent"
-          />
-        )}
-        {trade.movement !== undefined && (
-          <DetailRow
-            label="Movement"
-            value={trade.movement}
-            format="percent"
-          />
-        )}
-        {trade.maxProfit !== undefined && (
-          <DetailRow
-            label="Max Profit"
-            value={trade.maxProfit}
-            format="percent"
-          />
-        )}
-        {trade.maxLoss !== undefined && (
-          <DetailRow
-            label="Max Loss"
-            value={trade.maxLoss}
-            format="percent"
-          />
-        )}
+        {trade.openingVix && <DetailRow label="Opening VIX" value={trade.openingVix} format="number" />}
+        {trade.closingVix && <DetailRow label="Closing VIX" value={trade.closingVix} format="number" />}
+        {trade.gap !== undefined && <DetailRow label="Gap" value={trade.gap} format="percent" />}
+        {trade.movement !== undefined && <DetailRow label="Movement" value={trade.movement} format="percent" />}
+        {trade.maxProfit !== undefined && <DetailRow label="Max Profit" value={trade.maxProfit} format="percent" />}
+        {trade.maxLoss !== undefined && <DetailRow label="Max Loss" value={trade.maxLoss} format="percent" />}
       </CardContent>
     </Card>
   )
 }
+
+// =============================================================================
+// Main Component
+// =============================================================================
 
 export function TradeDetailView() {
   const {
     selectedDate,
     selectedStrategy,
     calendarDays,
-    scalingMode
+    scalingMode,
+    combineLegGroups
   } = useTradingCalendarStore()
 
   const dayData = selectedDate ? calendarDays.get(selectedDate) : undefined
@@ -335,6 +449,25 @@ export function TradeDetailView() {
     if (!dayData || !selectedStrategy) return []
     return dayData.actualTrades.filter(t => t.strategy === selectedStrategy)
   }, [dayData, selectedStrategy])
+
+  // Group and combine trades if toggle is enabled
+  const combinedBacktestGroups = useMemo(() => {
+    if (!combineLegGroups || backtestTrades.length === 0) return []
+    const groups = groupTradesByEntry(backtestTrades)
+    return Array.from(groups.values()).map(group => ({
+      combined: combineLegGroup(group),
+      original: group
+    }))
+  }, [backtestTrades, combineLegGroups])
+
+  const combinedActualGroups = useMemo(() => {
+    if (!combineLegGroups || actualTrades.length === 0) return []
+    const groups = groupReportingTradesByEntry(actualTrades)
+    return Array.from(groups.values()).map(group => ({
+      combined: combineReportingLegGroup(group),
+      original: group
+    }))
+  }, [actualTrades, combineLegGroups])
 
   // Calculate totals for the summary header
   const btTotals = useMemo(() => {
@@ -356,11 +489,48 @@ export function TradeDetailView() {
   }, [actualTrades])
 
   // Scale totals based on scaling mode
+  // Sum P&L across all trades first, then apply scaling
   const scaledTotals = useMemo(() => {
-    // For the header, use the first trades to get scale factor (consistent with previous behavior)
-    const backtestTrade = backtestTrades[0] ?? null
-    const actualTrade = actualTrades[0] ?? null
-    return scaleTradeValues(backtestTrade, actualTrade, scalingMode)
+    const totalBtPl = backtestTrades.reduce((sum, t) => sum + t.pl, 0)
+    const totalActualPl = actualTrades.reduce((sum, t) => sum + t.pl, 0)
+    const btContracts = backtestTrades[0]?.numContracts ?? 0
+    const actualContracts = actualTrades[0]?.numContracts ?? 0
+
+    if (scalingMode === 'raw') {
+      return {
+        backtest: backtestTrades.length > 0 ? { pl: totalBtPl, contracts: btContracts } : null,
+        actual: actualTrades.length > 0 ? { pl: totalActualPl, contracts: actualContracts } : null,
+        slippage: null
+      }
+    }
+
+    if (scalingMode === 'perContract') {
+      const btPerContract = btContracts > 0 ? totalBtPl / btContracts : 0
+      const actualPerContract = actualContracts > 0 ? totalActualPl / actualContracts : 0
+      return {
+        backtest: backtestTrades.length > 0 ? { pl: btPerContract, contracts: 1 } : null,
+        actual: actualTrades.length > 0 ? { pl: actualPerContract, contracts: 1 } : null,
+        slippage: backtestTrades.length > 0 && actualTrades.length > 0 ? actualPerContract - btPerContract : null
+      }
+    }
+
+    // scalingMode === 'toReported' - scale backtest DOWN to actual contract count
+    if (backtestTrades.length > 0 && actualTrades.length > 0 && btContracts > 0) {
+      const scaleFactor = actualContracts / btContracts
+      const scaledBtPl = totalBtPl * scaleFactor
+      return {
+        backtest: { pl: scaledBtPl, contracts: actualContracts },
+        actual: { pl: totalActualPl, contracts: actualContracts },
+        slippage: totalActualPl - scaledBtPl
+      }
+    }
+
+    // Fallback for unmatched trades
+    return {
+      backtest: backtestTrades.length > 0 ? { pl: totalBtPl, contracts: btContracts } : null,
+      actual: actualTrades.length > 0 ? { pl: totalActualPl, contracts: actualContracts } : null,
+      slippage: null
+    }
   }, [backtestTrades, actualTrades, scalingMode])
 
   // Early return after all hooks
@@ -458,28 +628,56 @@ export function TradeDetailView() {
         </CardContent>
       </Card>
 
-      {/* Individual actual trade cards */}
-      {actualTrades.map((trade, index) => (
-        <ActualTradeCard
-          key={`actual-${index}`}
-          trade={trade}
-          tradeIndex={index}
-          totalTrades={actualTrades.length}
-          scalingMode={scalingMode}
-        />
-      ))}
+      {/* Trade cards - combined or individual based on toggle */}
+      {combineLegGroups ? (
+        <>
+          {/* Combined actual trade groups */}
+          {combinedActualGroups.map((group, index) => (
+            <CombinedActualTradeGroup
+              key={`actual-group-${index}`}
+              combined={group.combined}
+              originalTrades={group.original}
+              scalingMode={scalingMode}
+            />
+          ))}
 
-      {/* Individual backtest trade cards */}
-      {backtestTrades.map((trade, index) => (
-        <BacktestTradeCard
-          key={`backtest-${index}`}
-          trade={trade}
-          tradeIndex={index}
-          totalTrades={backtestTrades.length}
-          scalingMode={scalingMode}
-          actualContracts={actualTotals?.contracts}
-        />
-      ))}
+          {/* Combined backtest trade groups */}
+          {combinedBacktestGroups.map((group, index) => (
+            <CombinedBacktestTradeGroup
+              key={`backtest-group-${index}`}
+              combined={group.combined}
+              originalTrades={group.original}
+              scalingMode={scalingMode}
+              actualContracts={actualTotals?.contracts}
+            />
+          ))}
+        </>
+      ) : (
+        <>
+          {/* Individual actual trade cards */}
+          {actualTrades.map((trade, index) => (
+            <ActualTradeCard
+              key={`actual-${index}`}
+              trade={trade}
+              tradeIndex={index}
+              totalTrades={actualTrades.length}
+              scalingMode={scalingMode}
+            />
+          ))}
+
+          {/* Individual backtest trade cards */}
+          {backtestTrades.map((trade, index) => (
+            <BacktestTradeCard
+              key={`backtest-${index}`}
+              trade={trade}
+              tradeIndex={index}
+              totalTrades={backtestTrades.length}
+              scalingMode={scalingMode}
+              actualContracts={actualTotals?.contracts}
+            />
+          ))}
+        </>
+      )}
     </div>
   )
 }

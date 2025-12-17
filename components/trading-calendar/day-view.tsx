@@ -186,13 +186,11 @@ export function DayView() {
             {unmatchedComparisons.map((comparison) => {
               const firstActualTrade = comparison.actual?.trades[0]
               const firstBtTrade = comparison.backtest?.trades[0]
-              const isBacktestOnly = comparison.backtest && !comparison.actual
-              const isActualOnly = !comparison.backtest && comparison.actual
 
               return (
                 <TradeCard
                   key={comparison.strategy}
-                  strategy={`${comparison.strategy}${isBacktestOnly ? ' (Backtest only)' : ''}${isActualOnly ? ' (Actual only)' : ''}`}
+                  strategy={comparison.strategy}
                   backtestPl={comparison.scaled.backtestPl}
                   actualPl={comparison.scaled.actualPl}
                   slippage={null}
