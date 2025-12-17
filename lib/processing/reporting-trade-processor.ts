@@ -215,6 +215,26 @@ export class ReportingTradeProcessor {
     return new Date(dateStr)
   }
 
+  /**
+   * Parse a raw time string (e.g., "15:30:28.8096918") into a formatted time string (e.g., "3:30 PM")
+   */
+  private parseTimeToFormatted(timeStr: string | undefined): string | undefined {
+    if (!timeStr) return undefined
+
+    // Extract hours, minutes from format like "15:30:28.8096918"
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})/)
+    if (!match) return undefined
+
+    const hours = parseInt(match[1], 10)
+    const minutes = match[2]
+
+    // Convert to 12-hour format
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+
+    return `${displayHours}:${minutes} ${period}`
+  }
+
   private convertToReportingTrade(raw: RawReportingTradeData): ReportingTrade {
     const dateOpened = this.parseDatePreservingCalendarDay(raw['Date Opened'])
     if (Number.isNaN(dateOpened.getTime())) {
@@ -229,6 +249,7 @@ export class ReportingTradeProcessor {
     const reportingTrade = {
       strategy: raw['Strategy'].trim(),
       dateOpened,
+      timeOpened: this.parseTimeToFormatted(raw['Time Opened']),
       openingPrice: parseFloat(raw['Opening Price']),
       legs: raw['Legs'].trim(),
       initialPremium: parseFloat(raw['Initial Premium']),
@@ -236,6 +257,7 @@ export class ReportingTradeProcessor {
       pl: parseFloat(raw['P/L']),
       closingPrice: raw['Closing Price'] ? parseFloat(raw['Closing Price']) : undefined,
       dateClosed,
+      timeClosed: this.parseTimeToFormatted(raw['Time Closed']),
       avgClosingCost: raw['Avg. Closing Cost'] ? parseFloat(raw['Avg. Closing Cost']) : undefined,
       reasonForClose: raw['Reason For Close']?.trim() || undefined,
     }
