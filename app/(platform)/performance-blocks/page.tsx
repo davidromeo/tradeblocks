@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { DateRange } from "react-day-picker";
 
 // Chart Components
+import { CalendarSensitivityChartWrapper } from "@/components/performance-charts/calendar-sensitivity-chart-wrapper";
 import { DayOfWeekChart } from "@/components/performance-charts/day-of-week-chart";
 import { DrawdownChart } from "@/components/performance-charts/drawdown-chart";
 import { EquityCurveChart } from "@/components/performance-charts/equity-curve-chart";
@@ -308,6 +309,7 @@ export default function PerformanceBlocksPage() {
           <MonthlyReturnsChart />
           <ReturnDistributionChart />
           <DayOfWeekChart />
+          <CalendarSensitivityChartWrapper />
           <TradeSequenceChart />
           <RollingMetricsChart />
           <VixRegimeChart />
