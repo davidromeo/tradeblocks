@@ -31,7 +31,9 @@ describe('Static dataset exact matching - GitHub issue reproduction', () => {
     // Create a trade matching the tradelog from the bug report
     // Date: 2025-12-16, Time: 15:19:00
     const trade: Trade = {
-      dateOpened: new Date('2025-12-16'), // Parsed as UTC midnight (same as CSV parsing)
+      // Parsed as UTC midnight to match how CSV dates are parsed by the application
+      // (new Date('YYYY-MM-DD') creates a Date at UTC midnight, not local midnight)
+      dateOpened: new Date('2025-12-16'),
       timeOpened: '15:19:00',
       openingPrice: 6794.55,
       legs: '1 Dec 18 6725 P STO 9.50 | 1 Dec 18 6880 C STO 3.10 | 1 Dec 23 6725 P BTO 24.20 | 1 Dec 23 6880 C BTO 13.15',
@@ -122,7 +124,9 @@ describe('Static dataset exact matching - GitHub issue reproduction', () => {
     expect(matchResult?.values.somevalue).toBe(42)
   })
 
-  it('matches with Nearest After strategy (which was reported as not working)', async () => {
+  it('matches with Nearest After strategy (bug fix verification)', async () => {
+    // Bug report stated that Nearest After did not produce a match
+    // This test verifies that the fix resolves this issue
     const staticDatasetCsv = `t,somevalue
 2025-12-16 15:19:00,42`
 
@@ -150,7 +154,7 @@ describe('Static dataset exact matching - GitHub issue reproduction', () => {
 
     const matchResult = matchTradeToDataset(trade, datasetResult.rows, 'nearest-after')
 
-    // Should now find a match (bug report said it didn't match)
+    // Should now find a match (the fix resolves the bug where it didn't match)
     expect(matchResult).not.toBeNull()
     expect(matchResult?.values.somevalue).toBe(42)
   })
