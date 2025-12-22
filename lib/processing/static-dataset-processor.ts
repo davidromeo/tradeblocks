@@ -104,7 +104,7 @@ function parseTimestamp(value: string): Date | null {
 
   // Try ISO 8601 format with timezone info
   // Only use native parsing if there's explicit timezone (T followed by time and Z or offset)
-  if (/T\d.*[Z+-]/.test(trimmed)) {
+  if (/T\d{2}:\d{2}(:\d{2})?([Z]|[+-]\d{2}:?\d{2})$/.test(trimmed)) {
     const isoDate = new Date(trimmed)
     if (!isNaN(isoDate.getTime())) {
       return isoDate
