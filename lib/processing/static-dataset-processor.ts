@@ -102,9 +102,9 @@ function parseTimestamp(value: string): Date | null {
     return easternToUtc(parseInt(year), parseInt(month) - 1, parseInt(day))
   }
 
-  // Try ISO 8601 format with time (includes timezone info)
-  // Only use native parsing if there's a time component (T or space followed by time)
-  if (/T\d|^\d{4}-\d{2}-\d{2}\s+\d/.test(trimmed)) {
+  // Try ISO 8601 format with timezone info
+  // Only use native parsing if there's explicit timezone (T followed by time and Z or offset)
+  if (/T\d.*[Z+-]/.test(trimmed)) {
     const isoDate = new Date(trimmed)
     if (!isNaN(isoDate.getTime())) {
       return isoDate
@@ -118,8 +118,8 @@ function parseTimestamp(value: string): Date | null {
     const [, month, day, year, hours, minutes, seconds] = usDateMatch
     const hasTime = hours !== undefined
     if (hasTime) {
-      // Has time component - use local time (same as before)
-      const date = new Date(
+      // Has time component - treat as Eastern Time
+      return easternToUtc(
         parseInt(year),
         parseInt(month) - 1,
         parseInt(day),
@@ -127,9 +127,6 @@ function parseTimestamp(value: string): Date | null {
         parseInt(minutes),
         seconds ? parseInt(seconds) : 0
       )
-      if (!isNaN(date.getTime())) {
-        return date
-      }
     } else {
       // Date only - use Eastern Time midnight
       return easternToUtc(parseInt(year), parseInt(month) - 1, parseInt(day))
@@ -142,8 +139,8 @@ function parseTimestamp(value: string): Date | null {
     const [, year, month, day, hours, minutes, seconds] = isoDateMatch
     const hasTime = hours !== undefined
     if (hasTime) {
-      // Has time component - use local time (same as before)
-      const date = new Date(
+      // Has time component - treat as Eastern Time
+      return easternToUtc(
         parseInt(year),
         parseInt(month) - 1,
         parseInt(day),
@@ -151,9 +148,6 @@ function parseTimestamp(value: string): Date | null {
         parseInt(minutes),
         seconds ? parseInt(seconds) : 0
       )
-      if (!isNaN(date.getTime())) {
-        return date
-      }
     } else {
       // Date only - use Eastern Time midnight
       return easternToUtc(parseInt(year), parseInt(month) - 1, parseInt(day))
