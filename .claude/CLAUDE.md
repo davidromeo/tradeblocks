@@ -97,6 +97,35 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 
 **IndexedDB Data References**: The `ProcessedBlock` interface uses `dataReferences` to store keys for related data in IndexedDB. When working with blocks, always load associated trades/daily logs separately.
 
+### Trading Calendar Data Model
+
+The Trading Calendar feature compares **backtest** (theoretical) results against **actual** (reported/live) trades. **CRITICAL**: The variable names map as follows:
+
+| Term in UI | Model Type | CSV Source | Variable Names | Description |
+|------------|------------|------------|----------------|-------------|
+| **Backtest** | `Trade` | `tradelog.csv` | `backtestTrades`, `backtestPl` | Theoretical results, typically **more contracts** |
+| **Actual** | `ReportingTrade` | `strategylog.csv` | `actualTrades`, `actualPl` | Live/reported trades, typically **fewer contracts** |
+
+**Scaling Modes** (for comparing P&L fairly):
+- `raw`: Show P&L values as-is, no adjustment
+- `perContract`: Divide each P&L by its contract count for per-lot comparison
+- `toReported`: Scale **backtest DOWN** to match actual contract counts
+
+**Scaling Logic for `toReported`**:
+```typescript
+// Backtest has MORE contracts, actual has FEWER
+// Scale factor < 1 to scale DOWN
+const scaleFactor = actualContracts / btContracts  // e.g., 1/10 = 0.1
+const scaledBacktestPl = backtestPl * scaleFactor  // Scales DOWN
+const actualPl = actualPl  // Stays as-is (this is the reference)
+```
+
+**Key files**:
+- `lib/models/trade.ts` - `Trade` interface (backtest)
+- `lib/models/reporting-trade.ts` - `ReportingTrade` interface (actual)
+- `lib/stores/trading-calendar-store.ts` - State management and scaling
+- `lib/services/calendar-data.ts` - `scaleStrategyComparison()` function
+
 ## Testing Strategy
 
 Tests use `fake-indexeddb` for IndexedDB simulation. When writing tests:

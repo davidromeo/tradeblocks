@@ -36,6 +36,10 @@ export interface Block {
     rowCount: number;
     fileSize: number;
   };
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
   stats: {
     totalPnL: number;
     winRate: number;
@@ -115,6 +119,12 @@ function convertProcessedBlockToBlock(
       ? {
           mappings: processedBlock.strategyAlignment.mappings ?? [],
           updatedAt: new Date(processedBlock.strategyAlignment.updatedAt),
+        }
+      : undefined,
+    dateRange: processedBlock.dateRange
+      ? {
+          start: new Date(processedBlock.dateRange.start),
+          end: new Date(processedBlock.dateRange.end),
         }
       : undefined,
     stats: {

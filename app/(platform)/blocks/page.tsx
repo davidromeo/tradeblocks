@@ -133,9 +133,14 @@ function BlockCard({
           )}
         </div>
 
-        {/* Last Modified */}
-        <div className="text-xs text-muted-foreground border-t pt-3">
-          Last updated: {formatDate(block.lastModified)}
+        {/* Date Range & Last Modified */}
+        <div className="text-xs text-muted-foreground border-t pt-3 space-y-1">
+          {block.dateRange && (
+            <div>
+              Data: {formatDate(block.dateRange.start)} – {formatDate(block.dateRange.end)}
+            </div>
+          )}
+          <div>Updated: {formatDate(block.lastModified)}</div>
         </div>
 
         {/* Actions */}
@@ -280,9 +285,14 @@ function BlockRow({
         )}
       </div>
 
-      {/* Last Modified */}
-      <div className="hidden lg:block text-sm text-muted-foreground whitespace-nowrap">
-        {formatDate(block.lastModified)}
+      {/* Date Range & Last Modified */}
+      <div className="hidden lg:flex flex-col text-sm text-muted-foreground whitespace-nowrap">
+        {block.dateRange && (
+          <span className="text-xs">
+            {formatDate(block.dateRange.start)} – {formatDate(block.dateRange.end)}
+          </span>
+        )}
+        <span className="text-xs">{formatDate(block.lastModified)}</span>
       </div>
 
       {/* Actions */}

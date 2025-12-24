@@ -6,6 +6,7 @@
 export interface ReportingTrade {
   strategy: string
   dateOpened: Date
+  timeOpened?: string
   openingPrice: number
   legs: string
   initialPremium: number
@@ -13,6 +14,7 @@ export interface ReportingTrade {
   pl: number
   closingPrice?: number
   dateClosed?: Date
+  timeClosed?: string
   avgClosingCost?: number
   reasonForClose?: string
 }
@@ -23,6 +25,7 @@ export interface ReportingTrade {
 export interface RawReportingTradeData {
   "Strategy": string
   "Date Opened": string
+  "Time Opened"?: string
   "Opening Price": string
   "Legs": string
   "Initial Premium": string
@@ -30,6 +33,7 @@ export interface RawReportingTradeData {
   "P/L": string
   "Closing Price"?: string
   "Date Closed"?: string
+  "Time Closed"?: string
   "Avg. Closing Cost"?: string
   "Reason For Close"?: string
 }
