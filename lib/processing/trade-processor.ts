@@ -322,17 +322,38 @@ export class TradeProcessor {
   }
 
   /**
+   * Parse a YYYY-MM-DD date string preserving the calendar date.
+   *
+   * Option Omega exports dates in Eastern time. JavaScript's new Date('YYYY-MM-DD')
+   * parses as UTC midnight, which when converted to local time can shift to the
+   * previous day (e.g., Dec 11 UTC → Dec 10 7pm EST).
+   *
+   * This method creates a Date representing midnight local time on the specified
+   * calendar date, so Dec 11 in the CSV becomes Dec 11 in the app regardless of timezone.
+   */
+  private parseDatePreservingCalendarDay(dateStr: string): Date {
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (match) {
+      const [, year, month, day] = match
+      // Create date at midnight local time - this preserves the calendar date
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+    }
+    // Fall back to default parsing for other formats
+    return new Date(dateStr)
+  }
+
+  /**
    * Convert validated CSV row to Trade object
    */
   private convertToTrade(rawData: Record<string, string>): Trade {
     try {
-      // Parse dates
-      const dateOpened = new Date(rawData['Date Opened'])
+      // Parse dates preserving calendar day
+      const dateOpened = this.parseDatePreservingCalendarDay(rawData['Date Opened'])
       if (isNaN(dateOpened.getTime())) {
         throw new Error(`Invalid Date Opened: ${rawData['Date Opened']}`)
       }
 
-      const dateClosed = rawData['Date Closed'] ? new Date(rawData['Date Closed']) : undefined
+      const dateClosed = rawData['Date Closed'] ? this.parseDatePreservingCalendarDay(rawData['Date Closed']) : undefined
       if (dateClosed && isNaN(dateClosed.getTime())) {
         throw new Error(`Invalid Date Closed: ${rawData['Date Closed']}`)
       }
