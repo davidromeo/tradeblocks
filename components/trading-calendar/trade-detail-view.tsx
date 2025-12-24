@@ -23,6 +23,18 @@ import {
 } from '@/lib/utils/combine-leg-groups'
 import { cn } from '@/lib/utils'
 
+/**
+ * Normalize backtest premium to dollars
+ * Backtest trades may store premium in cents (whole numbers without decimals)
+ * while reporting trades store premium in dollars
+ */
+function normalizeBacktestPremium(trade: Trade | CombinedTrade): number {
+  if (trade.premiumPrecision === 'cents') {
+    return trade.premium / 100
+  }
+  return trade.premium
+}
+
 interface DetailRowProps {
   label: string
   value: string | number | null | undefined
@@ -86,7 +98,10 @@ interface IndividualLegCardProps {
 
 function IndividualLegCard({ trade, index, type }: IndividualLegCardProps) {
   const isBacktest = type === 'backtest'
-  const premium = isBacktest ? (trade as Trade).premium : (trade as ReportingTrade).initialPremium
+  // Normalize backtest premium from cents to dollars if needed
+  const premium = isBacktest
+    ? normalizeBacktestPremium(trade as Trade)
+    : (trade as ReportingTrade).initialPremium
 
   return (
     <div className="p-3 bg-muted/30 rounded-lg">
@@ -135,6 +150,9 @@ function CombinedActualTradeGroup({ combined, originalTrades, scalingMode, sideB
     return null
   }, [scalingMode, combined.numContracts])
 
+  // Calculate scaled P&L for header display
+  const displayPl = scaleFactor !== null ? combined.pl * scaleFactor : combined.pl
+
   const legCount = combined.originalTradeCount
 
   return (
@@ -150,10 +168,10 @@ function CombinedActualTradeGroup({ combined, originalTrades, scalingMode, sideB
             </CardTitle>
             <div className={cn(
               "text-lg font-bold",
-              combined.pl > 0 && "text-green-500",
-              combined.pl < 0 && "text-red-500"
+              displayPl > 0 && "text-green-500",
+              displayPl < 0 && "text-red-500"
             )}>
-              {formatCurrency(combined.pl)}
+              {formatCurrency(displayPl)}
             </div>
           </div>
         </CardHeader>
@@ -163,7 +181,7 @@ function CombinedActualTradeGroup({ combined, originalTrades, scalingMode, sideB
           <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
           <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
           <DetailRow label="Legs" value={combined.legs} />
-          <DetailRow label="Premium" value={combined.initialPremium} format="premium" />
+          <DetailRow label="Premium" value={combined.initialPremium} format="premium" scaleFactor={scaleFactor} />
           <DetailRow label="Contracts" value={combined.numContracts} format="number" />
           <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
           <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
@@ -251,7 +269,7 @@ function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, act
         <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
         <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
         <DetailRow label="Legs" value={combined.legs} />
-        <DetailRow label="Premium" value={combined.premium} format="premium" />
+        <DetailRow label="Premium" value={normalizeBacktestPremium(combined)} format="premium" scaleFactor={scaleFactor} />
         <DetailRow label="Contracts" value={combined.numContracts} format="number" />
         <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
         <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
@@ -278,8 +296,24 @@ function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, act
               {combined.closingVix && <DetailRow label="Closing VIX" value={combined.closingVix} format="number" />}
               {combined.gap !== undefined && <DetailRow label="Gap" value={combined.gap} format="percent" />}
               {combined.movement !== undefined && <DetailRow label="Movement" value={combined.movement} format="percent" />}
-              {combined.maxProfit !== undefined && <DetailRow label="Max Profit" value={combined.maxProfit} format="percent" />}
-              {combined.maxLoss !== undefined && <DetailRow label="Max Loss" value={combined.maxLoss} format="percent" />}
+              {/* For combined trades (multiple legs), maxProfit/maxLoss are dollar amounts derived from margin */}
+              {/* For single trades, they are percentages of premium */}
+              {combined.maxProfit !== undefined && (
+                <DetailRow
+                  label="Max Profit"
+                  value={combined.maxProfit}
+                  format={combined.originalTradeCount > 1 ? 'currency' : 'percent'}
+                  scaleFactor={combined.originalTradeCount > 1 ? scaleFactor : undefined}
+                />
+              )}
+              {combined.maxLoss !== undefined && (
+                <DetailRow
+                  label="Max Loss"
+                  value={combined.maxLoss}
+                  format={combined.originalTradeCount > 1 ? 'currency' : 'percent'}
+                  scaleFactor={combined.originalTradeCount > 1 ? scaleFactor : undefined}
+                />
+              )}
             </div>
           </CollapsibleContent>
         </Collapsible>
@@ -331,6 +365,9 @@ function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode, sideBySi
     return null
   }, [scalingMode, trade.numContracts])
 
+  // Calculate scaled P&L for header display
+  const displayPl = scaleFactor !== null ? trade.pl * scaleFactor : trade.pl
+
   const tradeLabel = totalTrades > 1 ? ` (Trade ${tradeIndex + 1} of ${totalTrades})` : ''
 
   return (
@@ -345,10 +382,10 @@ function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode, sideBySi
           </CardTitle>
           <div className={cn(
             "text-lg font-bold",
-            trade.pl > 0 && "text-green-500",
-            trade.pl < 0 && "text-red-500"
+            displayPl > 0 && "text-green-500",
+            displayPl < 0 && "text-red-500"
           )}>
-            {formatCurrency(trade.pl)}
+            {formatCurrency(displayPl)}
           </div>
         </div>
       </CardHeader>
@@ -357,7 +394,7 @@ function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode, sideBySi
         <DetailRow label="Time Closed" value={trade.timeClosed ?? '-'} />
         <DetailRow label="Opening Price" value={trade.openingPrice} format="number" />
         <DetailRow label="Legs" value={trade.legs} />
-        <DetailRow label="Premium" value={trade.initialPremium} format="premium" />
+        <DetailRow label="Premium" value={trade.initialPremium} format="premium" scaleFactor={scaleFactor} />
         <DetailRow label="Contracts" value={trade.numContracts} format="number" />
         <DetailRow label="Closing Price" value={trade.closingPrice} format="number" />
         <DetailRow label="Avg Closing Cost" value={trade.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
@@ -421,7 +458,7 @@ function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actual
         <DetailRow label="Time Closed" value={trade.timeClosed ?? '-'} />
         <DetailRow label="Opening Price" value={trade.openingPrice} format="number" />
         <DetailRow label="Legs" value={trade.legs} />
-        <DetailRow label="Premium" value={trade.premium} format="premium" />
+        <DetailRow label="Premium" value={normalizeBacktestPremium(trade)} format="premium" scaleFactor={scaleFactor} />
         <DetailRow label="Contracts" value={trade.numContracts} format="number" />
         <DetailRow label="Closing Price" value={trade.closingPrice} format="number" />
         <DetailRow label="Avg Closing Cost" value={trade.avgClosingCost} format="currency" scaleFactor={scaleFactor} />

@@ -186,6 +186,8 @@ export function combineLegGroup(trades: Trade[]): CombinedTrade {
   const movement = firstTrade.movement
 
   // Max profit/loss: sum if available for all trades, otherwise undefined
+  // Note: For combined trades, these become dollar amounts (not percentages)
+  // The display layer should format accordingly based on originalTradeCount
   let maxProfit: number | undefined
   if (trades.every(t => t.maxProfit !== undefined)) {
     maxProfit = trades.reduce((sum, t) => sum + t.maxProfit!, 0)
