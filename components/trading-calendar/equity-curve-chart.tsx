@@ -2,12 +2,11 @@
 
 import { ChartWrapper, createLineChartLayout } from "@/components/performance-charts/chart-wrapper"
 import { Badge } from "@/components/ui/badge"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Trade } from "@/lib/models/trade"
 import { ReportingTrade } from "@/lib/models/reporting-trade"
 import { useTradingCalendarStore, StrategyMatch, ScalingMode, CalendarViewMode } from "@/lib/stores/trading-calendar-store"
 import type { Layout, PlotData } from "plotly.js"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 
 /**
  * Get the date range for the current calendar view
@@ -146,15 +145,14 @@ function buildEquityCurve(
 }
 
 export function EquityCurveChart() {
-  const [tradeMode, setTradeMode] = useState<"all" | "matched">("all")
-
   const {
     backtestTrades,
     actualTrades,
     scalingMode,
     strategyMatches,
     viewDate,
-    calendarViewMode
+    calendarViewMode,
+    tradeFilterMode
   } = useTradingCalendarStore()
 
   // Build equity curves filtered to current calendar view
@@ -205,16 +203,15 @@ export function EquityCurveChart() {
 
   const hasBacktestData = backtestCurve.length > 0
   const hasActualData = actualCurve.length > 0
-  const hasMatchedData = matchedBacktestCurve.length > 0 || matchedActualCurve.length > 0
 
   // Don't show if no data at all
   if (!hasBacktestData && !hasActualData) {
     return null
   }
 
-  // Select curves based on mode
-  const btCurve = tradeMode === 'matched' ? matchedBacktestCurve : backtestCurve
-  const actCurve = tradeMode === 'matched' ? matchedActualCurve : actualCurve
+  // Select curves based on trade filter mode from store
+  const btCurve = tradeFilterMode === 'matched' ? matchedBacktestCurve : backtestCurve
+  const actCurve = tradeFilterMode === 'matched' ? matchedActualCurve : actualCurve
 
   // Build traces
   const traces: Partial<PlotData>[] = []
@@ -302,7 +299,7 @@ export function EquityCurveChart() {
   // Calculate final difference for matched mode
   let finalDifference: number | null = null
   let finalPercentDiff: number | null = null
-  if (tradeMode === 'matched' && btCurve.length > 0 && actCurve.length > 0) {
+  if (tradeFilterMode === 'matched' && btCurve.length > 0 && actCurve.length > 0) {
     const finalBt = btCurve[btCurve.length - 1].equity
     const finalAct = actCurve[actCurve.length - 1].equity
     finalDifference = finalAct - finalBt
@@ -316,29 +313,20 @@ export function EquityCurveChart() {
       ? "Scaled to Actual"
       : null
 
+  // Build trade filter mode indicator
+  const filterLabel = tradeFilterMode === 'matched' ? "Matched Only" : null
+
   const controls = (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       {scalingLabel && (
         <Badge variant="secondary" className="text-xs">
           {scalingLabel}
         </Badge>
       )}
-      {hasActualData && hasBacktestData && (
-        <ToggleGroup
-          type="single"
-          value={tradeMode}
-          onValueChange={(value: "all" | "matched") => {
-            if (value) setTradeMode(value)
-          }}
-          className="border rounded-md p-1"
-        >
-          <ToggleGroupItem value="all" className="text-xs px-3 py-1">
-            All Trades
-          </ToggleGroupItem>
-          <ToggleGroupItem value="matched" className="text-xs px-3 py-1" disabled={!hasMatchedData}>
-            Matched
-          </ToggleGroupItem>
-        </ToggleGroup>
+      {filterLabel && (
+        <Badge variant="outline" className="text-xs">
+          {filterLabel}
+        </Badge>
       )}
     </div>
   )
@@ -354,7 +342,7 @@ export function EquityCurveChart() {
   const periodLabel = formatDateRange(dateRange.startDate, dateRange.endDate, calendarViewMode)
 
   let description = ""
-  if (tradeMode === 'matched' && finalDifference !== null && finalPercentDiff !== null) {
+  if (tradeFilterMode === 'matched' && finalDifference !== null && finalPercentDiff !== null) {
     description = `${periodLabel}: ${btCurve.length} backtest vs ${actCurve.length} actual trades${scalingNote}. Diff: $${finalDifference.toFixed(2)} (${finalPercentDiff > 0 ? "+" : ""}${finalPercentDiff.toFixed(2)}%)`
   } else {
     description = `${periodLabel}: ${btCurve.length} backtest, ${actCurve.length} actual trades${scalingNote}`
@@ -366,7 +354,7 @@ export function EquityCurveChart() {
       description={description}
       tooltip={{
         flavor: "Side-by-side comparison of backtest vs actual performance over time",
-        detailed: tradeMode === "matched"
+        detailed: tradeFilterMode === "matched"
           ? "This chart shows how your actual performance compares to your backtest expectations for matched strategies. Divergence between the lines reveals slippage, execution differences, or timing variations accumulating over time."
           : "This chart shows all trades from both backtest and actual data. This gives you the complete picture of what was planned vs what actually executed.",
       }}

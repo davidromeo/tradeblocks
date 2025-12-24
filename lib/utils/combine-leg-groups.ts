@@ -185,23 +185,31 @@ export function combineLegGroup(trades: Trade[]): CombinedTrade {
   const gap = firstTrade.gap
   const movement = firstTrade.movement
 
-  // Max profit/loss: sum if available for all trades, otherwise undefined
-  // Note: For combined trades, these become dollar amounts (not percentages)
-  // The display layer should format accordingly based on originalTradeCount
+  // Max profit/loss handling:
+  // - For single trades (originalTradeCount === 1): preserve original percentage values from CSV
+  // - For combined trades (originalTradeCount > 1): derive dollar amounts from margin
   let maxProfit: number | undefined
-  if (trades.every(t => t.maxProfit !== undefined)) {
-    maxProfit = trades.reduce((sum, t) => sum + t.maxProfit!, 0)
-  }
-
-  // Use margin requirement as ground truth for worst-case loss.
   let maxLoss: number | undefined
-  if (maxMargin && Number.isFinite(maxMargin) && maxMargin > 0) {
-    maxLoss = -maxMargin
-  } else if (trades.every(t => t.maxLoss !== undefined)) {
-    maxLoss = trades.reduce((sum, t) => sum + t.maxLoss!, 0)
-  } else if (totalPremium < 0) {
-    // Fallback: For debit trades, the max loss is at least the premium paid
-    maxLoss = totalPremium
+
+  if (trades.length === 1) {
+    // Single trade: preserve original values (percentages from CSV)
+    maxProfit = firstTrade.maxProfit
+    maxLoss = firstTrade.maxLoss
+  } else {
+    // Combined trades: sum maxProfit, use margin for maxLoss
+    if (trades.every(t => t.maxProfit !== undefined)) {
+      maxProfit = trades.reduce((sum, t) => sum + t.maxProfit!, 0)
+    }
+
+    // Use margin requirement as ground truth for worst-case loss
+    if (maxMargin && Number.isFinite(maxMargin) && maxMargin > 0) {
+      maxLoss = -maxMargin
+    } else if (trades.every(t => t.maxLoss !== undefined)) {
+      maxLoss = trades.reduce((sum, t) => sum + t.maxLoss!, 0)
+    } else if (totalPremium < 0) {
+      // Fallback: For debit trades, the max loss is at least the premium paid
+      maxLoss = totalPremium
+    }
   }
 
   const combined: CombinedTrade = {

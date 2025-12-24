@@ -25,6 +25,7 @@ import {
 } from "@/lib/services/calendar-data";
 import {
   ScalingMode,
+  TradeFilterMode,
   useTradingCalendarStore,
 } from "@/lib/stores/trading-calendar-store";
 import { AlertTriangle, BarChart3, HelpCircle, TrendingUp } from "lucide-react";
@@ -39,6 +40,7 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     performanceStats,
     comparisonStats,
     scalingMode,
+    tradeFilterMode,
     navigationView,
     selectedDate,
     calendarDays,
@@ -48,6 +50,7 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     actualTrades,
     combineLegGroups,
     setScalingMode,
+    setTradeFilterMode,
     setCombineLegGroups,
   } = useTradingCalendarStore();
 
@@ -69,12 +72,17 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
       scaleStrategyComparison(c, scalingMode)
     );
 
+    // Filter comparisons based on trade filter mode
+    const filteredComparisons = tradeFilterMode === 'matched'
+      ? scaledComparisons.filter(c => c.isMatched)
+      : scaledComparisons;
+
     let scaledBacktestPl = 0;
     let scaledActualPl = 0;
     let matchedCount = 0;
     let winningStrategies = 0;
 
-    for (const comparison of scaledComparisons) {
+    for (const comparison of filteredComparisons) {
       if (comparison.scaled.backtestPl !== null) {
         scaledBacktestPl += comparison.scaled.backtestPl;
       }
@@ -91,8 +99,20 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
       }
     }
 
+    // Calculate filtered trade counts
+    const filteredBacktestCount = tradeFilterMode === 'matched'
+      ? filteredComparisons.reduce((sum, c) => sum + (c.backtest?.trades.length ?? 0), 0)
+      : dayData.backtestTradeCount;
+    const filteredActualCount = tradeFilterMode === 'matched'
+      ? filteredComparisons.reduce((sum, c) => sum + (c.actual?.trades.length ?? 0), 0)
+      : dayData.actualTradeCount;
+
+    // Determine if we have data after filtering
+    const hasFilteredBacktest = filteredComparisons.some(c => c.backtest !== null);
+    const hasFilteredActual = filteredComparisons.some(c => c.actual !== null);
+
     const variance =
-      dayData.hasBacktest && dayData.hasActual
+      hasFilteredBacktest && hasFilteredActual
         ? scaledActualPl - scaledBacktestPl
         : null;
     const variancePercent =
@@ -101,8 +121,8 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
         : null;
 
     const winRate =
-      scaledComparisons.length > 0
-        ? (winningStrategies / scaledComparisons.length) * 100
+      filteredComparisons.length > 0
+        ? (winningStrategies / filteredComparisons.length) * 100
         : 0;
 
     // Calculate day-specific performance metrics
@@ -111,13 +131,13 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     return {
       backtestPl: scaledBacktestPl,
       actualPl: scaledActualPl,
-      backtestTradeCount: dayData.backtestTradeCount,
-      actualTradeCount: dayData.actualTradeCount,
-      hasBacktest: dayData.hasBacktest,
-      hasActual: dayData.hasActual,
+      backtestTradeCount: filteredBacktestCount,
+      actualTradeCount: filteredActualCount,
+      hasBacktest: hasFilteredBacktest,
+      hasActual: hasFilteredActual,
       variance,
       variancePercent,
-      strategyCount: scaledComparisons.length,
+      strategyCount: filteredComparisons.length,
       matchedCount,
       winRate,
       // Day-specific metrics
@@ -125,7 +145,7 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
       avgRom: dayMetrics.avgRom,
       avgPremiumCapture: dayMetrics.avgPremiumCapture,
     };
-  }, [isViewingDay, dayData, strategyMatches, scalingMode]);
+  }, [isViewingDay, dayData, strategyMatches, scalingMode, tradeFilterMode]);
 
   // Get P/L positive flag
   const isPositive = (value: number) => value > 0;
@@ -187,6 +207,52 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
         </Select>
       </div>
 
+      {/* Trade Filter Toggle */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-1">
+          <Label className="text-xs text-muted-foreground">Trades</Label>
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+            </HoverCardTrigger>
+            <HoverCardContent className="w-80 p-0 overflow-hidden">
+              <div className="space-y-3">
+                <div className="bg-primary/5 border-b px-4 py-3">
+                  <h4 className="text-sm font-semibold text-primary">
+                    Trade Filter
+                  </h4>
+                </div>
+                <div className="px-4 pb-4 space-y-3">
+                  <p className="text-sm text-foreground leading-relaxed">
+                    Filter which trades to include in all calculations and displays.
+                  </p>
+                  <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+                    <li>
+                      <strong>All Trades:</strong> Include all backtest and actual trades
+                    </li>
+                    <li>
+                      <strong>Matched Only:</strong> Only include trades from strategies that have both backtest and actual data
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        </div>
+        <Select
+          value={tradeFilterMode}
+          onValueChange={(value) => setTradeFilterMode(value as TradeFilterMode)}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Trades</SelectItem>
+            <SelectItem value="matched">Matched Only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Unmatched strategies warning */}
       {hasUnmatched && (
         <Button
@@ -216,12 +282,22 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     return `${value.toFixed(1)}%`;
   };
 
+  // Check if we should show the comparison section
+  const showComparisonSection = isViewingDay
+    ? dayStats?.hasBacktest && dayStats?.hasActual
+    : comparisonStats;
+
   return (
     <div className="space-y-6">
+      {/* Standalone controls when comparison section is hidden but we have actual trades */}
+      {!showComparisonSection && hasActualTrades && (
+        <div className="flex items-center gap-4 justify-end">
+          {performanceActions}
+        </div>
+      )}
+
       {/* Comparison Stats - same structure, data changes based on context */}
-      {(isViewingDay
-        ? dayStats?.hasBacktest && dayStats?.hasActual
-        : comparisonStats) && (
+      {showComparisonSection && (
         <MetricSection
           title="Backtest vs Actual"
           icon={<BarChart3 className="h-4 w-4" />}

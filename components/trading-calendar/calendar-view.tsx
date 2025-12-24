@@ -7,8 +7,9 @@ import {
   getDayBackgroundStyle,
   getMonthGridDates,
   getWeekGridDates,
-  getScaledDayBacktestPl,
-  getScaledDayActualPl,
+  getFilteredScaledDayBacktestPl,
+  getFilteredScaledDayActualPl,
+  getFilteredTradeCounts,
   getScaledDayMargin
 } from '@/lib/services/calendar-data'
 import { cn } from '@/lib/utils'
@@ -33,22 +34,43 @@ interface CalendarDayCellProps {
 }
 
 function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDayCellProps) {
-  const { calendarDays, scalingMode, dataDisplayMode, showMargin } = useTradingCalendarStore()
+  const { calendarDays, scalingMode, dataDisplayMode, showMargin, tradeFilterMode, strategyMatches } = useTradingCalendarStore()
 
   const dateKey = formatDateKey(date)
   const dayData = calendarDays.get(dateKey)
 
-  const hasTrades = dayData && (dayData.hasBacktest || dayData.hasActual)
-  const hasBacktestData = dayData?.hasBacktest ?? false
-  const hasActualData = dayData?.hasActual ?? false
+  // Build matched strategy sets when in matched mode
+  const matchedBacktestStrategies = useMemo(() => {
+    if (tradeFilterMode !== 'matched') return null
+    return new Set(strategyMatches.map(m => m.backtestStrategy))
+  }, [tradeFilterMode, strategyMatches])
+
+  const matchedActualStrategies = useMemo(() => {
+    if (tradeFilterMode !== 'matched') return null
+    return new Set(strategyMatches.map(m => m.actualStrategy))
+  }, [tradeFilterMode, strategyMatches])
+
+  // Get filtered trade counts
+  const { backtestCount, actualCount } = useMemo(() => {
+    if (!dayData) return { backtestCount: 0, actualCount: 0 }
+    return getFilteredTradeCounts(dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches)
+  }, [dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches])
+
+  // In matched mode, only show days that have BOTH backtest AND actual trades from matched strategies
+  // This enables actual comparison. In all mode, show if either exists.
+  const hasTrades = tradeFilterMode === 'matched'
+    ? backtestCount > 0 && actualCount > 0
+    : backtestCount > 0 || actualCount > 0
+  const hasBacktestData = backtestCount > 0
+  const hasActualData = actualCount > 0
 
   // Determine what to show based on display mode
   const showBacktest = (dataDisplayMode === 'backtest' || dataDisplayMode === 'both') && hasBacktestData
   const showActual = (dataDisplayMode === 'actual' || dataDisplayMode === 'both') && hasActualData
 
-  // Get both P/L values
-  const backtestPl = dayData ? getScaledDayBacktestPl(dayData, scalingMode) : 0
-  const actualPl = dayData ? getScaledDayActualPl(dayData, scalingMode) : 0
+  // Get both P/L values (filtered)
+  const backtestPl = dayData ? getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches) : 0
+  const actualPl = dayData ? getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches) : 0
 
   // Get background style - handles mismatch cases with stripes when showing both
   const bgStyle = useMemo(() => {
@@ -100,7 +122,7 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
                       {formatCurrency(backtestPl, true)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {dayData?.backtestTradeCount} {dayData?.backtestTradeCount === 1 ? 'trade' : 'trades'}
+                      {backtestCount} {backtestCount === 1 ? 'trade' : 'trades'}
                     </span>
                   </div>
                 )}
@@ -110,7 +132,7 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
                       {formatCurrency(actualPl, true)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {dayData?.actualTradeCount} {dayData?.actualTradeCount === 1 ? 'trade' : 'trades'}
+                      {actualCount} {actualCount === 1 ? 'trade' : 'trades'}
                     </span>
                   </div>
                 )}
@@ -125,7 +147,7 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
                       {formatCurrency(backtestPl, true)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      ({dayData?.backtestTradeCount})
+                      ({backtestCount})
                     </span>
                   </div>
                 )}
@@ -136,7 +158,7 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
                       {formatCurrency(actualPl, true)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      ({dayData?.actualTradeCount})
+                      ({actualCount})
                     </span>
                   </div>
                 )}
@@ -164,9 +186,20 @@ interface WeeklySummaryProps {
 }
 
 function WeeklySummary({ dates }: WeeklySummaryProps) {
-  const { calendarDays, scalingMode, dataDisplayMode, showMargin } = useTradingCalendarStore()
+  const { calendarDays, scalingMode, dataDisplayMode, showMargin, tradeFilterMode, strategyMatches } = useTradingCalendarStore()
 
-  // Calculate week totals for both backtest and actual (using scaled values)
+  // Build matched strategy sets when in matched mode
+  const matchedBacktestStrategies = useMemo(() => {
+    if (tradeFilterMode !== 'matched') return null
+    return new Set(strategyMatches.map(m => m.backtestStrategy))
+  }, [tradeFilterMode, strategyMatches])
+
+  const matchedActualStrategies = useMemo(() => {
+    if (tradeFilterMode !== 'matched') return null
+    return new Set(strategyMatches.map(m => m.actualStrategy))
+  }, [tradeFilterMode, strategyMatches])
+
+  // Calculate week totals for both backtest and actual (using scaled and filtered values)
   const weekStats = useMemo(() => {
     let backtestPl = 0
     let actualPl = 0
@@ -179,24 +212,33 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
       const dayData = calendarDays.get(dateKey)
 
       if (dayData) {
-        if (dayData.hasBacktest) {
-          backtestPl += getScaledDayBacktestPl(dayData, scalingMode)
+        const { backtestCount, actualCount } = getFilteredTradeCounts(dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches)
+
+        // In matched mode, only count days that have BOTH backtest AND actual
+        const includeDay = tradeFilterMode === 'matched'
+          ? backtestCount > 0 && actualCount > 0
+          : true
+
+        if (includeDay && backtestCount > 0) {
+          backtestPl += getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches)
           backtestDays++
         }
-        if (dayData.hasActual) {
-          actualPl += getScaledDayActualPl(dayData, scalingMode)
+        if (includeDay && actualCount > 0) {
+          actualPl += getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches)
           actualDays++
         }
-        // Track max scaled margin for the week
-        const scaledMargin = getScaledDayMargin(dayData, scalingMode)
-        if (scaledMargin > maxMargin) {
-          maxMargin = scaledMargin
+        // Track max scaled margin for the week (only for included days)
+        if (includeDay) {
+          const scaledMargin = getScaledDayMargin(dayData, scalingMode)
+          if (scaledMargin > maxMargin) {
+            maxMargin = scaledMargin
+          }
         }
       }
     }
 
     return { backtestPl, actualPl, backtestDays, actualDays, maxMargin }
-  }, [dates, calendarDays, scalingMode])
+  }, [dates, calendarDays, scalingMode, matchedBacktestStrategies, matchedActualStrategies, tradeFilterMode, strategyMatches])
 
   // Determine what to show based on display mode
   const showBacktest = (dataDisplayMode === 'backtest' || dataDisplayMode === 'both') && weekStats.backtestDays > 0

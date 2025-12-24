@@ -126,6 +126,7 @@ export function DayView() {
     calendarDays,
     strategyMatches,
     scalingMode,
+    tradeFilterMode,
     navigateToTrade
   } = useTradingCalendarStore()
 
@@ -176,8 +177,8 @@ export function DayView() {
         </div>
       )}
 
-      {/* Unmatched strategies */}
-      {unmatchedComparisons.length > 0 && (
+      {/* Unmatched strategies - hidden when filter mode is 'matched' */}
+      {tradeFilterMode === 'all' && unmatchedComparisons.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
             Unmatched ({unmatchedComparisons.length})
@@ -206,11 +207,11 @@ export function DayView() {
         </div>
       )}
 
-      {/* Empty state */}
-      {strategyComparisons.length === 0 && (
+      {/* Empty state - accounts for filter mode */}
+      {(tradeFilterMode === 'all' ? strategyComparisons.length === 0 : matchedComparisons.length === 0) && (
         <Card className="py-8">
           <CardContent className="text-center text-muted-foreground">
-            No trades on this day
+            {tradeFilterMode === 'matched' ? 'No matched trades on this day' : 'No trades on this day'}
           </CardContent>
         </Card>
       )}

@@ -86,6 +86,34 @@ function DetailRow({
   )
 }
 
+/**
+ * Display legs with each leg on its own line
+ * Leg format: "<contracts> <date> <strike> <type> <action> <price>"
+ * Multiple legs separated by " | "
+ * Strips the leading contract count since it's shown separately in the Contracts row
+ */
+function LegsRow({ legs }: { legs: string }) {
+  // Split by " | " to get individual legs
+  const legParts = legs.split(' | ')
+
+  // Strip leading contract count from each leg (it's shown in Contracts row)
+  const legDetails = legParts.map(leg => {
+    const match = leg.match(/^\d+\s+(.+)$/)
+    return match ? match[1] : leg
+  })
+
+  return (
+    <div className="grid grid-cols-2 gap-4 py-2 border-b border-border/50">
+      <div className="text-sm text-muted-foreground">Legs</div>
+      <div className="text-sm font-medium text-right">
+        {legDetails.map((detail, idx) => (
+          <div key={idx}>{detail}</div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // =============================================================================
 // Individual Leg Card (compact version for inside combined groups)
 // =============================================================================
@@ -180,8 +208,8 @@ function CombinedActualTradeGroup({ combined, originalTrades, scalingMode, sideB
           <DetailRow label="Time Opened" value={combined.timeOpened ?? '-'} />
           <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
           <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
-          <DetailRow label="Legs" value={combined.legs} />
-          <DetailRow label="Premium" value={combined.initialPremium} format="premium" scaleFactor={scaleFactor} />
+          <LegsRow legs={combined.legs} />
+          <DetailRow label="Premium" value={combined.initialPremium} format="premium" />
           <DetailRow label="Contracts" value={combined.numContracts} format="number" />
           <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
           <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
@@ -268,8 +296,8 @@ function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, act
         <DetailRow label="Time Opened" value={combined.timeOpened ?? '-'} />
         <DetailRow label="Time Closed" value={combined.timeClosed ?? '-'} />
         <DetailRow label="Opening Price" value={combined.openingPrice} format="number" />
-        <DetailRow label="Legs" value={combined.legs} />
-        <DetailRow label="Premium" value={normalizeBacktestPremium(combined)} format="premium" scaleFactor={scaleFactor} />
+        <LegsRow legs={combined.legs} />
+        <DetailRow label="Premium" value={normalizeBacktestPremium(combined)} format="premium" />
         <DetailRow label="Contracts" value={combined.numContracts} format="number" />
         <DetailRow label="Closing Price" value={combined.closingPrice} format="number" />
         <DetailRow label="Avg Closing Cost" value={combined.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
@@ -294,8 +322,8 @@ function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, act
               <DetailRow label="Margin Requirement" value={combined.marginReq} format="currency" scaleFactor={scaleFactor} />
               {combined.openingVix && <DetailRow label="Opening VIX" value={combined.openingVix} format="number" />}
               {combined.closingVix && <DetailRow label="Closing VIX" value={combined.closingVix} format="number" />}
-              {combined.gap !== undefined && <DetailRow label="Gap" value={combined.gap} format="percent" />}
-              {combined.movement !== undefined && <DetailRow label="Movement" value={combined.movement} format="percent" />}
+              {combined.gap !== undefined && <DetailRow label="Gap" value={combined.gap} format="number" />}
+              {combined.movement !== undefined && <DetailRow label="Movement" value={combined.movement} format="number" />}
               {/* For combined trades (multiple legs), maxProfit/maxLoss are dollar amounts derived from margin */}
               {/* For single trades, they are percentages of premium */}
               {combined.maxProfit !== undefined && (
@@ -393,8 +421,8 @@ function ActualTradeCard({ trade, tradeIndex, totalTrades, scalingMode, sideBySi
         <DetailRow label="Time Opened" value={trade.timeOpened ?? '-'} />
         <DetailRow label="Time Closed" value={trade.timeClosed ?? '-'} />
         <DetailRow label="Opening Price" value={trade.openingPrice} format="number" />
-        <DetailRow label="Legs" value={trade.legs} />
-        <DetailRow label="Premium" value={trade.initialPremium} format="premium" scaleFactor={scaleFactor} />
+        <LegsRow legs={trade.legs} />
+        <DetailRow label="Premium" value={trade.initialPremium} format="premium" />
         <DetailRow label="Contracts" value={trade.numContracts} format="number" />
         <DetailRow label="Closing Price" value={trade.closingPrice} format="number" />
         <DetailRow label="Avg Closing Cost" value={trade.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
@@ -457,8 +485,8 @@ function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actual
         <DetailRow label="Time Opened" value={trade.timeOpened ?? '-'} />
         <DetailRow label="Time Closed" value={trade.timeClosed ?? '-'} />
         <DetailRow label="Opening Price" value={trade.openingPrice} format="number" />
-        <DetailRow label="Legs" value={trade.legs} />
-        <DetailRow label="Premium" value={normalizeBacktestPremium(trade)} format="premium" scaleFactor={scaleFactor} />
+        <LegsRow legs={trade.legs} />
+        <DetailRow label="Premium" value={normalizeBacktestPremium(trade)} format="premium" />
         <DetailRow label="Contracts" value={trade.numContracts} format="number" />
         <DetailRow label="Closing Price" value={trade.closingPrice} format="number" />
         <DetailRow label="Avg Closing Cost" value={trade.avgClosingCost} format="currency" scaleFactor={scaleFactor} />
@@ -483,8 +511,8 @@ function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actual
               <DetailRow label="Margin Requirement" value={trade.marginReq} format="currency" scaleFactor={scaleFactor} />
               {trade.openingVix && <DetailRow label="Opening VIX" value={trade.openingVix} format="number" />}
               {trade.closingVix && <DetailRow label="Closing VIX" value={trade.closingVix} format="number" />}
-              {trade.gap !== undefined && <DetailRow label="Gap" value={trade.gap} format="percent" />}
-              {trade.movement !== undefined && <DetailRow label="Movement" value={trade.movement} format="percent" />}
+              {trade.gap !== undefined && <DetailRow label="Gap" value={trade.gap} format="number" />}
+              {trade.movement !== undefined && <DetailRow label="Movement" value={trade.movement} format="number" />}
               {trade.maxProfit !== undefined && <DetailRow label="Max Profit" value={trade.maxProfit} format="percent" />}
               {trade.maxLoss !== undefined && <DetailRow label="Max Loss" value={trade.maxLoss} format="percent" />}
             </div>

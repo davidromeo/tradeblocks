@@ -5,8 +5,8 @@ import { DailyLogEntry } from '@/lib/models/daily-log'
 import {
   calculateAdvancedMetrics,
   calculateTradeMetrics,
-  getScaledDayBacktestPl,
-  getScaledDayActualPl
+  getFilteredScaledDayBacktestPl,
+  getFilteredScaledDayActualPl
 } from '@/lib/services/calendar-data'
 import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
 import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
@@ -43,6 +43,13 @@ export type NavigationView = 'calendar' | 'day' | 'trade'
  * - both: Show both backtest and actual data
  */
 export type DataDisplayMode = 'backtest' | 'actual' | 'both'
+
+/**
+ * Trade filter mode - which trades to include in calculations and displays
+ * - all: Include all trades
+ * - matched: Only include trades from matched strategies
+ */
+export type TradeFilterMode = 'all' | 'matched'
 
 /**
  * Matched strategy pair (exact name match or user-linked)
@@ -167,6 +174,7 @@ interface TradingCalendarState {
   calendarViewMode: CalendarViewMode
   dateDisplayMode: DateDisplayMode
   dataDisplayMode: DataDisplayMode
+  tradeFilterMode: TradeFilterMode
   navigationView: NavigationView
   showMargin: boolean
   combineLegGroups: boolean
@@ -189,6 +197,7 @@ interface TradingCalendarState {
   setCalendarViewMode: (mode: CalendarViewMode) => void
   setDateDisplayMode: (mode: DateDisplayMode) => void
   setDataDisplayMode: (mode: DataDisplayMode) => void
+  setTradeFilterMode: (mode: TradeFilterMode) => void
   setShowMargin: (show: boolean) => void
   setCombineLegGroups: (combine: boolean) => void
   setViewDate: (date: Date) => void
@@ -413,7 +422,9 @@ function calculatePerformanceStats(
   dailyLogs: DailyLogEntry[],
   backtestTrades: Trade[],
   scalingMode: ScalingMode = 'raw',
-  dateDisplayMode: DateDisplayMode = 'exit'
+  dateDisplayMode: DateDisplayMode = 'exit',
+  tradeFilterMode: TradeFilterMode = 'all',
+  strategyMatches: StrategyMatch[] = []
 ): CalendarPerformanceStats {
   // Get date range based on view mode
   const year = viewDate.getFullYear()
@@ -436,9 +447,42 @@ function calculatePerformanceStats(
   const startKey = formatDateKey(startDate)
   const endKey = formatDateKey(endDate)
 
+  // Build matched strategy sets for filtering
+  const matchedBacktestStrategies = tradeFilterMode === 'matched'
+    ? new Set(strategyMatches.map(m => m.backtestStrategy))
+    : null
+  const matchedActualStrategies = tradeFilterMode === 'matched'
+    ? new Set(strategyMatches.map(m => m.actualStrategy))
+    : null
+
+  // Filter days data if in matched mode
+  let filteredDays = days
+  if (tradeFilterMode === 'matched') {
+    filteredDays = new Map()
+    for (const [dateKey, day] of days) {
+      const filteredBacktestTrades = day.backtestTrades.filter(t => matchedBacktestStrategies!.has(t.strategy))
+      const filteredActualTrades = day.actualTrades.filter(t => matchedActualStrategies!.has(t.strategy))
+
+      if (filteredBacktestTrades.length > 0 || filteredActualTrades.length > 0) {
+        filteredDays.set(dateKey, {
+          ...day,
+          backtestTrades: filteredBacktestTrades,
+          actualTrades: filteredActualTrades,
+          backtestPl: filteredBacktestTrades.reduce((sum, t) => sum + t.pl, 0),
+          actualPl: filteredActualTrades.reduce((sum, t) => sum + t.pl, 0),
+          backtestTradeCount: filteredBacktestTrades.length,
+          actualTradeCount: filteredActualTrades.length,
+          hasBacktest: filteredBacktestTrades.length > 0,
+          hasActual: filteredActualTrades.length > 0,
+          totalMargin: filteredBacktestTrades.reduce((sum, t) => sum + (t.marginReq || 0), 0)
+        })
+      }
+    }
+  }
+
   // Determine if we should use actual trades (when available) or backtest
   let hasActualInRange = false
-  for (const [dateKey, day] of days) {
+  for (const [dateKey, day] of filteredDays) {
     if (dateKey >= startKey && dateKey <= endKey && day.hasActual) {
       hasActualInRange = true
       break
@@ -447,7 +491,7 @@ function calculatePerformanceStats(
   const useActual = hasActualInRange
 
   // Calculate trade-based metrics
-  const tradeMetrics = calculateTradeMetrics(days, startKey, endKey, useActual)
+  const tradeMetrics = calculateTradeMetrics(filteredDays, startKey, endKey, useActual)
 
   // If no trades in the date range, return null for advanced metrics
   // We shouldn't show performance stats for empty periods
@@ -473,9 +517,14 @@ function calculatePerformanceStats(
   // This matches the behavior in performance-snapshot.ts
   const useTradeBasedCalculation = scalingMode === 'perContract' || dailyLogs.length < 2
 
-  if (useTradeBasedCalculation && backtestTrades.length > 0) {
+  // Filter backtest trades by matched strategies if in matched mode
+  const filteredBacktestTrades = tradeFilterMode === 'matched'
+    ? backtestTrades.filter(t => matchedBacktestStrategies!.has(t.strategy))
+    : backtestTrades
+
+  if (useTradeBasedCalculation && filteredBacktestTrades.length > 0) {
     // Filter trades to date range using the appropriate date based on display mode
-    const tradesInRange = backtestTrades.filter(t => {
+    const tradesInRange = filteredBacktestTrades.filter(t => {
       const tradeDate = formatDateKey(getTradeDate(t, dateDisplayMode))
       return tradeDate >= startKey && tradeDate <= endKey
     })
@@ -536,7 +585,8 @@ function calculateComparisonStats(
   strategyMatches: StrategyMatch[],
   unmatchedBacktest: string[],
   unmatchedActual: string[],
-  scalingMode: ScalingMode = 'raw'
+  scalingMode: ScalingMode = 'raw',
+  tradeFilterMode: TradeFilterMode = 'all'
 ): CalendarComparisonStats | null {
   // Get date range
   const year = viewDate.getFullYear()
@@ -559,33 +609,65 @@ function calculateComparisonStats(
   const startKey = formatDateKey(startDate)
   const endKey = formatDateKey(endDate)
 
+  // Build matched strategy sets for filtering
+  const matchedBacktestStrategies = tradeFilterMode === 'matched'
+    ? new Set(strategyMatches.map(m => m.backtestStrategy))
+    : null
+  const matchedActualStrategies = tradeFilterMode === 'matched'
+    ? new Set(strategyMatches.map(m => m.actualStrategy))
+    : null
+
   let backtestPl = 0
   let actualPl = 0
   let hasAnyActual = false
 
+  // Build reverse mapping for checking same-day matches
+  const actualToBacktest = new Map<string, string>()
+  for (const match of strategyMatches) {
+    actualToBacktest.set(match.actualStrategy, match.backtestStrategy)
+  }
+
   for (const [dateKey, day] of days) {
     if (dateKey >= startKey && dateKey <= endKey) {
-      backtestPl += getScaledDayBacktestPl(day, scalingMode)
-      actualPl += getScaledDayActualPl(day, scalingMode)
-      if (day.hasActual) hasAnyActual = true
+      backtestPl += getFilteredScaledDayBacktestPl(day, scalingMode, matchedBacktestStrategies, strategyMatches)
+      actualPl += getFilteredScaledDayActualPl(day, scalingMode, matchedActualStrategies, strategyMatches)
+
+      // Check if there are actual trades (filtered if in matched mode)
+      // In matched mode, only count if both backtest AND actual exist on the same day
+      if (tradeFilterMode === 'matched') {
+        const backtestStrategiesOnDay = new Set(day.backtestTrades.map(t => t.strategy))
+        const hasMatchedActualOnDay = day.actualTrades.some(t => {
+          if (!matchedActualStrategies!.has(t.strategy)) return false
+          const btStrategy = actualToBacktest.get(t.strategy)
+          return btStrategy && backtestStrategiesOnDay.has(btStrategy)
+        })
+        if (hasMatchedActualOnDay) hasAnyActual = true
+      } else {
+        if (day.hasActual) hasAnyActual = true
+      }
     }
   }
 
   // Only show comparison stats if there are actual trades
   if (!hasAnyActual) return null
 
-  const totalStrategies = strategyMatches.length + unmatchedBacktest.length + unmatchedActual.length
-  const matchRate = totalStrategies > 0
-    ? (strategyMatches.length / totalStrategies) * 100
-    : 0
+  // In matched mode, all strategies are matched by definition
+  const totalStrategies = tradeFilterMode === 'matched'
+    ? strategyMatches.length
+    : strategyMatches.length + unmatchedBacktest.length + unmatchedActual.length
+  const matchRate = tradeFilterMode === 'matched'
+    ? 100
+    : totalStrategies > 0
+      ? (strategyMatches.length / totalStrategies) * 100
+      : 0
 
   return {
     backtestPl,
     actualPl,
     totalSlippage: actualPl - backtestPl,
     matchRate,
-    unmatchedBacktestCount: unmatchedBacktest.length,
-    unmatchedActualCount: unmatchedActual.length
+    unmatchedBacktestCount: tradeFilterMode === 'matched' ? 0 : unmatchedBacktest.length,
+    unmatchedActualCount: tradeFilterMode === 'matched' ? 0 : unmatchedActual.length
   }
 }
 
@@ -605,6 +687,7 @@ const initialState = {
   calendarViewMode: 'month' as CalendarViewMode,
   dateDisplayMode: 'exit' as DateDisplayMode,
   dataDisplayMode: 'both' as DataDisplayMode,
+  tradeFilterMode: 'all' as TradeFilterMode,
   navigationView: 'calendar' as NavigationView,
   showMargin: false,
   combineLegGroups: true,
@@ -695,7 +778,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
           ? 'toReported'
           : 'raw'
 
-      // Calculate initial stats with default scaling mode
+      // Calculate initial stats with default scaling mode (default to 'all' for tradeFilterMode)
+      const defaultTradeFilterMode: TradeFilterMode = 'all'
       const performanceStats = calculatePerformanceStats(
         calendarDays,
         viewDate,
@@ -703,7 +787,9 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
         dailyLogs,
         backtestTrades,
         defaultScalingMode,
-        defaultDateDisplayMode
+        defaultDateDisplayMode,
+        defaultTradeFilterMode,
+        allMatches
       )
       const comparisonStats = calculateComparisonStats(
         calendarDays,
@@ -712,7 +798,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
         allMatches,
         unmatchedBacktest,
         unmatchedActual,
-        defaultScalingMode
+        defaultScalingMode,
+        defaultTradeFilterMode
       )
 
       set({
@@ -747,7 +834,9 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dailyLogs,
       state.backtestTrades,
       mode,
-      state.dateDisplayMode
+      state.dateDisplayMode,
+      state.tradeFilterMode,
+      state.strategyMatches
     )
     const comparisonStats = calculateComparisonStats(
       state.calendarDays,
@@ -756,7 +845,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.strategyMatches,
       state.unmatchedBacktestStrategies,
       state.unmatchedActualStrategies,
-      mode
+      mode,
+      state.tradeFilterMode
     )
     set({ scalingMode: mode, performanceStats, comparisonStats })
   },
@@ -770,7 +860,9 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dailyLogs,
       state.backtestTrades,
       state.scalingMode,
-      state.dateDisplayMode
+      state.dateDisplayMode,
+      state.tradeFilterMode,
+      state.strategyMatches
     )
     const comparisonStats = calculateComparisonStats(
       state.calendarDays,
@@ -779,7 +871,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.strategyMatches,
       state.unmatchedBacktestStrategies,
       state.unmatchedActualStrategies,
-      state.scalingMode
+      state.scalingMode,
+      state.tradeFilterMode
     )
     set({ calendarViewMode: mode, performanceStats, comparisonStats })
   },
@@ -801,7 +894,9 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dailyLogs,
       state.backtestTrades,
       state.scalingMode,
-      mode
+      mode,
+      state.tradeFilterMode,
+      state.strategyMatches
     )
     const comparisonStats = calculateComparisonStats(
       calendarDays,
@@ -810,13 +905,41 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.strategyMatches,
       state.unmatchedBacktestStrategies,
       state.unmatchedActualStrategies,
-      state.scalingMode
+      state.scalingMode,
+      state.tradeFilterMode
     )
     set({ dateDisplayMode: mode, calendarDays, performanceStats, comparisonStats })
   },
 
   setDataDisplayMode: (mode) => {
     set({ dataDisplayMode: mode })
+  },
+
+  setTradeFilterMode: (mode) => {
+    const state = get()
+    // Recalculate stats with new trade filter mode
+    const performanceStats = calculatePerformanceStats(
+      state.calendarDays,
+      state.viewDate,
+      state.calendarViewMode,
+      state.dailyLogs,
+      state.backtestTrades,
+      state.scalingMode,
+      state.dateDisplayMode,
+      mode,
+      state.strategyMatches
+    )
+    const comparisonStats = calculateComparisonStats(
+      state.calendarDays,
+      state.viewDate,
+      state.calendarViewMode,
+      state.strategyMatches,
+      state.unmatchedBacktestStrategies,
+      state.unmatchedActualStrategies,
+      state.scalingMode,
+      mode
+    )
+    set({ tradeFilterMode: mode, performanceStats, comparisonStats })
   },
 
   setShowMargin: (show) => {
@@ -836,7 +959,9 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dailyLogs,
       state.backtestTrades,
       state.scalingMode,
-      state.dateDisplayMode
+      state.dateDisplayMode,
+      state.tradeFilterMode,
+      state.strategyMatches
     )
     const comparisonStats = calculateComparisonStats(
       state.calendarDays,
@@ -845,7 +970,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.strategyMatches,
       state.unmatchedBacktestStrategies,
       state.unmatchedActualStrategies,
-      state.scalingMode
+      state.scalingMode,
+      state.tradeFilterMode
     )
     set({ viewDate: date, performanceStats, comparisonStats })
   },
@@ -905,7 +1031,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dateDisplayMode
     )
 
-    // Recalculate stats with current scaling mode
+    // Recalculate stats with current scaling mode and trade filter mode
     const performanceStats = calculatePerformanceStats(
       calendarDays,
       state.viewDate,
@@ -913,7 +1039,9 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dailyLogs,
       state.backtestTrades,
       state.scalingMode,
-      state.dateDisplayMode
+      state.dateDisplayMode,
+      state.tradeFilterMode,
+      updatedMatches
     )
     const comparisonStats = calculateComparisonStats(
       calendarDays,
@@ -922,7 +1050,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       updatedMatches,
       updatedUnmatchedBacktest,
       updatedUnmatchedActual,
-      state.scalingMode
+      state.scalingMode,
+      state.tradeFilterMode
     )
 
     set({
@@ -989,7 +1118,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dateDisplayMode
     )
 
-    // Recalculate stats with current scaling mode
+    // Recalculate stats with current scaling mode and trade filter mode
     const performanceStats = calculatePerformanceStats(
       calendarDays,
       state.viewDate,
@@ -997,7 +1126,9 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       state.dailyLogs,
       state.backtestTrades,
       state.scalingMode,
-      state.dateDisplayMode
+      state.dateDisplayMode,
+      state.tradeFilterMode,
+      updatedMatches
     )
     const comparisonStats = calculateComparisonStats(
       calendarDays,
@@ -1006,7 +1137,8 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
       updatedMatches,
       updatedUnmatchedBacktest,
       updatedUnmatchedActual,
-      state.scalingMode
+      state.scalingMode,
+      state.tradeFilterMode
     )
 
     set({

@@ -222,13 +222,21 @@ function groupTradesByStrategy<T extends { strategy: string }>(trades: T[]): Map
  *
  * @param dayData Calendar day data
  * @param scalingMode Current scaling mode
+ * @param strategyMatches Strategy mappings for toReported scaling (backtest -> actual name)
  */
 export function getScaledDayBacktestPl(
   dayData: CalendarDayData,
-  scalingMode: ScalingMode
+  scalingMode: ScalingMode,
+  strategyMatches: StrategyMatch[] = []
 ): number {
   if (!dayData.hasBacktest) return 0
   if (scalingMode === 'raw') return dayData.backtestPl
+
+  // Build backtest -> actual strategy name mapping for toReported mode
+  const backtestToActualStrategy = new Map<string, string>()
+  for (const match of strategyMatches) {
+    backtestToActualStrategy.set(match.backtestStrategy, match.actualStrategy)
+  }
 
   // Group backtest trades by strategy
   const btByStrategy = groupTradesByStrategy(dayData.backtestTrades)
@@ -237,7 +245,7 @@ export function getScaledDayBacktestPl(
 
   let totalScaledPl = 0
 
-  for (const [strategy, btTrades] of btByStrategy) {
+  for (const [btStrategy, btTrades] of btByStrategy) {
     const strategyPl = btTrades.reduce((sum, t) => sum + t.pl, 0)
     const btContracts = btTrades[0]?.numContracts ?? 0
 
@@ -245,8 +253,9 @@ export function getScaledDayBacktestPl(
       // Scale by own contract count
       totalScaledPl += btContracts > 0 ? strategyPl / btContracts : strategyPl
     } else if (scalingMode === 'toReported') {
-      // Scale to match actual contract count for this strategy
-      const actualTrades = actualByStrategy.get(strategy) ?? []
+      // Look up the ACTUAL strategy name that corresponds to this backtest strategy
+      const actualStrategyName = backtestToActualStrategy.get(btStrategy)
+      const actualTrades = actualStrategyName ? actualByStrategy.get(actualStrategyName) ?? [] : []
       const actualContracts = actualTrades[0]?.numContracts ?? 0
 
       if (btContracts > 0 && actualContracts > 0) {
@@ -331,6 +340,205 @@ export function getScaledDayMargin(
   }
 
   return totalScaledMargin
+}
+
+// =============================================================================
+// Filtered Day-level Scaling Functions (for matched-only mode)
+// =============================================================================
+
+/**
+ * Get scaled backtest P/L for a calendar day, filtered to matched strategies only
+ *
+ * IMPORTANT: In matched mode, we only include backtest trades where the corresponding
+ * actual trade ALSO exists on this same day. This ensures proper comparison.
+ *
+ * @param dayData Calendar day data
+ * @param scalingMode Current scaling mode
+ * @param matchedBacktestStrategies Set of backtest strategy names that have matches (globally)
+ * @param strategyMatches Strategy mappings for toReported scaling (backtest -> actual name)
+ */
+export function getFilteredScaledDayBacktestPl(
+  dayData: CalendarDayData,
+  scalingMode: ScalingMode,
+  matchedBacktestStrategies: Set<string> | null,
+  strategyMatches: StrategyMatch[] = []
+): number {
+  if (!dayData.hasBacktest) return 0
+
+  // If no filter, use standard function
+  if (!matchedBacktestStrategies) {
+    return getScaledDayBacktestPl(dayData, scalingMode, strategyMatches)
+  }
+
+  // Build backtest -> actual strategy name mapping
+  const backtestToActualStrategy = new Map<string, string>()
+  for (const match of strategyMatches) {
+    backtestToActualStrategy.set(match.backtestStrategy, match.actualStrategy)
+  }
+
+  // Get actual strategies present on THIS day
+  const actualStrategiesOnDay = new Set(dayData.actualTrades.map(t => t.strategy))
+
+  // Filter backtest trades to only those where:
+  // 1. The strategy is in the global matched set
+  // 2. The corresponding actual strategy has trades on THIS day
+  const filteredTrades = dayData.backtestTrades.filter(t => {
+    if (!matchedBacktestStrategies.has(t.strategy)) return false
+    const actualStrategyName = backtestToActualStrategy.get(t.strategy)
+    return actualStrategyName && actualStrategiesOnDay.has(actualStrategyName)
+  })
+
+  if (filteredTrades.length === 0) return 0
+
+  if (scalingMode === 'raw') {
+    return filteredTrades.reduce((sum, t) => sum + t.pl, 0)
+  }
+
+  // Group filtered backtest trades by strategy
+  const btByStrategy = groupTradesByStrategy(filteredTrades)
+  // Group actual trades by strategy (needed for toReported mode)
+  const actualByStrategy = groupTradesByStrategy(dayData.actualTrades)
+
+  let totalScaledPl = 0
+
+  for (const [btStrategy, btTrades] of btByStrategy) {
+    const strategyPl = btTrades.reduce((sum, t) => sum + t.pl, 0)
+    const btContracts = btTrades[0]?.numContracts ?? 0
+
+    if (scalingMode === 'perContract') {
+      totalScaledPl += btContracts > 0 ? strategyPl / btContracts : strategyPl
+    } else if (scalingMode === 'toReported') {
+      // Look up the ACTUAL strategy name that corresponds to this backtest strategy
+      const actualStrategyName = backtestToActualStrategy.get(btStrategy)
+      const actualTrades = actualStrategyName ? actualByStrategy.get(actualStrategyName) ?? [] : []
+      const actualContracts = actualTrades[0]?.numContracts ?? 0
+
+      if (btContracts > 0 && actualContracts > 0) {
+        totalScaledPl += strategyPl * (actualContracts / btContracts)
+      } else {
+        // This shouldn't happen since we filtered above, but fallback to raw
+        totalScaledPl += strategyPl
+      }
+    }
+  }
+
+  return totalScaledPl
+}
+
+/**
+ * Get scaled actual P/L for a calendar day, filtered to matched strategies only
+ *
+ * IMPORTANT: In matched mode, we only include actual trades where the corresponding
+ * backtest trade ALSO exists on this same day. This ensures proper comparison.
+ *
+ * @param dayData Calendar day data
+ * @param scalingMode Current scaling mode
+ * @param matchedActualStrategies Set of actual strategy names that have matches (globally)
+ * @param strategyMatches Strategy mappings for filtering (backtest -> actual name)
+ */
+export function getFilteredScaledDayActualPl(
+  dayData: CalendarDayData,
+  scalingMode: ScalingMode,
+  matchedActualStrategies: Set<string> | null,
+  strategyMatches: StrategyMatch[] = []
+): number {
+  if (!dayData.hasActual) return 0
+
+  // If no filter, use standard function
+  if (!matchedActualStrategies) {
+    return getScaledDayActualPl(dayData, scalingMode)
+  }
+
+  // Build actual -> backtest strategy name mapping
+  const actualToBacktestStrategy = new Map<string, string>()
+  for (const match of strategyMatches) {
+    actualToBacktestStrategy.set(match.actualStrategy, match.backtestStrategy)
+  }
+
+  // Get backtest strategies present on THIS day
+  const backtestStrategiesOnDay = new Set(dayData.backtestTrades.map(t => t.strategy))
+
+  // Filter actual trades to only those where:
+  // 1. The strategy is in the global matched set
+  // 2. The corresponding backtest strategy has trades on THIS day
+  const filteredTrades = dayData.actualTrades.filter(t => {
+    if (!matchedActualStrategies.has(t.strategy)) return false
+    const btStrategyName = actualToBacktestStrategy.get(t.strategy)
+    return btStrategyName && backtestStrategiesOnDay.has(btStrategyName)
+  })
+
+  if (filteredTrades.length === 0) return 0
+
+  if (scalingMode === 'raw' || scalingMode === 'toReported') {
+    return filteredTrades.reduce((sum, t) => sum + t.pl, 0)
+  }
+
+  // perContract mode - scale each strategy by its own contract count
+  const actualByStrategy = groupTradesByStrategy(filteredTrades)
+
+  let totalScaledPl = 0
+
+  for (const [, actualTrades] of actualByStrategy) {
+    const strategyPl = actualTrades.reduce((sum, t) => sum + t.pl, 0)
+    const contracts = actualTrades[0]?.numContracts ?? 0
+
+    totalScaledPl += contracts > 0 ? strategyPl / contracts : strategyPl
+  }
+
+  return totalScaledPl
+}
+
+/**
+ * Get filtered trade counts for a calendar day
+ *
+ * IMPORTANT: In matched mode, we only count trades where BOTH backtest and actual
+ * exist on the same day for that strategy. This ensures proper comparison.
+ *
+ * @param dayData Calendar day data
+ * @param matchedBacktestStrategies Set of backtest strategy names that have matches (globally)
+ * @param matchedActualStrategies Set of actual strategy names that have matches (globally)
+ * @param strategyMatches Strategy mappings for filtering (backtest -> actual name)
+ */
+export function getFilteredTradeCounts(
+  dayData: CalendarDayData,
+  matchedBacktestStrategies: Set<string> | null,
+  matchedActualStrategies: Set<string> | null,
+  strategyMatches: StrategyMatch[] = []
+): { backtestCount: number; actualCount: number } {
+  if (!matchedBacktestStrategies || !matchedActualStrategies) {
+    return {
+      backtestCount: dayData.backtestTradeCount,
+      actualCount: dayData.actualTradeCount
+    }
+  }
+
+  // Build mappings
+  const backtestToActual = new Map<string, string>()
+  const actualToBacktest = new Map<string, string>()
+  for (const match of strategyMatches) {
+    backtestToActual.set(match.backtestStrategy, match.actualStrategy)
+    actualToBacktest.set(match.actualStrategy, match.backtestStrategy)
+  }
+
+  // Get strategies present on THIS day
+  const backtestStrategiesOnDay = new Set(dayData.backtestTrades.map(t => t.strategy))
+  const actualStrategiesOnDay = new Set(dayData.actualTrades.map(t => t.strategy))
+
+  // Count backtest trades where actual exists on same day
+  const backtestCount = dayData.backtestTrades.filter(t => {
+    if (!matchedBacktestStrategies.has(t.strategy)) return false
+    const actualStrategyName = backtestToActual.get(t.strategy)
+    return actualStrategyName && actualStrategiesOnDay.has(actualStrategyName)
+  }).length
+
+  // Count actual trades where backtest exists on same day
+  const actualCount = dayData.actualTrades.filter(t => {
+    if (!matchedActualStrategies.has(t.strategy)) return false
+    const btStrategyName = actualToBacktest.get(t.strategy)
+    return btStrategyName && backtestStrategiesOnDay.has(btStrategyName)
+  }).length
+
+  return { backtestCount, actualCount }
 }
 
 // =============================================================================
