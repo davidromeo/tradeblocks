@@ -6,7 +6,6 @@ import {
   IconDatabase,
   IconGauge,
   IconLayoutDashboard,
-  IconLink,
   IconReportAnalytics,
   IconRouteSquare,
   IconSparkles,
@@ -87,12 +86,6 @@ const navData = {
       href: "/trading-calendar",
       icon: IconCalendar,
       badge: "New",
-    },
-    {
-      title: "Comparison Blocks",
-      href: "/comparison-blocks",
-      icon: IconLink,
-      badge: "Beta",
     },
     {
       title: "TradeBlocks Assistant",

@@ -87,7 +87,6 @@ import {
   TradeProcessor,
 } from "@/lib/processing/trade-processor";
 import { useBlockStore } from "@/lib/stores/block-store";
-import { useComparisonStore } from "@/lib/stores/comparison-store";
 import { cn } from "@/lib/utils";
 import {
   findMissingHeaders,
@@ -248,7 +247,6 @@ export function BlockDialog({
     refreshBlock,
     deleteBlock,
   } = useBlockStore();
-  const resetComparison = useComparisonStore((state) => state.reset);
 
   // Reset form when dialog opens/closes or mode changes
   useEffect(() => {
@@ -1604,9 +1602,6 @@ export function BlockDialog({
             block.id,
             processedData.reporting.trades
           );
-
-          // Clear comparison data since reporting trades changed
-          resetComparison();
         } else if (
           !reportingLog.file &&
           reportingLog.status === "empty" &&
@@ -1618,9 +1613,6 @@ export function BlockDialog({
           metadataUpdates.reportingLog = undefined;
           metadataUpdates.strategyAlignment = undefined;
           await deleteReportingTradesByBlock(block.id);
-
-          // Clear comparison data since reporting log was removed
-          resetComparison();
         }
 
         if (Object.keys(metadataUpdates).length > 1) {

@@ -4,6 +4,7 @@ import { NoActiveBlock } from "@/components/no-active-block";
 import { CalendarNavigation } from "@/components/trading-calendar/calendar-navigation";
 import { CalendarView } from "@/components/trading-calendar/calendar-view";
 import { DayView } from "@/components/trading-calendar/day-view";
+import { EquityCurveChart } from "@/components/trading-calendar/equity-curve-chart";
 import { MatchStrategiesDialog } from "@/components/trading-calendar/match-strategies-dialog";
 import { StatsHeader } from "@/components/trading-calendar/stats-header";
 import { TradeDetailView } from "@/components/trading-calendar/trade-detail-view";
@@ -172,6 +173,9 @@ function TradingCalendarContent() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Equity curve comparison chart - only show in calendar view when both data types exist */}
+      {navigationView === "calendar" && <EquityCurveChart />}
 
       {/* Strategy matching dialog */}
       <MatchStrategiesDialog
