@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
 import { ChartWrapper } from './chart-wrapper'
 import { Badge } from '@/components/ui/badge'
-import { AlertTriangle, TrendingUp, Shuffle } from 'lucide-react'
+import { AlertTriangle, TrendingUp, Shuffle, ArrowLeftRight } from 'lucide-react'
 import type { PlotData, Layout } from 'plotly.js'
 import type { RunsTestResult } from '@/lib/calculations/streak-analysis'
 
@@ -13,32 +13,48 @@ function RunsTestCard({ runsTest }: { runsTest: RunsTestResult }) {
     ? '< 0.001'
     : runsTest.pValue.toFixed(3)
 
+  // Determine badge styling based on pattern type
+  const getBadgeContent = () => {
+    switch (runsTest.patternType) {
+      case 'clustered':
+        return {
+          label: 'Clustered',
+          icon: <TrendingUp className="h-3 w-3" />,
+          className: 'bg-amber-500 hover:bg-amber-500',
+          bgClass: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
+        }
+      case 'alternating':
+        return {
+          label: 'Alternating',
+          icon: <ArrowLeftRight className="h-3 w-3" />,
+          className: 'bg-blue-500 hover:bg-blue-500',
+          bgClass: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800'
+        }
+      default:
+        return {
+          label: 'Random',
+          icon: <Shuffle className="h-3 w-3" />,
+          className: '',
+          bgClass: 'bg-muted/40 border-border/60'
+        }
+    }
+  }
+
+  const badgeContent = getBadgeContent()
+
   return (
-    <div className={`rounded-lg border p-3 mt-3 ${
-      runsTest.isStreaky
-        ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
-        : 'bg-muted/40 border-border/60'
-    }`}>
+    <div className={`rounded-lg border p-3 mt-3 ${badgeContent.bgClass}`}>
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">Runs Test</span>
           <span className="text-sm text-muted-foreground">p = {pValueFormatted}</span>
         </div>
         <Badge
-          variant={runsTest.isStreaky ? 'default' : 'muted'}
-          className={runsTest.isStreaky ? 'bg-amber-500 hover:bg-amber-500' : ''}
+          variant={runsTest.isNonRandom ? 'default' : 'muted'}
+          className={badgeContent.className}
         >
-          {runsTest.isStreaky ? (
-            <>
-              <TrendingUp className="h-3 w-3" />
-              Streaky
-            </>
-          ) : (
-            <>
-              <Shuffle className="h-3 w-3" />
-              Random
-            </>
-          )}
+          {badgeContent.icon}
+          {badgeContent.label}
         </Badge>
       </div>
       <p className="text-xs text-muted-foreground">

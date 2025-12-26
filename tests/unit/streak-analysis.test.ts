@@ -322,8 +322,8 @@ describe('Streak Analysis', () => {
       });
     });
 
-    describe('Streaky Sequences (Too Few Runs)', () => {
-      it('should detect highly clustered sequence as streaky', () => {
+    describe('Clustered Sequences (Too Few Runs)', () => {
+      it('should detect highly clustered sequence', () => {
         // WWWWWWWWWWLLLLLLLLLL (10 wins, 10 losses, 2 runs)
         const trades = [
           ...Array.from({ length: 10 }, (_, i) => createMockTrade(100, i)),
@@ -334,7 +334,8 @@ describe('Streak Analysis', () => {
         expect(result).toBeDefined();
         expect(result!.numRuns).toBe(2);
         expect(result!.pValue).toBeLessThan(0.05);
-        expect(result!.isStreaky).toBe(true);
+        expect(result!.isNonRandom).toBe(true);
+        expect(result!.patternType).toBe('clustered');
         expect(result!.sampleSize).toBe(20);
         expect(result!.isSufficientSample).toBe(true);
       });
@@ -351,12 +352,13 @@ describe('Streak Analysis', () => {
         expect(result).toBeDefined();
         expect(result!.numRuns).toBe(20);
         expect(result!.pValue).toBeLessThan(0.05);
-        expect(result!.isStreaky).toBe(true); // Still "non-random"
+        expect(result!.isNonRandom).toBe(true);
+        expect(result!.patternType).toBe('alternating');
       });
     });
 
     describe('Random-looking Sequences', () => {
-      it('should not detect random-looking sequence as streaky', () => {
+      it('should not detect random-looking sequence as non-random', () => {
         // A mixed pattern that should appear random
         // WWLWLLWWWLWLLWWLWLWL
         const pattern = [1, 1, -1, 1, -1, -1, 1, 1, 1, -1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1];
@@ -366,7 +368,8 @@ describe('Streak Analysis', () => {
         expect(result).toBeDefined();
         // This mixed pattern should have runs close to expected
         expect(result!.pValue).toBeGreaterThan(0.05);
-        expect(result!.isStreaky).toBe(false);
+        expect(result!.isNonRandom).toBe(false);
+        expect(result!.patternType).toBe('random');
       });
     });
 

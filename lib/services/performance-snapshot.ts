@@ -75,7 +75,8 @@ export interface SnapshotChartData {
       expectedRuns: number
       zScore: number
       pValue: number
-      isStreaky: boolean
+      isNonRandom: boolean
+      patternType: 'random' | 'clustered' | 'alternating'
       interpretation: string
       sampleSize: number
       isSufficientSample: boolean
