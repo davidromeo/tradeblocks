@@ -1,10 +1,22 @@
 import { Trade } from '@/lib/models/trade'
+import { normalCDF } from './statistical-utils'
 
 export interface StreakData {
   type: 'win' | 'loss'
   length: number
   totalPl: number
   trades: Trade[]
+}
+
+export interface RunsTestResult {
+  numRuns: number           // Observed number of runs
+  expectedRuns: number      // Expected runs under randomness
+  zScore: number            // Standardized test statistic
+  pValue: number            // Two-tailed p-value
+  isStreaky: boolean        // p < 0.05
+  interpretation: string    // Human-readable explanation
+  sampleSize: number        // Total number of trades
+  isSufficientSample: boolean // n >= 20 for reliable results
 }
 
 export interface StreakDistribution {
@@ -18,6 +30,91 @@ export interface StreakDistribution {
     avgLossStreak: number
     totalWinStreaks: number
     totalLossStreaks: number
+  }
+  runsTest?: RunsTestResult
+}
+
+/**
+ * Wald-Wolfowitz Runs Test for detecting non-randomness in win/loss sequences.
+ *
+ * A "run" is a consecutive sequence of the same outcome (wins or losses).
+ * The test compares observed runs to expected runs under randomness:
+ * - Fewer runs than expected → Clustering/streakiness (wins cluster, losses cluster)
+ * - More runs than expected → Anti-clustering (alternating pattern)
+ *
+ * @param trades - Array of trades sorted chronologically
+ * @returns RunsTestResult with p-value and interpretation, or undefined if insufficient data
+ */
+export function calculateRunsTest(trades: Trade[]): RunsTestResult | undefined {
+  if (!trades || trades.length < 2) {
+    return undefined
+  }
+
+  // Count wins and losses
+  const n1 = trades.filter(t => t.pl > 0).length  // wins
+  const n2 = trades.filter(t => t.pl <= 0).length // losses (including breakeven)
+  const n = n1 + n2
+
+  // Need at least one of each outcome type
+  if (n1 === 0 || n2 === 0) {
+    return undefined
+  }
+
+  // Count runs (consecutive sequences of same outcome)
+  let numRuns = 1
+  let prevWin = trades[0].pl > 0
+
+  for (let i = 1; i < trades.length; i++) {
+    const currentWin = trades[i].pl > 0
+    if (currentWin !== prevWin) {
+      numRuns++
+      prevWin = currentWin
+    }
+  }
+
+  // Expected number of runs under randomness
+  const expectedRuns = (2 * n1 * n2) / n + 1
+
+  // Variance of runs under randomness
+  const numerator = 2 * n1 * n2 * (2 * n1 * n2 - n)
+  const denominator = n * n * (n - 1)
+  const variance = numerator / denominator
+
+  // Z-score (standard normal approximation)
+  const stdDev = Math.sqrt(variance)
+  const zScore = stdDev > 0 ? (numRuns - expectedRuns) / stdDev : 0
+
+  // Two-tailed p-value
+  const pValue = 2 * (1 - normalCDF(Math.abs(zScore)))
+
+  // Determine interpretation
+  const isSufficientSample = n >= 20
+  const isStreaky = pValue < 0.05
+
+  let interpretation: string
+  if (!isSufficientSample) {
+    interpretation = isStreaky
+      ? 'Results appear non-random, but sample size is small. Collect more trades for reliable analysis.'
+      : 'Results appear random, but sample size is small. Collect more trades for reliable analysis.'
+  } else if (isStreaky) {
+    if (numRuns < expectedRuns) {
+      interpretation = 'Results show clustering (streakiness). Wins and losses tend to group together. Adaptive position sizing may be beneficial.'
+    } else {
+      interpretation = 'Results show alternating pattern. Wins and losses tend to alternate. This is unusual and may warrant investigation.'
+    }
+  } else {
+    interpretation = 'Results appear random. Wins and losses do not show significant patterns. Adaptive position sizing is unlikely to help.'
+  }
+
+  return {
+    numRuns,
+    expectedRuns,
+    zScore,
+    pValue,
+    isStreaky,
+    interpretation,
+    sampleSize: n,
+    isSufficientSample,
   }
 }
 
@@ -108,10 +205,14 @@ export function calculateStreakDistributions(trades: Trade[]): StreakDistributio
     totalLossStreaks: lossStreaks.length,
   }
 
+  // Calculate runs test for streakiness
+  const runsTest = calculateRunsTest(sortedTrades)
+
   return {
     streaks,
     winDistribution,
     lossDistribution,
     statistics,
+    runsTest,
   }
 }

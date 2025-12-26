@@ -18,6 +18,7 @@ import {
 } from '@/lib/calculations/mfe-mae'
 import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
 import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
+import { calculateRunsTest } from '@/lib/calculations/streak-analysis'
 
 export interface SnapshotDateRange {
   from?: Date
@@ -68,6 +69,16 @@ export interface SnapshotChartData {
       maxLossStreak: number
       avgWinStreak: number
       avgLossStreak: number
+    }
+    runsTest?: {
+      numRuns: number
+      expectedRuns: number
+      zScore: number
+      pValue: number
+      isStreaky: boolean
+      interpretation: string
+      sampleSize: number
+      isSufficientSample: boolean
     }
   }
   monthlyReturns: Record<number, Record<number, number>>
@@ -701,6 +712,9 @@ function calculateStreakData(trades: Trade[]) {
     lossDistribution[streak] = (lossDistribution[streak] || 0) + 1
   })
 
+  // Calculate runs test for streakiness detection
+  const runsTest = calculateRunsTest(sortedTrades)
+
   return {
     winDistribution,
     lossDistribution,
@@ -709,7 +723,8 @@ function calculateStreakData(trades: Trade[]) {
       maxLossStreak: Math.max(...lossStreaks, 0),
       avgWinStreak: winStreaks.length > 0 ? winStreaks.reduce((a, b) => a + b) / winStreaks.length : 0,
       avgLossStreak: lossStreaks.length > 0 ? lossStreaks.reduce((a, b) => a + b) / lossStreaks.length : 0
-    }
+    },
+    runsTest
   }
 }
 
