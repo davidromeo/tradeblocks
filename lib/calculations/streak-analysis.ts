@@ -13,7 +13,8 @@ export interface RunsTestResult {
   expectedRuns: number      // Expected runs under randomness
   zScore: number            // Standardized test statistic
   pValue: number            // Two-tailed p-value
-  isStreaky: boolean        // p < 0.05
+  isNonRandom: boolean      // p < 0.05 (sequence deviates from randomness)
+  patternType: 'random' | 'clustered' | 'alternating'  // Type of pattern detected
   interpretation: string    // Human-readable explanation
   sampleSize: number        // Total number of trades
   isSufficientSample: boolean // n >= 20 for reliable results
@@ -87,21 +88,29 @@ export function calculateRunsTest(trades: Trade[]): RunsTestResult | undefined {
   // Two-tailed p-value
   const pValue = 2 * (1 - normalCDF(Math.abs(zScore)))
 
-  // Determine interpretation
+  // Determine pattern type and interpretation
   const isSufficientSample = n >= 20
-  const isStreaky = pValue < 0.05
+  const isNonRandom = pValue < 0.05
+
+  // Determine pattern type based on whether we have too few or too many runs
+  let patternType: 'random' | 'clustered' | 'alternating'
+  if (!isNonRandom) {
+    patternType = 'random'
+  } else if (numRuns < expectedRuns) {
+    patternType = 'clustered'  // Too few runs = wins/losses cluster together
+  } else {
+    patternType = 'alternating'  // Too many runs = wins/losses alternate
+  }
 
   let interpretation: string
   if (!isSufficientSample) {
-    interpretation = isStreaky
+    interpretation = isNonRandom
       ? 'Results appear non-random, but sample size is small. Collect more trades for reliable analysis.'
       : 'Results appear random, but sample size is small. Collect more trades for reliable analysis.'
-  } else if (isStreaky) {
-    if (numRuns < expectedRuns) {
-      interpretation = 'Results show clustering (streakiness). Wins and losses tend to group together. Adaptive position sizing may be beneficial.'
-    } else {
-      interpretation = 'Results show alternating pattern. Wins and losses tend to alternate. This is unusual and may warrant investigation.'
-    }
+  } else if (patternType === 'clustered') {
+    interpretation = 'Results show clustering (streakiness). Wins and losses tend to group together. Adaptive position sizing may be beneficial.'
+  } else if (patternType === 'alternating') {
+    interpretation = 'Results show alternating pattern. Wins and losses tend to alternate. This is unusual and may warrant investigation.'
   } else {
     interpretation = 'Results appear random. Wins and losses do not show significant patterns. Adaptive position sizing is unlikely to help.'
   }
@@ -111,7 +120,8 @@ export function calculateRunsTest(trades: Trade[]): RunsTestResult | undefined {
     expectedRuns,
     zScore,
     pValue,
-    isStreaky,
+    isNonRandom,
+    patternType,
     interpretation,
     sampleSize: n,
     isSufficientSample,
