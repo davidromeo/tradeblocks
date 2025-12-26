@@ -74,22 +74,42 @@ export function computeTotalPremium(trade: Trade): number | undefined {
   return isFinite(total) && total > 0 ? total : undefined
 }
 
+/**
+ * Computes total MFE (Maximum Favorable Excursion) in dollars.
+ * OptionOmega exports maxProfit as a percentage of initial premium.
+ */
 export function computeTotalMaxProfit(trade: Trade): number | undefined {
   if (typeof trade.maxProfit !== 'number' || !isFinite(trade.maxProfit) || trade.maxProfit === 0) {
     return undefined
   }
 
-  const total = normalisePerContractValue(Math.abs(trade.maxProfit), trade, false)
-  return isFinite(total) && total > 0 ? total : undefined
+  const totalPremium = computeTotalPremium(trade)
+  if (!totalPremium || totalPremium <= 0) {
+    return undefined
+  }
+
+  // maxProfit is a percentage (e.g., 18.67 means 18.67% of initial premium)
+  const mfe = (Math.abs(trade.maxProfit) / 100) * totalPremium
+  return isFinite(mfe) && mfe > 0 ? mfe : undefined
 }
 
+/**
+ * Computes total MAE (Maximum Adverse Excursion) in dollars.
+ * OptionOmega exports maxLoss as a percentage of initial premium.
+ */
 export function computeTotalMaxLoss(trade: Trade): number | undefined {
   if (typeof trade.maxLoss !== 'number' || !isFinite(trade.maxLoss) || trade.maxLoss === 0) {
     return undefined
   }
 
-  const total = normalisePerContractValue(Math.abs(trade.maxLoss), trade, false)
-  return isFinite(total) && total > 0 ? total : undefined
+  const totalPremium = computeTotalPremium(trade)
+  if (!totalPremium || totalPremium <= 0) {
+    return undefined
+  }
+
+  // maxLoss is a percentage (e.g., -12.65 means 12.65% loss of initial premium)
+  const mae = (Math.abs(trade.maxLoss) / 100) * totalPremium
+  return isFinite(mae) && mae > 0 ? mae : undefined
 }
 
 export type EfficiencyBasis = 'premium' | 'maxProfit' | 'margin' | 'unknown'
