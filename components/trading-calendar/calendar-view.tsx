@@ -58,9 +58,10 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
 
   // In matched mode, only show days that have BOTH backtest AND actual trades from matched strategies
   // This enables actual comparison. In all mode, show if either exists.
-  const hasTrades = tradeFilterMode === 'matched'
+  // IMPORTANT: Only show trade data for dates within the current month view
+  const hasTrades = isCurrentMonth && (tradeFilterMode === 'matched'
     ? backtestCount > 0 && actualCount > 0
-    : backtestCount > 0 || actualCount > 0
+    : backtestCount > 0 || actualCount > 0)
   const hasBacktestData = backtestCount > 0
   const hasActualData = actualCount > 0
 
@@ -183,9 +184,10 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
 
 interface WeeklySummaryProps {
   dates: Date[]
+  currentMonth: number
 }
 
-function WeeklySummary({ dates }: WeeklySummaryProps) {
+function WeeklySummary({ dates, currentMonth }: WeeklySummaryProps) {
   const { calendarDays, scalingMode, dataDisplayMode, showMargin, tradeFilterMode, strategyMatches } = useTradingCalendarStore()
 
   // Build matched strategy sets when in matched mode
@@ -200,6 +202,7 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
   }, [tradeFilterMode, strategyMatches])
 
   // Calculate week totals for both backtest and actual (using scaled and filtered values)
+  // Only include dates from the current month in the weekly totals
   const weekStats = useMemo(() => {
     let backtestPl = 0
     let actualPl = 0
@@ -208,6 +211,9 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
     let maxMargin = 0
 
     for (const date of dates) {
+      // Skip dates that are not in the current month
+      if (date.getMonth() !== currentMonth) continue
+
       const dateKey = formatDateKey(date)
       const dayData = calendarDays.get(dateKey)
 
@@ -238,7 +244,7 @@ function WeeklySummary({ dates }: WeeklySummaryProps) {
     }
 
     return { backtestPl, actualPl, backtestDays, actualDays, maxMargin }
-  }, [dates, calendarDays, scalingMode, matchedBacktestStrategies, matchedActualStrategies, tradeFilterMode, strategyMatches])
+  }, [dates, calendarDays, scalingMode, matchedBacktestStrategies, matchedActualStrategies, tradeFilterMode, strategyMatches, currentMonth])
 
   // Determine what to show based on display mode
   const showBacktest = (dataDisplayMode === 'backtest' || dataDisplayMode === 'both') && weekStats.backtestDays > 0
@@ -403,7 +409,7 @@ export function CalendarView() {
                 />
               )
             })}
-            <WeeklySummary dates={week} />
+            <WeeklySummary dates={week} currentMonth={currentMonth} />
           </div>
         ))}
       </div>
