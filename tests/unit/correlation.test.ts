@@ -283,6 +283,57 @@ describe('Correlation Calculations', () => {
       expect(result.sampleSizes[0][1]).toBe(0);
       expect(Number.isNaN(result.correlationData[0][1])).toBe(true);
     });
+
+    it('should track actual shared days in zero-fill mode, not padded length', () => {
+      const trades: Trade[] = [
+        // Strategy1 trades on days 1, 3
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy1', pl: 200 } as Trade,
+
+        // Strategy2 trades on days 3, 5 - only day 3 overlaps
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: new Date('2025-01-05'), strategy: 'Strategy2', pl: 250 } as Trade,
+      ];
+
+      const result = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        alignment: 'zero-pad',
+      });
+
+      // Zero-fill uses all 3 dates (Jan 1, 3, 5) for correlation calculation
+      // But sample size should reflect actual shared trading days (just day 3)
+      expect(result.sampleSizes[0][1]).toBe(1);  // Only 1 shared trading day
+      expect(result.sampleSizes[1][0]).toBe(1);  // Symmetric
+
+      // Correlation is still calculated using zero-padded data (3 points)
+      // but sample size correctly shows the overlap is minimal
+      expect(result.correlationData[0][1]).not.toBeNaN();
+    });
+
+    it('should report zero shared days in zero-fill mode when strategies never overlap', () => {
+      const trades: Trade[] = [
+        // Strategy1 trades on days 1, 2
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy1', pl: 200 } as Trade,
+
+        // Strategy2 trades on days 3, 4 - no overlap
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: new Date('2025-01-04'), strategy: 'Strategy2', pl: 250 } as Trade,
+      ];
+
+      const result = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        alignment: 'zero-pad',
+      });
+
+      // Even with zero-fill, sample size should show 0 actual shared days
+      expect(result.sampleSizes[0][1]).toBe(0);
+      expect(result.sampleSizes[1][0]).toBe(0);
+
+      // Correlation can still be calculated with zero-padded data
+      // (will likely be negative due to inverse zero-padding pattern)
+      expect(result.correlationData[0][1]).not.toBeNaN();
+    });
   });
 
   describe('Analytics with minSamples threshold', () => {
