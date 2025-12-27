@@ -127,10 +127,19 @@ export function calculateCorrelationMatrix(
 
       let returns1: number[] = [];
       let returns2: number[] = [];
+      let sharedDaysCount = 0;
 
       if (alignment === "zero-pad") {
         returns1 = zeroPaddedReturns[strategy1];
         returns2 = zeroPaddedReturns[strategy2];
+        // Count actual shared trading days (where both strategies traded)
+        const strategy1Data = strategyDailyReturns[strategy1];
+        const strategy2Data = strategyDailyReturns[strategy2];
+        for (const date of Object.keys(strategy1Data)) {
+          if (date in strategy2Data) {
+            sharedDaysCount++;
+          }
+        }
       } else {
         const strategy1Data = strategyDailyReturns[strategy1];
         const strategy2Data = strategyDailyReturns[strategy2];
@@ -141,10 +150,11 @@ export function calculateCorrelationMatrix(
             returns2.push(strategy2Data[date]);
           }
         }
+        sharedDaysCount = returns1.length;
       }
 
-      // Track sample size (shared trading days)
-      sampleRow.push(returns1.length);
+      // Track sample size (shared trading days - not zero-padded length)
+      sampleRow.push(sharedDaysCount);
 
       // Need at least 2 data points for correlation
       if (returns1.length < 2) {
