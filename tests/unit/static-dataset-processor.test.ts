@@ -262,6 +262,29 @@ describe('parseTimestamp in static dataset processor', () => {
       const etFormatted = formatInEastern(result.rows[0].timestamp)
       expect(etFormatted).toMatch(/05\/20\/2022/)
     })
+
+    it('parses YYYY-MM-DD HH:mm:ss format treating time as Eastern Time', async () => {
+      // This test reproduces the exact issue from the bug report
+      // "2025-12-16 15:19:00" should be treated as 3:19 PM Eastern Time
+      const csv = `t,somevalue
+2025-12-16 15:19:00,42`
+
+      const result = await processStaticDatasetContent(csv, {
+        name: 'test',
+        fileName: 'test.csv',
+      })
+
+      expect(result.errors).toHaveLength(0)
+      expect(result.rows).toHaveLength(1)
+      
+      // Verify it was parsed as Eastern Time
+      const etFormatted = formatInEastern(result.rows[0].timestamp)
+      expect(etFormatted).toMatch(/12\/16\/2025/)
+      expect(etFormatted).toMatch(/15:19:00/)
+      
+      // The value should be preserved
+      expect(result.rows[0].values.somevalue).toBe(42)
+    })
   })
 
   describe('date range calculation', () => {
