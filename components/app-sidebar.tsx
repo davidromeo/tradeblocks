@@ -10,6 +10,7 @@ import {
   IconRouteSquare,
   IconSparkles,
   IconStack2,
+  IconStack3,
   IconTimelineEvent,
   IconTrendingDown,
 } from "@tabler/icons-react";
@@ -38,6 +39,12 @@ const navData = {
       title: "Block Management",
       href: "/blocks",
       icon: IconStack2,
+    },
+    {
+      title: "Portfolio Builder",
+      href: "/portfolio-builder",
+      icon: IconStack3,
+      badge: "New",
     },
     {
       title: "Static Datasets",
