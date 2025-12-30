@@ -5,6 +5,7 @@ import {
   scaleTradeByWeight,
   mergeAndScaleTrades,
   checkMegaBlockStaleness,
+  buildMegaBlockData,
 } from '@/lib/services/mega-block';
 import { SourceBlockRef } from '@/lib/models/mega-block';
 
@@ -398,5 +399,156 @@ describe('checkMegaBlockStaleness', () => {
 
     const result = checkMegaBlockStaleness(regularBlock, []);
     expect(result.isStale).toBe(false);
+  });
+});
+
+describe('buildMegaBlockData', () => {
+  const now = Date.now();
+
+  const blockA: ProcessedBlock = {
+    id: 'a',
+    name: 'Strategy A',
+    isActive: false,
+    created: new Date(now - 200000),
+    lastModified: new Date(now - 100000),
+    tradeLog: {
+      fileName: 'a.csv',
+      fileSize: 100,
+      originalRowCount: 10,
+      processedRowCount: 10,
+      uploadedAt: new Date(),
+    },
+    processingStatus: 'completed',
+    dataReferences: { tradesStorageKey: 'trades-a' },
+    analysisConfig: {
+      riskFreeRate: 2,
+      useBusinessDaysOnly: true,
+      annualizationFactor: 252,
+      confidenceLevel: 0.95,
+    },
+  };
+
+  const blockB: ProcessedBlock = {
+    id: 'b',
+    name: 'Strategy B',
+    isActive: false,
+    created: new Date(now - 200000),
+    lastModified: new Date(now - 50000),
+    tradeLog: {
+      fileName: 'b.csv',
+      fileSize: 100,
+      originalRowCount: 10,
+      processedRowCount: 10,
+      uploadedAt: new Date(),
+    },
+    processingStatus: 'completed',
+    dataReferences: { tradesStorageKey: 'trades-b' },
+    analysisConfig: {
+      riskFreeRate: 2,
+      useBusinessDaysOnly: true,
+      annualizationFactor: 252,
+      confidenceLevel: 0.95,
+    },
+  };
+
+  const tradesA: Trade[] = [
+    {
+      dateOpened: new Date('2024-01-15'),
+      timeOpened: '09:30:00',
+      openingPrice: 4535.25,
+      legs: 'SPX 15JAN24 4500P/4450P',
+      premium: 2.5,
+      pl: 100.0,
+      numContracts: 1,
+      fundsAtClose: 10100.0,
+      marginReq: 1000.0,
+      strategy: 'Strategy A',
+      openingCommissionsFees: 1.0,
+      closingCommissionsFees: 1.0,
+      openingShortLongRatio: 0.5,
+    },
+  ];
+
+  const tradesB: Trade[] = [
+    {
+      dateOpened: new Date('2024-01-16'),
+      timeOpened: '09:30:00',
+      openingPrice: 4538.0,
+      legs: 'SPX 16JAN24 4600C/4650C',
+      premium: 2.0,
+      pl: -50.0,
+      numContracts: 1,
+      fundsAtClose: 9950.0,
+      marginReq: 800.0,
+      strategy: 'Strategy B',
+      openingCommissionsFees: 1.0,
+      closingCommissionsFees: 1.0,
+      openingShortLongRatio: 0.6,
+    },
+  ];
+
+  it('builds mega block data with correct structure', () => {
+    const result = buildMegaBlockData({
+      name: 'Combined Portfolio',
+      description: 'Test combination',
+      sourceBlocks: [
+        { blockId: 'a', weight: 2.0 },
+        { blockId: 'b', weight: 1.0 },
+      ],
+      sourceBlocksData: [blockA, blockB],
+      tradesMap: { a: tradesA, b: tradesB },
+    });
+
+    expect(result.block.name).toBe('Combined Portfolio');
+    expect(result.block.description).toBe('Test combination');
+    expect(result.block.isMegaBlock).toBe(true);
+    expect(result.block.megaBlockConfig?.sourceBlocks).toHaveLength(2);
+  });
+
+  it('includes scaled and merged trades', () => {
+    const result = buildMegaBlockData({
+      name: 'Combined',
+      sourceBlocks: [
+        { blockId: 'a', weight: 2.0 },
+        { blockId: 'b', weight: 1.0 },
+      ],
+      sourceBlocksData: [blockA, blockB],
+      tradesMap: { a: tradesA, b: tradesB },
+    });
+
+    expect(result.trades).toHaveLength(2);
+    expect(result.trades[0].pl).toBe(200.0); // Scaled by 2.0
+    expect(result.trades[1].pl).toBe(-50.0); // Scaled by 1.0
+  });
+
+  it('records source block versions', () => {
+    const result = buildMegaBlockData({
+      name: 'Combined',
+      sourceBlocks: [
+        { blockId: 'a', weight: 2.0 },
+        { blockId: 'b', weight: 1.0 },
+      ],
+      sourceBlocksData: [blockA, blockB],
+      tradesMap: { a: tradesA, b: tradesB },
+    });
+
+    const versions = result.block.megaBlockConfig?.sourceBlockVersions;
+    expect(versions?.a).toBe(new Date(blockA.lastModified).getTime());
+    expect(versions?.b).toBe(new Date(blockB.lastModified).getTime());
+  });
+
+  it('sets correct date range from merged trades', () => {
+    const result = buildMegaBlockData({
+      name: 'Combined',
+      sourceBlocks: [
+        { blockId: 'a', weight: 2.0 },
+        { blockId: 'b', weight: 1.0 },
+      ],
+      sourceBlocksData: [blockA, blockB],
+      tradesMap: { a: tradesA, b: tradesB },
+    });
+
+    expect(result.block.dateRange?.start).toEqual(new Date('2024-01-15'));
+    expect(result.block.dateRange?.end).toEqual(new Date('2024-01-16'));
   });
 });

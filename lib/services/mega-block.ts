@@ -130,3 +130,85 @@ export function checkMegaBlockStaleness(
     missingBlocks,
   };
 }
+
+/**
+ * Input for building mega block data
+ */
+export interface BuildMegaBlockInput {
+  name: string;
+  description?: string;
+  sourceBlocks: SourceBlockRef[];
+  sourceBlocksData: ProcessedBlock[]; // Full block data for version tracking
+  tradesMap: Record<string, Trade[]>; // blockId -> trades
+}
+
+/**
+ * Result of building mega block data
+ */
+export interface MegaBlockBuildResult {
+  block: Omit<ProcessedBlock, 'id' | 'created' | 'lastModified'>;
+  trades: Trade[];
+}
+
+/**
+ * Build the data for a new Mega Block.
+ * Does NOT save to database - that's handled by the caller.
+ *
+ * @param input - Configuration and source data
+ * @returns Block data and merged trades ready for storage
+ */
+export function buildMegaBlockData(input: BuildMegaBlockInput): MegaBlockBuildResult {
+  const { name, description, sourceBlocks, sourceBlocksData, tradesMap } = input;
+
+  // Merge and scale trades
+  const trades = mergeAndScaleTrades(tradesMap, sourceBlocks);
+
+  // Build source block versions map
+  const sourceBlockVersions: Record<string, number> = {};
+  for (const block of sourceBlocksData) {
+    sourceBlockVersions[block.id] = new Date(block.lastModified).getTime();
+  }
+
+  // Calculate date range from merged trades
+  let dateRange: { start: Date; end: Date } | undefined;
+  if (trades.length > 0) {
+    const dates = trades.map((t) => new Date(t.dateOpened).getTime());
+    dateRange = {
+      start: new Date(Math.min(...dates)),
+      end: new Date(Math.max(...dates)),
+    };
+  }
+
+  // Build the block (without id, created, lastModified - those are added on save)
+  const block: Omit<ProcessedBlock, 'id' | 'created' | 'lastModified'> = {
+    name,
+    description,
+    isActive: false,
+    tradeLog: {
+      fileName: 'materialized-mega-block.csv',
+      fileSize: 0, // Not a real file
+      originalRowCount: trades.length,
+      processedRowCount: trades.length,
+      uploadedAt: new Date(),
+    },
+    dateRange,
+    processingStatus: 'completed',
+    dataReferences: {
+      tradesStorageKey: '', // Will be set when saving
+    },
+    analysisConfig: {
+      riskFreeRate: 2.0,
+      useBusinessDaysOnly: true,
+      annualizationFactor: 252,
+      confidenceLevel: 0.95,
+    },
+    isMegaBlock: true,
+    megaBlockConfig: {
+      sourceBlocks,
+      lastMaterializedAt: new Date(),
+      sourceBlockVersions,
+    },
+  };
+
+  return { block, trades };
+}
