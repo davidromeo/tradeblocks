@@ -1,6 +1,11 @@
 // tests/unit/mega-block-service.test.ts
 import { Trade } from '@/lib/models/trade';
-import { scaleTradeByWeight, mergeAndScaleTrades } from '@/lib/services/mega-block';
+import { ProcessedBlock } from '@/lib/models/block';
+import {
+  scaleTradeByWeight,
+  mergeAndScaleTrades,
+  checkMegaBlockStaleness,
+} from '@/lib/services/mega-block';
 import { SourceBlockRef } from '@/lib/models/mega-block';
 
 describe('scaleTradeByWeight', () => {
@@ -186,5 +191,212 @@ describe('mergeAndScaleTrades', () => {
     };
     const merged = mergeAndScaleTrades(incompleteMap, sourceBlocks);
     expect(merged).toHaveLength(2); // Only trades from block a
+  });
+});
+
+describe('checkMegaBlockStaleness', () => {
+  const now = Date.now();
+
+  const megaBlock: ProcessedBlock = {
+    id: 'mega-1',
+    name: 'Combined',
+    isActive: false,
+    created: new Date(now - 100000),
+    lastModified: new Date(now - 50000),
+    tradeLog: {
+      fileName: 'materialized.csv',
+      fileSize: 0,
+      originalRowCount: 0,
+      processedRowCount: 100,
+      uploadedAt: new Date(),
+    },
+    processingStatus: 'completed',
+    dataReferences: { tradesStorageKey: 'trades-mega-1' },
+    analysisConfig: {
+      riskFreeRate: 2.0,
+      useBusinessDaysOnly: true,
+      annualizationFactor: 252,
+      confidenceLevel: 0.95,
+    },
+    isMegaBlock: true,
+    megaBlockConfig: {
+      sourceBlocks: [
+        { blockId: 'a', weight: 2.0 },
+        { blockId: 'b', weight: 1.0 },
+      ],
+      lastMaterializedAt: new Date(now - 50000),
+      sourceBlockVersions: {
+        a: now - 100000,
+        b: now - 100000,
+      },
+    },
+  };
+
+  it('returns fresh when no source blocks have changed', () => {
+    const sourceBlocks: ProcessedBlock[] = [
+      {
+        id: 'a',
+        name: 'Block A',
+        isActive: false,
+        created: new Date(now - 200000),
+        lastModified: new Date(now - 100000), // Same as recorded
+        tradeLog: {
+          fileName: 'a.csv',
+          fileSize: 100,
+          originalRowCount: 10,
+          processedRowCount: 10,
+          uploadedAt: new Date(),
+        },
+        processingStatus: 'completed',
+        dataReferences: { tradesStorageKey: 'trades-a' },
+        analysisConfig: {
+          riskFreeRate: 2,
+          useBusinessDaysOnly: true,
+          annualizationFactor: 252,
+          confidenceLevel: 0.95,
+        },
+      },
+      {
+        id: 'b',
+        name: 'Block B',
+        isActive: false,
+        created: new Date(now - 200000),
+        lastModified: new Date(now - 100000), // Same as recorded
+        tradeLog: {
+          fileName: 'b.csv',
+          fileSize: 100,
+          originalRowCount: 10,
+          processedRowCount: 10,
+          uploadedAt: new Date(),
+        },
+        processingStatus: 'completed',
+        dataReferences: { tradesStorageKey: 'trades-b' },
+        analysisConfig: {
+          riskFreeRate: 2,
+          useBusinessDaysOnly: true,
+          annualizationFactor: 252,
+          confidenceLevel: 0.95,
+        },
+      },
+    ];
+
+    const result = checkMegaBlockStaleness(megaBlock, sourceBlocks);
+    expect(result.isStale).toBe(false);
+    expect(result.updatedBlocks).toHaveLength(0);
+    expect(result.missingBlocks).toHaveLength(0);
+  });
+
+  it('detects when a source block has been updated', () => {
+    const sourceBlocks: ProcessedBlock[] = [
+      {
+        id: 'a',
+        name: 'Block A',
+        isActive: false,
+        created: new Date(now - 200000),
+        lastModified: new Date(now - 10000), // NEWER than recorded
+        tradeLog: {
+          fileName: 'a.csv',
+          fileSize: 100,
+          originalRowCount: 10,
+          processedRowCount: 10,
+          uploadedAt: new Date(),
+        },
+        processingStatus: 'completed',
+        dataReferences: { tradesStorageKey: 'trades-a' },
+        analysisConfig: {
+          riskFreeRate: 2,
+          useBusinessDaysOnly: true,
+          annualizationFactor: 252,
+          confidenceLevel: 0.95,
+        },
+      },
+      {
+        id: 'b',
+        name: 'Block B',
+        isActive: false,
+        created: new Date(now - 200000),
+        lastModified: new Date(now - 100000),
+        tradeLog: {
+          fileName: 'b.csv',
+          fileSize: 100,
+          originalRowCount: 10,
+          processedRowCount: 10,
+          uploadedAt: new Date(),
+        },
+        processingStatus: 'completed',
+        dataReferences: { tradesStorageKey: 'trades-b' },
+        analysisConfig: {
+          riskFreeRate: 2,
+          useBusinessDaysOnly: true,
+          annualizationFactor: 252,
+          confidenceLevel: 0.95,
+        },
+      },
+    ];
+
+    const result = checkMegaBlockStaleness(megaBlock, sourceBlocks);
+    expect(result.isStale).toBe(true);
+    expect(result.updatedBlocks).toContain('a');
+    expect(result.missingBlocks).toHaveLength(0);
+  });
+
+  it('detects when a source block is missing', () => {
+    const sourceBlocks: ProcessedBlock[] = [
+      {
+        id: 'a',
+        name: 'Block A',
+        isActive: false,
+        created: new Date(now - 200000),
+        lastModified: new Date(now - 100000),
+        tradeLog: {
+          fileName: 'a.csv',
+          fileSize: 100,
+          originalRowCount: 10,
+          processedRowCount: 10,
+          uploadedAt: new Date(),
+        },
+        processingStatus: 'completed',
+        dataReferences: { tradesStorageKey: 'trades-a' },
+        analysisConfig: {
+          riskFreeRate: 2,
+          useBusinessDaysOnly: true,
+          annualizationFactor: 252,
+          confidenceLevel: 0.95,
+        },
+      },
+      // Block 'b' is missing!
+    ];
+
+    const result = checkMegaBlockStaleness(megaBlock, sourceBlocks);
+    expect(result.isStale).toBe(true);
+    expect(result.missingBlocks).toContain('b');
+  });
+
+  it('returns not stale for regular blocks', () => {
+    const regularBlock: ProcessedBlock = {
+      id: 'regular',
+      name: 'Regular',
+      isActive: false,
+      created: new Date(),
+      lastModified: new Date(),
+      tradeLog: {
+        fileName: 'r.csv',
+        fileSize: 100,
+        originalRowCount: 10,
+        processedRowCount: 10,
+        uploadedAt: new Date(),
+      },
+      processingStatus: 'completed',
+      dataReferences: { tradesStorageKey: 'trades-r' },
+      analysisConfig: {
+        riskFreeRate: 2,
+        useBusinessDaysOnly: true,
+        annualizationFactor: 252,
+        confidenceLevel: 0.95,
+      },
+    };
+
+    const result = checkMegaBlockStaleness(regularBlock, []);
+    expect(result.isStale).toBe(false);
   });
 });
