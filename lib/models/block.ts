@@ -84,6 +84,17 @@ export interface ProcessedBlock {
     confidenceLevel: number;
     combineLegGroups?: boolean; // For strategies with multiple entries per timestamp
   };
+
+  // Mega Block configuration (only present for combined blocks)
+  isMegaBlock?: boolean;
+  megaBlockConfig?: {
+    sourceBlocks: Array<{
+      blockId: string;
+      weight: number;
+    }>;
+    lastMaterializedAt: Date;
+    sourceBlockVersions: Record<string, number>; // blockId -> lastModified timestamp
+  };
 }
 
 /**
