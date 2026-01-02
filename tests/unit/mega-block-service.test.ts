@@ -42,9 +42,12 @@ describe('scaleTradeByWeight', () => {
     expect(scaled.numContracts).toBe(3);
   });
 
-  it('scales premium by weight', () => {
+  it('preserves premium per contract (does not scale)', () => {
+    // Premium is a per-contract value and should NOT be scaled.
+    // Total exposure changes via numContracts, not premium.
     const scaled = scaleTradeByWeight(baseTrade, 2.0);
-    expect(scaled.premium).toBe(5.0);
+    expect(scaled.premium).toBe(2.5); // Same as original
+    expect(scaled.numContracts).toBe(2); // Contracts are scaled
   });
 
   it('scales commissions by weight', () => {
@@ -83,6 +86,30 @@ describe('scaleTradeByWeight', () => {
     const scaled = scaleTradeByWeight(baseTrade, 0.5);
     expect(scaled.pl).toBe(62.5);
     expect(scaled.numContracts).toBe(0.5);
+  });
+
+  it('converts cents premium to dollars when scaling', () => {
+    const tradeWithCents: Trade = {
+      ...baseTrade,
+      premium: 250, // 250 cents = $2.50 per contract
+      premiumPrecision: 'cents',
+    };
+    const scaled = scaleTradeByWeight(tradeWithCents, 2.0);
+    // Premium should be converted from cents to dollars
+    expect(scaled.premium).toBe(2.5); // 250 cents / 100 = $2.50
+    expect(scaled.premiumPrecision).toBe('dollars');
+  });
+
+  it('does not scale maxProfit and maxLoss (they are percentages)', () => {
+    const tradeWithMax: Trade = {
+      ...baseTrade,
+      maxProfit: 18.67, // percentage of premium
+      maxLoss: -12.65,  // percentage of premium
+    };
+    const scaled = scaleTradeByWeight(tradeWithMax, 2.0);
+    // maxProfit and maxLoss are percentages and should NOT be scaled
+    expect(scaled.maxProfit).toBe(18.67);
+    expect(scaled.maxLoss).toBe(-12.65);
   });
 });
 

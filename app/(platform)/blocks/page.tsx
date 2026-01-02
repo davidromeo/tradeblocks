@@ -22,8 +22,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useBlockStore, type Block } from "@/lib/stores/block-store";
-import { Activity, AlertTriangle, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, Calendar, ChevronDown, Download, Grid3X3, Info, Layers, List, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
 import React, { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ProgressDialog } from "@/components/progress-dialog";
 import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
 import { waitForRender } from "@/lib/utils/async-helpers";
@@ -100,9 +101,14 @@ function BlockCard({
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <CardTitle className="text-lg font-semibold leading-tight">
-              {block.name}
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              {block.isMegaBlock && (
+                <Layers className="h-4 w-4 text-primary flex-shrink-0" />
+              )}
+              <CardTitle className="text-lg font-semibold leading-tight">
+                {block.name}
+              </CardTitle>
+            </div>
             {block.description && (
               <p className="text-sm text-muted-foreground mt-1">
                 {block.description}
@@ -253,6 +259,9 @@ function BlockRow({
       {/* Name and Description */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
+          {block.isMegaBlock && (
+            <Layers className="h-4 w-4 text-primary flex-shrink-0" />
+          )}
           <h3 className="font-semibold truncate">{block.name}</h3>
           {block.isActive && (
             <Badge variant="default" className="text-xs">ACTIVE</Badge>
@@ -352,6 +361,7 @@ const DAILY_LOG_TEMPLATE_CSV = `Date,Net Liquidity,Current Funds,Withdrawn,Tradi
 2024-01-17,50000.00,50150.00,0,10000.00,-250.00,-2.44,-0.50`;
 
 export default function BlockManagementPage() {
+  const router = useRouter();
   const blocks = useBlockStore(state => state.blocks);
   const isInitialized = useBlockStore(state => state.isInitialized);
   const isStuck = useBlockStore(state => state.isStuck);
@@ -481,6 +491,10 @@ export default function BlockManagementPage() {
             onClick={() => setViewMode("list")}
           >
             <List className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/portfolio-builder")}>
+            <Layers className="w-4 h-4 mr-2" />
+            Build Mega Block
           </Button>
           <Button onClick={handleNewBlock}>
             <Plus className="w-4 h-4 mr-2" />

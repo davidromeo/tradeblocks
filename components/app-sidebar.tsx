@@ -20,7 +20,7 @@ import * as React from "react";
 
 import { useBlockStore } from "@/lib/stores/block-store";
 
-import { NavMain } from "@/components/nav-main";
+import { NavMainGrouped } from "@/components/nav-main-grouped";
 import { SidebarActiveBlocks } from "@/components/sidebar-active-blocks";
 import { SidebarFooterLegal } from "@/components/sidebar-footer-legal";
 import {
@@ -33,74 +33,91 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-const navData = {
-  navMain: [
-    {
-      title: "Block Management",
-      href: "/blocks",
-      icon: IconStack2,
-    },
-    {
-      title: "Portfolio Builder",
-      href: "/portfolio-builder",
-      icon: IconStack3,
-      badge: "New",
-    },
-    {
-      title: "Static Datasets",
-      href: "/static-datasets",
-      icon: IconDatabase,
-    },
-    {
-      title: "Block Stats",
-      href: "/block-stats",
-      icon: IconLayoutDashboard,
-    },
-    {
-      title: "Performance Blocks",
-      href: "/performance-blocks",
-      icon: IconReportAnalytics,
-    },
-
-    {
-      title: "Position Sizing",
-      href: "/position-sizing",
-      icon: IconGauge,
-    },
-    {
-      title: "Risk Simulator",
-      href: "/risk-simulator",
-      icon: IconRouteSquare,
-    },
-    {
-      title: "Correlation Matrix",
-      href: "/correlation-matrix",
-      icon: IconChartHistogram,
-    },
-    {
-      title: "Tail Risk Analysis",
-      href: "/tail-risk-analysis",
-      icon: IconTrendingDown,
-    },
-    {
-      title: "Walk-Forward",
-      href: "/walk-forward",
-      icon: IconTimelineEvent,
-      badge: "Beta",
-    },
-    {
-      title: "Trading Calendar",
-      href: "/trading-calendar",
-      icon: IconCalendar,
-      badge: "New",
-    },
-    {
-      title: "TradeBlocks Assistant",
-      href: "/assistant",
-      icon: IconSparkles,
-    },
-  ],
-};
+const navGroups = [
+  {
+    title: "Data",
+    items: [
+      {
+        title: "Block Management",
+        href: "/blocks",
+        icon: IconStack2,
+      },
+      {
+        title: "Portfolio Builder",
+        href: "/portfolio-builder",
+        icon: IconStack3,
+        badge: "New",
+      },
+      {
+        title: "Static Datasets",
+        href: "/static-datasets",
+        icon: IconDatabase,
+      },
+    ],
+  },
+  {
+    title: "Performance",
+    items: [
+      {
+        title: "Block Stats",
+        href: "/block-stats",
+        icon: IconLayoutDashboard,
+      },
+      {
+        title: "Performance Blocks",
+        href: "/performance-blocks",
+        icon: IconReportAnalytics,
+      },
+      {
+        title: "Trading Calendar",
+        href: "/trading-calendar",
+        icon: IconCalendar,
+        badge: "New",
+      },
+    ],
+  },
+  {
+    title: "Risk",
+    items: [
+      {
+        title: "Position Sizing",
+        href: "/position-sizing",
+        icon: IconGauge,
+      },
+      {
+        title: "Risk Simulator",
+        href: "/risk-simulator",
+        icon: IconRouteSquare,
+      },
+      {
+        title: "Correlation Matrix",
+        href: "/correlation-matrix",
+        icon: IconChartHistogram,
+      },
+      {
+        title: "Tail Risk Analysis",
+        href: "/tail-risk-analysis",
+        icon: IconTrendingDown,
+      },
+    ],
+  },
+  {
+    title: "Tools",
+    items: [
+      {
+        title: "Walk-Forward",
+        href: "/walk-forward",
+        icon: IconTimelineEvent,
+        badge: "Beta",
+      },
+      {
+        title: "TradeBlocks Assistant",
+        href: "/assistant",
+        icon: IconSparkles,
+      },
+    ],
+  },
+];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const blocks = useBlockStore((state) => state.blocks);
@@ -145,7 +162,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navData.navMain} />
+        <NavMainGrouped groups={navGroups} />
       </SidebarContent>
       {hasActiveBlock && activeBlock && (
         <SidebarActiveBlocks activeBlock={activeBlock} />

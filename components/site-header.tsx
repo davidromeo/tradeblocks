@@ -56,6 +56,12 @@ const routeMeta: Record<
     description:
       "Upload and manage time-series data to match against your trades.",
   },
+  "/portfolio-builder": {
+    title: "Portfolio Builder",
+    description:
+      "Combine multiple strategy blocks into a Mega Block for portfolio analysis.",
+    badge: "New",
+  },
   "/settings": {
     title: "Settings",
     description:

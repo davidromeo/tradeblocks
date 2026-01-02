@@ -115,6 +115,23 @@ import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
 import { waitForRender } from "@/lib/utils/async-helpers";
 import { useProgressDialog } from "@/hooks/use-progress-dialog";
 
+/**
+ * Convert a filename to a readable block name.
+ * Removes extension, replaces dashes/underscores with spaces, and title cases.
+ */
+function fileNameToBlockName(fileName: string): string {
+  // Remove .csv extension
+  const nameWithoutExt = fileName.replace(/\.csv$/i, "");
+  // Replace dashes and underscores with spaces
+  const withSpaces = nameWithoutExt.replace(/[-_]+/g, " ");
+  // Title case each word
+  return withSpaces
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+    .trim();
+}
+
 interface Block {
   id: string;
   name: string;
@@ -586,6 +603,12 @@ export function BlockDialog({
         requiresStrategyName: false,
       });
 
+      // Auto-fill block name from filename if empty (trade log only, new mode only)
+      if (type === "trade" && mode === "new" && !name.trim()) {
+        const suggestedName = fileNameToBlockName(file.name);
+        setName(suggestedName);
+      }
+
       const label =
         type === "trade"
           ? "Trade log"
@@ -594,7 +617,7 @@ export function BlockDialog({
           : "Reporting log";
       toast.success(`${label} headers look good.`);
     },
-    [getUploadStateSetter, validateCsvHeaders, resetStrategyOverrideState]
+    [getUploadStateSetter, validateCsvHeaders, resetStrategyOverrideState, mode, name]
   );
 
   const handleFileSelect = useCallback(
@@ -658,6 +681,12 @@ export function BlockDialog({
         requiresStrategyName: false,
       });
 
+      // Auto-fill block name from filename if empty (trade log only, new mode only)
+      if (type === "trade" && mode === "new" && !name.trim()) {
+        const suggestedName = fileNameToBlockName(file.name);
+        setName(suggestedName);
+      }
+
       const label =
         type === "trade"
           ? "Trade log"
@@ -669,7 +698,7 @@ export function BlockDialog({
       // Reset the input value to allow re-selecting the same file
       e.target.value = "";
     },
-    [getUploadStateSetter, validateCsvHeaders, resetStrategyOverrideState]
+    [getUploadStateSetter, validateCsvHeaders, resetStrategyOverrideState, mode, name]
   );
 
   const removeFile = useCallback(
@@ -737,12 +766,19 @@ export function BlockDialog({
       setMissingStrategyCount(missingCount);
       setPendingTradeResult(missingCount > 0 ? rawTradeResult : null);
 
-      const trimmedOverride = strategyOverride.trim();
+      // Auto-fill strategy override with block name if strategies are missing and override is empty
+      // Use the name directly for immediate application since setState is async
+      let effectiveOverride = strategyOverride.trim();
+      if (missingCount > 0 && !effectiveOverride && name.trim()) {
+        effectiveOverride = name.trim();
+        setStrategyOverride(effectiveOverride);
+      }
+
       const adjustedTradeResult =
-        missingCount > 0 && trimmedOverride
-          ? applyStrategyOverrideToResult(rawTradeResult, trimmedOverride)
+        missingCount > 0 && effectiveOverride
+          ? applyStrategyOverrideToResult(rawTradeResult, effectiveOverride)
           : rawTradeResult;
-      const requiresOverride = missingCount > 0 && !trimmedOverride;
+      const requiresOverride = missingCount > 0 && !effectiveOverride;
 
       setTradeLog((prev) => ({
         ...prev,

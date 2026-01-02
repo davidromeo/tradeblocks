@@ -51,6 +51,7 @@ export interface Block {
     mappings: StrategyAlignment[];
     updatedAt: Date;
   };
+  isMegaBlock?: boolean;
 }
 
 interface BlockStore {
@@ -134,6 +135,7 @@ function convertProcessedBlockToBlock(
       avgWin: 0,
       avgLoss: 0,
     },
+    isMegaBlock: processedBlock.isMegaBlock,
   };
 }
 
