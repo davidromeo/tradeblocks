@@ -111,6 +111,21 @@ function parseTimestamp(value: string): Date | null {
     }
   }
 
+  // Handle ISO 8601 local time format (T separator but no timezone)
+  // e.g., 2024-01-15T10:30:00 - treat as Eastern Time
+  const isoLocalMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})T(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  if (isoLocalMatch) {
+    const [, year, month, day, hours, minutes, seconds] = isoLocalMatch
+    return easternToUtc(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hours),
+      parseInt(minutes),
+      seconds ? parseInt(seconds) : 0
+    )
+  }
+
   // Try common date formats
   // MM/DD/YYYY or MM-DD-YYYY (with optional time)
   const usDateMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/)
