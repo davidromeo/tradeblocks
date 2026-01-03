@@ -103,7 +103,7 @@ describe('Correlation Calculations', () => {
     expect(result.correlationData[1][1]).toBe(1.0);
   });
 
-  it('should calculate correlation only on overlapping trading days', () => {
+  it('should return NaN for correlation with insufficient overlapping trading days', () => {
     const trades: Trade[] = [
       // Strategy1 trades on days 1, 3
       { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
@@ -117,13 +117,17 @@ describe('Correlation Calculations', () => {
     const result = calculateCorrelationMatrix(trades, { method: 'pearson' });
 
     // Should only have 1 overlapping day (day 3) - not enough for correlation
-    // Should return 0 for different strategies when insufficient data
-    expect(result.correlationData[0][1]).toBe(0.0);
-    expect(result.correlationData[1][0]).toBe(0.0);
+    // Should return NaN for different strategies when insufficient data
+    expect(Number.isNaN(result.correlationData[0][1])).toBe(true);
+    expect(Number.isNaN(result.correlationData[1][0])).toBe(true);
 
     // But diagonal should still be 1.0
     expect(result.correlationData[0][0]).toBe(1.0);
     expect(result.correlationData[1][1]).toBe(1.0);
+
+    // Sample sizes should reflect the actual shared days
+    expect(result.sampleSizes[0][1]).toBe(1); // Only 1 shared day
+    expect(result.sampleSizes[1][0]).toBe(1);
   });
 
   it('should support zero-pad alignment for pearson', () => {
@@ -188,7 +192,9 @@ describe('Correlation Calculations', () => {
       dateBasis: 'closed',
     });
 
-    expect(opened.correlationData[0][1]).toBe(0);
+    // No shared opened dates, so NaN
+    expect(Number.isNaN(opened.correlationData[0][1])).toBe(true);
+    // But closed dates align perfectly
     expect(closed.correlationData[0][1]).toBeCloseTo(1, 5);
   });
 
@@ -231,11 +237,170 @@ describe('Correlation Calculations', () => {
         [0.5, 1, 0.2],
         [-0.5, 0.2, 1],
       ],
+      sampleSizes: [
+        [100, 50, 30],
+        [50, 80, 20],
+        [30, 20, 60],
+      ],
     };
 
     const analytics = calculateCorrelationAnalytics(matrix);
     const expectedAverage = (0.5 - 0.5 + 0.2) / 3;
 
     expect(analytics.averageCorrelation).toBeCloseTo(expectedAverage, 5);
+  });
+
+  describe('Sample Size Tracking', () => {
+    it('should return sample sizes matrix alongside correlations', () => {
+      const trades: Trade[] = [
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy1', pl: 200 } as Trade,
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy1', pl: -50 } as Trade,
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy2', pl: 90 } as Trade,
+        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy2', pl: 210 } as Trade,
+      ];
+
+      const result = calculateCorrelationMatrix(trades, { method: 'pearson' });
+
+      expect(result.sampleSizes).toBeDefined();
+      expect(result.sampleSizes[0][0]).toBe(3);  // Strategy1 has 3 days
+      expect(result.sampleSizes[1][1]).toBe(2);  // Strategy2 has 2 days
+      expect(result.sampleSizes[0][1]).toBe(2);  // 2 shared days
+      expect(result.sampleSizes[1][0]).toBe(2);  // Symmetric
+    });
+
+    it('should return NaN for correlations with no shared days', () => {
+      const trades: Trade[] = [
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy1', pl: 200 } as Trade,
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: new Date('2025-01-04'), strategy: 'Strategy2', pl: 250 } as Trade,
+      ];
+
+      const result = calculateCorrelationMatrix(trades, { method: 'pearson' });
+
+      // No shared days
+      expect(result.sampleSizes[0][1]).toBe(0);
+      expect(Number.isNaN(result.correlationData[0][1])).toBe(true);
+    });
+
+    it('should track actual shared days in zero-fill mode, not padded length', () => {
+      const trades: Trade[] = [
+        // Strategy1 trades on days 1, 3
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy1', pl: 200 } as Trade,
+
+        // Strategy2 trades on days 3, 5 - only day 3 overlaps
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: new Date('2025-01-05'), strategy: 'Strategy2', pl: 250 } as Trade,
+      ];
+
+      const result = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        alignment: 'zero-pad',
+      });
+
+      // Zero-fill uses all 3 dates (Jan 1, 3, 5) for correlation calculation
+      // But sample size should reflect actual shared trading days (just day 3)
+      expect(result.sampleSizes[0][1]).toBe(1);  // Only 1 shared trading day
+      expect(result.sampleSizes[1][0]).toBe(1);  // Symmetric
+
+      // Correlation is still calculated using zero-padded data (3 points)
+      // but sample size correctly shows the overlap is minimal
+      expect(result.correlationData[0][1]).not.toBeNaN();
+    });
+
+    it('should report zero shared days in zero-fill mode when strategies never overlap', () => {
+      const trades: Trade[] = [
+        // Strategy1 trades on days 1, 2
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy1', pl: 200 } as Trade,
+
+        // Strategy2 trades on days 3, 4 - no overlap
+        { dateOpened: new Date('2025-01-03'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: new Date('2025-01-04'), strategy: 'Strategy2', pl: 250 } as Trade,
+      ];
+
+      const result = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        alignment: 'zero-pad',
+      });
+
+      // Even with zero-fill, sample size should show 0 actual shared days
+      expect(result.sampleSizes[0][1]).toBe(0);
+      expect(result.sampleSizes[1][0]).toBe(0);
+
+      // Correlation can still be calculated with zero-padded data
+      // (will likely be negative due to inverse zero-padding pattern)
+      expect(result.correlationData[0][1]).not.toBeNaN();
+    });
+  });
+
+  describe('Analytics with minSamples threshold', () => {
+    it('should count insufficient data pairs based on threshold', () => {
+      const matrix = {
+        strategies: ['A', 'B', 'C'],
+        correlationData: [
+          [1, 0.5, 0.3],
+          [0.5, 1, NaN],
+          [0.3, NaN, 1],
+        ],
+        sampleSizes: [
+          [100, 25, 8],
+          [25, 50, 3],
+          [8, 3, 30],
+        ],
+      };
+
+      // With minSamples=2 (default), only NaN pair is insufficient
+      const analytics2 = calculateCorrelationAnalytics(matrix, 2);
+      expect(analytics2.insufficientDataPairs).toBe(1);  // B-C pair (NaN)
+
+      // With minSamples=10, A-C (n=8) also becomes insufficient
+      const analytics10 = calculateCorrelationAnalytics(matrix, 10);
+      expect(analytics10.insufficientDataPairs).toBe(2);  // B-C (NaN) and A-C (n=8)
+    });
+
+    it('should include sample size in strongest/weakest analytics', () => {
+      const matrix = {
+        strategies: ['A', 'B', 'C'],
+        correlationData: [
+          [1, 0.8, -0.5],
+          [0.8, 1, 0.2],
+          [-0.5, 0.2, 1],
+        ],
+        sampleSizes: [
+          [100, 50, 30],
+          [50, 80, 20],
+          [30, 20, 60],
+        ],
+      };
+
+      const analytics = calculateCorrelationAnalytics(matrix);
+
+      expect(analytics.strongest.sampleSize).toBe(50);  // A-B pair
+      expect(analytics.weakest.sampleSize).toBe(30);    // A-C pair
+    });
+
+    it('should return NaN analytics when all pairs have insufficient data', () => {
+      const matrix = {
+        strategies: ['A', 'B'],
+        correlationData: [
+          [1, NaN],
+          [NaN, 1],
+        ],
+        sampleSizes: [
+          [10, 1],
+          [1, 10],
+        ],
+      };
+
+      const analytics = calculateCorrelationAnalytics(matrix, 2);
+
+      expect(Number.isNaN(analytics.strongest.value)).toBe(true);
+      expect(Number.isNaN(analytics.weakest.value)).toBe(true);
+      expect(Number.isNaN(analytics.averageCorrelation)).toBe(true);
+      expect(analytics.insufficientDataPairs).toBe(1);
+    });
   });
 });

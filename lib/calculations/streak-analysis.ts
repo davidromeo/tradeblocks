@@ -1,10 +1,23 @@
 import { Trade } from '@/lib/models/trade'
+import { normalCDF } from './statistical-utils'
 
 export interface StreakData {
   type: 'win' | 'loss'
   length: number
   totalPl: number
   trades: Trade[]
+}
+
+export interface RunsTestResult {
+  numRuns: number           // Observed number of runs
+  expectedRuns: number      // Expected runs under randomness
+  zScore: number            // Standardized test statistic
+  pValue: number            // Two-tailed p-value
+  isNonRandom: boolean      // p < 0.05 (sequence deviates from randomness)
+  patternType: 'random' | 'clustered' | 'alternating'  // Type of pattern detected
+  interpretation: string    // Human-readable explanation
+  sampleSize: number        // Total number of trades
+  isSufficientSample: boolean // n >= 20 for reliable results
 }
 
 export interface StreakDistribution {
@@ -18,6 +31,100 @@ export interface StreakDistribution {
     avgLossStreak: number
     totalWinStreaks: number
     totalLossStreaks: number
+  }
+  runsTest?: RunsTestResult
+}
+
+/**
+ * Wald-Wolfowitz Runs Test for detecting non-randomness in win/loss sequences.
+ *
+ * A "run" is a consecutive sequence of the same outcome (wins or losses).
+ * The test compares observed runs to expected runs under randomness:
+ * - Fewer runs than expected → Clustering/streakiness (wins cluster, losses cluster)
+ * - More runs than expected → Anti-clustering (alternating pattern)
+ *
+ * @param trades - Array of trades sorted chronologically
+ * @returns RunsTestResult with p-value and interpretation, or undefined if insufficient data
+ */
+export function calculateRunsTest(trades: Trade[]): RunsTestResult | undefined {
+  if (!trades || trades.length < 2) {
+    return undefined
+  }
+
+  // Count wins and losses
+  const n1 = trades.filter(t => t.pl > 0).length  // wins
+  const n2 = trades.filter(t => t.pl <= 0).length // losses (including breakeven)
+  const n = n1 + n2
+
+  // Need at least one of each outcome type
+  if (n1 === 0 || n2 === 0) {
+    return undefined
+  }
+
+  // Count runs (consecutive sequences of same outcome)
+  let numRuns = 1
+  let prevWin = trades[0].pl > 0
+
+  for (let i = 1; i < trades.length; i++) {
+    const currentWin = trades[i].pl > 0
+    if (currentWin !== prevWin) {
+      numRuns++
+      prevWin = currentWin
+    }
+  }
+
+  // Expected number of runs under randomness
+  const expectedRuns = (2 * n1 * n2) / n + 1
+
+  // Variance of runs under randomness
+  const numerator = 2 * n1 * n2 * (2 * n1 * n2 - n)
+  const denominator = n * n * (n - 1)
+  const variance = numerator / denominator
+
+  // Z-score (standard normal approximation)
+  const stdDev = Math.sqrt(variance)
+  const zScore = stdDev > 0 ? (numRuns - expectedRuns) / stdDev : 0
+
+  // Two-tailed p-value
+  const pValue = 2 * (1 - normalCDF(Math.abs(zScore)))
+
+  // Determine pattern type and interpretation
+  const isSufficientSample = n >= 20
+  const isNonRandom = pValue < 0.05
+
+  // Determine pattern type based on whether we have too few or too many runs
+  let patternType: 'random' | 'clustered' | 'alternating'
+  if (!isNonRandom) {
+    patternType = 'random'
+  } else if (numRuns < expectedRuns) {
+    patternType = 'clustered'  // Too few runs = wins/losses cluster together
+  } else {
+    patternType = 'alternating'  // Too many runs = wins/losses alternate
+  }
+
+  let interpretation: string
+  if (!isSufficientSample) {
+    interpretation = isNonRandom
+      ? 'Results appear non-random, but sample size is small. Collect more trades for reliable analysis.'
+      : 'Results appear random, but sample size is small. Collect more trades for reliable analysis.'
+  } else if (patternType === 'clustered') {
+    interpretation = 'Results show clustering (streakiness). Wins and losses tend to group together. Adaptive position sizing may be beneficial.'
+  } else if (patternType === 'alternating') {
+    interpretation = 'Results show alternating pattern. Wins and losses tend to alternate. This is unusual and may warrant investigation.'
+  } else {
+    interpretation = 'Results appear random. Wins and losses do not show significant patterns. Adaptive position sizing is unlikely to help.'
+  }
+
+  return {
+    numRuns,
+    expectedRuns,
+    zScore,
+    pValue,
+    isNonRandom,
+    patternType,
+    interpretation,
+    sampleSize: n,
+    isSufficientSample,
   }
 }
 
@@ -108,10 +215,14 @@ export function calculateStreakDistributions(trades: Trade[]): StreakDistributio
     totalLossStreaks: lossStreaks.length,
   }
 
+  // Calculate runs test for streakiness
+  const runsTest = calculateRunsTest(sortedTrades)
+
   return {
     streaks,
     winDistribution,
     lossDistribution,
     statistics,
+    runsTest,
   }
 }

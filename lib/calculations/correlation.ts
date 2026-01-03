@@ -17,19 +17,25 @@ export interface CorrelationOptions {
 export interface CorrelationMatrix {
   strategies: string[];
   correlationData: number[][];
+  /** Sample size (n) for each strategy pair - number of shared trading days */
+  sampleSizes: number[][];
 }
 
 export interface CorrelationAnalytics {
   strongest: {
     value: number;
     pair: [string, string];
+    sampleSize: number;
   };
   weakest: {
     value: number;
     pair: [string, string];
+    sampleSize: number;
   };
   averageCorrelation: number;
   strategyCount: number;
+  /** Number of strategy pairs with insufficient data (below minSamples threshold) */
+  insufficientDataPairs: number;
 }
 
 /**
@@ -83,12 +89,16 @@ export function calculateCorrelationMatrix(
   // Need at least 2 strategies
   if (strategies.length < 2) {
     const identityMatrix = strategies.map((_, i) =>
-      strategies.map((_, j) => (i === j ? 1.0 : 0.0))
+      strategies.map((_, j) => (i === j ? 1.0 : NaN))
     );
-    return { strategies, correlationData: identityMatrix };
+    const sampleSizeMatrix = strategies.map((strategy) => [
+      Object.keys(strategyDailyReturns[strategy]).length,
+    ]);
+    return { strategies, correlationData: identityMatrix, sampleSizes: sampleSizeMatrix };
   }
 
   const correlationData: number[][] = [];
+  const sampleSizes: number[][] = [];
 
   const sortedDates = alignment === "zero-pad"
     ? Array.from(allDates).sort()
@@ -105,19 +115,31 @@ export function calculateCorrelationMatrix(
 
   for (const strategy1 of strategies) {
     const row: number[] = [];
+    const sampleRow: number[] = [];
 
     for (const strategy2 of strategies) {
       if (strategy1 === strategy2) {
         row.push(1.0);
+        // Diagonal: count of trading days for this strategy
+        sampleRow.push(Object.keys(strategyDailyReturns[strategy1]).length);
         continue;
       }
 
       let returns1: number[] = [];
       let returns2: number[] = [];
+      let sharedDaysCount = 0;
 
       if (alignment === "zero-pad") {
         returns1 = zeroPaddedReturns[strategy1];
         returns2 = zeroPaddedReturns[strategy2];
+        // Count actual shared trading days (where both strategies traded)
+        const strategy1Data = strategyDailyReturns[strategy1];
+        const strategy2Data = strategyDailyReturns[strategy2];
+        for (const date of Object.keys(strategy1Data)) {
+          if (date in strategy2Data) {
+            sharedDaysCount++;
+          }
+        }
       } else {
         const strategy1Data = strategyDailyReturns[strategy1];
         const strategy2Data = strategyDailyReturns[strategy2];
@@ -128,11 +150,15 @@ export function calculateCorrelationMatrix(
             returns2.push(strategy2Data[date]);
           }
         }
+        sharedDaysCount = returns1.length;
       }
 
+      // Track sample size (shared trading days - not zero-padded length)
+      sampleRow.push(sharedDaysCount);
+
       // Need at least 2 data points for correlation
-      if (returns1.length < 2 || returns2.length < 2) {
-        row.push(0.0);
+      if (returns1.length < 2) {
+        row.push(NaN);
         continue;
       }
 
@@ -150,9 +176,10 @@ export function calculateCorrelationMatrix(
     }
 
     correlationData.push(row);
+    sampleSizes.push(sampleRow);
   }
 
-  return { strategies, correlationData };
+  return { strategies, correlationData, sampleSizes };
 }
 
 /**
@@ -273,16 +300,20 @@ function getTradeDateKey(
 
 /**
  * Calculate quick analytics from correlation matrix
+ * @param matrix The correlation matrix with sample sizes
+ * @param minSamples Minimum sample size threshold for valid correlations (default: 2)
  */
 export function calculateCorrelationAnalytics(
-  matrix: CorrelationMatrix
+  matrix: CorrelationMatrix,
+  minSamples: number = 2
 ): CorrelationAnalytics {
-  const { strategies, correlationData } = matrix;
+  const { strategies, correlationData, sampleSizes } = matrix;
 
-  let strongest = { value: -1, pair: ["", ""] as [string, string] };
-  let weakest = { value: 1, pair: ["", ""] as [string, string] };
+  let strongest = { value: -Infinity, pair: ["", ""] as [string, string], sampleSize: 0 };
+  let weakest = { value: Infinity, pair: ["", ""] as [string, string], sampleSize: 0 };
   let sumCorrelation = 0;
-  let count = 0;
+  let validCount = 0;
+  let insufficientDataPairs = 0;
 
   // Find strongest and weakest correlations (excluding diagonal)
   // Strongest = highest correlation (most positive)
@@ -290,25 +321,40 @@ export function calculateCorrelationAnalytics(
   for (let i = 0; i < strategies.length; i++) {
     for (let j = i + 1; j < strategies.length; j++) {
       const value = correlationData[i][j];
+      const n = sampleSizes[i][j];
+
+      // Skip if below threshold or NaN
+      if (Number.isNaN(value) || n < minSamples) {
+        insufficientDataPairs++;
+        continue;
+      }
+
       sumCorrelation += value;
-      count++;
+      validCount++;
 
       // Strongest is the most positive correlation
       if (value > strongest.value) {
-        strongest = { value, pair: [strategies[i], strategies[j]] };
+        strongest = { value, pair: [strategies[i], strategies[j]], sampleSize: n };
       }
 
       // Weakest is the most negative correlation (minimum value)
       if (value < weakest.value) {
-        weakest = { value, pair: [strategies[i], strategies[j]] };
+        weakest = { value, pair: [strategies[i], strategies[j]], sampleSize: n };
       }
     }
+  }
+
+  // Handle case where no valid pairs exist
+  if (validCount === 0) {
+    strongest = { value: NaN, pair: ["", ""], sampleSize: 0 };
+    weakest = { value: NaN, pair: ["", ""], sampleSize: 0 };
   }
 
   return {
     strongest,
     weakest,
-    averageCorrelation: count > 0 ? sumCorrelation / count : 0,
+    averageCorrelation: validCount > 0 ? sumCorrelation / validCount : NaN,
     strategyCount: strategies.length,
+    insufficientDataPairs,
   };
 }
