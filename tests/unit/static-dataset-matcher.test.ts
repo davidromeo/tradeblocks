@@ -180,6 +180,22 @@ describe('matchTradeToDataset', () => {
       expect(result?.values.close).toBe(14.5)
     })
 
+    it('matches trade to dataset with exact timestamp - issue reproduction', () => {
+      // This test reproduces the issue from the bug report where
+      // "2025-12-16 15:19:00" in the tradelog should match
+      // "2025-12-16 15:19:00" in the static dataset
+      const trade = createTrade('2025-12-16', '15:19:00')
+      const rows = createRows(
+        [createTimestamp('2025-12-16', '15:19:00')],
+        [{ close: 42 }]
+      )
+
+      const result = matchTradeToDataset(trade, rows, 'exact')
+
+      expect(result).not.toBeNull()
+      expect(result?.values.close).toBe(42)
+    })
+
     it('returns null when no exact match exists', () => {
       const trade = createTrade('2024-01-15', '10:37:00')
       const rows = createRows(hourlyTimestamps, hourlyValues)
