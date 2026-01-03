@@ -65,13 +65,47 @@ function isDateField(field: string): boolean {
 }
 
 /**
+ * Format minutes since midnight as readable time (e.g., "11:45 AM ET")
+ */
+function formatMinutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  const period = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours % 12 || 12
+  return `${displayHours}:${mins.toString().padStart(2, '0')} ${period} ET`
+}
+
+/**
  * Format a value for hover display based on field type
  */
 function formatValueForHover(value: number, field: string): string {
   if (isDateField(field)) {
     return new Date(value).toLocaleDateString()
   }
+  if (field === 'timeOfDayMinutes') {
+    return formatMinutesToTime(value)
+  }
   return value.toFixed(2)
+}
+
+/**
+ * Generate tick values and labels for time of day axis
+ */
+function generateTimeAxisTicks(min: number, max: number): { tickvals: number[]; ticktext: string[] } {
+  const tickvals: number[] = []
+  const ticktext: string[] = []
+
+  // Generate ticks at every hour
+  const startHour = Math.floor(min / 60)
+  for (let hour = startHour; hour * 60 <= max; hour += 1) {
+    const minutes = hour * 60
+    if (minutes >= min && minutes <= max) {
+      tickvals.push(minutes)
+      ticktext.push(formatMinutesToTime(minutes))
+    }
+  }
+
+  return { tickvals, ticktext }
 }
 
 /**
@@ -127,8 +161,8 @@ function buildCategoricalScatterTraces(
     }
 
     const hover =
-      `${xInfo?.label ?? xAxis.field}: ${x.toFixed(2)}<br>` +
-      `${yInfo?.label ?? yAxis.field}: ${y.toFixed(2)}`
+      `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(x, xAxis.field)}<br>` +
+      `${yInfo?.label ?? yAxis.field}: ${formatValueForHover(y, yAxis.field)}`
 
     if (isWinner === 1) {
       winners.push({ x, y, size, hover })
@@ -220,7 +254,7 @@ function buildScatterTraces(
     // Build hover text
     hoverTexts.push(
       `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(x, xAxis.field)}<br>` +
-      `${yInfo?.label ?? yAxis.field}: ${y.toFixed(2)}`
+      `${yInfo?.label ?? yAxis.field}: ${formatValueForHover(y, yAxis.field)}`
     )
   }
 
@@ -301,6 +335,7 @@ function buildBarTraces(
 ): Partial<PlotData>[] {
   // Group trades by X value buckets
   const buckets = new Map<string, number[]>()
+  const isTimeField = xAxis.field === 'timeOfDayMinutes'
 
   for (const trade of trades) {
     const x = getTradeValue(trade, xAxis.field)
@@ -308,8 +343,14 @@ function buildBarTraces(
 
     if (x === null || y === null) continue
 
-    // Create bucket key (round to 1 decimal)
-    const bucketKey = x.toFixed(1)
+    // Create bucket key - for time, keep exact minute value
+    let bucketKey: string
+    if (isTimeField) {
+      // Keep exact minute value (no rounding)
+      bucketKey = Math.round(x).toString()
+    } else {
+      bucketKey = x.toFixed(1)
+    }
 
     if (!buckets.has(bucketKey)) {
       buckets.set(bucketKey, [])
@@ -320,13 +361,20 @@ function buildBarTraces(
   // Calculate average Y for each bucket
   const xLabels: string[] = []
   const yAvgs: number[] = []
+  const xInfo = getFieldInfo(xAxis.field)
+  const yInfo = getFieldInfo(yAxis.field)
 
   const sortedBuckets = Array.from(buckets.entries()).sort(
     (a, b) => parseFloat(a[0]) - parseFloat(b[0])
   )
 
   for (const [bucket, values] of sortedBuckets) {
-    xLabels.push(bucket)
+    // Format time values as readable time for bar labels
+    if (isTimeField) {
+      xLabels.push(formatMinutesToTime(parseFloat(bucket)))
+    } else {
+      xLabels.push(bucket)
+    }
     yAvgs.push(values.reduce((sum, v) => sum + v, 0) / values.length)
   }
 
@@ -337,7 +385,11 @@ function buildBarTraces(
     marker: {
       color: yAvgs.map(v => v >= 0 ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)')
     },
-    name: `Avg ${getFieldInfo(yAxis.field)?.label ?? yAxis.field}`
+    hovertemplate: xLabels.map((label, i) =>
+      `${xInfo?.label ?? xAxis.field}: ${label}<br>` +
+      `Avg ${yInfo?.label ?? yAxis.field}: ${yAvgs[i].toFixed(2)}<extra></extra>`
+    ),
+    name: `Avg ${yInfo?.label ?? yAxis.field}`
   }]
 }
 
@@ -381,7 +433,7 @@ function buildLineTraces(
     },
     hovertemplate: points.map(p =>
       `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-      `${yInfo?.label ?? yAxis.field}: ${p.y.toFixed(2)}<extra></extra>`
+      `${yInfo?.label ?? yAxis.field}: ${formatValueForHover(p.y, yAxis.field)}<extra></extra>`
     ),
     name: yInfo?.label ?? yAxis.field
   }]
@@ -489,7 +541,7 @@ function buildAdditionalAxisTraces(
         name: y2Info?.label ?? yAxis2.field,
         hovertemplate: points.map(p =>
           `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-          `${y2Info?.label ?? yAxis2.field}: ${p.y.toFixed(2)}<extra></extra>`
+          `${y2Info?.label ?? yAxis2.field}: ${formatValueForHover(p.y, yAxis2.field)}<extra></extra>`
         )
       })
     }
@@ -531,7 +583,7 @@ function buildAdditionalAxisTraces(
         name: y3Info?.label ?? yAxis3.field,
         hovertemplate: points.map(p =>
           `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-          `${y3Info?.label ?? yAxis3.field}: ${p.y.toFixed(2)}<extra></extra>`
+          `${y3Info?.label ?? yAxis3.field}: ${formatValueForHover(p.y, yAxis3.field)}<extra></extra>`
         )
       })
     }
@@ -600,7 +652,7 @@ export function CustomChart({
             name: yInfo?.label ?? yAxis.field,
             hovertemplate: points.map(p =>
               `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-              `${yInfo?.label ?? yAxis.field}: ${p.y.toFixed(2)}<extra></extra>`
+              `${yInfo?.label ?? yAxis.field}: ${formatValueForHover(p.y, yAxis.field)}<extra></extra>`
             )
           }]
         } else {
@@ -631,7 +683,7 @@ export function CustomChart({
             name: yInfo?.label ?? yAxis.field,
             hovertemplate: points.map(p =>
               `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-              `${yInfo?.label ?? yAxis.field}: ${p.y.toFixed(2)}<extra></extra>`
+              `${yInfo?.label ?? yAxis.field}: ${formatValueForHover(p.y, yAxis.field)}<extra></extra>`
             )
           }]
         } else {
@@ -665,6 +717,38 @@ export function CustomChart({
     // Use date axis type for date fields
     const isXAxisDate = isDateField(xAxis.field)
 
+    // Check for time fields to generate custom tick labels
+    // Note: Bar charts already format X-axis labels as text in buildBarTraces,
+    // and bar chart Y values are aggregated averages (not raw time values),
+    // so we skip time tick formatting for bar charts entirely
+    const isXTimeField = xAxis.field === 'timeOfDayMinutes' && chartType !== 'bar'
+    const isYTimeField = yAxis.field === 'timeOfDayMinutes' && chartType !== 'bar'
+
+    // Collect X and Y values for time axis ticks
+    let xTimeTicks: { tickvals: number[]; ticktext: string[] } | null = null
+    let yTimeTicks: { tickvals: number[]; ticktext: string[] } | null = null
+
+    if (isXTimeField || isYTimeField) {
+      const xValues: number[] = []
+      const yValues: number[] = []
+      for (const trade of trades) {
+        const x = getTradeValue(trade, xAxis.field)
+        const y = getTradeValue(trade, yAxis.field)
+        if (x !== null) xValues.push(x)
+        if (y !== null) yValues.push(y)
+      }
+      if (isXTimeField && xValues.length > 0) {
+        const minX = Math.min(...xValues)
+        const maxX = Math.max(...xValues)
+        xTimeTicks = generateTimeAxisTicks(minX, maxX)
+      }
+      if (isYTimeField && yValues.length > 0) {
+        const minY = Math.min(...yValues)
+        const maxY = Math.max(...yValues)
+        yTimeTicks = generateTimeAxisTicks(minY, maxY)
+      }
+    }
+
     // Calculate dynamic right margin based on number of axes
     let rightMargin = 40
     if (colorBy && colorBy.field !== 'none' && !hasMultiAxis) {
@@ -675,11 +759,18 @@ export function CustomChart({
       rightMargin = hasY3 ? 110 : 50
     }
 
+    // Increase left margin for time axis labels on Y-axis
+    const leftMargin = isYTimeField ? 95 : 70
+
     const chartLayout: Partial<Layout> = {
       xaxis: {
         title: { text: xInfo?.label ?? xAxis.field },
         zeroline: chartType !== 'histogram',
-        type: isXAxisDate ? 'date' : undefined
+        type: isXAxisDate ? 'date' : undefined,
+        ...(xTimeTicks && {
+          tickvals: xTimeTicks.tickvals,
+          ticktext: xTimeTicks.ticktext
+        })
       },
       yaxis: {
         title: {
@@ -687,7 +778,11 @@ export function CustomChart({
         },
         zeroline: true,
         zerolinewidth: 1,
-        zerolinecolor: '#94a3b8'
+        zerolinecolor: '#94a3b8',
+        ...(yTimeTicks && {
+          tickvals: yTimeTicks.tickvals,
+          ticktext: yTimeTicks.ticktext
+        })
       },
       showlegend: showLegend,
       legend: showLegend ? {
@@ -703,7 +798,7 @@ export function CustomChart({
         t: showLegend ? 40 : 20,
         r: rightMargin,
         b: 60,
-        l: 70
+        l: leftMargin
       }
     }
 

@@ -33,6 +33,40 @@ interface ThresholdChartProps {
   className?: string;
 }
 
+/**
+ * Format minutes since midnight as readable time (e.g., "11:45 AM")
+ */
+function formatMinutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${mins.toString().padStart(2, "0")} ${period}`;
+}
+
+/**
+ * Generate tick values and labels for time of day axis
+ */
+function generateTimeAxisTicks(
+  min: number,
+  max: number
+): { tickvals: number[]; ticktext: string[] } {
+  const tickvals: number[] = [];
+  const ticktext: string[] = [];
+
+  // Start from the nearest 2-hour mark
+  const startHour = Math.floor(min / 120) * 2;
+  for (let hour = startHour; hour * 60 <= max; hour += 2) {
+    const minutes = hour * 60;
+    if (minutes >= min && minutes <= max) {
+      tickvals.push(minutes);
+      ticktext.push(formatMinutesToTime(minutes));
+    }
+  }
+
+  return { tickvals, ticktext };
+}
+
 export function ThresholdChart({
   trades,
   xAxis,
@@ -198,10 +232,23 @@ export function ThresholdChart({
     const maxCumulative = Math.max(100, ...allCumulativeValues); // Always include 100
     const cumulativePadding = (maxCumulative - minCumulative) * 0.05;
 
+    // Generate custom tick labels for time of day field
+    const isTimeField = xAxis.field === "timeOfDayMinutes";
+    const timeTicks = isTimeField
+      ? generateTimeAxisTicks(
+          Math.min(...xValues),
+          Math.max(...xValues)
+        )
+      : null;
+
     const chartLayout: Partial<Layout> = {
       xaxis: {
         title: { text: fieldLabel },
         zeroline: false,
+        ...(timeTicks && {
+          tickvals: timeTicks.tickvals,
+          ticktext: timeTicks.ticktext,
+        }),
       },
       yaxis: {
         title: { text: "Cumulative %" },

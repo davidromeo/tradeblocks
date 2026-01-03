@@ -28,6 +28,17 @@ import { ThresholdMetric, getFieldInfo } from "@/lib/models/report-config";
 import { ArrowUp, ArrowDown, Sparkles, ChevronDown, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+/**
+ * Format minutes since midnight as readable time (e.g., "9:30 AM ET")
+ */
+function formatMinutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${mins.toString().padStart(2, "0")} ${period} ET`;
+}
+
 type OptimizeStrategy = "maxTotalPl" | "bestAvgCustom" | "reset";
 
 interface TradeWithData {
@@ -268,6 +279,15 @@ export function WhatIfExplorer({
   const xInfo = getFieldInfo(xAxisField);
   const fieldLabel = xInfo?.label ?? xAxisField;
   const metricLabel = metric === "rom" ? "ROM" : metric === "plPct" ? "P/L %" : "P/L";
+  const isTimeField = xAxisField === "timeOfDayMinutes";
+
+  // Format X value based on field type
+  const formatXValue = (v: number) => {
+    if (isTimeField) {
+      return formatMinutesToTime(v);
+    }
+    return v.toFixed(2);
+  };
 
   // Format metric value
   const formatMetric = (v: number | null) => {
@@ -290,7 +310,7 @@ export function WhatIfExplorer({
           </Label>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium">
-              {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
+              {formatXValue(whatIfResults.rangeMin)} - {formatXValue(whatIfResults.rangeMax)}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -373,7 +393,7 @@ export function WhatIfExplorer({
             {fieldLabel} Range
           </div>
           <div className="font-medium">
-            {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
+            {formatXValue(whatIfResults.rangeMin)} - {formatXValue(whatIfResults.rangeMax)}
           </div>
         </div>
 
