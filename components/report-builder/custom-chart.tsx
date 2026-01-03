@@ -15,6 +15,7 @@ import {
   ChartAxisConfig,
   getFieldInfo
 } from '@/lib/models/report-config'
+import { formatMinutesToTime, generateTimeAxisTicks } from '@/lib/utils/time-formatting'
 
 interface CustomChartProps {
   trades: EnrichedTrade[]
@@ -65,17 +66,6 @@ function isDateField(field: string): boolean {
 }
 
 /**
- * Format minutes since midnight as readable time (e.g., "11:45 AM ET")
- */
-function formatMinutesToTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  const period = hours >= 12 ? 'PM' : 'AM'
-  const displayHours = hours % 12 || 12
-  return `${displayHours}:${mins.toString().padStart(2, '0')} ${period} ET`
-}
-
-/**
  * Format a value for hover display based on field type
  */
 function formatValueForHover(value: number, field: string): string {
@@ -86,26 +76,6 @@ function formatValueForHover(value: number, field: string): string {
     return formatMinutesToTime(value)
   }
   return value.toFixed(2)
-}
-
-/**
- * Generate tick values and labels for time of day axis
- */
-function generateTimeAxisTicks(min: number, max: number): { tickvals: number[]; ticktext: string[] } {
-  const tickvals: number[] = []
-  const ticktext: string[] = []
-
-  // Generate ticks at every hour
-  const startHour = Math.floor(min / 60)
-  for (let hour = startHour; hour * 60 <= max; hour += 1) {
-    const minutes = hour * 60
-    if (minutes >= min && minutes <= max) {
-      tickvals.push(minutes)
-      ticktext.push(formatMinutesToTime(minutes))
-    }
-  }
-
-  return { tickvals, ticktext }
 }
 
 /**

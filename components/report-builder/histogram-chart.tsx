@@ -12,6 +12,7 @@ import type { Layout, PlotData } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
+import { formatMinutesToTime, generateTimeAxisTicks } from "@/lib/utils/time-formatting";
 import { WhatIfExplorer } from "./what-if-explorer";
 
 interface HistogramChartProps {
@@ -23,17 +24,6 @@ interface HistogramChartProps {
 
 // Use shared getEnrichedTradeValue from enriched-trade model
 const getTradeValue = getEnrichedTradeValue;
-
-/**
- * Format minutes since midnight as readable time (e.g., "11:45 AM ET")
- */
-function formatMinutesToTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = Math.round(minutes % 60);
-  const period = hours >= 12 ? "PM" : "AM";
-  const displayHours = hours % 12 || 12;
-  return `${displayHours}:${mins.toString().padStart(2, "0")} ${period} ET`;
-}
 
 /**
  * Bin time data into fixed-size intervals (e.g., 30-minute bins)
@@ -80,26 +70,6 @@ function binTimeData(
   }
 
   return { x, y, labels };
-}
-
-/**
- * Generate tick values and labels for time axis (every hour)
- */
-function generateTimeAxisTicks(min: number, max: number): { tickvals: number[]; ticktext: string[] } {
-  const tickvals: number[] = [];
-  const ticktext: string[] = [];
-
-  // Start at the first full hour at or after min
-  const startHour = Math.ceil(min / 60);
-  const endHour = Math.floor(max / 60);
-
-  for (let hour = startHour; hour <= endHour; hour++) {
-    const minutes = hour * 60;
-    tickvals.push(minutes);
-    ticktext.push(formatMinutesToTime(minutes));
-  }
-
-  return { tickvals, ticktext };
 }
 
 

@@ -25,19 +25,9 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ThresholdMetric, getFieldInfo } from "@/lib/models/report-config";
+import { formatMinutesToTime } from "@/lib/utils/time-formatting";
 import { ArrowUp, ArrowDown, Sparkles, ChevronDown, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-/**
- * Format minutes since midnight as readable time (e.g., "9:30 AM ET")
- */
-function formatMinutesToTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = Math.round(minutes % 60);
-  const period = hours >= 12 ? "PM" : "AM";
-  const displayHours = hours % 12 || 12;
-  return `${displayHours}:${mins.toString().padStart(2, "0")} ${period} ET`;
-}
 
 type OptimizeStrategy = "maxTotalPl" | "bestAvgCustom" | "reset";
 
