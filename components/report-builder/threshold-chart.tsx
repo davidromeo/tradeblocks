@@ -22,6 +22,7 @@ import {
   ThresholdMetric,
   getFieldInfo,
 } from "@/lib/models/report-config";
+import { generateTimeAxisTicksWithInterval } from "@/lib/utils/time-formatting";
 import type { Layout, PlotData } from "plotly.js";
 import { useMemo } from "react";
 import { WhatIfExplorer } from "./what-if-explorer";
@@ -32,6 +33,9 @@ interface ThresholdChartProps {
   metric?: ThresholdMetric; // 'pl', 'plPct', or 'rom' - defaults to 'plPct'
   className?: string;
 }
+
+// Threshold charts use wider tick intervals for cleaner display with many data points
+const THRESHOLD_CHART_TICK_INTERVAL_HOURS = 2;
 
 export function ThresholdChart({
   trades,
@@ -198,10 +202,25 @@ export function ThresholdChart({
     const maxCumulative = Math.max(100, ...allCumulativeValues); // Always include 100
     const cumulativePadding = (maxCumulative - minCumulative) * 0.05;
 
+    // Generate custom tick labels for time of day field
+    const isTimeField = xAxis.field === "timeOfDayMinutes";
+    const timeTicks = isTimeField
+      ? generateTimeAxisTicksWithInterval(
+          Math.min(...xValues),
+          Math.max(...xValues),
+          THRESHOLD_CHART_TICK_INTERVAL_HOURS,
+          false // No timezone suffix for compact display
+        )
+      : null;
+
     const chartLayout: Partial<Layout> = {
       xaxis: {
         title: { text: fieldLabel },
         zeroline: false,
+        ...(timeTicks && {
+          tickvals: timeTicks.tickvals,
+          ticktext: timeTicks.ticktext,
+        }),
       },
       yaxis: {
         title: { text: "Cumulative %" },
