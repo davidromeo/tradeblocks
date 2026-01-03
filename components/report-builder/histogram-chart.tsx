@@ -10,6 +10,8 @@
 import { useMemo, useState, useCallback } from "react";
 import type { Layout, PlotData } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
 import { formatMinutesToTime, generateTimeAxisTicks } from "@/lib/utils/time-formatting";
@@ -25,8 +27,9 @@ interface HistogramChartProps {
 // Use shared getEnrichedTradeValue from enriched-trade model
 const getTradeValue = getEnrichedTradeValue;
 
-// 30-minute bins align with common market session intervals (e.g., 9:30-10:00)
-const TIME_BIN_SIZE_MINUTES = 30;
+const DEFAULT_TIME_BIN_SIZE = 30;
+const MIN_TIME_BIN_SIZE = 5;
+const MAX_TIME_BIN_SIZE = 120;
 
 /**
  * Bin time data into fixed-size intervals for histogram display.
@@ -34,7 +37,7 @@ const TIME_BIN_SIZE_MINUTES = 30;
  */
 function binTimeData(
   values: number[],
-  binSizeMinutes: number = TIME_BIN_SIZE_MINUTES
+  binSizeMinutes: number = DEFAULT_TIME_BIN_SIZE
 ): { x: number[]; y: number[]; labels: string[] } {
   if (values.length === 0) return { x: [], y: [], labels: [] };
 
@@ -91,10 +94,14 @@ export function HistogramChart({
 }: HistogramChartProps) {
   // Track the selected range from What-If Explorer for visual highlighting
   const [selectedRange, setSelectedRange] = useState<[number, number] | null>(null);
+  // Bin size for time histograms (in minutes)
+  const [timeBinSize, setTimeBinSize] = useState(DEFAULT_TIME_BIN_SIZE);
 
   const handleRangeChange = useCallback((min: number, max: number) => {
     setSelectedRange([min, max]);
   }, []);
+
+  const isTimeField = xAxis.field === "timeOfDayMinutes";
 
   const { traces, layout } = useMemo(() => {
     if (trades.length === 0) {
@@ -116,7 +123,7 @@ export function HistogramChart({
 
     const xInfo = getFieldInfo(xAxis.field);
     const chartTraces: Partial<PlotData>[] = [];
-    const isTimeField = xAxis.field === "timeOfDayMinutes";
+    const isTime = xAxis.field === "timeOfDayMinutes";
     const fieldLabel = xInfo?.label ?? xAxis.field;
 
     // Compute data range once for consistent binning and axis formatting
@@ -124,16 +131,16 @@ export function HistogramChart({
     const dataMax = Math.max(...allValues);
     const binCount = Math.min(50, Math.ceil(Math.sqrt(allValues.length)));
 
-    // For time fields, use pre-binned bar chart with fixed intervals
-    if (isTimeField) {
+    // For time fields, use pre-binned bar chart with configurable intervals
+    if (isTime) {
       if (selectedRange) {
         const [rangeMin, rangeMax] = selectedRange;
         const inRangeValues = allValues.filter((v) => v >= rangeMin && v <= rangeMax);
         const outOfRangeValues = allValues.filter((v) => v < rangeMin || v > rangeMax);
 
         // Pre-bin both datasets with same bin size
-        const inBinned = binTimeData(inRangeValues);
-        const outBinned = binTimeData(outOfRangeValues);
+        const inBinned = binTimeData(inRangeValues, timeBinSize);
+        const outBinned = binTimeData(outOfRangeValues, timeBinSize);
 
         if (outBinned.y.length > 0) {
           chartTraces.push({
@@ -162,7 +169,7 @@ export function HistogramChart({
         }
       } else {
         // No range selection - single bar chart
-        const binned = binTimeData(allValues);
+        const binned = binTimeData(allValues, timeBinSize);
         chartTraces.push({
           x: binned.x,
           y: binned.y,
@@ -219,7 +226,7 @@ export function HistogramChart({
     }
 
     // Generate time axis ticks for time fields
-    const timeTicks = isTimeField ? generateTimeAxisTicks(dataMin, dataMax) : null;
+    const timeTicks = isTime ? generateTimeAxisTicks(dataMin, dataMax) : null;
 
     const chartLayout: Partial<Layout> = {
       xaxis: {
@@ -252,13 +259,13 @@ export function HistogramChart({
       margin: {
         t: selectedRange ? 40 : 20,
         r: 40,
-        b: isTimeField ? 80 : 60, // More space for time labels
+        b: isTime ? 80 : 60, // More space for time labels
         l: 70,
       },
     };
 
     return { traces: chartTraces, layout: chartLayout };
-  }, [trades, xAxis, selectedRange]);
+  }, [trades, xAxis, selectedRange, timeBinSize]);
 
   if (trades.length === 0) {
     return (
@@ -270,6 +277,27 @@ export function HistogramChart({
 
   return (
     <div className={className}>
+      {/* Bin size selector for time fields */}
+      {isTimeField && (
+        <div className="flex items-center gap-2 mb-2">
+          <Label className="text-xs text-muted-foreground">Bin size:</Label>
+          <Input
+            type="number"
+            min={MIN_TIME_BIN_SIZE}
+            max={MAX_TIME_BIN_SIZE}
+            value={timeBinSize}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!isNaN(val) && val >= MIN_TIME_BIN_SIZE && val <= MAX_TIME_BIN_SIZE) {
+                setTimeBinSize(val);
+              }
+            }}
+            className="h-7 w-16 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">min</span>
+        </div>
+      )}
+
       <ChartWrapper
         title=""
         data={traces as PlotData[]}
