@@ -16,7 +16,7 @@ import type { Layout, PlotData, Shape } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
-import { formatMinutesToTime, generateTimeAxisTicks } from "@/lib/utils/time-formatting";
+import { formatMinutesToTime, generateTimeAxisTicksFromData } from "@/lib/utils/time-formatting";
 import { WhatIfExplorer2D, YAxisConfig, YAxisRange } from "./what-if-explorer-2d";
 
 /**
@@ -277,13 +277,11 @@ export function ScatterChart({
       // Generate custom tick labels for time of day fields (X and Y axes)
       const isXTimeField = xAxis.field === "timeOfDayMinutes";
       const isYTimeField = yAxis.field === "timeOfDayMinutes";
-      const xValues = y1Points.map((p) => p.x);
-      const yValues = y1Points.map((p) => p.y);
-      const xTimeTicks = isXTimeField && xValues.length > 0
-        ? generateTimeAxisTicks(Math.min(...xValues), Math.max(...xValues))
+      const xTimeTicks = isXTimeField
+        ? generateTimeAxisTicksFromData(y1Points.map((p) => p.x))
         : null;
-      const yTimeTicks = isYTimeField && yValues.length > 0
-        ? generateTimeAxisTicks(Math.min(...yValues), Math.max(...yValues))
+      const yTimeTicks = isYTimeField
+        ? generateTimeAxisTicksFromData(y1Points.map((p) => p.y))
         : null;
 
       const chartLayout: Partial<Layout> = {
@@ -702,13 +700,11 @@ export function ScatterChart({
     // Generate custom tick labels for time of day fields (X and Y axes)
     const isXTimeField = xAxis.field === "timeOfDayMinutes";
     const isYTimeField = yAxis.field === "timeOfDayMinutes";
-    const xVals = points.map((p) => p.x);
-    const yVals = points.map((p) => p.y);
-    const xTimeTicks = isXTimeField && xVals.length > 0
-      ? generateTimeAxisTicks(Math.min(...xVals), Math.max(...xVals))
+    const xTimeTicks = isXTimeField
+      ? generateTimeAxisTicksFromData(points.map((p) => p.x))
       : null;
-    const yTimeTicks = isYTimeField && yVals.length > 0
-      ? generateTimeAxisTicks(Math.min(...yVals), Math.max(...yVals))
+    const yTimeTicks = isYTimeField
+      ? generateTimeAxisTicksFromData(points.map((p) => p.y))
       : null;
 
     const chartLayout: Partial<Layout> = {

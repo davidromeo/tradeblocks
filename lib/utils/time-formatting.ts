@@ -55,6 +55,24 @@ export function generateTimeAxisTicks(
 }
 
 /**
+ * Generate time axis ticks from an array of time values.
+ * Convenience wrapper that computes min/max from data and generates ticks.
+ *
+ * @param values - Array of time values in minutes since midnight
+ * @param includeTimezone - Whether to include "ET" suffix in labels (default: true)
+ * @returns Object with tickvals and ticktext, or null if values is empty
+ */
+export function generateTimeAxisTicksFromData(
+  values: number[],
+  includeTimezone = true
+): { tickvals: number[]; ticktext: string[] } | null {
+  if (values.length === 0) return null
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  return generateTimeAxisTicks(min, max, includeTimezone)
+}
+
+/**
  * Generate tick values for time axis at larger intervals (e.g., every 2 hours)
  * Useful for charts with limited horizontal space
  *

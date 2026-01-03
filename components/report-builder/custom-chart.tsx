@@ -15,7 +15,7 @@ import {
   ChartAxisConfig,
   getFieldInfo
 } from '@/lib/models/report-config'
-import { formatMinutesToTime, generateTimeAxisTicks } from '@/lib/utils/time-formatting'
+import { formatMinutesToTime, generateTimeAxisTicksFromData } from '@/lib/utils/time-formatting'
 
 interface CustomChartProps {
   trades: EnrichedTrade[]
@@ -696,40 +696,17 @@ export function CustomChart({
     const isXTimeField = xAxis.field === 'timeOfDayMinutes' && chartType !== 'bar'
     const isYTimeField = yAxis.field === 'timeOfDayMinutes' && chartType !== 'bar'
 
-    // Compute min/max for time axis ticks (single pass for efficiency)
-    let xTimeTicks: { tickvals: number[]; ticktext: string[] } | null = null
-    let yTimeTicks: { tickvals: number[]; ticktext: string[] } | null = null
-
-    if (isXTimeField || isYTimeField) {
-      let minX: number | null = null
-      let maxX: number | null = null
-      let minY: number | null = null
-      let maxY: number | null = null
-
-      for (const trade of trades) {
-        if (isXTimeField) {
-          const x = getTradeValue(trade, xAxis.field)
-          if (x !== null) {
-            if (minX === null || x < minX) minX = x
-            if (maxX === null || x > maxX) maxX = x
-          }
-        }
-        if (isYTimeField) {
-          const y = getTradeValue(trade, yAxis.field)
-          if (y !== null) {
-            if (minY === null || y < minY) minY = y
-            if (maxY === null || y > maxY) maxY = y
-          }
-        }
-      }
-
-      if (isXTimeField && minX !== null && maxX !== null) {
-        xTimeTicks = generateTimeAxisTicks(minX, maxX)
-      }
-      if (isYTimeField && minY !== null && maxY !== null) {
-        yTimeTicks = generateTimeAxisTicks(minY, maxY)
-      }
-    }
+    // Generate time axis ticks using shared helper
+    const xTimeTicks = isXTimeField
+      ? generateTimeAxisTicksFromData(
+          trades.map((t) => getTradeValue(t, xAxis.field)).filter((v): v is number => v !== null)
+        )
+      : null
+    const yTimeTicks = isYTimeField
+      ? generateTimeAxisTicksFromData(
+          trades.map((t) => getTradeValue(t, yAxis.field)).filter((v): v is number => v !== null)
+        )
+      : null
 
     // Calculate dynamic right margin based on number of axes
     let rightMargin = 40
