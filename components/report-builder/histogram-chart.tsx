@@ -33,7 +33,15 @@ const MAX_TIME_BIN_SIZE = 120;
 
 /**
  * Bin time data into fixed-size intervals for histogram display.
- * Returns bar chart data with formatted labels for hover, and numeric values for axis.
+ *
+ * @param values - Array of time values in minutes since midnight
+ * @param binSizeMinutes - Size of each bin in minutes (must be positive, defaults to 30)
+ * @returns Object with x (bin midpoints), y (counts), and labels (formatted time ranges)
+ *
+ * Edge cases handled:
+ * - Empty array: Returns empty arrays
+ * - Identical min/max: Creates a single bin
+ * - Invalid binSizeMinutes: Falls back to default
  */
 function binTimeData(
   values: number[],
@@ -41,25 +49,28 @@ function binTimeData(
 ): { x: number[]; y: number[]; labels: string[] } {
   if (values.length === 0) return { x: [], y: [], labels: [] };
 
+  // Validate binSizeMinutes to prevent infinite loops or division by zero
+  const safeBinSize = binSizeMinutes > 0 ? binSizeMinutes : DEFAULT_TIME_BIN_SIZE;
+
   const min = Math.min(...values);
   const max = Math.max(...values);
 
   // Round min down and max up to bin boundaries
-  const binStart = Math.floor(min / binSizeMinutes) * binSizeMinutes;
+  const binStart = Math.floor(min / safeBinSize) * safeBinSize;
   // Handle edge case where all values are identical (min === max)
   const binEnd = min === max
-    ? binStart + binSizeMinutes
-    : Math.ceil(max / binSizeMinutes) * binSizeMinutes;
+    ? binStart + safeBinSize
+    : Math.ceil(max / safeBinSize) * safeBinSize;
 
   // Create bins at fixed intervals
   const bins = new Map<number, number>();
-  for (let t = binStart; t < binEnd; t += binSizeMinutes) {
+  for (let t = binStart; t < binEnd; t += safeBinSize) {
     bins.set(t, 0);
   }
 
   // Count values in each bin
   for (const val of values) {
-    const binKey = Math.floor(val / binSizeMinutes) * binSizeMinutes;
+    const binKey = Math.floor(val / safeBinSize) * safeBinSize;
     bins.set(binKey, (bins.get(binKey) || 0) + 1);
   }
 
@@ -73,12 +84,12 @@ function binTimeData(
   const labels: string[] = [];
 
   for (const [binKey, count] of Array.from(bins.entries()).sort((a, b) => a[0] - b[0])) {
-    const binMid = binKey + binSizeMinutes / 2;
+    const binMid = binKey + safeBinSize / 2;
     x.push(binMid);
     y.push(count);
     // Format as time range for hover
     const startTime = formatMinutesToTime(binKey);
-    const endTime = formatMinutesToTime(binKey + binSizeMinutes);
+    const endTime = formatMinutesToTime(binKey + safeBinSize);
     labels.push(`${startTime} - ${endTime}`);
   }
 
@@ -290,6 +301,12 @@ export function HistogramChart({
               const val = parseInt(e.target.value, 10);
               if (!isNaN(val) && val >= MIN_TIME_BIN_SIZE && val <= MAX_TIME_BIN_SIZE) {
                 setTimeBinSize(val);
+              }
+            }}
+            onBlur={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (isNaN(val) || val < MIN_TIME_BIN_SIZE || val > MAX_TIME_BIN_SIZE) {
+                setTimeBinSize(DEFAULT_TIME_BIN_SIZE);
               }
             }}
             className="h-7 w-16 text-xs"

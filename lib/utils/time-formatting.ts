@@ -73,11 +73,13 @@ export function generateTimeAxisTicksWithInterval(
   const tickvals: number[] = []
   const ticktext: string[] = []
 
-  // Start from the nearest interval mark
+  // Normalize min to handle negative values, then find the nearest interval mark
+  const normalizedMin = Math.max(0, min)
   const intervalMinutes = intervalHours * 60
-  const startHour = Math.floor(min / intervalMinutes) * intervalHours
+  const startHour = Math.floor(normalizedMin / intervalMinutes) * intervalHours
+  const endHour = Math.floor(max / 60)
 
-  for (let hour = startHour; hour * 60 <= max; hour += intervalHours) {
+  for (let hour = startHour; hour <= endHour; hour += intervalHours) {
     const minutes = hour * 60
     if (minutes >= min && minutes <= max) {
       tickvals.push(minutes)
