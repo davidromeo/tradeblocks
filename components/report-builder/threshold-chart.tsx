@@ -34,6 +34,9 @@ interface ThresholdChartProps {
   className?: string;
 }
 
+// Threshold charts use wider tick intervals for cleaner display with many data points
+const THRESHOLD_CHART_TICK_INTERVAL_HOURS = 2;
+
 export function ThresholdChart({
   trades,
   xAxis,
@@ -199,13 +202,13 @@ export function ThresholdChart({
     const maxCumulative = Math.max(100, ...allCumulativeValues); // Always include 100
     const cumulativePadding = (maxCumulative - minCumulative) * 0.05;
 
-    // Generate custom tick labels for time of day field (2-hour intervals for compact display)
+    // Generate custom tick labels for time of day field
     const isTimeField = xAxis.field === "timeOfDayMinutes";
     const timeTicks = isTimeField
       ? generateTimeAxisTicksWithInterval(
           Math.min(...xValues),
           Math.max(...xValues),
-          2,    // 2-hour intervals
+          THRESHOLD_CHART_TICK_INTERVAL_HOURS,
           false // No timezone suffix for compact display
         )
       : null;

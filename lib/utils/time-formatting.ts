@@ -13,10 +13,12 @@
  * @returns Formatted time string like "11:45 AM ET"
  */
 export function formatMinutesToTime(minutes: number, includeTimezone = true): string {
-  // Handle 24:00 (1440 minutes) and values beyond by wrapping to valid range
-  const normalizedMinutes = minutes % 1440
-  const hours = Math.floor(normalizedMinutes / 60)
-  const mins = Math.round(normalizedMinutes % 60)
+  // Handle wrap-around: normalize to [0, 1440) for both negative and overflow values
+  const normalizedMinutes = ((minutes % 1440) + 1440) % 1440
+  // Round first, then extract hours/mins to avoid "10:60" edge case
+  const totalMinutesRounded = Math.round(normalizedMinutes)
+  const hours = Math.floor(totalMinutesRounded / 60)
+  const mins = totalMinutesRounded % 60
   const period = hours >= 12 ? 'PM' : 'AM'
   const displayHours = hours % 12 || 12
   const time = `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`

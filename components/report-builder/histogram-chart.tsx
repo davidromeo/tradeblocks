@@ -25,13 +25,16 @@ interface HistogramChartProps {
 // Use shared getEnrichedTradeValue from enriched-trade model
 const getTradeValue = getEnrichedTradeValue;
 
+// 30-minute bins align with common market session intervals (e.g., 9:30-10:00)
+const TIME_BIN_SIZE_MINUTES = 30;
+
 /**
- * Bin time data into fixed-size intervals (e.g., 30-minute bins)
- * Returns bar chart data with formatted labels for hover, and numeric values for axis
+ * Bin time data into fixed-size intervals for histogram display.
+ * Returns bar chart data with formatted labels for hover, and numeric values for axis.
  */
 function binTimeData(
   values: number[],
-  binSizeMinutes: number = 30
+  binSizeMinutes: number = TIME_BIN_SIZE_MINUTES
 ): { x: number[]; y: number[]; labels: string[] } {
   if (values.length === 0) return { x: [], y: [], labels: [] };
 
@@ -40,7 +43,10 @@ function binTimeData(
 
   // Round min down and max up to bin boundaries
   const binStart = Math.floor(min / binSizeMinutes) * binSizeMinutes;
-  const binEnd = Math.ceil(max / binSizeMinutes) * binSizeMinutes;
+  // Handle edge case where all values are identical (min === max)
+  const binEnd = min === max
+    ? binStart + binSizeMinutes
+    : Math.ceil(max / binSizeMinutes) * binSizeMinutes;
 
   // Create bins at fixed intervals
   const bins = new Map<number, number>();
@@ -54,7 +60,11 @@ function binTimeData(
     bins.set(binKey, (bins.get(binKey) || 0) + 1);
   }
 
-  // Convert to arrays - use numeric X values for proper axis positioning
+  // Convert to arrays.
+  // Use numeric X values (bin midpoints) so Plotly treats the X axis as a continuous
+  // scale instead of categorical labels. This keeps bars aligned with the time-based
+  // ticks generated elsewhere and avoids mis-positioned bars when using formatted
+  // time strings. Human-readable time ranges are stored in `labels` for hover text.
   const x: number[] = [];
   const y: number[] = [];
   const labels: string[] = [];
@@ -114,18 +124,16 @@ export function HistogramChart({
     const dataMax = Math.max(...allValues);
     const binCount = Math.min(50, Math.ceil(Math.sqrt(allValues.length)));
 
-    // For time fields, use pre-binned bar chart with 30-minute bins
+    // For time fields, use pre-binned bar chart with fixed intervals
     if (isTimeField) {
-      const timeBinSize = 30; // 30-minute bins
-
       if (selectedRange) {
         const [rangeMin, rangeMax] = selectedRange;
         const inRangeValues = allValues.filter((v) => v >= rangeMin && v <= rangeMax);
         const outOfRangeValues = allValues.filter((v) => v < rangeMin || v > rangeMax);
 
         // Pre-bin both datasets with same bin size
-        const inBinned = binTimeData(inRangeValues, timeBinSize);
-        const outBinned = binTimeData(outOfRangeValues, timeBinSize);
+        const inBinned = binTimeData(inRangeValues);
+        const outBinned = binTimeData(outOfRangeValues);
 
         if (outBinned.y.length > 0) {
           chartTraces.push({
@@ -154,7 +162,7 @@ export function HistogramChart({
         }
       } else {
         // No range selection - single bar chart
-        const binned = binTimeData(allValues, timeBinSize);
+        const binned = binTimeData(allValues);
         chartTraces.push({
           x: binned.x,
           y: binned.y,
@@ -244,7 +252,7 @@ export function HistogramChart({
       margin: {
         t: selectedRange ? 40 : 20,
         r: 40,
-        b: 80, // More space for rotated time labels
+        b: isTimeField ? 80 : 60, // More space for time labels
         l: 70,
       },
     };

@@ -687,34 +687,46 @@ export function CustomChart({
     // Use date axis type for date fields
     const isXAxisDate = isDateField(xAxis.field)
 
-    // Check for time fields to generate custom tick labels
-    // Note: Bar charts already format X-axis labels as text in buildBarTraces,
-    // and bar chart Y values are aggregated averages (not raw time values),
-    // so we skip time tick formatting for bar charts entirely
+    // Check for time fields to generate custom tick labels.
+    // For bar charts, the X-axis is already converted to string category labels
+    // in buildBarTraces (e.g., "09:30", "10:00"), while the time tick helpers
+    // generate numeric tickvals. Mixing numeric tickvals with string category
+    // labels would cause a mismatch, so we only apply time tick formatting to
+    // non-bar charts.
     const isXTimeField = xAxis.field === 'timeOfDayMinutes' && chartType !== 'bar'
     const isYTimeField = yAxis.field === 'timeOfDayMinutes' && chartType !== 'bar'
 
-    // Collect X and Y values for time axis ticks
+    // Compute min/max for time axis ticks (single pass for efficiency)
     let xTimeTicks: { tickvals: number[]; ticktext: string[] } | null = null
     let yTimeTicks: { tickvals: number[]; ticktext: string[] } | null = null
 
     if (isXTimeField || isYTimeField) {
-      const xValues: number[] = []
-      const yValues: number[] = []
+      let minX: number | null = null
+      let maxX: number | null = null
+      let minY: number | null = null
+      let maxY: number | null = null
+
       for (const trade of trades) {
-        const x = getTradeValue(trade, xAxis.field)
-        const y = getTradeValue(trade, yAxis.field)
-        if (x !== null) xValues.push(x)
-        if (y !== null) yValues.push(y)
+        if (isXTimeField) {
+          const x = getTradeValue(trade, xAxis.field)
+          if (x !== null) {
+            if (minX === null || x < minX) minX = x
+            if (maxX === null || x > maxX) maxX = x
+          }
+        }
+        if (isYTimeField) {
+          const y = getTradeValue(trade, yAxis.field)
+          if (y !== null) {
+            if (minY === null || y < minY) minY = y
+            if (maxY === null || y > maxY) maxY = y
+          }
+        }
       }
-      if (isXTimeField && xValues.length > 0) {
-        const minX = Math.min(...xValues)
-        const maxX = Math.max(...xValues)
+
+      if (isXTimeField && minX !== null && maxX !== null) {
         xTimeTicks = generateTimeAxisTicks(minX, maxX)
       }
-      if (isYTimeField && yValues.length > 0) {
-        const minY = Math.min(...yValues)
-        const maxY = Math.max(...yValues)
+      if (isYTimeField && minY !== null && maxY !== null) {
         yTimeTicks = generateTimeAxisTicks(minY, maxY)
       }
     }
