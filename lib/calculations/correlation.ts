@@ -6,12 +6,14 @@ export type CorrelationMethod = "pearson" | "spearman" | "kendall";
 export type CorrelationAlignment = "shared" | "zero-pad";
 export type CorrelationNormalization = "raw" | "margin" | "notional";
 export type CorrelationDateBasis = "opened" | "closed";
+export type CorrelationTimePeriod = "daily" | "weekly" | "monthly";
 
 export interface CorrelationOptions {
   method?: CorrelationMethod;
   alignment?: CorrelationAlignment;
   normalization?: CorrelationNormalization;
   dateBasis?: CorrelationDateBasis;
+  timePeriod?: CorrelationTimePeriod;
 }
 
 export interface CorrelationMatrix {
@@ -50,11 +52,11 @@ export function calculateCorrelationMatrix(
     alignment = "shared",
     normalization = "raw",
     dateBasis = "opened",
+    timePeriod = "daily",
   } = options;
 
   // Group trades by strategy and date
   const strategyDailyReturns: Record<string, Record<string, number>> = {};
-  const allDates = new Set<string>();
 
   for (const trade of trades) {
     // Skip trades without a strategy
@@ -80,11 +82,26 @@ export function calculateCorrelationMatrix(
 
     strategyDailyReturns[strategy][dateKey] =
       (strategyDailyReturns[strategy][dateKey] || 0) + normalizedReturn;
-
-    allDates.add(dateKey);
   }
 
-  const strategies = Object.keys(strategyDailyReturns).sort();
+  // Aggregate by time period (no-op for daily)
+  const strategyReturns: Record<string, Record<string, number>> = {};
+  for (const strategy of Object.keys(strategyDailyReturns)) {
+    strategyReturns[strategy] = aggregateByPeriod(
+      strategyDailyReturns[strategy],
+      timePeriod
+    );
+  }
+
+  // Build allDates from aggregated data
+  const allDates = new Set<string>();
+  for (const returns of Object.values(strategyReturns)) {
+    for (const periodKey of Object.keys(returns)) {
+      allDates.add(periodKey);
+    }
+  }
+
+  const strategies = Object.keys(strategyReturns).sort();
 
   // Need at least 2 strategies
   if (strategies.length < 2) {
@@ -92,7 +109,7 @@ export function calculateCorrelationMatrix(
       strategies.map((_, j) => (i === j ? 1.0 : NaN))
     );
     const sampleSizeMatrix = strategies.map((strategy) => [
-      Object.keys(strategyDailyReturns[strategy]).length,
+      Object.keys(strategyReturns[strategy]).length,
     ]);
     return { strategies, correlationData: identityMatrix, sampleSizes: sampleSizeMatrix };
   }
@@ -100,15 +117,15 @@ export function calculateCorrelationMatrix(
   const correlationData: number[][] = [];
   const sampleSizes: number[][] = [];
 
-  const sortedDates = alignment === "zero-pad"
+  const sortedPeriods = alignment === "zero-pad"
     ? Array.from(allDates).sort()
     : [];
 
   const zeroPaddedReturns: Record<string, number[]> = {};
   if (alignment === "zero-pad") {
     for (const strategy of strategies) {
-      zeroPaddedReturns[strategy] = sortedDates.map(
-        (date) => strategyDailyReturns[strategy][date] || 0
+      zeroPaddedReturns[strategy] = sortedPeriods.map(
+        (period) => strategyReturns[strategy][period] || 0
       );
     }
   }
@@ -120,41 +137,41 @@ export function calculateCorrelationMatrix(
     for (const strategy2 of strategies) {
       if (strategy1 === strategy2) {
         row.push(1.0);
-        // Diagonal: count of trading days for this strategy
-        sampleRow.push(Object.keys(strategyDailyReturns[strategy1]).length);
+        // Diagonal: count of periods for this strategy
+        sampleRow.push(Object.keys(strategyReturns[strategy1]).length);
         continue;
       }
 
       let returns1: number[] = [];
       let returns2: number[] = [];
-      let sharedDaysCount = 0;
+      let sharedPeriodsCount = 0;
 
       if (alignment === "zero-pad") {
         returns1 = zeroPaddedReturns[strategy1];
         returns2 = zeroPaddedReturns[strategy2];
-        // Count actual shared trading days (where both strategies traded)
-        const strategy1Data = strategyDailyReturns[strategy1];
-        const strategy2Data = strategyDailyReturns[strategy2];
-        for (const date of Object.keys(strategy1Data)) {
-          if (date in strategy2Data) {
-            sharedDaysCount++;
+        // Count actual shared periods (where both strategies traded)
+        const strategy1Data = strategyReturns[strategy1];
+        const strategy2Data = strategyReturns[strategy2];
+        for (const period of Object.keys(strategy1Data)) {
+          if (period in strategy2Data) {
+            sharedPeriodsCount++;
           }
         }
       } else {
-        const strategy1Data = strategyDailyReturns[strategy1];
-        const strategy2Data = strategyDailyReturns[strategy2];
+        const strategy1Data = strategyReturns[strategy1];
+        const strategy2Data = strategyReturns[strategy2];
 
-        for (const date of Object.keys(strategy1Data)) {
-          if (date in strategy2Data) {
-            returns1.push(strategy1Data[date]);
-            returns2.push(strategy2Data[date]);
+        for (const period of Object.keys(strategy1Data)) {
+          if (period in strategy2Data) {
+            returns1.push(strategy1Data[period]);
+            returns2.push(strategy2Data[period]);
           }
         }
-        sharedDaysCount = returns1.length;
+        sharedPeriodsCount = returns1.length;
       }
 
-      // Track sample size (shared trading days - not zero-padded length)
-      sampleRow.push(sharedDaysCount);
+      // Track sample size (shared periods - not zero-padded length)
+      sampleRow.push(sharedPeriodsCount);
 
       // Need at least 2 data points for correlation
       if (returns1.length < 2) {
@@ -296,6 +313,49 @@ function getTradeDateKey(
   }
 
   return date.toISOString().split("T")[0];
+}
+
+/**
+ * Get ISO week key for a date (YYYY-Www format)
+ */
+function getIsoWeekKey(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  // ISO week: week containing Jan 4 is week 1
+  // Thursday of the week determines which year the week belongs to
+  const thursday = new Date(date);
+  thursday.setDate(date.getDate() + (4 - (date.getDay() || 7)));
+  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  const weekNum = Math.ceil(
+    ((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
+  );
+  return `${thursday.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+/**
+ * Get month key for a date (YYYY-MM format)
+ */
+function getMonthKey(dateStr: string): string {
+  return dateStr.substring(0, 7); // YYYY-MM from YYYY-MM-DD
+}
+
+/**
+ * Aggregate daily returns by time period (sum P&L within each period)
+ */
+function aggregateByPeriod(
+  dailyReturns: Record<string, number>,
+  period: CorrelationTimePeriod
+): Record<string, number> {
+  if (period === "daily") return dailyReturns;
+
+  const aggregated: Record<string, number> = {};
+  const getKey = period === "weekly" ? getIsoWeekKey : getMonthKey;
+
+  for (const [dateStr, value] of Object.entries(dailyReturns)) {
+    const periodKey = getKey(dateStr);
+    aggregated[periodKey] = (aggregated[periodKey] || 0) + value;
+  }
+
+  return aggregated;
 }
 
 /**

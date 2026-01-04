@@ -403,4 +403,142 @@ describe('Correlation Calculations', () => {
       expect(analytics.insufficientDataPairs).toBe(1);
     });
   });
+
+  describe('Time Period Aggregation', () => {
+    it('should aggregate daily P&L to weekly sums', () => {
+      // Week 1: Jan 6-12, 2025 (Mon-Sun in ISO week)
+      // Week 2: Jan 13-19, 2025
+      const trades: Trade[] = [
+        // Strategy1: Week 1 = +150, Week 2 = +200
+        { dateOpened: new Date('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-07'), strategy: 'Strategy1', pl: 50 } as Trade,
+        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy1', pl: 200 } as Trade,
+
+        // Strategy2: Week 1 = -100, Week 2 = +300
+        { dateOpened: new Date('2025-01-08'), strategy: 'Strategy2', pl: -100 } as Trade,
+        { dateOpened: new Date('2025-01-14'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: new Date('2025-01-15'), strategy: 'Strategy2', pl: 150 } as Trade,
+      ];
+
+      const weeklyResult = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        timePeriod: 'weekly',
+      });
+
+      // Both strategies have 2 weeks of data
+      expect(weeklyResult.sampleSizes[0][0]).toBe(2); // Strategy1 has 2 weeks
+      expect(weeklyResult.sampleSizes[1][1]).toBe(2); // Strategy2 has 2 weeks
+      expect(weeklyResult.sampleSizes[0][1]).toBe(2); // 2 shared weeks
+
+      // Weekly sums: Strategy1 [150, 200], Strategy2 [-100, 300]
+      // Both increase from week 1 to week 2, so positive correlation
+      expect(weeklyResult.correlationData[0][1]).toBeCloseTo(1, 5);
+    });
+
+    it('should aggregate daily P&L to monthly sums', () => {
+      const trades: Trade[] = [
+        // Strategy1: Jan = +300, Feb = -100
+        { dateOpened: new Date('2025-01-05'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-15'), strategy: 'Strategy1', pl: 200 } as Trade,
+        { dateOpened: new Date('2025-02-10'), strategy: 'Strategy1', pl: -100 } as Trade,
+
+        // Strategy2: Jan = -200, Feb = +150
+        { dateOpened: new Date('2025-01-20'), strategy: 'Strategy2', pl: -200 } as Trade,
+        { dateOpened: new Date('2025-02-15'), strategy: 'Strategy2', pl: 150 } as Trade,
+      ];
+
+      const monthlyResult = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        timePeriod: 'monthly',
+      });
+
+      // Both strategies have 2 months of data
+      expect(monthlyResult.sampleSizes[0][0]).toBe(2); // Strategy1 has 2 months
+      expect(monthlyResult.sampleSizes[1][1]).toBe(2); // Strategy2 has 2 months
+      expect(monthlyResult.sampleSizes[0][1]).toBe(2); // 2 shared months
+
+      // Monthly sums: Strategy1 [300, -100], Strategy2 [-200, 150]
+      // Opposite directions: Strategy1 goes down, Strategy2 goes up = negative correlation
+      expect(monthlyResult.correlationData[0][1]).toBeCloseTo(-1, 5);
+    });
+
+    it('should enable correlation for strategies that never trade on same day', () => {
+      // Two strategies that never overlap on daily basis but trade in same weeks
+      const trades: Trade[] = [
+        // Strategy1 trades Mon/Wed (Jan 6, 8, 13, 15)
+        { dateOpened: new Date('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-08'), strategy: 'Strategy1', pl: 50 } as Trade,
+        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy1', pl: -50 } as Trade,
+        { dateOpened: new Date('2025-01-15'), strategy: 'Strategy1', pl: 200 } as Trade,
+
+        // Strategy2 trades Tue/Thu (Jan 7, 9, 14, 16)
+        { dateOpened: new Date('2025-01-07'), strategy: 'Strategy2', pl: 80 } as Trade,
+        { dateOpened: new Date('2025-01-09'), strategy: 'Strategy2', pl: 30 } as Trade,
+        { dateOpened: new Date('2025-01-14'), strategy: 'Strategy2', pl: -30 } as Trade,
+        { dateOpened: new Date('2025-01-16'), strategy: 'Strategy2', pl: 180 } as Trade,
+      ];
+
+      // Daily: no shared days = NaN
+      const dailyResult = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        timePeriod: 'daily',
+      });
+      expect(dailyResult.sampleSizes[0][1]).toBe(0);
+      expect(Number.isNaN(dailyResult.correlationData[0][1])).toBe(true);
+
+      // Weekly: both have 2 weeks, can correlate
+      const weeklyResult = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        timePeriod: 'weekly',
+      });
+      expect(weeklyResult.sampleSizes[0][1]).toBe(2);
+      expect(Number.isNaN(weeklyResult.correlationData[0][1])).toBe(false);
+    });
+
+    it('should respect alignment option with weekly aggregation', () => {
+      const trades: Trade[] = [
+        // Strategy1 trades week 1 and 2
+        { dateOpened: new Date('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy1', pl: 200 } as Trade,
+
+        // Strategy2 trades week 2 and 3
+        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: new Date('2025-01-20'), strategy: 'Strategy2', pl: 250 } as Trade,
+      ];
+
+      // Shared alignment: only week 2 shared = insufficient for correlation
+      const sharedResult = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        timePeriod: 'weekly',
+        alignment: 'shared',
+      });
+      expect(sharedResult.sampleSizes[0][1]).toBe(1); // Only 1 shared week
+      expect(Number.isNaN(sharedResult.correlationData[0][1])).toBe(true);
+
+      // Zero-pad: fills missing weeks with 0
+      const zeroPadResult = calculateCorrelationMatrix(trades, {
+        method: 'pearson',
+        timePeriod: 'weekly',
+        alignment: 'zero-pad',
+      });
+      expect(zeroPadResult.sampleSizes[0][1]).toBe(1); // Still only 1 actual shared week
+      // But correlation can be calculated using all 3 weeks with zero-padding
+      expect(Number.isNaN(zeroPadResult.correlationData[0][1])).toBe(false);
+    });
+
+    it('should use daily by default when timePeriod not specified', () => {
+      const trades: Trade[] = [
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy1', pl: 200 } as Trade,
+        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy2', pl: 90 } as Trade,
+        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy2', pl: 210 } as Trade,
+      ];
+
+      const defaultResult = calculateCorrelationMatrix(trades, { method: 'pearson' });
+      const dailyResult = calculateCorrelationMatrix(trades, { method: 'pearson', timePeriod: 'daily' });
+
+      expect(defaultResult.sampleSizes[0][1]).toBe(dailyResult.sampleSizes[0][1]);
+      expect(defaultResult.correlationData[0][1]).toBeCloseTo(dailyResult.correlationData[0][1], 6);
+    });
+  });
 });
