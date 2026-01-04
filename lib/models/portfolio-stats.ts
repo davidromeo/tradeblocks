@@ -48,6 +48,7 @@ export interface StrategyStats {
   successRate: number
   profitFactor: number
   kellyPercentage?: number  // Kelly Criterion percentage (optimal % of capital to bet)
+  kellyUtilization?: number  // Kelly Utilization percentage (actual usage / Kelly Factor)
 }
 
 /**

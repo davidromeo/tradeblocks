@@ -35,6 +35,7 @@ interface StrategyData {
   avgLoss: number;
   profitFactor: number;
   kellyFactor?: number;
+  kellyUtilization?: number;
 }
 
 interface StrategyBreakdownTableProps {
@@ -52,6 +53,7 @@ const mockData: StrategyData[] = [
     avgLoss: -5929,
     profitFactor: 1.06,
     kellyFactor: 2.5,
+    kellyUtilization: 15.2,
   },
   {
     strategy: "McRib w Lettuce, Pickles, & Special Sauce",
@@ -62,6 +64,7 @@ const mockData: StrategyData[] = [
     avgLoss: -9484,
     profitFactor: 1.57,
     kellyFactor: 12.8,
+    kellyUtilization: 35.6,
   },
   {
     strategy: "The Overnight SPY Who Loved Me",
@@ -72,6 +75,7 @@ const mockData: StrategyData[] = [
     avgLoss: -2568,
     profitFactor: 4.32,
     kellyFactor: 45.2,
+    kellyUtilization: 62.8,
   },
   {
     strategy: "Hump Day, Half-Baked Calendar - 1/2",
@@ -82,6 +86,7 @@ const mockData: StrategyData[] = [
     avgLoss: -7973,
     profitFactor: 2.29,
     kellyFactor: 28.7,
+    kellyUtilization: 42.3,
   },
   {
     strategy: "Theta Tuesday Calendar - 2/3",
@@ -92,6 +97,7 @@ const mockData: StrategyData[] = [
     avgLoss: -8639,
     profitFactor: 1.85,
     kellyFactor: 18.3,
+    kellyUtilization: 8.9,
   },
 ];
 
@@ -152,6 +158,22 @@ export function StrategyBreakdownTable({
       return "-";
     }
     return `${value.toFixed(1)}%`;
+  };
+
+  const formatKellyUtilization = (value: number | undefined) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "-";
+    }
+    return `${value.toFixed(1)}%`;
+  };
+
+  const getKellyUtilizationColor = (value: number | undefined) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "";
+    }
+    if (value < 25) return "text-blue-600 dark:text-blue-400"; // Very conservative
+    if (value < 50) return "text-green-600 dark:text-green-400"; // Appropriate
+    return "text-red-600 dark:text-red-400"; // Very aggressive (50-100% and above)
   };
 
   const getProfitFactorColor = (value: number) => {
@@ -290,6 +312,19 @@ export function StrategyBreakdownTable({
                     Kelly Factor
                   </SortButton>
                 </TableHead>
+                <TableHead className="text-right font-semibold">
+                  <SortButton
+                    field="kellyUtilization"
+                    tooltip={{
+                      flavor:
+                        "What percentage of the Kelly Factor recommendation you're actually using based on average realized loss.",
+                      detailed:
+                        "Kelly Utilization measures what percentage of the Kelly Factor recommendation you're actually deploying, calculated from your average realized losses. Formula: (Average Loss / Portfolio Capital) / Kelly Factor × 100. This metric uses average actual losses as a starting point for risk assessment (note that maximum losses may be higher). Values below 25% indicate conservative sizing (<1/4 Kelly), 25-50% represents expected utilization (Quarter to Half Kelly), and 50-100% suggests aggressive position sizing relative to Kelly recommendations.",
+                    }}
+                  >
+                    Kelly Utilization
+                  </SortButton>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -335,6 +370,14 @@ export function StrategyBreakdownTable({
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {formatKellyFactor(row.kellyFactor)}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right font-medium",
+                      getKellyUtilizationColor(row.kellyUtilization)
+                    )}
+                  >
+                    {formatKellyUtilization(row.kellyUtilization)}
                   </TableCell>
                 </TableRow>
               ))}
