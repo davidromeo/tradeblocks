@@ -34,6 +34,7 @@ interface StrategyData {
   avgWin: number;
   avgLoss: number;
   profitFactor: number;
+  kellyFactor?: number;
 }
 
 interface StrategyBreakdownTableProps {
@@ -50,6 +51,7 @@ const mockData: StrategyData[] = [
     avgWin: 7842,
     avgLoss: -5929,
     profitFactor: 1.06,
+    kellyFactor: 2.5,
   },
   {
     strategy: "McRib w Lettuce, Pickles, & Special Sauce",
@@ -59,6 +61,7 @@ const mockData: StrategyData[] = [
     avgWin: 24042,
     avgLoss: -9484,
     profitFactor: 1.57,
+    kellyFactor: 12.8,
   },
   {
     strategy: "The Overnight SPY Who Loved Me",
@@ -68,6 +71,7 @@ const mockData: StrategyData[] = [
     avgWin: 5222,
     avgLoss: -2568,
     profitFactor: 4.32,
+    kellyFactor: 45.2,
   },
   {
     strategy: "Hump Day, Half-Baked Calendar - 1/2",
@@ -77,6 +81,7 @@ const mockData: StrategyData[] = [
     avgWin: 12505,
     avgLoss: -7973,
     profitFactor: 2.29,
+    kellyFactor: 28.7,
   },
   {
     strategy: "Theta Tuesday Calendar - 2/3",
@@ -86,6 +91,7 @@ const mockData: StrategyData[] = [
     avgWin: 14187,
     avgLoss: -8639,
     profitFactor: 1.85,
+    kellyFactor: 18.3,
   },
 ];
 
@@ -112,6 +118,11 @@ export function StrategyBreakdownTable({
     const aValue = a[sortField];
     const bValue = b[sortField];
 
+    // Handle undefined values: always sort them to the end
+    if (aValue === undefined && bValue === undefined) return 0;
+    if (aValue === undefined) return 1; // undefined goes to end
+    if (bValue === undefined) return -1; // undefined goes to end
+
     if (typeof aValue === "string" && typeof bValue === "string") {
       return sortDirection === "asc"
         ? aValue.localeCompare(bValue)
@@ -135,6 +146,13 @@ export function StrategyBreakdownTable({
   };
 
   const formatPercentage = (value: number) => `${value.toFixed(1)}%`;
+
+  const formatKellyFactor = (value: number | undefined) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "-";
+    }
+    return `${value.toFixed(1)}%`;
+  };
 
   const getProfitFactorColor = (value: number) => {
     if (value >= 2) return "text-green-600 dark:text-green-400";
@@ -259,6 +277,19 @@ export function StrategyBreakdownTable({
                     Profit Factor
                   </SortButton>
                 </TableHead>
+                <TableHead className="text-right font-semibold">
+                  <SortButton
+                    field="kellyFactor"
+                    tooltip={{
+                      flavor:
+                        "Optimal position sizing percentage based on the Kelly Criterion formula using margin-based returns.",
+                      detailed:
+                        "Kelly Factor (Kelly Percentage) calculates the optimal percentage of capital to allocate per trade based on win rate and return-on-margin ratio. This calculation uses percentage returns relative to margin requirements rather than absolute dollar amounts, making it more appropriate for position sizing. A value of 15% means you should allocate 15% of your capital per trade for maximum growth. Values above 25% are considered aggressive, and the Kelly Criterion assumes infinite capital and perfect knowledge of win probabilities. Many traders use fractional Kelly (e.g., 1/2 Kelly or 1/4 Kelly) to reduce volatility.",
+                    }}
+                  >
+                    Kelly Factor
+                  </SortButton>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -301,6 +332,9 @@ export function StrategyBreakdownTable({
                     )}
                   >
                     {row.profitFactor.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatKellyFactor(row.kellyFactor)}
                   </TableCell>
                 </TableRow>
               ))}

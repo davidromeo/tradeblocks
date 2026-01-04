@@ -19,6 +19,7 @@ import { std, mean, min, max } from 'mathjs'
 import { Trade } from '../models/trade'
 import { DailyLogEntry } from '../models/daily-log'
 import { PortfolioStats, StrategyStats, AnalysisConfig } from '../models/portfolio-stats'
+import { calculateKellyMetrics } from './kelly'
 
 /**
  * Default analysis configuration
@@ -199,6 +200,16 @@ export class PortfolioStatsCalculator {
       // Calculate average DTE if available
       const avgDte = this.calculateAvgDTE(strategyTrades)
 
+      // Calculate Kelly using margin-based approach (percentage returns)
+      // This calculates Kelly based on return-on-margin (P&L / margin requirement)
+      // which is more appropriate for position sizing than absolute dollar amounts.
+      // Falls back to absolute-based calculation if margin data is unavailable.
+      const kellyMetrics = calculateKellyMetrics(strategyTrades, portfolioStats.initialCapital)
+      
+      // Prefer normalized Kelly (margin-based) if available, otherwise use absolute-based
+      const kellyPercentage = kellyMetrics.normalizedKellyPct ?? 
+                              (kellyMetrics.hasValidKelly ? kellyMetrics.percent : undefined)
+
       strategyStats[strategyName] = {
         strategyName,
         tradeCount: strategyTrades.length,
@@ -211,6 +222,7 @@ export class PortfolioStatsCalculator {
         avgDte,
         successRate: portfolioStats.winRate, // Assuming success rate = win rate for now
         profitFactor: portfolioStats.profitFactor,
+        kellyPercentage,
       }
     })
 

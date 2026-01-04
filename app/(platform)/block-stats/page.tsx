@@ -1134,6 +1134,7 @@ export default function BlockStatsPage() {
           avgWin: stat.avgWin,
           avgLoss: stat.avgLoss,
           profitFactor: stat.profitFactor,
+          kellyFactor: stat.kellyPercentage,
         }))}
       />
     </div>

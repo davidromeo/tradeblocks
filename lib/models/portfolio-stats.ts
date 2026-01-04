@@ -47,6 +47,7 @@ export interface StrategyStats {
   avgDte?: number  // Average days to expiration
   successRate: number
   profitFactor: number
+  kellyPercentage?: number  // Kelly Criterion percentage (optimal % of capital to bet)
 }
 
 /**
