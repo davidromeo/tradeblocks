@@ -57,14 +57,15 @@ export default function CorrelationMatrixPage() {
     useState<CorrelationNormalization>("raw");
   const [dateBasis, setDateBasis] = useState<CorrelationDateBasis>("opened");
   const [timePeriod, setTimePeriod] = useState<CorrelationTimePeriod>("daily");
-  const [minSamples, setMinSamples] = useState<number>(10);
-  const [minSamplesInput, setMinSamplesInput] = useState<string>("10");
 
   const DEFAULT_MIN_SAMPLES: Record<CorrelationTimePeriod, number> = {
-    daily: 10,
+    daily: 2,
     weekly: 5,
     monthly: 3,
   };
+
+  const [minSamples, setMinSamples] = useState<number>(DEFAULT_MIN_SAMPLES.daily);
+  const [minSamplesInput, setMinSamplesInput] = useState<string>(String(DEFAULT_MIN_SAMPLES.daily));
 
   const handleTimePeriodChange = (period: CorrelationTimePeriod) => {
     setTimePeriod(period);

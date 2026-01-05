@@ -312,23 +312,38 @@ function getTradeDateKey(
     );
   }
 
-  return date.toISOString().split("T")[0];
+  // Extract calendar date components directly to preserve Eastern Time date
+  // Using toISOString() would convert to UTC and potentially shift the date
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
  * Get ISO week key for a date (YYYY-Www format)
  */
 function getIsoWeekKey(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
+  const [yearStr, monthStr, dayStr] = dateStr.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr) - 1; // zero-based month
+  const day = Number(dayStr);
+
+  // Construct date in UTC to avoid timezone/DST issues
+  const date = new Date(Date.UTC(year, month, day));
+
   // ISO week: week containing Jan 4 is week 1
   // Thursday of the week determines which year the week belongs to
-  const thursday = new Date(date);
-  thursday.setDate(date.getDate() + (4 - (date.getDay() || 7)));
-  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  const thursday = new Date(date.getTime());
+  const dayOfWeek = thursday.getUTCDay() || 7; // make Sunday = 7
+  thursday.setUTCDate(thursday.getUTCDate() + (4 - dayOfWeek));
+
+  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
   const weekNum = Math.ceil(
     ((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
   );
-  return `${thursday.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+
+  return `${thursday.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
 }
 
 /**

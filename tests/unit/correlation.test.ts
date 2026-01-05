@@ -1,6 +1,15 @@
 import { calculateCorrelationAnalytics, calculateCorrelationMatrix } from '@/lib/calculations/correlation';
 import { Trade } from '@/lib/models/trade';
 
+/**
+ * Create a date at local midnight for a given YYYY-MM-DD string.
+ * This ensures the date doesn't shift when extracting local date components.
+ */
+function localDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 describe('Correlation Calculations', () => {
   it('should match pandas pearson correlation', () => {
     // Test data matching Python example
@@ -406,18 +415,18 @@ describe('Correlation Calculations', () => {
 
   describe('Time Period Aggregation', () => {
     it('should aggregate daily P&L to weekly sums', () => {
-      // Week 1: Jan 6-12, 2025 (Mon-Sun in ISO week)
-      // Week 2: Jan 13-19, 2025
+      // Week 2 (ISO): Jan 6-12, 2025 (Mon-Sun)
+      // Week 3 (ISO): Jan 13-19, 2025
       const trades: Trade[] = [
-        // Strategy1: Week 1 = +150, Week 2 = +200
-        { dateOpened: new Date('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
-        { dateOpened: new Date('2025-01-07'), strategy: 'Strategy1', pl: 50 } as Trade,
-        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy1', pl: 200 } as Trade,
+        // Strategy1: Week 2 = +150, Week 3 = +200
+        { dateOpened: localDate('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: localDate('2025-01-07'), strategy: 'Strategy1', pl: 50 } as Trade,
+        { dateOpened: localDate('2025-01-13'), strategy: 'Strategy1', pl: 200 } as Trade,
 
-        // Strategy2: Week 1 = -100, Week 2 = +300
-        { dateOpened: new Date('2025-01-08'), strategy: 'Strategy2', pl: -100 } as Trade,
-        { dateOpened: new Date('2025-01-14'), strategy: 'Strategy2', pl: 150 } as Trade,
-        { dateOpened: new Date('2025-01-15'), strategy: 'Strategy2', pl: 150 } as Trade,
+        // Strategy2: Week 2 = -100, Week 3 = +300
+        { dateOpened: localDate('2025-01-08'), strategy: 'Strategy2', pl: -100 } as Trade,
+        { dateOpened: localDate('2025-01-14'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: localDate('2025-01-15'), strategy: 'Strategy2', pl: 150 } as Trade,
       ];
 
       const weeklyResult = calculateCorrelationMatrix(trades, {
@@ -438,13 +447,13 @@ describe('Correlation Calculations', () => {
     it('should aggregate daily P&L to monthly sums', () => {
       const trades: Trade[] = [
         // Strategy1: Jan = +300, Feb = -100
-        { dateOpened: new Date('2025-01-05'), strategy: 'Strategy1', pl: 100 } as Trade,
-        { dateOpened: new Date('2025-01-15'), strategy: 'Strategy1', pl: 200 } as Trade,
-        { dateOpened: new Date('2025-02-10'), strategy: 'Strategy1', pl: -100 } as Trade,
+        { dateOpened: localDate('2025-01-05'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: localDate('2025-01-15'), strategy: 'Strategy1', pl: 200 } as Trade,
+        { dateOpened: localDate('2025-02-10'), strategy: 'Strategy1', pl: -100 } as Trade,
 
         // Strategy2: Jan = -200, Feb = +150
-        { dateOpened: new Date('2025-01-20'), strategy: 'Strategy2', pl: -200 } as Trade,
-        { dateOpened: new Date('2025-02-15'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: localDate('2025-01-20'), strategy: 'Strategy2', pl: -200 } as Trade,
+        { dateOpened: localDate('2025-02-15'), strategy: 'Strategy2', pl: 150 } as Trade,
       ];
 
       const monthlyResult = calculateCorrelationMatrix(trades, {
@@ -466,16 +475,16 @@ describe('Correlation Calculations', () => {
       // Two strategies that never overlap on daily basis but trade in same weeks
       const trades: Trade[] = [
         // Strategy1 trades Mon/Wed (Jan 6, 8, 13, 15)
-        { dateOpened: new Date('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
-        { dateOpened: new Date('2025-01-08'), strategy: 'Strategy1', pl: 50 } as Trade,
-        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy1', pl: -50 } as Trade,
-        { dateOpened: new Date('2025-01-15'), strategy: 'Strategy1', pl: 200 } as Trade,
+        { dateOpened: localDate('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: localDate('2025-01-08'), strategy: 'Strategy1', pl: 50 } as Trade,
+        { dateOpened: localDate('2025-01-13'), strategy: 'Strategy1', pl: -50 } as Trade,
+        { dateOpened: localDate('2025-01-15'), strategy: 'Strategy1', pl: 200 } as Trade,
 
         // Strategy2 trades Tue/Thu (Jan 7, 9, 14, 16)
-        { dateOpened: new Date('2025-01-07'), strategy: 'Strategy2', pl: 80 } as Trade,
-        { dateOpened: new Date('2025-01-09'), strategy: 'Strategy2', pl: 30 } as Trade,
-        { dateOpened: new Date('2025-01-14'), strategy: 'Strategy2', pl: -30 } as Trade,
-        { dateOpened: new Date('2025-01-16'), strategy: 'Strategy2', pl: 180 } as Trade,
+        { dateOpened: localDate('2025-01-07'), strategy: 'Strategy2', pl: 80 } as Trade,
+        { dateOpened: localDate('2025-01-09'), strategy: 'Strategy2', pl: 30 } as Trade,
+        { dateOpened: localDate('2025-01-14'), strategy: 'Strategy2', pl: -30 } as Trade,
+        { dateOpened: localDate('2025-01-16'), strategy: 'Strategy2', pl: 180 } as Trade,
       ];
 
       // Daily: no shared days = NaN
@@ -497,16 +506,16 @@ describe('Correlation Calculations', () => {
 
     it('should respect alignment option with weekly aggregation', () => {
       const trades: Trade[] = [
-        // Strategy1 trades week 1 and 2
-        { dateOpened: new Date('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
-        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy1', pl: 200 } as Trade,
+        // Strategy1 trades week 2 and 3 (ISO 8601)
+        { dateOpened: localDate('2025-01-06'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: localDate('2025-01-13'), strategy: 'Strategy1', pl: 200 } as Trade,
 
-        // Strategy2 trades week 2 and 3
-        { dateOpened: new Date('2025-01-13'), strategy: 'Strategy2', pl: 150 } as Trade,
-        { dateOpened: new Date('2025-01-20'), strategy: 'Strategy2', pl: 250 } as Trade,
+        // Strategy2 trades week 3 and 4 (ISO 8601)
+        { dateOpened: localDate('2025-01-13'), strategy: 'Strategy2', pl: 150 } as Trade,
+        { dateOpened: localDate('2025-01-20'), strategy: 'Strategy2', pl: 250 } as Trade,
       ];
 
-      // Shared alignment: only week 2 shared = insufficient for correlation
+      // Shared alignment: only week 3 shared = insufficient for correlation
       const sharedResult = calculateCorrelationMatrix(trades, {
         method: 'pearson',
         timePeriod: 'weekly',
@@ -528,10 +537,10 @@ describe('Correlation Calculations', () => {
 
     it('should use daily by default when timePeriod not specified', () => {
       const trades: Trade[] = [
-        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
-        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy1', pl: 200 } as Trade,
-        { dateOpened: new Date('2025-01-01'), strategy: 'Strategy2', pl: 90 } as Trade,
-        { dateOpened: new Date('2025-01-02'), strategy: 'Strategy2', pl: 210 } as Trade,
+        { dateOpened: localDate('2025-01-01'), strategy: 'Strategy1', pl: 100 } as Trade,
+        { dateOpened: localDate('2025-01-02'), strategy: 'Strategy1', pl: 200 } as Trade,
+        { dateOpened: localDate('2025-01-01'), strategy: 'Strategy2', pl: 90 } as Trade,
+        { dateOpened: localDate('2025-01-02'), strategy: 'Strategy2', pl: 210 } as Trade,
       ];
 
       const defaultResult = calculateCorrelationMatrix(trades, { method: 'pearson' });
