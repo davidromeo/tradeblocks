@@ -10,6 +10,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -26,6 +27,7 @@ import {
   CorrelationMethod,
   CorrelationMatrix,
   CorrelationNormalization,
+  CorrelationTimePeriod,
 } from "@/lib/calculations/correlation";
 import { getBlock, getTradesByBlockWithOptions } from "@/lib/db";
 import { Trade } from "@/lib/models/trade";
@@ -54,7 +56,33 @@ export default function CorrelationMatrixPage() {
   const [normalization, setNormalization] =
     useState<CorrelationNormalization>("raw");
   const [dateBasis, setDateBasis] = useState<CorrelationDateBasis>("opened");
-  const [minSamples, setMinSamples] = useState<number>(2);
+  const [timePeriod, setTimePeriod] = useState<CorrelationTimePeriod>("daily");
+
+  const DEFAULT_MIN_SAMPLES: Record<CorrelationTimePeriod, number> = {
+    daily: 2,
+    weekly: 5,
+    monthly: 3,
+  };
+
+  const [minSamples, setMinSamples] = useState<number>(DEFAULT_MIN_SAMPLES.daily);
+  const [minSamplesInput, setMinSamplesInput] = useState<string>(String(DEFAULT_MIN_SAMPLES.daily));
+
+  const handleTimePeriodChange = (period: CorrelationTimePeriod) => {
+    setTimePeriod(period);
+    const defaultVal = DEFAULT_MIN_SAMPLES[period];
+    setMinSamples(defaultVal);
+    setMinSamplesInput(String(defaultVal));
+  };
+
+  const handleMinSamplesBlur = () => {
+    const val = parseInt(minSamplesInput, 10);
+    if (!isNaN(val) && val >= 1 && val <= 100) {
+      setMinSamples(val);
+      setMinSamplesInput(String(val));
+    } else {
+      setMinSamplesInput(String(minSamples));
+    }
+  };
 
   const analyticsContext = useMemo(
     () =>
@@ -63,9 +91,10 @@ export default function CorrelationMatrixPage() {
         alignment,
         normalization,
         dateBasis,
+        timePeriod,
         minSamples,
       }),
-    [method, alignment, normalization, dateBasis, minSamples]
+    [method, alignment, normalization, dateBasis, timePeriod, minSamples]
   );
 
   useEffect(() => {
@@ -104,11 +133,12 @@ export default function CorrelationMatrixPage() {
       alignment,
       normalization,
       dateBasis,
+      timePeriod,
     });
     const stats = calculateCorrelationAnalytics(matrix, minSamples);
 
     return { correlationMatrix: matrix, analytics: stats };
-  }, [trades, method, alignment, normalization, dateBasis, minSamples]);
+  }, [trades, method, alignment, normalization, dateBasis, timePeriod, minSamples]);
 
   const { plotData, layout } = useMemo(() => {
     if (!correlationMatrix) {
@@ -279,6 +309,7 @@ export default function CorrelationMatrixPage() {
       alignment,
       normalization,
       dateBasis,
+      timePeriod,
       minSamples,
     });
 
@@ -286,7 +317,7 @@ export default function CorrelationMatrixPage() {
       lines,
       generateExportFilename(activeBlock.name, "correlation", "csv")
     );
-  }, [correlationMatrix, method, alignment, normalization, dateBasis, minSamples, activeBlock]);
+  }, [correlationMatrix, method, alignment, normalization, dateBasis, timePeriod, minSamples, activeBlock]);
 
   const handleDownloadJson = useCallback(() => {
     if (!correlationMatrix || !activeBlock) {
@@ -304,6 +335,7 @@ export default function CorrelationMatrixPage() {
         alignment,
         normalization,
         dateBasis,
+        timePeriod,
         minSamples,
       },
       strategies: correlationMatrix.strategies,
@@ -324,7 +356,7 @@ export default function CorrelationMatrixPage() {
       exportData,
       generateExportFilename(activeBlock.name, "correlation", "json")
     );
-  }, [correlationMatrix, analytics, method, alignment, normalization, dateBasis, minSamples, activeBlock]);
+  }, [correlationMatrix, analytics, method, alignment, normalization, dateBasis, timePeriod, minSamples, activeBlock]);
 
   if (loading) {
     return (
@@ -389,7 +421,7 @@ export default function CorrelationMatrixPage() {
           <CardTitle className="text-lg">Calculation Settings</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {/* Method */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -480,8 +512,57 @@ export default function CorrelationMatrixPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {alignment === "shared" && "Only common trading days"}
-                {alignment === "zero-pad" && "Fill missing days with $0"}
+                {alignment === "shared" && "Only common trading periods"}
+                {alignment === "zero-pad" && "Fill missing periods with $0"}
+              </p>
+            </div>
+
+            {/* Time Period */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="time-period-select">Time Period</Label>
+                <HoverCard>
+                  <HoverCardTrigger asChild>
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-80 p-0 overflow-hidden">
+                    <div className="space-y-3">
+                      <div className="bg-primary/5 border-b px-4 py-3">
+                        <h4 className="text-sm font-semibold text-primary">Time Period Aggregation</h4>
+                      </div>
+                      <div className="px-4 pb-4 space-y-3">
+                        <p className="text-sm font-medium text-foreground leading-relaxed">
+                          How to aggregate P&L before calculating correlations
+                        </p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          <strong>Daily:</strong> Correlate daily P&L (default).<br/>
+                          <strong>Weekly:</strong> Sum P&L by ISO week, then correlate. Useful for strategies that trade on different days but may compensate each other weekly.<br/>
+                          <strong>Monthly:</strong> Sum P&L by month. Shows longer-term correlation patterns.
+                        </p>
+                      </div>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
+              </div>
+              <Select
+                value={timePeriod}
+                onValueChange={(value) =>
+                  handleTimePeriodChange(value as CorrelationTimePeriod)
+                }
+              >
+                <SelectTrigger id="time-period-select">
+                  <SelectValue placeholder="Time period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {timePeriod === "daily" && "Correlate daily P&L"}
+                {timePeriod === "weekly" && "Sum by week, then correlate"}
+                {timePeriod === "monthly" && "Sum by month, then correlate"}
               </p>
             </div>
 
@@ -583,7 +664,7 @@ export default function CorrelationMatrixPage() {
             {/* Min. Samples */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Label htmlFor="min-samples-select">Min. Samples</Label>
+                <Label htmlFor="min-samples-input">Min. Samples</Label>
                 <HoverCard>
                   <HoverCardTrigger asChild>
                     <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
@@ -595,35 +676,31 @@ export default function CorrelationMatrixPage() {
                       </div>
                       <div className="px-4 pb-4 space-y-3">
                         <p className="text-sm font-medium text-foreground leading-relaxed">
-                          Minimum shared trading days required for valid correlation
+                          Minimum shared periods required for valid correlation
                         </p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
-                          Correlations calculated with fewer shared days than this threshold are shown as
+                          Correlations calculated with fewer shared periods than this threshold are shown as
                           &ldquo;—&rdquo; to indicate insufficient data. Higher thresholds give more reliable
-                          correlations but may exclude more strategy pairs.
+                          correlations but may exclude more strategy pairs. Default adjusts based on time period.
                         </p>
                       </div>
                     </div>
                   </HoverCardContent>
                 </HoverCard>
               </div>
-              <Select
-                value={String(minSamples)}
-                onValueChange={(value) => setMinSamples(Number(value))}
-              >
-                <SelectTrigger id="min-samples-select">
-                  <SelectValue placeholder="Min samples" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2">2 (default)</SelectItem>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="30">30</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                id="min-samples-input"
+                type="number"
+                min={1}
+                max={100}
+                value={minSamplesInput}
+                onChange={(e) => setMinSamplesInput(e.target.value)}
+                onBlur={handleMinSamplesBlur}
+                onKeyDown={(e) => e.key === "Enter" && handleMinSamplesBlur()}
+                className="w-full"
+              />
               <p className="text-xs text-muted-foreground">
-                Pairs with fewer shared days show &ldquo;—&rdquo;
+                Pairs with fewer shared periods show &ldquo;—&rdquo;
               </p>
             </div>
           </div>
@@ -780,6 +857,7 @@ interface CsvMeta {
   alignment: string;
   normalization: string;
   dateBasis: string;
+  timePeriod: string;
   minSamples: number;
 }
 
@@ -795,6 +873,7 @@ function buildCorrelationCsvLines(
   lines.push(toCsvRow(["Alignment", meta.alignment]));
   lines.push(toCsvRow(["Return Basis", meta.normalization]));
   lines.push(toCsvRow(["Date Basis", meta.dateBasis]));
+  lines.push(toCsvRow(["Time Period", meta.timePeriod]));
   lines.push(toCsvRow(["Min. Samples Threshold", meta.minSamples]));
   lines.push(toCsvRow(["Strategy Count", matrix.strategies.length]));
 
@@ -812,7 +891,8 @@ function buildCorrelationCsvLines(
   });
 
   lines.push("");
-  lines.push(toCsvRow(["=== SAMPLE SIZES (Shared Trading Days) ==="]));
+  const periodLabel = meta.timePeriod === "daily" ? "Days" : meta.timePeriod === "weekly" ? "Weeks" : "Months";
+  lines.push(toCsvRow([`=== SAMPLE SIZES (Shared ${periodLabel}) ===`]));
 
   lines.push(toCsvRow(["Strategy", ...matrix.strategies]));
   matrix.sampleSizes.forEach((row, index) => {
@@ -832,6 +912,7 @@ interface AnalyticsContextArgs {
   alignment: CorrelationAlignment;
   normalization: CorrelationNormalization;
   dateBasis: CorrelationDateBasis;
+  timePeriod: CorrelationTimePeriod;
   minSamples: number;
 }
 
@@ -840,6 +921,7 @@ function formatAnalyticsContext({
   alignment,
   normalization,
   dateBasis,
+  timePeriod,
   minSamples,
 }: AnalyticsContextArgs): string {
   const methodLabel =
@@ -849,7 +931,7 @@ function formatAnalyticsContext({
       ? "Spearman"
       : "Kendall";
 
-  const alignmentLabel = alignment === "shared" ? "Shared days" : "Zero-filled";
+  const alignmentLabel = alignment === "shared" ? "Shared periods" : "Zero-filled";
 
   const normalizationLabel =
     normalization === "raw"
@@ -860,7 +942,14 @@ function formatAnalyticsContext({
 
   const dateLabel = dateBasis === "opened" ? "Opened dates" : "Closed dates";
 
+  const timePeriodLabel =
+    timePeriod === "daily"
+      ? "Daily"
+      : timePeriod === "weekly"
+      ? "Weekly"
+      : "Monthly";
+
   const minSamplesLabel = `n≥${minSamples}`;
 
-  return [methodLabel, alignmentLabel, normalizationLabel, dateLabel, minSamplesLabel].join(", ");
+  return [methodLabel, timePeriodLabel, alignmentLabel, normalizationLabel, dateLabel, minSamplesLabel].join(", ");
 }

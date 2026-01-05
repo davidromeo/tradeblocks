@@ -82,6 +82,14 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 
 ### Critical Implementation Details
 
+**Timezone Handling**: All dates and times are processed and displayed as **US Eastern Time** (America/New_York). This is critical because:
+- Trading data originates from US markets operating on Eastern Time
+- CSVs contain dates/times in Eastern Time format
+- When parsing dates, preserve the calendar date as-is (don't convert to UTC)
+- When displaying times, show Eastern Time (with DST awareness)
+- Use `toLocaleDateString('en-US')` or manual string extraction instead of `.toISOString()` which converts to UTC
+- Static datasets in `tests/data/` explicitly handle Eastern Time with DST awareness
+
 **Date Handling**: Trades use separate `dateOpened` (Date object) and `timeOpened` (string) fields. When processing CSVs, parse dates carefully and maintain consistency with legacy format.
 
 **Trade P&L Calculations**:
