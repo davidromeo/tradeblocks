@@ -194,6 +194,428 @@ describe('Comprehensive Portfolio Statistics', () => {
       expect(stats.winningTrades).toBe(0);
       expect(stats.losingTrades).toBe(0);
     });
+
+    test('should include Kelly Percentage in strategy stats when calculable', () => {
+      // Strategy with both wins and losses should have Kelly Percentage
+      const allTradesStats = calculator.calculateStrategyStats(sampleTrades);
+      
+      // Strategy A has 2 wins, no losses - Kelly should be undefined
+      expect(allTradesStats['Strategy A']).toBeDefined();
+      expect(allTradesStats['Strategy A'].kellyPercentage).toBeUndefined();
+      
+      // Strategy B has only losses - Kelly should be undefined
+      expect(allTradesStats['Strategy B']).toBeDefined();
+      expect(allTradesStats['Strategy B'].kellyPercentage).toBeUndefined();
+      
+      // Strategy C has only break-even - Kelly should be undefined
+      expect(allTradesStats['Strategy C']).toBeDefined();
+      expect(allTradesStats['Strategy C'].kellyPercentage).toBeUndefined();
+    });
+
+    test('should calculate Kelly Percentage correctly for strategy with wins and losses', () => {
+      // Create a strategy with both wins and losses
+      const mixedTrades: Trade[] = [
+        {
+          dateOpened: new Date('2024-01-01'),
+          timeOpened: '10:00:00',
+          openingPrice: 100,
+          legs: 'CALL',
+          premium: 500,
+          pl: 100, // Win
+          numContracts: 1,
+          fundsAtClose: 10100,
+          marginReq: 1000,
+          strategy: 'Mixed Strategy',
+          openingCommissionsFees: 5,
+          closingCommissionsFees: 5,
+          openingShortLongRatio: 0.5,
+          closingShortLongRatio: 0.5,
+          openingVix: 15,
+          closingVix: 14,
+          gap: 0,
+          movement: 1.5,
+          maxProfit: 200,
+          maxLoss: -100,
+          dateClosed: new Date('2024-01-02'),
+          timeClosed: '15:00:00',
+          closingPrice: 102,
+          avgClosingCost: 102,
+          reasonForClose: 'Target',
+        },
+        {
+          dateOpened: new Date('2024-01-03'),
+          timeOpened: '11:00:00',
+          openingPrice: 105,
+          legs: 'PUT',
+          premium: 600,
+          pl: -50, // Loss
+          numContracts: 2,
+          fundsAtClose: 10050,
+          marginReq: 2000,
+          strategy: 'Mixed Strategy',
+          openingCommissionsFees: 10,
+          closingCommissionsFees: 10,
+          openingShortLongRatio: 0.6,
+          closingShortLongRatio: 0.4,
+          openingVix: 16,
+          closingVix: 18,
+          gap: -0.5,
+          movement: -2,
+          maxProfit: 300,
+          maxLoss: -200,
+          dateClosed: new Date('2024-01-04'),
+          timeClosed: '14:00:00',
+          closingPrice: 103,
+          avgClosingCost: 103,
+          reasonForClose: 'Stop',
+        },
+        {
+          dateOpened: new Date('2024-01-05'),
+          timeOpened: '09:30:00',
+          openingPrice: 102,
+          legs: 'SPREAD',
+          premium: 400,
+          pl: 100, // Win
+          numContracts: 1,
+          fundsAtClose: 10150,
+          marginReq: 1500,
+          strategy: 'Mixed Strategy',
+          openingCommissionsFees: 7,
+          closingCommissionsFees: 7,
+          openingShortLongRatio: 0.4,
+          closingShortLongRatio: 0.3,
+          openingVix: 14,
+          closingVix: 13,
+          gap: 0.2,
+          movement: 2.5,
+          maxProfit: 250,
+          maxLoss: -150,
+          dateClosed: new Date('2024-01-06'),
+          timeClosed: '16:00:00',
+          closingPrice: 104,
+          avgClosingCost: 104,
+          reasonForClose: 'Target',
+        },
+      ];
+
+      const strategyStats = calculator.calculateStrategyStats(mixedTrades);
+      
+      expect(strategyStats['Mixed Strategy']).toBeDefined();
+      expect(strategyStats['Mixed Strategy'].kellyPercentage).toBeDefined();
+      
+      // Verify Kelly calculation (margin-based):
+      // Trade 1: Win $100, margin $1000 → return = 10%
+      // Trade 2: Loss $50, margin $2000 → return = 2.5%
+      // Trade 3: Win $100, margin $1500 → return = 6.67%
+      // Win rate = 2/3 = 0.6667
+      // Avg win % = (10 + 6.67) / 2 = 8.335%
+      // Avg loss % = 2.5%
+      // Win/Loss ratio = 8.335 / 2.5 = 3.334
+      // Kelly % = (0.6667 * 3.334 - 0.3333) / 3.334 * 100 ≈ 56.7%
+      const kelly = strategyStats['Mixed Strategy'].kellyPercentage!;
+      expect(kelly).toBeCloseTo(56.7, 1);
+      
+      // Verify other stats are present
+      expect(strategyStats['Mixed Strategy'].profitFactor).toBeDefined();
+      expect(strategyStats['Mixed Strategy'].tradeCount).toBe(3);
+    });
+
+    test('should fall back to absolute-based Kelly when margin data is unavailable', () => {
+      // Trades without margin data should use absolute P&L calculation
+      const tradesWithoutMargin: Trade[] = [
+        {
+          dateOpened: new Date('2024-01-01'),
+          timeOpened: '10:00:00',
+          openingPrice: 100,
+          legs: 'CALL',
+          premium: 500,
+          pl: 100, // Win
+          numContracts: 1,
+          fundsAtClose: 10100,
+          marginReq: 0, // No margin data
+          strategy: 'No Margin Strategy',
+          openingCommissionsFees: 5,
+          closingCommissionsFees: 5,
+          openingShortLongRatio: 0.5,
+          closingShortLongRatio: 0.5,
+          openingVix: 15,
+          closingVix: 14,
+          gap: 0,
+          movement: 1.5,
+          maxProfit: 200,
+          maxLoss: -100,
+          dateClosed: new Date('2024-01-02'),
+          timeClosed: '15:00:00',
+          closingPrice: 102,
+          avgClosingCost: 102,
+          reasonForClose: 'Target',
+        },
+        {
+          dateOpened: new Date('2024-01-03'),
+          timeOpened: '11:00:00',
+          openingPrice: 105,
+          legs: 'PUT',
+          premium: 600,
+          pl: -50, // Loss
+          numContracts: 2,
+          fundsAtClose: 10050,
+          marginReq: 0, // No margin data
+          strategy: 'No Margin Strategy',
+          openingCommissionsFees: 10,
+          closingCommissionsFees: 10,
+          openingShortLongRatio: 0.6,
+          closingShortLongRatio: 0.4,
+          openingVix: 16,
+          closingVix: 18,
+          gap: -0.5,
+          movement: -2,
+          maxProfit: 300,
+          maxLoss: -200,
+          dateClosed: new Date('2024-01-04'),
+          timeClosed: '14:00:00',
+          closingPrice: 103,
+          avgClosingCost: 103,
+          reasonForClose: 'Stop',
+        },
+      ];
+
+      const strategyStats = calculator.calculateStrategyStats(tradesWithoutMargin);
+      
+      expect(strategyStats['No Margin Strategy']).toBeDefined();
+      // Should still calculate Kelly using absolute values when margin data unavailable
+      expect(strategyStats['No Margin Strategy'].kellyPercentage).toBeDefined();
+      
+      // Verify it uses absolute-based calculation:
+      // Win rate = 0.5, Avg win = 100, Avg loss = 50
+      // Win/Loss ratio = 2
+      // Kelly % = (0.5 * 2 - 0.5) / 2 * 100 = 25%
+      const kelly = strategyStats['No Margin Strategy'].kellyPercentage!;
+      expect(kelly).toBeCloseTo(25.0, 1);
+    });
+
+    test('should calculate Kelly Utilization correctly when all data is available', () => {
+      // Strategy with max loss data, Kelly Factor, and known initial capital
+      const tradesWithMaxLoss: Trade[] = [
+        {
+          dateOpened: new Date('2024-01-01'),
+          timeOpened: '10:00:00',
+          openingPrice: 100,
+          legs: 'CALL',
+          premium: 500,
+          pl: 100, // Win
+          numContracts: 1,
+          fundsAtClose: 40100,
+          marginReq: 2000,
+          strategy: 'Test Strategy',
+          openingCommissionsFees: 5,
+          closingCommissionsFees: 5,
+          openingShortLongRatio: 0.5,
+          closingShortLongRatio: 0.5,
+          openingVix: 15,
+          closingVix: 14,
+          gap: 0,
+          movement: 1.5,
+          maxProfit: 200,
+          maxLoss: -1, // -1% of $500 premium * 100 (option multiplier) = $500 max loss
+          dateClosed: new Date('2024-01-02'),
+          timeClosed: '15:00:00',
+          closingPrice: 102,
+          avgClosingCost: 102,
+          reasonForClose: 'Target',
+        },
+        {
+          dateOpened: new Date('2024-01-03'),
+          timeOpened: '11:00:00',
+          openingPrice: 105,
+          legs: 'PUT',
+          premium: 600,
+          pl: -50, // Loss
+          numContracts: 1,
+          fundsAtClose: 40050,
+          marginReq: 2000,
+          strategy: 'Test Strategy',
+          openingCommissionsFees: 10,
+          closingCommissionsFees: 10,
+          openingShortLongRatio: 0.6,
+          closingShortLongRatio: 0.4,
+          openingVix: 16,
+          closingVix: 18,
+          gap: -0.5,
+          movement: -2,
+          maxProfit: 300,
+          maxLoss: -1, // -1% of $600 premium * 100 (option multiplier) = $600 max loss
+          dateClosed: new Date('2024-01-04'),
+          timeClosed: '14:00:00',
+          closingPrice: 103,
+          avgClosingCost: 103,
+          reasonForClose: 'Stop',
+        },
+        {
+          dateOpened: new Date('2024-01-05'),
+          timeOpened: '09:30:00',
+          openingPrice: 102,
+          legs: 'SPREAD',
+          premium: 400,
+          pl: 100, // Win
+          numContracts: 1,
+          fundsAtClose: 40150,
+          marginReq: 2000,
+          strategy: 'Test Strategy',
+          openingCommissionsFees: 7,
+          closingCommissionsFees: 7,
+          openingShortLongRatio: 0.4,
+          closingShortLongRatio: 0.3,
+          openingVix: 14,
+          closingVix: 13,
+          gap: 0.2,
+          movement: 2.5,
+          maxProfit: 250,
+          maxLoss: -1.375, // -1.375% of $400 premium * 100 (option multiplier) = $550 max loss
+          dateClosed: new Date('2024-01-06'),
+          timeClosed: '16:00:00',
+          closingPrice: 104,
+          avgClosingCost: 104,
+          reasonForClose: 'Target',
+        },
+      ];
+
+      const fullPortfolioInitialCapital = 40000; // $40,000
+      const strategyStats = calculator.calculateStrategyStats(tradesWithMaxLoss, fullPortfolioInitialCapital);
+      
+      expect(strategyStats['Test Strategy']).toBeDefined();
+      expect(strategyStats['Test Strategy'].kellyUtilization).toBeDefined();
+      
+      // avgLoss is calculated from actual realized losses (negative P&L values)
+      // Trade 2 had pl: -50, so avgLoss = -50 (negative value)
+      expect(strategyStats['Test Strategy'].avgLoss).toBeCloseTo(-50, 0);
+      
+      // Verify Kelly Utilization:
+      // Avg loss = $50 (absolute value of avgLoss)
+      // Initial capital = $40,000
+      // Actual usage = $50 / $40,000 = 0.125%
+      // Kelly Factor (calculated from actual trades) ≈ 50%
+      // Kelly Utilization = 0.125% / 50% * 100 ≈ 0.25%
+      const kellyUtil = strategyStats['Test Strategy'].kellyUtilization!;
+      expect(kellyUtil).toBeCloseTo(0.25, 1);
+    });
+
+    test('should return undefined Kelly Utilization when no losing trades (avgLoss is 0)', () => {
+      // Strategy with only winning trades - avgLoss will be 0, so Kelly Utilization should be undefined
+      const tradesWithOnlyWins: Trade[] = [
+        {
+          dateOpened: new Date('2024-01-01'),
+          timeOpened: '10:00:00',
+          openingPrice: 100,
+          legs: 'CALL',
+          premium: 500,
+          pl: 100, // Win only
+          numContracts: 1,
+          fundsAtClose: 10100,
+          marginReq: 2000,
+          strategy: 'Winners Only Strategy',
+          openingCommissionsFees: 5,
+          closingCommissionsFees: 5,
+          openingShortLongRatio: 0.5,
+        },
+      ];
+
+      const strategyStats = calculator.calculateStrategyStats(tradesWithOnlyWins, 40000);
+      
+      expect(strategyStats['Winners Only Strategy']).toBeDefined();
+      // avgLoss will be 0 (no losing trades), so Kelly Utilization should be undefined
+      expect(strategyStats['Winners Only Strategy'].avgLoss).toBe(0);
+      expect(strategyStats['Winners Only Strategy'].kellyUtilization).toBeUndefined();
+    });
+
+    test('should return undefined Kelly Utilization when Kelly Factor is unavailable', () => {
+      // Strategy with only wins (no losses) - Kelly cannot be calculated
+      const tradesWithOnlyWins: Trade[] = [
+        {
+          dateOpened: new Date('2024-01-01'),
+          timeOpened: '10:00:00',
+          openingPrice: 100,
+          legs: 'CALL',
+          premium: 500,
+          pl: 100, // Win
+          numContracts: 1,
+          fundsAtClose: 40100,
+          marginReq: 2000,
+          strategy: 'Winners Only',
+          openingCommissionsFees: 5,
+          closingCommissionsFees: 5,
+          openingShortLongRatio: 0.5,
+          maxLoss: -1, // -1% of $500 premium * 100 (option multiplier) = $500 max loss
+        },
+        {
+          dateOpened: new Date('2024-01-02'),
+          timeOpened: '11:00:00',
+          openingPrice: 105,
+          legs: 'PUT',
+          premium: 600,
+          pl: 200, // Win
+          numContracts: 1,
+          fundsAtClose: 40300,
+          marginReq: 2000,
+          strategy: 'Winners Only',
+          openingCommissionsFees: 10,
+          closingCommissionsFees: 10,
+          openingShortLongRatio: 0.6,
+          maxLoss: -1, // -1% of $600 premium * 100 (option multiplier) = $600 max loss
+        },
+      ];
+
+      const strategyStats = calculator.calculateStrategyStats(tradesWithOnlyWins, 40000);
+      
+      expect(strategyStats['Winners Only']).toBeDefined();
+      expect(strategyStats['Winners Only'].kellyPercentage).toBeUndefined();
+      // avgLoss will be 0 (no losing trades - all trades are winners)
+      expect(strategyStats['Winners Only'].avgLoss).toBe(0);
+      // Kelly Utilization should be undefined when Kelly Factor is unavailable
+      expect(strategyStats['Winners Only'].kellyUtilization).toBeUndefined();
+    });
+
+    test('should return undefined Kelly Utilization when initial capital is zero', () => {
+      const tradesWithMaxLoss: Trade[] = [
+        {
+          dateOpened: new Date('2024-01-01'),
+          timeOpened: '10:00:00',
+          openingPrice: 100,
+          legs: 'CALL',
+          premium: 500,
+          pl: 100,
+          numContracts: 1,
+          fundsAtClose: 10100,
+          marginReq: 2000,
+          strategy: 'Test Strategy',
+          openingCommissionsFees: 5,
+          closingCommissionsFees: 5,
+          openingShortLongRatio: 0.5,
+          maxLoss: -500,
+        },
+        {
+          dateOpened: new Date('2024-01-02'),
+          timeOpened: '11:00:00',
+          openingPrice: 105,
+          legs: 'PUT',
+          premium: 600,
+          pl: -50,
+          numContracts: 1,
+          fundsAtClose: 10050,
+          marginReq: 2000,
+          strategy: 'Test Strategy',
+          openingCommissionsFees: 10,
+          closingCommissionsFees: 10,
+          openingShortLongRatio: 0.6,
+          maxLoss: -600,
+        },
+      ];
+
+      const strategyStats = calculator.calculateStrategyStats(tradesWithMaxLoss, 0);
+      
+      expect(strategyStats['Test Strategy']).toBeDefined();
+      // Kelly Utilization should be undefined when initial capital is zero
+      expect(strategyStats['Test Strategy'].kellyUtilization).toBeUndefined();
+    });
   });
 
   describe('Win/Loss Streaks', () => {

@@ -169,7 +169,10 @@ export default function BlockStatsPage() {
 
             // Calculate strategy stats from cached trades
             const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 });
-            const strategies = calculator.calculateStrategyStats(cachedSnapshot.filteredTrades);
+            const strategies = calculator.calculateStrategyStats(
+              cachedSnapshot.filteredTrades,
+              cachedSnapshot.portfolioStats.initialCapital
+            );
             setStrategyStats(strategies);
 
             setIsLoadingData(false);
@@ -242,7 +245,8 @@ export default function BlockStatsPage() {
           riskFreeRate: riskFree,
         });
         const strategies = calculator.calculateStrategyStats(
-          snapshot.filteredTrades
+          snapshot.filteredTrades,
+          snapshot.portfolioStats.initialCapital
         );
         setStrategyStats(strategies);
       } catch (error) {
@@ -1134,6 +1138,8 @@ export default function BlockStatsPage() {
           avgWin: stat.avgWin,
           avgLoss: stat.avgLoss,
           profitFactor: stat.profitFactor,
+          kellyFactor: stat.kellyPercentage,
+          kellyUtilization: stat.kellyUtilization,
         }))}
       />
     </div>

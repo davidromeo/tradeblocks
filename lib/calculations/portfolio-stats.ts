@@ -19,6 +19,7 @@ import { std, mean, min, max } from 'mathjs'
 import { Trade } from '../models/trade'
 import { DailyLogEntry } from '../models/daily-log'
 import { PortfolioStats, StrategyStats, AnalysisConfig } from '../models/portfolio-stats'
+import { calculateKellyMetrics } from './kelly'
 
 /**
  * Default analysis configuration
@@ -174,8 +175,10 @@ export class PortfolioStatsCalculator {
 
   /**
    * Calculate strategy-specific statistics
+   * @param trades - All trades to calculate statistics for
+   * @param fullPortfolioInitialCapital - Initial capital of the full portfolio (used for Kelly Utilization calculation)
    */
-  calculateStrategyStats(trades: Trade[]): Record<string, StrategyStats> {
+  calculateStrategyStats(trades: Trade[], fullPortfolioInitialCapital?: number): Record<string, StrategyStats> {
     if (trades.length === 0) {
       return {}
     }
@@ -199,6 +202,33 @@ export class PortfolioStatsCalculator {
       // Calculate average DTE if available
       const avgDte = this.calculateAvgDTE(strategyTrades)
 
+      // Calculate Kelly using margin-based approach (percentage returns)
+      // This calculates Kelly based on return-on-margin (P&L / margin requirement)
+      // which is more appropriate for position sizing than absolute dollar amounts.
+      // Falls back to absolute-based calculation if margin data is unavailable.
+      const kellyMetrics = calculateKellyMetrics(strategyTrades, portfolioStats.initialCapital)
+      
+      // Prefer normalized Kelly (margin-based) if available, otherwise use absolute-based
+      const kellyPercentage = kellyMetrics.normalizedKellyPct ?? 
+                              (kellyMetrics.hasValidKelly ? kellyMetrics.percent : undefined)
+
+      // Calculate Kelly Utilization using avgLoss (average realized loss)
+      // avgLoss is already calculated in portfolioStats from losing trades
+      // We use the absolute value since avgLoss is negative
+      const avgLossAbs = portfolioStats.avgLoss < 0 ? Math.abs(portfolioStats.avgLoss) : undefined
+
+      // Calculate Kelly Utilization: (avgLoss / initialCapital * 100) / kellyPercentage * 100
+      let kellyUtilization: number | undefined = undefined
+      if (avgLossAbs !== undefined && 
+          avgLossAbs > 0 && 
+          fullPortfolioInitialCapital !== undefined && 
+          fullPortfolioInitialCapital > 0 && 
+          kellyPercentage !== undefined && 
+          kellyPercentage > 0) {
+        const actualUsagePercent = (avgLossAbs / fullPortfolioInitialCapital) * 100
+        kellyUtilization = (actualUsagePercent / kellyPercentage) * 100
+      }
+
       strategyStats[strategyName] = {
         strategyName,
         tradeCount: strategyTrades.length,
@@ -211,6 +241,8 @@ export class PortfolioStatsCalculator {
         avgDte,
         successRate: portfolioStats.winRate, // Assuming success rate = win rate for now
         profitFactor: portfolioStats.profitFactor,
+        kellyPercentage,
+        kellyUtilization,
       }
     })
 

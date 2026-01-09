@@ -34,6 +34,8 @@ interface StrategyData {
   avgWin: number;
   avgLoss: number;
   profitFactor: number;
+  kellyFactor?: number;
+  kellyUtilization?: number;
 }
 
 interface StrategyBreakdownTableProps {
@@ -50,6 +52,8 @@ const mockData: StrategyData[] = [
     avgWin: 7842,
     avgLoss: -5929,
     profitFactor: 1.06,
+    kellyFactor: 2.5,
+    kellyUtilization: 15.2,
   },
   {
     strategy: "McRib w Lettuce, Pickles, & Special Sauce",
@@ -59,6 +63,8 @@ const mockData: StrategyData[] = [
     avgWin: 24042,
     avgLoss: -9484,
     profitFactor: 1.57,
+    kellyFactor: 12.8,
+    kellyUtilization: 35.6,
   },
   {
     strategy: "The Overnight SPY Who Loved Me",
@@ -68,6 +74,8 @@ const mockData: StrategyData[] = [
     avgWin: 5222,
     avgLoss: -2568,
     profitFactor: 4.32,
+    kellyFactor: 45.2,
+    kellyUtilization: 62.8,
   },
   {
     strategy: "Hump Day, Half-Baked Calendar - 1/2",
@@ -77,6 +85,8 @@ const mockData: StrategyData[] = [
     avgWin: 12505,
     avgLoss: -7973,
     profitFactor: 2.29,
+    kellyFactor: 28.7,
+    kellyUtilization: 42.3,
   },
   {
     strategy: "Theta Tuesday Calendar - 2/3",
@@ -86,6 +96,8 @@ const mockData: StrategyData[] = [
     avgWin: 14187,
     avgLoss: -8639,
     profitFactor: 1.85,
+    kellyFactor: 18.3,
+    kellyUtilization: 8.9,
   },
 ];
 
@@ -112,6 +124,11 @@ export function StrategyBreakdownTable({
     const aValue = a[sortField];
     const bValue = b[sortField];
 
+    // Handle undefined values: always sort them to the end
+    if (aValue === undefined && bValue === undefined) return 0;
+    if (aValue === undefined) return 1; // undefined goes to end
+    if (bValue === undefined) return -1; // undefined goes to end
+
     if (typeof aValue === "string" && typeof bValue === "string") {
       return sortDirection === "asc"
         ? aValue.localeCompare(bValue)
@@ -135,6 +152,29 @@ export function StrategyBreakdownTable({
   };
 
   const formatPercentage = (value: number) => `${value.toFixed(1)}%`;
+
+  const formatKellyFactor = (value: number | undefined) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "-";
+    }
+    return `${value.toFixed(1)}%`;
+  };
+
+  const formatKellyUtilization = (value: number | undefined) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "-";
+    }
+    return `${value.toFixed(1)}%`;
+  };
+
+  const getKellyUtilizationColor = (value: number | undefined) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return "";
+    }
+    if (value < 25) return "text-blue-600 dark:text-blue-400"; // Very conservative
+    if (value < 50) return "text-green-600 dark:text-green-400"; // Appropriate
+    return "text-red-600 dark:text-red-400"; // Very aggressive (50-100% and above)
+  };
 
   const getProfitFactorColor = (value: number) => {
     if (value >= 2) return "text-green-600 dark:text-green-400";
@@ -259,6 +299,32 @@ export function StrategyBreakdownTable({
                     Profit Factor
                   </SortButton>
                 </TableHead>
+                <TableHead className="text-right font-semibold">
+                  <SortButton
+                    field="kellyFactor"
+                    tooltip={{
+                      flavor:
+                        "Optimal position sizing percentage based on the Kelly Criterion formula using margin-based returns.",
+                      detailed:
+                        "Kelly Factor (Kelly Percentage) calculates the optimal percentage of capital to allocate per trade based on win rate and return-on-margin ratio. This calculation uses percentage returns relative to margin requirements rather than absolute dollar amounts, making it more appropriate for position sizing. A value of 15% means you should allocate 15% of your capital per trade for maximum growth. Values above 25% are considered aggressive, and the Kelly Criterion assumes infinite capital and perfect knowledge of win probabilities. Many traders use fractional Kelly (e.g., 1/2 Kelly or 1/4 Kelly) to reduce volatility.",
+                    }}
+                  >
+                    Kelly Factor
+                  </SortButton>
+                </TableHead>
+                <TableHead className="text-right font-semibold">
+                  <SortButton
+                    field="kellyUtilization"
+                    tooltip={{
+                      flavor:
+                        "What percentage of the Kelly Factor recommendation you're actually using based on average realized loss.",
+                      detailed:
+                        "Kelly Utilization measures what percentage of the Kelly Factor recommendation you're actually deploying, calculated from your average realized losses. Formula: (Average Loss / Portfolio Capital) / Kelly Factor × 100. This metric uses average actual losses as a starting point for risk assessment (note that maximum losses may be higher). Values below 25% indicate conservative sizing (<1/4 Kelly), 25-50% represents expected utilization (Quarter to Half Kelly), and 50-100% suggests aggressive position sizing relative to Kelly recommendations.",
+                    }}
+                  >
+                    Kelly Utilization
+                  </SortButton>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -301,6 +367,17 @@ export function StrategyBreakdownTable({
                     )}
                   >
                     {row.profitFactor.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatKellyFactor(row.kellyFactor)}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right font-medium",
+                      getKellyUtilizationColor(row.kellyUtilization)
+                    )}
+                  >
+                    {formatKellyUtilization(row.kellyUtilization)}
                   </TableCell>
                 </TableRow>
               ))}
