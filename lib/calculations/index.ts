@@ -7,6 +7,7 @@
 export * from './portfolio-stats'
 export * from './performance'
 export * from './walk-forward-analyzer'
+export * from './calendar-sensitivity'
 
 // Re-export types for convenience
 export * from '../models/portfolio-stats'
