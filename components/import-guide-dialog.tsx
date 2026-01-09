@@ -26,13 +26,13 @@ import {
 import { Badge } from '@/components/ui/badge'
 
 // Template CSVs
-const COMPLETE_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close,P/L,No. of Contracts,Funds at Close,Margin Req.,Strategy,Opening Commissions + Fees,Closing Commissions + Fees,Opening Short/Long Ratio,Closing Short/Long Ratio,Opening VIX,Closing VIX,Gap,Movement,Max Profit,Max Loss
-2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,1.25,2024-01-15,15:45:00,1.25,Profit Target,125.00,1,10125.00,1000.00,Bull Put Spread,1.50,1.50,0.5,0.5,14.25,13.80,0.25,-0.15,250.00,-1000.00
-2024-01-16,10:15:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,0.50,2024-01-18,14:30:00,0.50,Profit Target,275.00,1,10400.00,1200.00,Bear Call Spread,1.50,1.50,0.6,0.55,15.10,14.50,-0.10,0.20,325.00,-1200.00`
+const COMPLETE_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close,P/L,P/L %,No. of Contracts,Funds at Close,Margin Req.,Strategy,Opening Commissions + Fees,Closing Commissions + Fees,Opening Short/Long Ratio,Closing Short/Long Ratio,Opening VIX,Closing VIX,Gap,Movement,Max Profit,Max Loss
+2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,1.25,2024-01-15,15:45:00,1.25,Profit Target,125.00,50.00,1,10125.00,1000.00,Bull Put Spread,1.50,1.50,0.5,0.5,14.25,13.80,0.25,-0.15,250.00,-1000.00
+2024-01-16,10:15:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,0.50,2024-01-18,14:30:00,0.50,Profit Target,275.00,84.62,1,10400.00,1200.00,Bear Call Spread,1.50,1.50,0.6,0.55,15.10,14.50,-0.10,0.20,325.00,-1200.00`
 
-const MINIMAL_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close,P/L,No. of Contracts,Funds at Close,Margin Req.,Strategy
-2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,,,,,,125.00,1,10125.00,1000.00,Bull Put Spread
-2024-01-16,09:30:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,,,,,,275.00,1,10400.00,1200.00,Bear Call Spread`
+const MINIMAL_TEMPLATE_CSV = `Date Opened,Time Opened,Opening Price,Legs,Premium,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close,P/L,P/L %,No. of Contracts,Funds at Close,Margin Req.,Strategy
+2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,,,,,,125.00,50.00,1,10125.00,1000.00,Bull Put Spread
+2024-01-16,09:30:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,,,,,,275.00,84.62,1,10400.00,1200.00,Bear Call Spread`
 
 const DAILY_LOG_TEMPLATE_CSV = `Date,Net Liquidity,Current Funds,Withdrawn,Trading Funds,P/L,P/L %,Drawdown %
 2024-01-15,50000.00,50125.00,0,10000.00,125.00,1.25,0
@@ -47,6 +47,7 @@ const REQUIRED_TRADE_FIELDS = [
   { name: "Legs", description: "Option legs description (e.g., 'SPX 15JAN24 4500P/4450P')" },
   { name: "Premium", description: "Premium received/paid" },
   { name: "P/L", description: "Profit/Loss for the trade" },
+  { name: "P/L %", description: "P/L as percentage of premium" },
   { name: "No. of Contracts", description: "Number of contracts traded" },
   { name: "Funds at Close", description: "Account funds after trade closed" },
   { name: "Margin Req.", description: "Margin requirement for the trade" },
