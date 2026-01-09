@@ -15,7 +15,7 @@ type ViewMode = 'dollars' | 'percent'
 
 export function TradeSequenceChart({ className, showTrend = true }: TradeSequenceChartProps) {
   const { data } = usePerformanceStore()
-  const [viewMode, setViewMode] = useState<ViewMode>('dollars')
+  const [viewMode, setViewMode] = useState<ViewMode>('percent')
 
   const { plotData, layout } = useMemo(() => {
     if (!data?.tradeSequence || data.tradeSequence.length === 0) {
