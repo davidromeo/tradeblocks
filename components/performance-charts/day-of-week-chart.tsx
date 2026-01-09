@@ -16,7 +16,7 @@ type ViewMode = 'dollars' | 'percent'
 
 export function DayOfWeekChart({ className }: DayOfWeekChartProps) {
   const { data } = usePerformanceStore()
-  const [viewMode, setViewMode] = useState<ViewMode>('dollars')
+  const [viewMode, setViewMode] = useState<ViewMode>('percent')
 
   const { plotData, layout } = useMemo(() => {
     if (!data?.dayOfWeekData) {
