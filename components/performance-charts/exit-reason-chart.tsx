@@ -14,7 +14,7 @@ type ViewMode = 'dollars' | 'percent'
 
 export function ExitReasonChart({ className }: ExitReasonChartProps) {
   const { data } = usePerformanceStore()
-  const [viewMode, setViewMode] = useState<ViewMode>('dollars')
+  const [viewMode, setViewMode] = useState<ViewMode>('percent')
 
   const { plotData, layout } = useMemo(() => {
     if (!data?.exitReasonBreakdown || data.exitReasonBreakdown.length === 0) {
