@@ -118,6 +118,49 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const [diversificationOpen, setDiversificationOpen] = useState(false)
   const [strategyWeightsOpen, setStrategyWeightsOpen] = useState(false)
 
+  // Window configuration input states (for free text editing)
+  const [inSampleInput, setInSampleInput] = useState(String(config.inSampleDays))
+  const [outOfSampleInput, setOutOfSampleInput] = useState(String(config.outOfSampleDays))
+  const [stepSizeInput, setStepSizeInput] = useState(String(config.stepSizeDays))
+
+  // Sync input states when config changes externally (e.g., presets)
+  useEffect(() => {
+    setInSampleInput(String(config.inSampleDays))
+    setOutOfSampleInput(String(config.outOfSampleDays))
+    setStepSizeInput(String(config.stepSizeDays))
+  }, [config.inSampleDays, config.outOfSampleDays, config.stepSizeDays])
+
+  // Blur handlers for window configuration inputs
+  const handleInSampleBlur = () => {
+    const val = parseInt(inSampleInput, 10)
+    if (!isNaN(val) && val >= 1) {
+      updateConfig({ inSampleDays: val })
+      setInSampleInput(String(val))
+    } else {
+      setInSampleInput(String(config.inSampleDays))
+    }
+  }
+
+  const handleOutOfSampleBlur = () => {
+    const val = parseInt(outOfSampleInput, 10)
+    if (!isNaN(val) && val >= 1) {
+      updateConfig({ outOfSampleDays: val })
+      setOutOfSampleInput(String(val))
+    } else {
+      setOutOfSampleInput(String(config.outOfSampleDays))
+    }
+  }
+
+  const handleStepSizeBlur = () => {
+    const val = parseInt(stepSizeInput, 10)
+    if (!isNaN(val) && val >= 1) {
+      updateConfig({ stepSizeDays: val })
+      setStepSizeInput(String(val))
+    } else {
+      setStepSizeInput(String(config.stepSizeDays))
+    }
+  }
+
   // Auto-configure when block changes
   useEffect(() => {
     if (blockId) {
@@ -364,9 +407,10 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
             </div>
             <Input
               type="number"
-              min={10}
-              value={config.inSampleDays}
-              onChange={(event) => updateConfig({ inSampleDays: Number(event.target.value) })}
+              value={inSampleInput}
+              onChange={(e) => setInSampleInput(e.target.value)}
+              onBlur={handleInSampleBlur}
+              onKeyDown={(e) => e.key === "Enter" && handleInSampleBlur()}
             />
           </div>
           <div className="space-y-1">
@@ -397,9 +441,10 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
             </div>
             <Input
               type="number"
-              min={5}
-              value={config.outOfSampleDays}
-              onChange={(event) => updateConfig({ outOfSampleDays: Number(event.target.value) })}
+              value={outOfSampleInput}
+              onChange={(e) => setOutOfSampleInput(e.target.value)}
+              onBlur={handleOutOfSampleBlur}
+              onKeyDown={(e) => e.key === "Enter" && handleOutOfSampleBlur()}
             />
           </div>
           <div className="space-y-1">
@@ -431,9 +476,10 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
             </div>
             <Input
               type="number"
-              min={1}
-              value={config.stepSizeDays}
-              onChange={(event) => updateConfig({ stepSizeDays: Number(event.target.value) })}
+              value={stepSizeInput}
+              onChange={(e) => setStepSizeInput(e.target.value)}
+              onBlur={handleStepSizeBlur}
+              onKeyDown={(e) => e.key === "Enter" && handleStepSizeBlur()}
             />
           </div>
         </div>
