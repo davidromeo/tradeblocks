@@ -305,6 +305,73 @@ function getConsistencyExplanation(consistencyPct: number, periodCount: number):
 }
 
 /**
+ * Validates configuration settings BEFORE running analysis.
+ *
+ * Returns guidance about potential configuration issues so users can
+ * adjust settings before investing time in a run. Unlike detectConfigurationObservations,
+ * this function runs without results - it's purely about configuration choices.
+ *
+ * @param config - The WFA configuration to validate
+ * @returns Array of observations about configuration choices
+ */
+export function validatePreRunConfiguration(
+  config: WalkForwardConfig
+): ConfigurationObservation[] {
+  const observations: ConfigurationObservation[] = []
+  const { inSampleDays, outOfSampleDays, minInSampleTrades, minOutOfSampleTrades } = config
+
+  // 1. Short window warning: inSampleDays < 21
+  if (inSampleDays < 21) {
+    observations.push({
+      severity: 'warning',
+      title: `Short in-sample window (${inSampleDays}d)`,
+      description: `Windows shorter than 21 days may amplify noise over signal. The optimizer might find patterns that don't persist. Consider 30+ days for more reliable results.`,
+    })
+  }
+
+  // 2. Aggressive IS/OOS ratio: < 2:1
+  const ratio = inSampleDays / outOfSampleDays
+  if (ratio < 2) {
+    observations.push({
+      severity: 'info',
+      title: `Aggressive IS/OOS ratio (${ratio.toFixed(1)}:1)`,
+      description: `Using nearly equal training and testing periods is more demanding. Typical ratios are 2:1 to 4:1, giving the optimizer more data to find stable patterns.`,
+    })
+  }
+
+  // 3. Very long windows: inSampleDays > 90
+  if (inSampleDays > 90) {
+    observations.push({
+      severity: 'info',
+      title: `Long in-sample window (${inSampleDays}d)`,
+      description: `Windows longer than 90 days may include stale market regimes. Parameters optimized over long periods might not reflect current conditions.`,
+    })
+  }
+
+  // 4. Low trade requirements: minInSampleTrades < 10 OR minOutOfSampleTrades < 5
+  const minIS = minInSampleTrades ?? 15
+  const minOOS = minOutOfSampleTrades ?? 5
+
+  if (minIS < 10) {
+    observations.push({
+      severity: 'warning',
+      title: `Low min IS trades (${minIS})`,
+      description: `Optimizing with fewer than 10 trades per window produces statistically unreliable results. Consider 10-15+ trades for meaningful optimization.`,
+    })
+  }
+
+  if (minOOS < 5) {
+    observations.push({
+      severity: 'warning',
+      title: `Low min OOS trades (${minOOS})`,
+      description: `Validating with fewer than 5 trades per window makes out-of-sample results noisy. Consider 5-10 trades for reliable validation.`,
+    })
+  }
+
+  return observations
+}
+
+/**
  * Detects configuration patterns that may affect result interpretation.
  *
  * Returns observations about the WFA configuration that help users
