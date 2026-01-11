@@ -9,7 +9,9 @@ export type WalkForwardOptimizationTarget =
   | 'cagr'
   | 'avgDailyPl'
   | 'winRate'
-  // Diversification targets
+  // Diversification targets - kept for type compatibility but not exposed in UI
+  // Computing diversification metrics per parameter combination is too expensive
+  // Use diversification CONSTRAINTS instead (enableCorrelationConstraint, enableTailRiskConstraint)
   | 'minAvgCorrelation'
   | 'minTailRisk'
   | 'maxEffectiveFactors'
