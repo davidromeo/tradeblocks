@@ -1,16 +1,20 @@
 "use client"
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Layout, PlotData } from 'plotly.js'
 import { ChartWrapper } from './chart-wrapper'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 interface ExitReasonChartProps {
   className?: string
 }
 
+type ViewMode = 'dollars' | 'percent'
+
 export function ExitReasonChart({ className }: ExitReasonChartProps) {
   const { data } = usePerformanceStore()
+  const [viewMode, setViewMode] = useState<ViewMode>('percent')
 
   const { plotData, layout } = useMemo(() => {
     if (!data?.exitReasonBreakdown || data.exitReasonBreakdown.length === 0) {
@@ -31,18 +35,27 @@ export function ExitReasonChart({ className }: ExitReasonChartProps) {
       hovertemplate: '%{x}<br>Trades: %{y}<extra></extra>'
     }
 
+    const metricValues = viewMode === 'dollars'
+      ? sorted.map(item => item.avgPl)
+      : sorted.map(item => item.avgPlPercent)
+
+    const yAxisTitle = viewMode === 'dollars' ? 'Average P/L ($)' : 'Average P/L (%)'
+    const hoverFormat = viewMode === 'dollars'
+      ? '%{x}<br>Avg P/L: $%{y:.2f}<extra></extra>'
+      : '%{x}<br>Avg P/L: %{y:.2f}%<extra></extra>'
+
     const avgPlTrace: Partial<PlotData> = {
       x: reasons,
-      y: sorted.map(item => item.avgPl),
+      y: metricValues,
       type: 'scatter',
       mode: 'lines+markers',
-      name: 'Avg P/L ($)',
+      name: yAxisTitle,
       yaxis: 'y2',
       marker: {
         size: 8,
-        color: sorted.map(item => item.avgPl >= 0 ? '#22c55e' : '#ef4444')
+        color: metricValues.map(val => val >= 0 ? '#22c55e' : '#ef4444')
       },
-      hovertemplate: '%{x}<br>Avg P/L: $%{y:.2f}<extra></extra>'
+      hovertemplate: hoverFormat
     }
 
     const chartLayout: Partial<Layout> = {
@@ -54,7 +67,7 @@ export function ExitReasonChart({ className }: ExitReasonChartProps) {
         title: { text: 'Trade Count' }
       },
       yaxis2: {
-        title: { text: 'Average P/L ($)' },
+        title: { text: yAxisTitle },
         overlaying: 'y',
         side: 'right'
       },
@@ -73,13 +86,32 @@ export function ExitReasonChart({ className }: ExitReasonChartProps) {
     }
 
     return { plotData: [countTrace, avgPlTrace], layout: chartLayout }
-  }, [data?.exitReasonBreakdown])
+  }, [data?.exitReasonBreakdown, viewMode])
 
   const tooltip = {
     flavor: 'Which exits add value and which ones leak capital?',
     detailed:
       'Tally exit reasons to see where discretionary overrides, stops, or assignment drive the best and worst outcomes. Consider codifying playbooks around the top performers.'
   }
+
+  const toggleControls = (
+    <ToggleGroup
+      type="single"
+      value={viewMode}
+      onValueChange={(value) => {
+        if (value) setViewMode(value as ViewMode)
+      }}
+      variant="outline"
+      size="sm"
+    >
+      <ToggleGroupItem value="dollars" aria-label="View in dollars">
+        Dollars
+      </ToggleGroupItem>
+      <ToggleGroupItem value="percent" aria-label="View in percent">
+        Percent
+      </ToggleGroupItem>
+    </ToggleGroup>
+  )
 
   return (
     <ChartWrapper
@@ -90,6 +122,7 @@ export function ExitReasonChart({ className }: ExitReasonChartProps) {
       layout={layout}
       style={{ height: '320px' }}
       tooltip={tooltip}
+      actions={toggleControls}
     />
   )
 }
