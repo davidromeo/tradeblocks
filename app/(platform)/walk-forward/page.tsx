@@ -21,6 +21,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -42,6 +47,7 @@ import { WalkForwardAnalysisChart } from "@/components/walk-forward/analysis-cha
 import { WalkForwardPeriodSelector } from "@/components/walk-forward/period-selector";
 import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics";
 import { RunSwitcher } from "@/components/walk-forward/run-switcher";
+import { WalkForwardSummary } from "@/components/walk-forward/walk-forward-summary";
 import { WalkForwardVerdict } from "@/components/walk-forward/walk-forward-verdict";
 import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
 import { useBlockStore } from "@/lib/stores/block-store";
@@ -103,6 +109,7 @@ export default function WalkForwardPage() {
   const [minOosTrades, setMinOosTrades] = useState(0);
   const [periodRange, setPeriodRange] = useState<[number, number]>([1, 1]);
   const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const activeBlockId = activeBlock?.id ?? null;
 
@@ -415,100 +422,144 @@ export default function WalkForwardPage() {
         onDelete={deleteAnalysis}
       />
 
-      {/* Configuration Summary - shows key settings for the current analysis */}
+      {/* Summary - high-level overview shown first when results exist */}
       {results && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Run Configuration</CardTitle>
-            <CardDescription className="text-xs">
-              Settings used for this walk-forward analysis
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" className="text-xs">
-                {results.config.inSampleDays}d IS / {results.config.outOfSampleDays}d OOS
-              </Badge>
-              <Badge variant="secondary" className="text-xs">
-                Target: {targetMetricLabel}
-              </Badge>
-              {results.config.normalizeTo1Lot && (
-                <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-950/30">
-                  1-Lot Normalized
-                </Badge>
-              )}
-              {results.config.selectedStrategies && results.config.selectedStrategies.length > 0 && (
-                <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950/30">
-                  {results.config.selectedStrategies.length} Strategies Selected
-                </Badge>
-              )}
-              {results.config.diversificationConfig?.enableCorrelationConstraint && (
-                <Badge variant="outline" className="text-xs bg-violet-50 dark:bg-violet-950/30">
-                  Correlation ≤ {results.config.diversificationConfig.maxCorrelationThreshold.toFixed(2)}
-                </Badge>
-              )}
-              {results.config.diversificationConfig?.enableTailRiskConstraint && (
-                <Badge variant="outline" className="text-xs bg-violet-50 dark:bg-violet-950/30">
-                  Tail Risk ≤ {results.config.diversificationConfig.maxTailDependenceThreshold.toFixed(2)}
-                </Badge>
-              )}
-              {results.config.strategyWeightSweep && results.config.strategyWeightSweep.configs.some(c => c.enabled) && (
-                <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950/30">
-                  Strategy Weight Sweep ({results.config.strategyWeightSweep.mode})
-                </Badge>
-              )}
-              {results.config.performanceFloor?.enableMinSharpe && (
-                <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
-                  Min Sharpe: {results.config.performanceFloor.minSharpeRatio.toFixed(2)}
-                </Badge>
-              )}
-              {results.config.performanceFloor?.enableMinProfitFactor && (
-                <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
-                  Min PF: {results.config.performanceFloor.minProfitFactor.toFixed(2)}
-                </Badge>
-              )}
-              {results.config.performanceFloor?.enablePositiveNetPl && (
-                <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
-                  Positive P/L Required
-                </Badge>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <WalkForwardSummary results={results.results} />
       )}
 
-      {/* Verdict - actionable summary at the top of results */}
+      {/* Detailed Breakdown - collapsible section with full details */}
       {results && (
-        <WalkForwardVerdict
-          results={results.results}
+        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between px-4 py-2 h-auto">
+              <span className="text-sm font-medium text-muted-foreground">
+                {detailsOpen ? "Hide details" : "Show detailed breakdown"}
+              </span>
+              <ChevronDown className={cn(
+                "h-4 w-4 text-muted-foreground transition-transform",
+                detailsOpen && "rotate-180"
+              )} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4 pt-4">
+            {/* Configuration Summary */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Run Configuration</CardTitle>
+                <CardDescription className="text-xs">
+                  Settings used for this walk-forward analysis
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="text-xs">
+                    {results.config.inSampleDays}d IS / {results.config.outOfSampleDays}d OOS
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    Target: {targetMetricLabel}
+                  </Badge>
+                  {results.config.normalizeTo1Lot && (
+                    <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-950/30">
+                      1-Lot Normalized
+                    </Badge>
+                  )}
+                  {results.config.selectedStrategies && results.config.selectedStrategies.length > 0 && (
+                    <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950/30">
+                      {results.config.selectedStrategies.length} Strategies Selected
+                    </Badge>
+                  )}
+                  {results.config.diversificationConfig?.enableCorrelationConstraint && (
+                    <Badge variant="outline" className="text-xs bg-violet-50 dark:bg-violet-950/30">
+                      Correlation ≤ {results.config.diversificationConfig.maxCorrelationThreshold.toFixed(2)}
+                    </Badge>
+                  )}
+                  {results.config.diversificationConfig?.enableTailRiskConstraint && (
+                    <Badge variant="outline" className="text-xs bg-violet-50 dark:bg-violet-950/30">
+                      Tail Risk ≤ {results.config.diversificationConfig.maxTailDependenceThreshold.toFixed(2)}
+                    </Badge>
+                  )}
+                  {results.config.strategyWeightSweep && results.config.strategyWeightSweep.configs.some(c => c.enabled) && (
+                    <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950/30">
+                      Strategy Weight Sweep ({results.config.strategyWeightSweep.mode})
+                    </Badge>
+                  )}
+                  {results.config.performanceFloor?.enableMinSharpe && (
+                    <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
+                      Min Sharpe: {results.config.performanceFloor.minSharpeRatio.toFixed(2)}
+                    </Badge>
+                  )}
+                  {results.config.performanceFloor?.enableMinProfitFactor && (
+                    <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
+                      Min PF: {results.config.performanceFloor.minProfitFactor.toFixed(2)}
+                    </Badge>
+                  )}
+                  {results.config.performanceFloor?.enablePositiveNetPl && (
+                    <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950/30">
+                      Positive P/L Required
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Detailed Verdict */}
+            <WalkForwardVerdict
+              results={results.results}
+              targetMetricLabel={targetMetricLabel}
+            />
+
+            {/* Robustness Metrics */}
+            <RobustnessMetrics
+              results={results.results}
+              targetMetricLabel={targetMetricLabel}
+            />
+
+            {/* Analysis Insights */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Analysis</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {insights.length > 0 ? (
+                  <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+                    {insights.map((insight, index) => (
+                      <li key={index}>{insight}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <AlertTriangle className="h-4 w-4" />
+                    No insights available.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
+      {/* RobustnessMetrics shown when no results yet (for empty state) */}
+      {!results && (
+        <RobustnessMetrics
+          results={null}
           targetMetricLabel={targetMetricLabel}
         />
       )}
 
-      <RobustnessMetrics
-        results={results?.results ?? null}
-        targetMetricLabel={targetMetricLabel}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Analysis</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {results && insights.length > 0 ? (
-            <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-              {insights.map((insight, index) => (
-                <li key={index}>{insight}</li>
-              ))}
-            </ul>
-          ) : (
+      {/* Analysis placeholder when no results */}
+      {!results && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Analysis</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4" />
               Run at least one analysis to surface suggestions.
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
       <WalkForwardAnalysisChart
         periods={results?.results.periods ?? []}
         targetMetricLabel={targetMetricLabel}
