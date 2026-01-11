@@ -205,14 +205,14 @@ const DEFAULT_PARAMETER_RANGES: WalkForwardParameterRanges = {
 
 /**
  * Extended parameter ranges with enable/disable support
- * All parameters enabled by default
+ * All parameters disabled by default - user opts in to sweeps
  */
 const DEFAULT_EXTENDED_PARAMETER_RANGES: WalkForwardExtendedParameterRanges = {
-  kellyMultiplier: [0.5, 1.5, 0.25, true],
-  fixedFractionPct: [1, 5, 0.5, true],
-  maxDrawdownPct: [5, 20, 5, true],
-  maxDailyLossPct: [0.5, 3, 0.5, true],
-  consecutiveLossLimit: [2, 6, 1, true],
+  kellyMultiplier: [0.5, 1.5, 0.25, false],
+  fixedFractionPct: [1, 5, 0.5, false],
+  maxDrawdownPct: [5, 20, 5, false],
+  maxDailyLossPct: [0.5, 3, 0.5, false],
+  consecutiveLossLimit: [2, 6, 1, false],
 }
 
 /**
