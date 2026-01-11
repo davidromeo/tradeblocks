@@ -29,9 +29,7 @@ Enhancements discovered during execution. Not critical - address in future phase
 - **Description:** Analysis tab only evaluates output metrics (efficiency, stability, consistency) and assumes configuration was sensible. It can't distinguish between "strategy is overfit" vs "configuration was too aggressive". Example: 14d IS / 7d OOS with 16 windows may not give strategies enough time to show their edge - poor results could be config-driven, not strategy-driven.
 - **Impact:** Medium (users may blame strategies when config is the issue)
 - **Effort:** Medium
-- **Suggested approach:**
-  - Phase 8-03: Add post-hoc "Configuration Observations" section to Analysis tab (detect short windows, aggressive ratios)
-  - Phase 10: Add pre-run configuration guidance in setup UI (help users understand tradeoffs before running)
+- **Status:** **RESOLVED** in Phase 8-03 - Added Configuration Notes section to Analysis tab with 5 pattern detection
 
 ### ISS-004: Pre-run configuration guidance
 
