@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { MultiSelect } from "@/components/multi-select"
 import type { CorrelationMethodOption, WalkForwardOptimizationTarget } from "@/lib/models/walk-forward"
+import { validatePreRunConfiguration } from "@/lib/calculations/walk-forward-interpretation"
 import {
   PARAMETER_METADATA,
   suggestStepForRange,
@@ -217,6 +218,12 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
         strategiesForWeightSweep.includes(config.strategy)
       ),
     [strategyWeightSweep.configs, strategiesForWeightSweep]
+  )
+
+  // Pre-run configuration guidance - validates config before analysis
+  const preRunObservations = useMemo(
+    () => validatePreRunConfiguration(config),
+    [config]
   )
 
   const renderParameterControls = () => {
@@ -498,6 +505,52 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
             />
           </div>
         </div>
+
+        {/* Pre-run configuration guidance */}
+        {preRunObservations.length > 0 && (
+          <div className="space-y-2">
+            {preRunObservations.map((obs, idx) => (
+              <Alert
+                key={idx}
+                className={cn(
+                  "py-2",
+                  obs.severity === "warning"
+                    ? "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20"
+                    : "border-slate-300/50 bg-slate-50/50 dark:bg-slate-900/30"
+                )}
+              >
+                <AlertCircle
+                  className={cn(
+                    "h-4 w-4",
+                    obs.severity === "warning"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-slate-600 dark:text-slate-400"
+                  )}
+                />
+                <AlertTitle
+                  className={cn(
+                    "text-sm",
+                    obs.severity === "warning"
+                      ? "text-amber-800 dark:text-amber-300"
+                      : "text-slate-700 dark:text-slate-300"
+                  )}
+                >
+                  {obs.title}
+                </AlertTitle>
+                <AlertDescription
+                  className={cn(
+                    "text-xs",
+                    obs.severity === "warning"
+                      ? "text-amber-700/80 dark:text-amber-400/80"
+                      : "text-slate-600/80 dark:text-slate-400/80"
+                  )}
+                >
+                  {obs.description}
+                </AlertDescription>
+              </Alert>
+            ))}
+          </div>
+        )}
 
         {/* Strategy Filter & Normalization Section */}
         <div className="grid gap-4 md:grid-cols-2">
