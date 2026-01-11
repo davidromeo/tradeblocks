@@ -215,9 +215,12 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
     }
   }, [blockId, autoConfigureFromBlock, loadAvailableStrategies])
 
-  // Disable run if no block, already running, or no parameters enabled for sweep
+  // Disable run if no block, already running, or no sweep/constraint configured
   const hasEnabledParameters = Object.values(extendedParameterRanges).some(([,,,enabled]) => enabled)
-  const disableRun = !blockId || isRunning || !hasEnabledParameters
+  const hasEnabledConstraints = diversificationConfig.enableCorrelationConstraint || diversificationConfig.enableTailRiskConstraint
+  const hasEnabledWeightSweeps = strategyWeightSweep.configs.some(c => c.enabled)
+  const hasValidConfig = hasEnabledParameters || hasEnabledConstraints || hasEnabledWeightSweeps
+  const disableRun = !blockId || isRunning || !hasValidConfig
 
   const handleRun = async () => {
     if (!blockId) return
