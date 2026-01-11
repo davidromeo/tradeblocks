@@ -360,25 +360,77 @@ export default function WalkForwardPage() {
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">How it works</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>How to Use This Page</DialogTitle>
+                <DialogTitle>Walk-Forward Analysis Guide</DialogTitle>
                 <DialogDescription asChild>
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <p>
-                      Walk-forward analysis validates your strategy by repeatedly optimizing on historical data (in-sample)
-                      and testing on unseen future data (out-of-sample).
-                    </p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Pick in-sample / out-of-sample windows that match your timeframe and data depth.</li>
-                      <li>Select an optimization target (Sharpe, Net Profit, etc.) that matches your risk goals.</li>
-                      <li>Set parameter ranges for sizing and risk controls to sweep combinations.</li>
-                      <li>Run to see how optimal parameters shift across regimes and how OOS performance holds up.</li>
-                      <li>Use efficiency and consistency scores to judge robustness vs. overfitting.</li>
-                    </ul>
-                    <p className="text-xs italic text-muted-foreground">
-                      A robust strategy usually retains ~60–80% of in-sample performance out-of-sample; large drop-offs can signal overfitting.
-                    </p>
+                  <div className="space-y-6 text-sm text-muted-foreground pt-2">
+                    {/* What is Walk-Forward Analysis */}
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-foreground">What is Walk-Forward Analysis?</h4>
+                      <p>
+                        Walk-forward analysis tests whether your optimized strategy settings work on data they&apos;ve never seen. It repeatedly:
+                      </p>
+                      <ol className="list-decimal list-inside space-y-1 pl-2">
+                        <li>Optimizes on a training window (in-sample)</li>
+                        <li>Tests those settings on the next chunk of unseen data (out-of-sample)</li>
+                        <li>Moves forward in time and repeats</li>
+                      </ol>
+                    </div>
+
+                    {/* Key Terms */}
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-foreground">Key Terms</h4>
+                      <dl className="space-y-2 pl-2">
+                        <div>
+                          <dt className="font-medium text-foreground inline">In-Sample (IS): </dt>
+                          <dd className="inline">The historical period used to find optimal parameters. Think of it as the &quot;training data.&quot;</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-foreground inline">Out-of-Sample (OOS): </dt>
+                          <dd className="inline">The forward period used to test those parameters. Think of it as &quot;final exam data&quot; the optimizer never saw.</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-foreground inline">Efficiency: </dt>
+                          <dd className="inline">How much of your in-sample performance survived out-of-sample testing. 80% efficiency = 80% of gains held up.</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-foreground inline">Robustness: </dt>
+                          <dd className="inline">Whether your strategy performs consistently across different time periods, not just one lucky stretch.</dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    {/* What Good Results Look Like */}
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-foreground">What Good Results Look Like</h4>
+                      <ul className="list-disc list-inside space-y-1 pl-2">
+                        <li><span className="font-medium">Efficiency above 70%:</span> Your optimized settings transfer well to new data</li>
+                        <li><span className="font-medium">Consistency above 60%:</span> Most windows were profitable out-of-sample</li>
+                        <li><span className="font-medium">Stable parameters:</span> The &quot;best&quot; settings didn&apos;t swing wildly between windows</li>
+                      </ul>
+                    </div>
+
+                    {/* Warning Signs */}
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-foreground">Warning Signs</h4>
+                      <ul className="list-disc list-inside space-y-1 pl-2">
+                        <li><span className="font-medium">Efficiency below 50%:</span> Settings that worked in training failed on new data</li>
+                        <li><span className="font-medium">Low consistency:</span> Performance varies wildly between windows</li>
+                        <li><span className="font-medium">Unstable parameters:</span> Optimal settings change dramatically each period</li>
+                      </ul>
+                    </div>
+
+                    {/* Tips */}
+                    <div className="space-y-2 border-t pt-4">
+                      <h4 className="font-semibold text-foreground">Tips for This Page</h4>
+                      <ul className="list-disc list-inside space-y-1 pl-2">
+                        <li>Pick in-sample / out-of-sample windows that match your timeframe and data depth</li>
+                        <li>Select an optimization target (Sharpe, Net Profit, etc.) that matches your risk goals</li>
+                        <li>Set parameter ranges for sizing and risk controls to sweep combinations</li>
+                        <li>Run to see how optimal parameters shift across regimes and how OOS performance holds up</li>
+                      </ul>
+                    </div>
                   </div>
                 </DialogDescription>
               </DialogHeader>
