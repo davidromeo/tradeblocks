@@ -19,7 +19,7 @@ None
 - [x] **Phase 3: Input Validation Fixes** - Fix overly tight constraints on text inputs
 - [x] **Phase 5: Optimization Targets** - Audit and implement missing optimization targets
 - [x] **Phase 6: Results Summary View** - High-level overview before detailed data
-- [ ] **Phase 7: Terminology Explanations** - Inline IS/OOS, windows, robustness explanations
+- [x] **Phase 7: Terminology Explanations** - Inline IS/OOS, windows, robustness explanations
 - [ ] **Phase 8: Interpretation Guidance** - Help users understand if results are good or bad
 - [ ] **Phase 9: Calculation Robustness** - Validate calculations are mathematically correct
 - [ ] **Phase 10: Integration & Polish** - End-to-end testing and refinements
@@ -82,9 +82,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 07-01: Write terminology content
-- [ ] 07-02: Design and implement tooltip/info system
-- [ ] 07-03: Add contextual help throughout WFA UI
+- [x] 07-01: Terminology explanations - Enhanced tooltips and IS/OOS glossary
 
 ### Phase 8: Interpretation Guidance
 **Goal**: Help users understand if their results are good, bad, or concerning
@@ -134,7 +132,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 | 3. Input Validation Fixes | 1/1 | Complete | 2026-01-11 |
 | 5. Optimization Targets | 1/1 | Complete | 2026-01-11 |
 | 6. Results Summary View | 1/1 | Complete | 2026-01-11 |
-| 7. Terminology Explanations | 0/3 | Not started | - |
+| 7. Terminology Explanations | 1/1 | Complete | 2026-01-11 |
 | 8. Interpretation Guidance | 0/3 | Not started | - |
 | 9. Calculation Robustness | 0/3 | Not started | - |
 | 10. Integration & Polish | 0/3 | Not started | - |
