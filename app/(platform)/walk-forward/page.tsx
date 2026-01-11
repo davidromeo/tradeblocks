@@ -431,12 +431,12 @@ export default function WalkForwardPage() {
       {results && (
         <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full justify-between px-4 py-2 h-auto">
-              <span className="text-sm font-medium text-muted-foreground">
-                {detailsOpen ? "Hide details" : "Show detailed breakdown"}
+            <Button variant="outline" className="w-full justify-between px-4 py-3 h-auto border-dashed hover:bg-muted/50">
+              <span className="text-sm font-medium">
+                {detailsOpen ? "Hide detailed breakdown" : "Show detailed breakdown"}
               </span>
               <ChevronDown className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform",
+                "h-4 w-4 transition-transform",
                 detailsOpen && "rotate-180"
               )} />
             </Button>
@@ -560,10 +560,14 @@ export default function WalkForwardPage() {
           </CardContent>
         </Card>
       )}
-      <WalkForwardAnalysisChart
-        periods={results?.results.periods ?? []}
-        targetMetricLabel={targetMetricLabel}
-      />
+
+      {/* Charts - only show when results exist */}
+      {results && (
+        <WalkForwardAnalysisChart
+          periods={results.results.periods}
+          targetMetricLabel={targetMetricLabel}
+        />
+      )}
 
       <Card className="overflow-hidden">
         <CardHeader className="pb-3">
