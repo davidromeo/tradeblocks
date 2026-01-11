@@ -34,7 +34,7 @@ None
 **Plans**: TBD
 
 Plans:
-- [ ] 01-01: Analyze walk-forward-analyzer.ts calculation engine
+- [x] 01-01: Analyze walk-forward-analyzer.ts calculation engine
 - [ ] 01-02: Audit walk-forward-store.ts and UI components
 - [ ] 01-03: Document findings and prioritize gaps
 
@@ -147,7 +147,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Audit & Analysis | 0/3 | Not started | - |
+| 1. Audit & Analysis | 1/3 | In progress | - |
 | 2. Parameter Selection UI | 0/3 | Not started | - |
 | 3. Parameter Range Configuration | 0/3 | Not started | - |
 | 4. Input Validation Fixes | 0/2 | Not started | - |
