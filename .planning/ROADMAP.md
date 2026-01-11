@@ -44,7 +44,7 @@ Plans:
 **Note**: MERGED from original Phase 2 (Parameter Selection) + Phase 3 (Range Configuration). Both features already implemented in period-selector.tsx.
 
 Plans:
-- [ ] 02-01: Wrap parameters in Collapsible container + remove presets
+- [x] 02-01: Wrap parameters in Collapsible container + remove presets
 
 ### Phase 3: Input Validation Fixes
 **Goal**: Fix overly tight constraints that prevent valid smaller values
@@ -135,7 +135,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Audit & Analysis | 3/3 | Complete | 2026-01-11 |
-| 2. Parameter UI Polish | 0/1 | Not started | - |
+| 2. Parameter UI Polish | 1/1 | Complete | 2026-01-11 |
 | 3. Input Validation Fixes | 0/2 | Not started | - |
 | 5. Optimization Targets | 0/3 | Not started | - |
 | 6. Results Summary View | 0/3 | Not started | - |
