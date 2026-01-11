@@ -212,3 +212,22 @@ IndexedDB stores (via `lib/db/`) handle persistence of:
 **When starting work on a Next.js project, ALWAYS call the `init` tool from
 next-devtools-mcp FIRST to set up proper context and establish documentation
 requirements. Do this automatically without being asked.**
+
+## GSD Workflow Rules
+
+1. **Use GSD method for all features:**
+   - `/gsd:discuss-phase` - Understand requirements
+   - `/gsd:plan-phase` - Create PLAN.md with tasks
+   - `/gsd:execute-plan` - Execute with subagents
+   - NEVER code without a plan
+
+2. **Subagent execution:**
+   - Spawn multiple subagents IN PARALLEL (single message, multiple Task calls)
+   - Each subagent gets fresh 200k context
+   - Subagents commit their own work and create SUMMARY.md
+   - Main context only for orchestration (~5% usage)
+   - NEVER use TaskOutput to read full subagent output
+
+3. **Plans location:** `.planning/phases/XX-name/`
+
+4. **After subagent work:** Always run `npm run typecheck` before final commit
