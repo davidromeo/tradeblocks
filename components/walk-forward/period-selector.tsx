@@ -689,8 +689,8 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                 <Badge variant="outline" className="text-xs">
                   {Object.values(extendedParameterRanges).some(([,,,enabled]) => enabled) ? "Active" : "Inactive"}
                 </Badge>
-                {/* Combination Estimate Badge */}
-                {combinationEstimate && (
+                {/* Combination Estimate Badge - only show when parameters are enabled */}
+                {combinationEstimate && combinationEstimate.enabledParameters.length > 0 && (
                   <Badge
                     variant={
                       combinationEstimate.warningLevel === "danger"
