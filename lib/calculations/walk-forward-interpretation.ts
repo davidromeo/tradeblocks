@@ -1,4 +1,4 @@
-import type { WalkForwardResults } from '../models/walk-forward'
+import type { WalkForwardConfig, WalkForwardResults } from '../models/walk-forward'
 import type { Assessment, VerdictAssessment } from './walk-forward-verdict'
 
 /**
@@ -25,6 +25,15 @@ export interface VerdictExplanation {
  */
 export interface RedFlag {
   severity: 'warning' | 'concern'
+  title: string
+  description: string
+}
+
+/**
+ * A configuration observation that may affect interpretation.
+ */
+export interface ConfigurationObservation {
+  severity: 'info' | 'warning'
   title: string
   description: string
 }
@@ -293,4 +302,68 @@ function getConsistencyExplanation(consistencyPct: number, periodCount: number):
     return `Worked in some windows, not others—may need filtering for market conditions.`
   }
   return `Failed more often than it succeeded—strategy may need refinement.`
+}
+
+/**
+ * Detects configuration patterns that may affect result interpretation.
+ *
+ * Returns observations about the WFA configuration that help users
+ * distinguish strategy issues from configuration issues.
+ */
+export function detectConfigurationObservations(
+  config: WalkForwardConfig,
+  results: WalkForwardResults
+): ConfigurationObservation[] {
+  const observations: ConfigurationObservation[] = []
+  const { inSampleDays, outOfSampleDays } = config
+  const periodCount = results.periods.length
+  const windowSize = inSampleDays + outOfSampleDays
+
+  // Short IS window (warning): inSampleDays < 21
+  if (inSampleDays < 21) {
+    observations.push({
+      severity: 'warning',
+      title: `In-sample window is short (${inSampleDays}d)`,
+      description: `With only ${inSampleDays} days of training data per window, the optimizer may not have enough information to find robust patterns. Consider increasing to 30+ days.`,
+    })
+  }
+
+  // Short OOS window (warning): outOfSampleDays < 7
+  if (outOfSampleDays < 7) {
+    observations.push({
+      severity: 'warning',
+      title: `Out-of-sample window is short (${outOfSampleDays}d)`,
+      description: `With only ${outOfSampleDays} days of testing data, results may be noisy. A longer testing period (14+ days) provides more confidence.`,
+    })
+  }
+
+  // Aggressive IS/OOS ratio (warning): inSampleDays / outOfSampleDays > 4
+  const ratio = inSampleDays / outOfSampleDays
+  if (ratio > 4) {
+    observations.push({
+      severity: 'warning',
+      title: `High IS/OOS ratio (${ratio.toFixed(1)}:1)`,
+      description: `Using ${ratio.toFixed(1)} times more training data than testing data increases overfitting risk. Ratios of 2:1 to 3:1 are more balanced.`,
+    })
+  }
+
+  // Many windows from short data (info): periods >= 10 && windowSize < 30
+  if (periodCount >= 10 && windowSize < 30) {
+    observations.push({
+      severity: 'info',
+      title: `Many short windows (${periodCount} windows of ${windowSize}d each)`,
+      description: `Running many short windows can produce noisy results. Each window may capture different market regimes.`,
+    })
+  }
+
+  // Few periods (info): periods < 4
+  if (periodCount < 4) {
+    observations.push({
+      severity: 'info',
+      title: `Limited test periods (${periodCount} windows)`,
+      description: `With only ${periodCount} periods, the sample size is small. Results may not generalize well to other time periods.`,
+    })
+  }
+
+  return observations
 }
