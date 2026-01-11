@@ -126,7 +126,9 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
     }
   }, [blockId, autoConfigureFromBlock, loadAvailableStrategies])
 
-  const disableRun = !blockId || isRunning
+  // Disable run if no block, already running, or no parameters enabled for sweep
+  const hasEnabledParameters = Object.values(extendedParameterRanges).some(([,,,enabled]) => enabled)
+  const disableRun = !blockId || isRunning || !hasEnabledParameters
 
   const handleRun = async () => {
     if (!blockId) return
