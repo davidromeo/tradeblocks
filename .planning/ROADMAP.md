@@ -115,7 +115,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 10-01: End-to-end integration testing
+- [x] 10-01: Pre-run configuration guidance (ISS-004)
 - [ ] 10-02: Edge case handling and error states
 - [ ] 10-03: Final polish and cleanup
 
@@ -135,7 +135,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 | 7. Terminology Explanations | 1/1 | Complete | 2026-01-11 |
 | 8. Interpretation Guidance | 3/3 | Complete | 2026-01-11 |
 | 9. Calculation Robustness | 1/1 | Complete | 2026-01-11 |
-| 10. Integration & Polish | 0/3 | Not started | - |
+| 10. Integration & Polish | 1/3 | In progress | - |
 
 ## Audit Notes
 
