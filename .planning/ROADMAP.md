@@ -21,7 +21,7 @@ None
 - [x] **Phase 6: Results Summary View** - High-level overview before detailed data
 - [x] **Phase 7: Terminology Explanations** - Inline IS/OOS, windows, robustness explanations
 - [x] **Phase 8: Interpretation Guidance** - Help users understand if results are good or bad
-- [ ] **Phase 9: Calculation Robustness** - Validate calculations are mathematically correct
+- [x] **Phase 9: Calculation Robustness** - Validate calculations are mathematically correct
 - [ ] **Phase 10: Integration & Polish** - End-to-end testing and refinements
 
 ## Phase Details
@@ -105,8 +105,8 @@ Plans:
 
 Plans:
 - [x] 09-01: Review calculation formulas against standards
-- [ ] 09-02: Add/fix unit tests for calculations
-- [ ] 09-03: Fix any identified calculation issues
+- ~~09-02: Add/fix unit tests for calculations~~ (Consolidated into 09-01 - 40 tests added)
+- ~~09-03: Fix any identified calculation issues~~ (Consolidated into 09-01 - N-1 variance fix)
 
 ### Phase 10: Integration & Polish
 **Goal**: End-to-end testing, refinements, edge case handling
@@ -134,7 +134,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 | 6. Results Summary View | 1/1 | Complete | 2026-01-11 |
 | 7. Terminology Explanations | 1/1 | Complete | 2026-01-11 |
 | 8. Interpretation Guidance | 3/3 | Complete | 2026-01-11 |
-| 9. Calculation Robustness | 1/3 | In progress | - |
+| 9. Calculation Robustness | 1/1 | Complete | 2026-01-11 |
 | 10. Integration & Polish | 0/3 | Not started | - |
 
 ## Audit Notes
