@@ -29,7 +29,6 @@ import { MultiSelect } from "@/components/multi-select"
 import type { CorrelationMethodOption, WalkForwardOptimizationTarget } from "@/lib/models/walk-forward"
 import {
   PARAMETER_METADATA,
-  WALK_FORWARD_PRESETS,
   suggestStepForRange,
   useWalkForwardStore,
 } from "@/lib/stores/walk-forward-store"
@@ -77,9 +76,7 @@ const isDiversificationTarget = (target: WalkForwardOptimizationTarget): boolean
 
 export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProps) {
   const config = useWalkForwardStore((state) => state.config)
-  const presets = useWalkForwardStore((state) => state.presets)
   const updateConfig = useWalkForwardStore((state) => state.updateConfig)
-  const applyPreset = useWalkForwardStore((state) => state.applyPreset)
   const autoConfigureFromBlock = useWalkForwardStore((state) => state.autoConfigureFromBlock)
   const tradeFrequency = useWalkForwardStore((state) => state.tradeFrequency)
   const autoConfigApplied = useWalkForwardStore((state) => state.autoConfigApplied)
@@ -117,6 +114,7 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const setTopNCount = useWalkForwardStore((state) => state.setTopNCount)
 
   // Collapsible state
+  const [parametersOpen, setParametersOpen] = useState(false)
   const [diversificationOpen, setDiversificationOpen] = useState(false)
   const [strategyWeightsOpen, setStrategyWeightsOpen] = useState(false)
 
@@ -135,20 +133,6 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
     await runAnalysis(blockId)
   }
 
-  const presetButtons = useMemo(
-    () =>
-      Object.entries(presets ?? WALK_FORWARD_PRESETS).map(([key, preset]) => (
-        <Button
-          key={key}
-          variant="outline"
-          size="sm"
-          onClick={() => applyPreset(key as keyof typeof WALK_FORWARD_PRESETS)}
-        >
-          {preset.label}
-        </Button>
-      )),
-    [presets, applyPreset]
-  )
 
   // Build strategy options for multi-select
   const strategyOptions = useMemo(
@@ -324,8 +308,7 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
           <div>
             <CardTitle>Configuration</CardTitle>
             <CardDescription>
-              Define in-sample / out-of-sample cadence, optimization target, and risk sweeps. Use
-              presets for quick-start configurations.
+              Define in-sample / out-of-sample cadence, optimization target, and parameter sweeps.
             </CardDescription>
           </div>
           {addon}
@@ -665,92 +648,105 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold">Parameter Sweeps</p>
-              <HoverCard>
-                <HoverCardTrigger asChild>
-                  <HelpCircle className="h-4 w-4 text-muted-foreground/60 cursor-help" />
-                </HoverCardTrigger>
-                <HoverCardContent className="w-96 p-0 overflow-hidden">
-                  <div className="space-y-3">
-                    <div className="bg-primary/5 border-b px-4 py-3">
-                      <h4 className="text-sm font-semibold text-primary">Parameter Sweeps</h4>
-                    </div>
-                    <div className="px-4 pb-4 space-y-3">
-                      <p className="text-sm font-medium text-foreground leading-relaxed">
-                        Define ranges for position sizing and risk control parameters to test.
-                      </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        For each in-sample window, the optimizer tests all combinations within these
-                        ranges to find the best settings. Wider ranges explore more possibilities but
-                        increase computation time exponentially. Use presets for quick-start
-                        configurations, then fine-tune based on results.
-                      </p>
-                      <div className="text-xs text-muted-foreground space-y-1 border-t border-border pt-2">
-                        <p className="font-medium">Example:</p>
-                        <p className="font-mono text-[10px] bg-muted/50 p-2 rounded">
-                          Kelly: 0.5-1.5 (step 0.1) = 11 values<br />
-                          Max DD: 10-20 (step 2) = 6 values<br />
-                          Total: 11 × 6 = 66 combinations
+        <Collapsible open={parametersOpen} onOpenChange={setParametersOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-lg border border-border/40 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold">Parameter Sweeps</p>
+                <HoverCard>
+                  <HoverCardTrigger asChild>
+                    <HelpCircle className="h-4 w-4 text-muted-foreground/60 cursor-help" />
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-96 p-0 overflow-hidden">
+                    <div className="space-y-3">
+                      <div className="bg-primary/5 border-b px-4 py-3">
+                        <h4 className="text-sm font-semibold text-primary">Parameter Sweeps</h4>
+                      </div>
+                      <div className="px-4 pb-4 space-y-3">
+                        <p className="text-sm font-medium text-foreground leading-relaxed">
+                          Define ranges for position sizing and risk control parameters to test.
                         </p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          For each in-sample window, the optimizer tests all combinations within these
+                          ranges to find the best settings. Wider ranges explore more possibilities but
+                          increase computation time exponentially.
+                        </p>
+                        <div className="text-xs text-muted-foreground space-y-1 border-t border-border pt-2">
+                          <p className="font-medium">Example:</p>
+                          <p className="font-mono text-[10px] bg-muted/50 p-2 rounded">
+                            Kelly: 0.5-1.5 (step 0.1) = 11 values<br />
+                            Max DD: 10-20 (step 2) = 6 values<br />
+                            Total: 11 × 6 = 66 combinations
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
-              {/* Combination Estimate Badge */}
-              {combinationEstimate && (
-                <Badge
-                  variant={
-                    combinationEstimate.warningLevel === "danger"
-                      ? "destructive"
-                      : combinationEstimate.warningLevel === "warning"
-                        ? "secondary"
-                        : "outline"
-                  }
-                  className={cn(
-                    "text-xs",
-                    combinationEstimate.warningLevel === "warning" &&
-                      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                  )}
-                >
-                  {combinationEstimate.count.toLocaleString()} combinations
-                  {combinationEstimate.warningLevel === "danger" && " ⚠️"}
-                  {combinationEstimate.warningLevel === "warning" && " ⚡"}
+                  </HoverCardContent>
+                </HoverCard>
+                <Badge variant="outline" className="text-xs">
+                  {Object.values(extendedParameterRanges).some(([,,,enabled]) => enabled) ? "Active" : "Inactive"}
                 </Badge>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">{presetButtons}</div>
-          </div>
+                {/* Combination Estimate Badge */}
+                {combinationEstimate && (
+                  <Badge
+                    variant={
+                      combinationEstimate.warningLevel === "danger"
+                        ? "destructive"
+                        : combinationEstimate.warningLevel === "warning"
+                          ? "secondary"
+                          : "outline"
+                    }
+                    className={cn(
+                      "text-xs",
+                      combinationEstimate.warningLevel === "warning" &&
+                        "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                    )}
+                  >
+                    {combinationEstimate.count.toLocaleString()} combinations
+                    {combinationEstimate.warningLevel === "danger" && " ⚠️"}
+                    {combinationEstimate.warningLevel === "warning" && " ⚡"}
+                  </Badge>
+                )}
+              </div>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                  parametersOpen && "rotate-180"
+                )}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3 space-y-4">
+            {/* Combination breakdown */}
+            {combinationEstimate && combinationEstimate.enabledParameters.length > 0 && (
+              <div className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                <span className="font-medium">Breakdown: </span>
+                {combinationEstimate.enabledParameters.map((param, idx) => (
+                  <span key={param}>
+                    {PARAMETER_METADATA[param]?.label ?? param}: {combinationEstimate.breakdown[param]}
+                    {idx < combinationEstimate.enabledParameters.length - 1 && " × "}
+                  </span>
+                ))}
+              </div>
+            )}
 
-          {/* Combination breakdown */}
-          {combinationEstimate && combinationEstimate.enabledParameters.length > 0 && (
-            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-              <span className="font-medium">Breakdown: </span>
-              {combinationEstimate.enabledParameters.map((param, idx) => (
-                <span key={param}>
-                  {PARAMETER_METADATA[param]?.label ?? param}: {combinationEstimate.breakdown[param]}
-                  {idx < combinationEstimate.enabledParameters.length - 1 && " × "}
-                </span>
-              ))}
-            </div>
-          )}
+            {/* Warning for high combination count */}
+            {combinationEstimate?.warningLevel === "danger" && (
+              <Alert variant="destructive" className="py-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  High combination count may cause slow analysis. Consider disabling parameters,
+                  narrowing ranges, or increasing step sizes.
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {/* Warning for high combination count */}
-          {combinationEstimate?.warningLevel === "danger" && (
-            <Alert variant="destructive" className="py-2">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-xs">
-                High combination count may cause slow analysis. Consider disabling parameters,
-                narrowing ranges, or increasing step sizes.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="grid gap-3 md:grid-cols-2">{renderParameterControls()}</div>
-        </div>
+            <div className="grid gap-3 md:grid-cols-2">{renderParameterControls()}</div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Performance Floor (shown when diversification target selected) */}
         {isDiversificationTarget(config.optimizationTarget) && (
