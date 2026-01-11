@@ -103,7 +103,7 @@ export interface SnapshotChartData {
     totalPremium?: number
   }>
   marginUtilization: Array<{ date: string; marginReq: number; fundsAtClose: number; numContracts: number; pl: number }>
-  exitReasonBreakdown: Array<{ reason: string; count: number; avgPl: number; totalPl: number }>
+  exitReasonBreakdown: Array<{ reason: string; count: number; avgPl: number; avgPlPercent: number; totalPl: number }>
   holdingPeriods: Array<{ tradeNumber: number; dateOpened: string; dateClosed?: string; durationHours: number; pl: number; strategy: string }>
   mfeMaeData: MFEMAEDataPoint[]
   mfeMaeStats: Partial<Record<NormalizationBasis, MFEMAEStats>>
@@ -1127,21 +1127,29 @@ function calculateMarginUtilization(trades: Trade[]) {
 }
 
 function calculateExitReasonBreakdown(trades: Trade[]) {
-  const summaryMap = new Map<string, { count: number; totalPl: number }>()
+  const summaryMap = new Map<string, { count: number; totalPl: number; totalPlPercent: number; percentSampleCount: number }>()
 
   trades.forEach(trade => {
     const reason = (trade.reasonForClose && trade.reasonForClose.trim()) || 'Unknown'
-    const current = summaryMap.get(reason) || { count: 0, totalPl: 0 }
+    const current = summaryMap.get(reason) || { count: 0, totalPl: 0, totalPlPercent: 0, percentSampleCount: 0 }
     current.count += 1
     current.totalPl += trade.pl
+    
+    // Calculate percentage return (ROM) if margin is available
+    if (trade.marginReq && trade.marginReq > 0) {
+      current.totalPlPercent += (trade.pl / trade.marginReq) * 100
+      current.percentSampleCount++
+    }
+    
     summaryMap.set(reason, current)
   })
 
-  return Array.from(summaryMap.entries()).map(([reason, { count, totalPl }]) => ({
+  return Array.from(summaryMap.entries()).map(([reason, { count, totalPl, totalPlPercent, percentSampleCount }]) => ({
     reason,
     count,
     totalPl,
-    avgPl: count > 0 ? totalPl / count : 0
+    avgPl: count > 0 ? totalPl / count : 0,
+    avgPlPercent: percentSampleCount > 0 ? totalPlPercent / percentSampleCount : 0
   }))
 }
 
