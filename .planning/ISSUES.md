@@ -38,8 +38,10 @@ Enhancements discovered during execution. Not critical - address in future phase
 - **Description:** Users should understand configuration tradeoffs BEFORE running analysis. Short windows favor noise over signal. More windows with less data per window may hurt strategy evaluation.
 - **Impact:** Medium (prevents "bad config → bad results → blame strategy" loop)
 - **Effort:** Medium
-- **Suggested phase:** Phase 10 (Integration & Polish)
+- **Status:** **RESOLVED** in Phase 10-01 - Added validatePreRunConfiguration function and guidance display in Configuration card
 
 ## Closed Enhancements
 
-[Moved here when addressed]
+- ISS-002: Resolved in Phase 7
+- ISS-003: Resolved in Phase 8-03
+- ISS-004: Resolved in Phase 10-01
