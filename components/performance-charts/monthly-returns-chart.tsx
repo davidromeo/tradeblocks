@@ -97,7 +97,7 @@ function createChartLayout(
 
 export function MonthlyReturnsChart({ className }: MonthlyReturnsChartProps) {
   const { data } = usePerformanceStore();
-  const [viewMode, setViewMode] = useState<ViewMode>("dollars");
+  const [viewMode, setViewMode] = useState<ViewMode>("percent");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("chronological");
 
   const { plotData, layout } = useMemo(() => {
