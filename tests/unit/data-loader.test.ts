@@ -85,8 +85,8 @@ describe('Data Loader', () => {
 
     test('should load trades from CSV string', async () => {
       const loader = DataLoader.createForTesting();
-      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
-"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,1,10100,1000,"Test Strategy",1,1,0.5,0.5,15,15,0,0,200,-200`;
+      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","P/L %","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
+"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,20.00,1,10100,1000,"Test Strategy",1,1,0.5,0.5,15,15,0,0,200,-200`;
 
       const result = await loader.loadTrades(csvContent);
 
@@ -155,9 +155,9 @@ describe('Data Loader', () => {
       const loader = DataLoader.createForTesting({ useMemoryStorage: true });
       const blockId = 'test-block-123';
 
-      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
-"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,1,10100,1000,"Test Strategy",1,1,0.5,0.5,15,15,0,0,200,-200
-"2024-01-02","11:00:00",101,"PUT",600,99,"2024-01-03","14:00:00",99,"Stop",-50,2,10050,2000,"Test Strategy",1,1,0.5,0.5,16,14,0,0,300,-300`;
+      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","P/L %","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
+"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,20.00,1,10100,1000,"Test Strategy",1,1,0.5,0.5,15,15,0,0,200,-200
+"2024-01-02","11:00:00",101,"PUT",600,99,"2024-01-03","14:00:00",99,"Stop",-50,-4.17,2,10050,2000,"Test Strategy",1,1,0.5,0.5,16,14,0,0,300,-300`;
 
       // Load and store
       const result = await loader.loadBlockData(blockId, csvContent);
@@ -182,9 +182,9 @@ describe('Data Loader', () => {
     test('should calculate date range correctly', async () => {
       const loader = DataLoader.createForTesting();
 
-      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
-"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,1,10100,1000,"Test Strategy",1,1,0.5,0.5,15,15,0,0,200,-200
-"2024-01-15","11:00:00",101,"PUT",600,99,"2024-01-16","14:00:00",99,"Stop",-50,2,10050,2000,"Test Strategy",1,1,0.5,0.5,16,14,0,0,300,-300`;
+      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","P/L %","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
+"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,20.00,1,10100,1000,"Test Strategy",1,1,0.5,0.5,15,15,0,0,200,-200
+"2024-01-15","11:00:00",101,"PUT",600,99,"2024-01-16","14:00:00",99,"Stop",-50,-4.17,2,10050,2000,"Test Strategy",1,1,0.5,0.5,16,14,0,0,300,-300`;
 
       const result = await loader.loadTrades(csvContent);
 

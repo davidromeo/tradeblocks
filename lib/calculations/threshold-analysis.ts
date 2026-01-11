@@ -72,7 +72,7 @@ export function calculateThresholdAnalysis(
       trade,
       xValue: getTradeValue(trade, xField),
       pl: trade.pl ?? 0,
-      plPct: trade.premiumEfficiency ?? (trade.premium && trade.premium !== 0 && trade.numContracts ? (trade.pl / Math.abs(trade.premium * trade.numContracts)) * 100 : 0),
+      plPct: trade.premiumEfficiency ?? 0,
       rom: trade.rom ?? 0
     }))
     .filter(t => t.xValue !== null) as Array<{

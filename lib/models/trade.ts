@@ -24,6 +24,7 @@ export interface Trade {
 
   // Financial metrics
   pl: number // Profit/Loss
+  plPct: number // P/L as percentage of premium
   numContracts: number
   fundsAtClose: number
   marginReq: number
@@ -72,6 +73,7 @@ export interface RawTradeData {
   "Avg. Closing Cost"?: string
   "Reason For Close"?: string
   "P/L": string
+  "P/L %": string
   "No. of Contracts": string
   "Funds at Close": string
   "Margin Req.": string
@@ -103,6 +105,7 @@ export const TRADE_COLUMN_MAPPING = {
   "Avg. Closing Cost": "avgClosingCost",
   "Reason For Close": "reasonForClose",
   "P/L": "pl",
+  "P/L %": "plPct",
   "No. of Contracts": "numContracts",
   "Funds at Close": "fundsAtClose",
   "Margin Req.": "marginReq",
@@ -127,7 +130,6 @@ export const TRADE_COLUMN_ALIASES = {
   "Opening Commissions & Fees": "Opening Commissions + Fees",
   "Closing comms & fees": "Closing Commissions + Fees",
   "Closing Commissions & Fees": "Closing Commissions + Fees",
-  "P/L %": "P/L %", // Recognized but ignored (we calculate our own plPct)
 } as const
 
 /**
@@ -145,6 +147,7 @@ export const REQUIRED_TRADE_COLUMNS = [
   "Avg. Closing Cost",
   "Reason For Close",
   "P/L",
+  "P/L %",
   "No. of Contracts",
   "Funds at Close",
   "Margin Req.",

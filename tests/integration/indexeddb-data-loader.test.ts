@@ -185,9 +185,9 @@ describe('IndexedDB Integration with Data Loader', () => {
       });
 
       const blockId = 'test-block-3';
-      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
-"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,1,10100,1000,"IndexedDB Test",1,1,0.5,0.5,15,15,0,0,200,-200
-"2024-01-02","11:00:00",101,"PUT",600,99,"2024-01-03","14:00:00",99,"Stop",-50,2,10050,2000,"IndexedDB Test",2,2,0.6,0.4,16,14,1,-1,300,-300`;
+      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","P/L %","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
+"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,20.00,1,10100,1000,"IndexedDB Test",1,1,0.5,0.5,15,15,0,0,200,-200
+"2024-01-02","11:00:00",101,"PUT",600,99,"2024-01-03","14:00:00",99,"Stop",-50,-4.17,2,10050,2000,"IndexedDB Test",2,2,0.6,0.4,16,14,1,-1,300,-300`;
 
       // Load and store
       const result = await loader.loadBlockData(blockId, csvContent);
@@ -219,8 +219,8 @@ describe('IndexedDB Integration with Data Loader', () => {
       });
 
       const blocks = ['block-1', 'block-2', 'block-3'];
-      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
-"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,1,10100,1000,"Concurrent Test",1,1,0.5,0.5,15,15,0,0,200,-200`;
+      const csvContent = `"Date Opened","Time Opened","Opening Price","Legs","Premium","Closing Price","Date Closed","Time Closed","Avg. Closing Cost","Reason For Close","P/L","P/L %","No. of Contracts","Funds at Close","Margin Req.","Strategy","Opening Commissions + Fees","Closing Commissions + Fees","Opening Short/Long Ratio","Closing Short/Long Ratio","Opening VIX","Closing VIX","Gap","Movement","Max Profit","Max Loss"
+"2024-01-01","10:00:00",100,"CALL",500,110,"2024-01-02","15:00:00",110,"Target",100,20.00,1,10100,1000,"Concurrent Test",1,1,0.5,0.5,15,15,0,0,200,-200`;
 
       // Load data for multiple blocks concurrently
       const promises = blocks.map(blockId =>

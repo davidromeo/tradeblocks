@@ -28,6 +28,7 @@ describe('Custom Fields', () => {
         'Avg. Closing Cost': '1.00',
         'Reason For Close': 'Profit Target',
         'P/L': '50',
+        'P/L %': '33.33',
         'No. of Contracts': '1',
         'Funds at Close': '10050',
         'Margin Req.': '5000',
