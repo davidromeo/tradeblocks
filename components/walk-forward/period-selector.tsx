@@ -123,12 +123,18 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const [outOfSampleInput, setOutOfSampleInput] = useState(String(config.outOfSampleDays))
   const [stepSizeInput, setStepSizeInput] = useState(String(config.stepSizeDays))
 
+  // Min trades input states (for free text editing)
+  const [minISTradesInput, setMinISTradesInput] = useState(String(config.minInSampleTrades ?? 0))
+  const [minOOSTradesInput, setMinOOSTradesInput] = useState(String(config.minOutOfSampleTrades ?? 0))
+
   // Sync input states when config changes externally (e.g., presets)
   useEffect(() => {
     setInSampleInput(String(config.inSampleDays))
     setOutOfSampleInput(String(config.outOfSampleDays))
     setStepSizeInput(String(config.stepSizeDays))
-  }, [config.inSampleDays, config.outOfSampleDays, config.stepSizeDays])
+    setMinISTradesInput(String(config.minInSampleTrades ?? 0))
+    setMinOOSTradesInput(String(config.minOutOfSampleTrades ?? 0))
+  }, [config.inSampleDays, config.outOfSampleDays, config.stepSizeDays, config.minInSampleTrades, config.minOutOfSampleTrades])
 
   // Blur handlers for window configuration inputs
   const handleInSampleBlur = () => {
@@ -158,6 +164,26 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
       setStepSizeInput(String(val))
     } else {
       setStepSizeInput(String(config.stepSizeDays))
+    }
+  }
+
+  const handleMinISTradesBlur = () => {
+    const val = parseInt(minISTradesInput, 10)
+    if (!isNaN(val) && val >= 1) {
+      updateConfig({ minInSampleTrades: val })
+      setMinISTradesInput(String(val))
+    } else {
+      setMinISTradesInput(String(config.minInSampleTrades ?? 0))
+    }
+  }
+
+  const handleMinOOSTradesBlur = () => {
+    const val = parseInt(minOOSTradesInput, 10)
+    if (!isNaN(val) && val >= 1) {
+      updateConfig({ minOutOfSampleTrades: val })
+      setMinOOSTradesInput(String(val))
+    } else {
+      setMinOOSTradesInput(String(config.minOutOfSampleTrades ?? 0))
     }
   }
 
@@ -653,11 +679,10 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
               </div>
               <Input
                 type="number"
-                min={5}
-                value={config.minInSampleTrades ?? 0}
-                onChange={(event) =>
-                  updateConfig({ minInSampleTrades: Number(event.target.value) })
-                }
+                value={minISTradesInput}
+                onChange={(e) => setMinISTradesInput(e.target.value)}
+                onBlur={handleMinISTradesBlur}
+                onKeyDown={(e) => e.key === "Enter" && handleMinISTradesBlur()}
               />
             </div>
             <div className="space-y-1">
@@ -686,11 +711,10 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
               </div>
               <Input
                 type="number"
-                min={1}
-                value={config.minOutOfSampleTrades ?? 0}
-                onChange={(event) =>
-                  updateConfig({ minOutOfSampleTrades: Number(event.target.value) })
-                }
+                value={minOOSTradesInput}
+                onChange={(e) => setMinOOSTradesInput(e.target.value)}
+                onBlur={handleMinOOSTradesBlur}
+                onKeyDown={(e) => e.key === "Enter" && handleMinOOSTradesBlur()}
               />
             </div>
           </div>
@@ -979,7 +1003,7 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                   <div className="space-y-2">
                     <Label className="text-xs">Max Correlation: {diversificationConfig.maxCorrelationThreshold}</Label>
                     <Slider
-                      min={0.3}
+                      min={0.1}
                       max={0.95}
                       step={0.05}
                       value={[diversificationConfig.maxCorrelationThreshold]}
@@ -1062,7 +1086,7 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                       Max Tail Dependence: {diversificationConfig.maxTailDependenceThreshold}
                     </Label>
                     <Slider
-                      min={0.2}
+                      min={0.1}
                       max={0.9}
                       step={0.05}
                       value={[diversificationConfig.maxTailDependenceThreshold]}
@@ -1326,8 +1350,8 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                               <Label className="text-xs">Step</Label>
                               <Input
                                 type="number"
-                                step={0.05}
-                                min={0.05}
+                                step={0.01}
+                                min={0.01}
                                 max={0.5}
                                 value={config.range[2]}
                                 onChange={(e) =>
