@@ -42,7 +42,7 @@ interface PeriodSelectorProps {
 const TARGET_OPTIONS: Array<{
   value: WalkForwardOptimizationTarget
   label: string
-  group: "performance" | "risk-adjusted" | "diversification"
+  group: "performance" | "risk-adjusted"
 }> = [
   // Performance targets
   { value: "netPl", label: "Net Profit", group: "performance" },
@@ -54,10 +54,6 @@ const TARGET_OPTIONS: Array<{
   { value: "sharpeRatio", label: "Sharpe Ratio", group: "risk-adjusted" },
   { value: "sortinoRatio", label: "Sortino Ratio", group: "risk-adjusted" },
   { value: "calmarRatio", label: "Calmar Ratio", group: "risk-adjusted" },
-  // Diversification targets
-  { value: "minAvgCorrelation", label: "Min Avg Correlation", group: "diversification" },
-  { value: "minTailRisk", label: "Min Tail Risk", group: "diversification" },
-  { value: "maxEffectiveFactors", label: "Max Effective Factors", group: "diversification" },
 ]
 
 // Helper text for parameters (extends the store's PARAMETER_METADATA)
@@ -67,11 +63,6 @@ const PARAMETER_HELPERS: Record<string, string> = {
   maxDrawdownPct: "Reject combos that breach this drawdown.",
   maxDailyLossPct: "Cut risk-off when day losses exceed cap.",
   consecutiveLossLimit: "Stops trading after N losing trades.",
-}
-
-// Check if target is a diversification target (requires performance floor)
-const isDiversificationTarget = (target: WalkForwardOptimizationTarget): boolean => {
-  return ["minAvgCorrelation", "minTailRisk", "maxEffectiveFactors"].includes(target)
 }
 
 export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProps) {
@@ -100,11 +91,9 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const normalizeTo1Lot = useWalkForwardStore((state) => state.normalizeTo1Lot)
   const setNormalizeTo1Lot = useWalkForwardStore((state) => state.setNormalizeTo1Lot)
 
-  // Phase 2: Diversification config and performance floor
+  // Phase 2: Diversification config
   const diversificationConfig = useWalkForwardStore((state) => state.diversificationConfig)
   const updateDiversificationConfig = useWalkForwardStore((state) => state.updateDiversificationConfig)
-  const performanceFloor = useWalkForwardStore((state) => state.performanceFloor)
-  const updatePerformanceFloor = useWalkForwardStore((state) => state.updatePerformanceFloor)
 
   // Phase 3: Strategy weight sweeps
   const strategyWeightSweep = useWalkForwardStore((state) => state.strategyWeightSweep)
@@ -640,14 +629,6 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                     </SelectItem>
                   ))}
                 </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel>Diversification</SelectLabel>
-                  {TARGET_OPTIONS.filter((o) => o.group === "diversification").map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -819,114 +800,6 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
             <div className="grid gap-3 md:grid-cols-2">{renderParameterControls()}</div>
           </CollapsibleContent>
         </Collapsible>
-
-        {/* Performance Floor (shown when diversification target selected) */}
-        {isDiversificationTarget(config.optimizationTarget) && (
-          <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 p-4">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-                Performance Floor
-              </p>
-              <HoverCard>
-                <HoverCardTrigger asChild>
-                  <HelpCircle className="h-3.5 w-3.5 text-amber-600/60 cursor-help" />
-                </HoverCardTrigger>
-                <HoverCardContent className="w-80 p-0 overflow-hidden">
-                  <div className="space-y-3">
-                    <div className="bg-amber-500/10 border-b px-4 py-3">
-                      <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-                        Performance Floor
-                      </h4>
-                    </div>
-                    <div className="px-4 pb-4 space-y-3">
-                      <p className="text-sm font-medium text-foreground leading-relaxed">
-                        Required when optimizing for diversification metrics.
-                      </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        Ensures combinations meet minimum profitability before optimizing for
-                        diversification. This prevents selecting "diversified but unprofitable"
-                        combinations. At least one floor must be enabled.
-                      </p>
-                    </div>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
-            </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="floor-sharpe"
-                    checked={performanceFloor.enableMinSharpe}
-                    onCheckedChange={(checked) =>
-                      updatePerformanceFloor({ enableMinSharpe: Boolean(checked) })
-                    }
-                  />
-                  <Label htmlFor="floor-sharpe" className="text-sm cursor-pointer">
-                    Min Sharpe Ratio
-                  </Label>
-                </div>
-                <Input
-                  type="number"
-                  step={0.1}
-                  min={0}
-                  value={performanceFloor.minSharpeRatio}
-                  onChange={(e) =>
-                    updatePerformanceFloor({ minSharpeRatio: Number(e.target.value) })
-                  }
-                  disabled={!performanceFloor.enableMinSharpe}
-                  className="h-8"
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="floor-pf"
-                    checked={performanceFloor.enableMinProfitFactor}
-                    onCheckedChange={(checked) =>
-                      updatePerformanceFloor({ enableMinProfitFactor: Boolean(checked) })
-                    }
-                  />
-                  <Label htmlFor="floor-pf" className="text-sm cursor-pointer">
-                    Min Profit Factor
-                  </Label>
-                </div>
-                <Input
-                  type="number"
-                  step={0.1}
-                  min={1}
-                  value={performanceFloor.minProfitFactor}
-                  onChange={(e) =>
-                    updatePerformanceFloor({ minProfitFactor: Number(e.target.value) })
-                  }
-                  disabled={!performanceFloor.enableMinProfitFactor}
-                  className="h-8"
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 h-8">
-                  <Checkbox
-                    id="floor-positive"
-                    checked={performanceFloor.enablePositiveNetPl}
-                    onCheckedChange={(checked) =>
-                      updatePerformanceFloor({ enablePositiveNetPl: Boolean(checked) })
-                    }
-                  />
-                  <Label htmlFor="floor-positive" className="text-sm cursor-pointer">
-                    Require Positive Net P/L
-                  </Label>
-                </div>
-              </div>
-            </div>
-            {!performanceFloor.enableMinSharpe &&
-              !performanceFloor.enableMinProfitFactor &&
-              !performanceFloor.enablePositiveNetPl && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ At least one floor must be enabled for diversification targets.
-                </p>
-              )}
-          </div>
-        )}
 
         {/* Diversification Constraints */}
         <Collapsible open={diversificationOpen} onOpenChange={setDiversificationOpen}>
