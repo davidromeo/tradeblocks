@@ -118,6 +118,21 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const [minISTradesInput, setMinISTradesInput] = useState(String(config.minInSampleTrades ?? 0))
   const [minOOSTradesInput, setMinOOSTradesInput] = useState(String(config.minOutOfSampleTrades ?? 0))
 
+  // Parameter range input states (for free text editing)
+  // Keys are like "kellyMultiplier_min", "kellyMultiplier_max", "kellyMultiplier_step"
+  const [paramInputs, setParamInputs] = useState<Record<string, string>>(() => {
+    const inputs: Record<string, string> = {}
+    Object.entries(extendedParameterRanges).forEach(([key, range]) => {
+      const [min, max, step] = range
+      const metadata = PARAMETER_METADATA[key]
+      const precision = metadata?.precision ?? 2
+      inputs[`${key}_min`] = min.toFixed(precision)
+      inputs[`${key}_max`] = max.toFixed(precision)
+      inputs[`${key}_step`] = step.toFixed(precision)
+    })
+    return inputs
+  })
+
   // Sync input states when config changes externally (e.g., presets)
   useEffect(() => {
     setInSampleInput(String(config.inSampleDays))
@@ -126,6 +141,20 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
     setMinISTradesInput(String(config.minInSampleTrades ?? 0))
     setMinOOSTradesInput(String(config.minOutOfSampleTrades ?? 0))
   }, [config.inSampleDays, config.outOfSampleDays, config.stepSizeDays, config.minInSampleTrades, config.minOutOfSampleTrades])
+
+  // Sync parameter range inputs when extendedParameterRanges changes (e.g., slider drag, preset)
+  useEffect(() => {
+    const inputs: Record<string, string> = {}
+    Object.entries(extendedParameterRanges).forEach(([key, range]) => {
+      const [min, max, step] = range
+      const metadata = PARAMETER_METADATA[key]
+      const precision = metadata?.precision ?? 2
+      inputs[`${key}_min`] = min.toFixed(precision)
+      inputs[`${key}_max`] = max.toFixed(precision)
+      inputs[`${key}_step`] = step.toFixed(precision)
+    })
+    setParamInputs(inputs)
+  }, [extendedParameterRanges])
 
   // Blur handlers for window configuration inputs
   const handleInSampleBlur = () => {
@@ -291,12 +320,22 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                   <Label className="text-xs">Min</Label>
                   <Input
                     type="number"
-                    value={minValue}
+                    value={paramInputs[`${key}_min`] ?? minValue.toFixed(precision)}
                     step={stepValue}
                     onChange={(event) => {
-                      const next = Number.parseFloat(event.target.value)
-                      if (Number.isFinite(next)) {
+                      setParamInputs(prev => ({ ...prev, [`${key}_min`]: event.target.value }))
+                    }}
+                    onBlur={() => {
+                      const next = Number.parseFloat(paramInputs[`${key}_min`] ?? "")
+                      if (Number.isFinite(next) && next >= metadata.min) {
                         setExtendedParameterRange(key, [next, maxValue, stepValue, true])
+                      } else {
+                        setParamInputs(prev => ({ ...prev, [`${key}_min`]: minValue.toFixed(precision) }))
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        (e.target as HTMLInputElement).blur()
                       }
                     }}
                   />
@@ -305,12 +344,22 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                   <Label className="text-xs">Max</Label>
                   <Input
                     type="number"
-                    value={maxValue}
+                    value={paramInputs[`${key}_max`] ?? maxValue.toFixed(precision)}
                     step={stepValue}
                     onChange={(event) => {
-                      const next = Number.parseFloat(event.target.value)
-                      if (Number.isFinite(next)) {
+                      setParamInputs(prev => ({ ...prev, [`${key}_max`]: event.target.value }))
+                    }}
+                    onBlur={() => {
+                      const next = Number.parseFloat(paramInputs[`${key}_max`] ?? "")
+                      if (Number.isFinite(next) && next <= metadata.max) {
                         setExtendedParameterRange(key, [minValue, next, stepValue, true])
+                      } else {
+                        setParamInputs(prev => ({ ...prev, [`${key}_max`]: maxValue.toFixed(precision) }))
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        (e.target as HTMLInputElement).blur()
                       }
                     }}
                   />
@@ -319,14 +368,22 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                   <Label className="text-xs">Step</Label>
                   <Input
                     type="number"
-                    value={stepValue}
+                    value={paramInputs[`${key}_step`] ?? stepValue.toFixed(precision)}
                     step={metadata.step}
-                    min={metadata.step}
                     onChange={(event) => {
-                      const parsed = Number.parseFloat(event.target.value)
-                      if (Number.isFinite(parsed) && parsed > 0) {
-                        const next = Math.max(parsed, metadata.step)
-                        setExtendedParameterRange(key, [minValue, maxValue, next, true])
+                      setParamInputs(prev => ({ ...prev, [`${key}_step`]: event.target.value }))
+                    }}
+                    onBlur={() => {
+                      const parsed = Number.parseFloat(paramInputs[`${key}_step`] ?? "")
+                      if (Number.isFinite(parsed) && parsed >= metadata.step) {
+                        setExtendedParameterRange(key, [minValue, maxValue, parsed, true])
+                      } else {
+                        setParamInputs(prev => ({ ...prev, [`${key}_step`]: stepValue.toFixed(precision) }))
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        (e.target as HTMLInputElement).blur()
                       }
                     }}
                   />
