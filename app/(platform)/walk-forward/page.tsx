@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  HelpCircle,
   Loader2,
   TrendingUp,
   BarChart3,
@@ -33,6 +34,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Slider } from "@/components/ui/slider";
 import {
   Table,
@@ -47,7 +53,10 @@ import { WalkForwardPeriodSelector } from "@/components/walk-forward/period-sele
 import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics";
 import { RunSwitcher } from "@/components/walk-forward/run-switcher";
 import { WalkForwardSummary } from "@/components/walk-forward/walk-forward-summary";
-import { WalkForwardVerdict } from "@/components/walk-forward/walk-forward-verdict";
+import {
+  getRecommendedParameters,
+  formatParameterName,
+} from "@/lib/calculations/walk-forward-verdict";
 import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
 import { useBlockStore } from "@/lib/stores/block-store";
 import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
@@ -844,17 +853,67 @@ export default function WalkForwardPage() {
               </CardContent>
             </Card>
 
-            {/* Detailed Verdict */}
-            <WalkForwardVerdict
-              results={results.results}
-              targetMetricLabel={targetMetricLabel}
-            />
-
             {/* Robustness Metrics */}
             <RobustnessMetrics
               results={results.results}
               targetMetricLabel={targetMetricLabel}
             />
+
+            {/* Parameter Observations */}
+            {(() => {
+              const { params, hasSuggestions } = getRecommendedParameters(results.results.periods);
+              if (!hasSuggestions) return null;
+              return (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Settings2 className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium">Parameter Observations</CardTitle>
+                      <HoverCard>
+                        <HoverCardTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-80">
+                          <p className="text-sm">
+                            These values represent the average optimal parameters found across all walk-forward windows.
+                            <strong className="block mt-2">Note:</strong> These are observations, not recommendations.
+                            Market conditions change, and past optimal parameters may not be ideal going forward.
+                          </p>
+                        </HoverCardContent>
+                      </HoverCard>
+                    </div>
+                    <CardDescription className="text-xs">
+                      Average values across {results.results.periods.length} optimization windows
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {Object.entries(params).map(([key, data]) => (
+                        <div key={key} className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {formatParameterName(key)}
+                            </span>
+                            {data.stable && (
+                              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                                Stable
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-lg font-semibold">{data.value}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Range: {data.range[0]} – {data.range[1]}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">
+                      Parameters marked as &quot;stable&quot; showed less than 30% variation across windows.
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Analysis Insights */}
             <Card>
