@@ -447,6 +447,7 @@ export default function WalkForwardPage() {
         currentId={results?.id ?? null}
         onSelect={selectAnalysis}
         onDelete={deleteAnalysis}
+        onExport={() => handleExport("json")}
       />
 
       {/* Results section wrapped in error boundary - config stays accessible on error */}

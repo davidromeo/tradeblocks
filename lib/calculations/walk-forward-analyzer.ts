@@ -572,6 +572,10 @@ export class WalkForwardAnalyzer {
       ? correlationAnalytics.strongest.pair
       : (['', ''] as [string, string])
 
+    // Calculate total pairs for this period
+    const numStrategies = correlationMatrix.strategies.length
+    const totalPairs = (numStrategies * (numStrategies - 1)) / 2
+
     return {
       avgCorrelation: Number.isNaN(correlationAnalytics.averageCorrelation)
         ? 0
@@ -586,6 +590,9 @@ export class WalkForwardAnalyzer {
       ]) as [string, string],
       effectiveFactors: tailRiskResult?.effectiveFactors ?? correlationMatrix.strategies.length,
       highRiskPairsPct: tailRiskResult?.analytics.highRiskPairsPct ?? 0,
+      // Track insufficient tail data for UI display
+      insufficientTailDataPairs: tailRiskResult?.insufficientDataPairs ?? totalPairs,
+      totalPairs,
     }
   }
 

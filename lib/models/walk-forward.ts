@@ -116,6 +116,10 @@ export interface PeriodDiversificationMetrics {
   maxTailDependencePair: [string, string]
   effectiveFactors: number
   highRiskPairsPct: number
+  /** Number of strategy pairs with insufficient data for tail risk calculation */
+  insufficientTailDataPairs?: number
+  /** Total number of strategy pairs */
+  totalPairs?: number
 }
 
 export interface WalkForwardConfig {

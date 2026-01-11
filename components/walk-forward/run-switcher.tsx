@@ -1,7 +1,7 @@
 "use client"
 
 import { format } from "date-fns"
-import { ChevronDown, ChevronRight, History, MoreHorizontal, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Download, History, MoreHorizontal, Trash2 } from "lucide-react"
 import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +28,7 @@ interface RunSwitcherProps {
   currentId: string | null
   onSelect: (id: string) => void
   onDelete: (id: string) => Promise<void>
+  onExport?: () => void
 }
 
 const TARGET_LABELS: Record<WalkForwardOptimizationTarget, string> = {
@@ -44,7 +45,7 @@ const TARGET_LABELS: Record<WalkForwardOptimizationTarget, string> = {
   maxEffectiveFactors: "Max Eff Factors",
 }
 
-export function RunSwitcher({ history, currentId, onSelect, onDelete }: RunSwitcherProps) {
+export function RunSwitcher({ history, currentId, onSelect, onDelete, onExport }: RunSwitcherProps) {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
 
   if (!history || history.length === 0) return null
@@ -103,6 +104,7 @@ export function RunSwitcher({ history, currentId, onSelect, onDelete }: RunSwitc
                   onToggle={() => toggleRow(analysis.id)}
                   onSelect={() => onSelect(analysis.id)}
                   onDelete={() => handleDelete(analysis.id)}
+                  onExport={isActive ? onExport : undefined}
                 />
               )
             })}
@@ -123,6 +125,7 @@ interface TableRowWithDetailsProps {
   onToggle: () => void
   onSelect: () => void
   onDelete: () => void
+  onExport?: () => void
 }
 
 function TableRowWithDetails({
@@ -135,6 +138,7 @@ function TableRowWithDetails({
   onToggle,
   onSelect,
   onDelete,
+  onExport,
 }: TableRowWithDetailsProps) {
   const config = analysis.config
 
@@ -281,6 +285,12 @@ function TableRowWithDetails({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {onExport && (
+                  <DropdownMenuItem onClick={onExport}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export for Assistant
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={onDelete}
                   className="text-destructive focus:text-destructive"

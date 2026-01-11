@@ -1,6 +1,6 @@
 {
   "mode": "yolo",
-  "depth": "comprehensive",
+  "depth": "quick",
   "gates": {
     "confirm_project": false,
     "confirm_phases": false,

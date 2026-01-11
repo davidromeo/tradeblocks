@@ -2,7 +2,10 @@
 
 import { MetricCard } from "@/components/metric-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import type { WalkForwardResults } from "@/lib/models/walk-forward"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
+import { HelpCircle } from "lucide-react"
+import type { WalkForwardPeriodResult, WalkForwardResults } from "@/lib/models/walk-forward"
+import { cn } from "@/lib/utils"
 
 interface RobustnessMetricsProps {
   results: WalkForwardResults | null
@@ -116,16 +119,9 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
                 />
               )}
               {summary.avgTailDependenceAcrossPeriods !== undefined && (
-                <MetricCard
-                  title="Avg Tail Dependence"
-                  value={summary.avgTailDependenceAcrossPeriods}
-                  format="decimal"
-                  decimalPlaces={3}
-                  tooltip={{
-                    flavor: "Average joint tail risk between strategies across all periods.",
-                    detailed: "Measures how often strategies experience extreme losses together. Lower is better.",
-                  }}
-                  isPositive={summary.avgTailDependenceAcrossPeriods < 0.4}
+                <TailDependenceMetric
+                  avgTailDependence={summary.avgTailDependenceAcrossPeriods}
+                  periods={results.periods}
                 />
               )}
               {summary.avgEffectiveFactors !== undefined && (
@@ -146,5 +142,89 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         </Card>
       )}
     </div>
+  )
+}
+
+/**
+ * Special component for tail dependence that handles insufficient data state
+ */
+function TailDependenceMetric({
+  avgTailDependence,
+  periods,
+}: {
+  avgTailDependence: number
+  periods: WalkForwardPeriodResult[]
+}) {
+  // Check if all periods have insufficient tail data
+  const periodsWithDiversification = periods.filter((p) => p.diversificationMetrics)
+  const hasInsufficientData = periodsWithDiversification.every((p) => {
+    const metrics = p.diversificationMetrics
+    if (!metrics) return true
+    // If insufficientTailDataPairs equals totalPairs, no valid data exists
+    return (
+      metrics.insufficientTailDataPairs !== undefined &&
+      metrics.totalPairs !== undefined &&
+      metrics.insufficientTailDataPairs >= metrics.totalPairs
+    )
+  })
+
+  // Also check if avgTailDependence is 0 and maxTailDependence is 0 across all periods
+  // This catches older results that don't have the new fields
+  const allZeroTailMetrics =
+    avgTailDependence === 0 &&
+    periodsWithDiversification.every(
+      (p) =>
+        p.diversificationMetrics?.avgTailDependence === 0 &&
+        p.diversificationMetrics?.maxTailDependence === 0 &&
+        p.diversificationMetrics?.maxTailDependencePair?.[0] === "" &&
+        p.diversificationMetrics?.maxTailDependencePair?.[1] === ""
+    )
+
+  const showInsufficientData = hasInsufficientData || allZeroTailMetrics
+
+  if (showInsufficientData) {
+    return (
+      <div className={cn("rounded-lg p-4 space-y-1", "bg-muted/50")}>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Avg Tail Dependence</span>
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+            </HoverCardTrigger>
+            <HoverCardContent className="w-80">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Insufficient tail data</p>
+                <p className="text-xs text-muted-foreground">
+                  Tail dependence requires strategies to have simultaneous extreme losses
+                  on shared trading days. With short OOS windows or sparse trading schedules,
+                  there may not be enough co-occurring tail events to calculate meaningful estimates.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Try:</strong> Longer OOS windows, higher tail threshold (e.g., 25%),
+                  or strategies that trade more frequently on overlapping days.
+                </p>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        </div>
+        <p className="text-sm font-medium text-muted-foreground/70">
+          Insufficient data
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <MetricCard
+      title="Avg Tail Dependence"
+      value={avgTailDependence}
+      format="decimal"
+      decimalPlaces={3}
+      tooltip={{
+        flavor: "Average joint tail risk between strategies across all periods.",
+        detailed: "Measures how often strategies experience extreme losses together. Lower is better.",
+      }}
+      isPositive={avgTailDependence < 0.4}
+    />
   )
 }
