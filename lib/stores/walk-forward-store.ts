@@ -28,6 +28,18 @@ export interface TradeFrequencyInfo {
 }
 
 /**
+ * Reason why auto-configuration chose specific settings.
+ * Used to provide context when settings trigger pre-run warnings.
+ */
+export type AutoConfigReason = 'normal' | 'low-frequency' | 'very-low-frequency'
+
+export interface AutoConfigResult {
+  config: Partial<WalkForwardConfig>
+  reason: AutoConfigReason
+  constrainedByFrequency: boolean // true if min trades or window sizes were constrained
+}
+
+/**
  * Calculates trade frequency metrics from a list of trades.
  */
 export function calculateTradeFrequency(trades: Trade[]): TradeFrequencyInfo | null {
@@ -57,8 +69,10 @@ export function calculateTradeFrequency(trades: Trade[]): TradeFrequencyInfo | n
 /**
  * Generates sensible WFA configuration defaults based on trade frequency.
  * Ensures windows are large enough to capture sufficient trades for meaningful analysis.
+ *
+ * @returns AutoConfigResult with config, reason, and whether settings were constrained
  */
-export function calculateAutoConfig(frequency: TradeFrequencyInfo): Partial<WalkForwardConfig> {
+export function calculateAutoConfig(frequency: TradeFrequencyInfo): AutoConfigResult {
   const { avgDaysBetweenTrades, tradesPerMonth, tradingDays } = frequency
 
   // Target: ~10-15 trades for in-sample, ~3-5 for out-of-sample
@@ -95,6 +109,8 @@ export function calculateAutoConfig(frequency: TradeFrequencyInfo): Partial<Walk
   // For low-frequency strategies, we need to be more lenient
   let minInSampleTrades: number
   let minOutOfSampleTrades: number
+  let reason: AutoConfigReason = 'normal'
+  let constrainedByFrequency = false
 
   if (tradesPerMonth >= 20) {
     // High frequency: daily or more
@@ -108,18 +124,26 @@ export function calculateAutoConfig(frequency: TradeFrequencyInfo): Partial<Walk
     // Low frequency: weekly
     minInSampleTrades = 6
     minOutOfSampleTrades = 2
+    reason = 'low-frequency'
+    constrainedByFrequency = true
   } else {
     // Very low frequency: bi-weekly or less
     minInSampleTrades = 4
     minOutOfSampleTrades = 1
+    reason = 'very-low-frequency'
+    constrainedByFrequency = true
   }
 
   return {
-    inSampleDays,
-    outOfSampleDays,
-    stepSizeDays,
-    minInSampleTrades,
-    minOutOfSampleTrades,
+    config: {
+      inSampleDays,
+      outOfSampleDays,
+      stepSizeDays,
+      minInSampleTrades,
+      minOutOfSampleTrades,
+    },
+    reason,
+    constrainedByFrequency,
   }
 }
 
@@ -140,6 +164,8 @@ interface WalkForwardStore {
   presets: Record<WalkForwardPresetKey, WalkForwardPreset>
   tradeFrequency: TradeFrequencyInfo | null
   autoConfigApplied: boolean
+  autoConfigReason: AutoConfigReason | null
+  constrainedByFrequency: boolean
 
   // Phase 1: Extended parameter ranges with enable/disable
   extendedParameterRanges: WalkForwardExtendedParameterRanges
@@ -487,6 +513,8 @@ export const useWalkForwardStore = create<WalkForwardStore>((set, get) => ({
   presets: WALK_FORWARD_PRESETS,
   tradeFrequency: null,
   autoConfigApplied: false,
+  autoConfigReason: null,
+  constrainedByFrequency: false,
 
   // Phase 1: Extended parameter ranges
   extendedParameterRanges: DEFAULT_EXTENDED_PARAMETER_RANGES,
@@ -567,28 +595,30 @@ export const useWalkForwardStore = create<WalkForwardStore>((set, get) => ({
       const trades = await db.getTradesByBlock(blockId)
 
       if (!trades || trades.length < 2) {
-        set({ tradeFrequency: null, autoConfigApplied: false })
+        set({ tradeFrequency: null, autoConfigApplied: false, autoConfigReason: null, constrainedByFrequency: false })
         return
       }
 
       const frequency = calculateTradeFrequency(trades)
       if (!frequency) {
-        set({ tradeFrequency: null, autoConfigApplied: false })
+        set({ tradeFrequency: null, autoConfigApplied: false, autoConfigReason: null, constrainedByFrequency: false })
         return
       }
 
-      const autoConfig = calculateAutoConfig(frequency)
+      const { config: autoConfig, reason, constrainedByFrequency } = calculateAutoConfig(frequency)
 
       set((state) => ({
         tradeFrequency: frequency,
         autoConfigApplied: true,
+        autoConfigReason: reason,
+        constrainedByFrequency,
         config: {
           ...state.config,
           ...autoConfig,
         },
       }))
     } catch {
-      set({ tradeFrequency: null, autoConfigApplied: false })
+      set({ tradeFrequency: null, autoConfigApplied: false, autoConfigReason: null, constrainedByFrequency: false })
     }
   },
 

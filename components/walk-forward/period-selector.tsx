@@ -72,6 +72,7 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
   const autoConfigureFromBlock = useWalkForwardStore((state) => state.autoConfigureFromBlock)
   const tradeFrequency = useWalkForwardStore((state) => state.tradeFrequency)
   const autoConfigApplied = useWalkForwardStore((state) => state.autoConfigApplied)
+  const constrainedByFrequency = useWalkForwardStore((state) => state.constrainedByFrequency)
   const runAnalysis = useWalkForwardStore((state) => state.runAnalysis)
   const cancelAnalysis = useWalkForwardStore((state) => state.cancelAnalysis)
   const isRunning = useWalkForwardStore((state) => state.isRunning)
@@ -390,12 +391,18 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
         )}
 
         {autoConfigApplied && tradeFrequency && (
-          <Alert>
-            <Sparkles className="h-4 w-4" />
-            <AlertTitle>Auto-configured for your trading frequency</AlertTitle>
-            <AlertDescription>
+          <Alert className={constrainedByFrequency ? "border-amber-300/50 bg-amber-50/30 dark:bg-amber-950/20" : undefined}>
+            <Sparkles className={cn("h-4 w-4", constrainedByFrequency && "text-amber-600 dark:text-amber-400")} />
+            <AlertTitle className={constrainedByFrequency ? "text-amber-800 dark:text-amber-300" : undefined}>
+              {constrainedByFrequency
+                ? "Auto-configured for low-frequency trading"
+                : "Auto-configured for your trading frequency"}
+            </AlertTitle>
+            <AlertDescription className={constrainedByFrequency ? "text-amber-700/80 dark:text-amber-400/80" : undefined}>
               Detected ~{tradeFrequency.tradesPerMonth.toFixed(1)} trades/month ({tradeFrequency.totalTrades} trades over {Math.round(tradeFrequency.tradingDays / 30)} months).
-              Window sizes adjusted to capture sufficient trades per period.
+              {constrainedByFrequency
+                ? " With limited trade data, shorter windows and lower trade minimums are necessary to run analysis. Results may be noisier than high-frequency strategies."
+                : " Window sizes adjusted to capture sufficient trades per period."}
             </AlertDescription>
           </Alert>
         )}

@@ -736,14 +736,16 @@ describe('auto configuration calculation', () => {
       tradesPerMonth: 33,
     }
 
-    const config = calculateAutoConfig(frequency)
+    const result = calculateAutoConfig(frequency)
 
     // High frequency should use smaller windows
-    expect(config.inSampleDays).toBe(14) // Minimum bound
-    expect(config.outOfSampleDays).toBe(7) // Minimum bound
-    expect(config.stepSizeDays).toBe(7)
-    expect(config.minInSampleTrades).toBe(15)
-    expect(config.minOutOfSampleTrades).toBe(5)
+    expect(result.config.inSampleDays).toBe(14) // Minimum bound
+    expect(result.config.outOfSampleDays).toBe(7) // Minimum bound
+    expect(result.config.stepSizeDays).toBe(7)
+    expect(result.config.minInSampleTrades).toBe(15)
+    expect(result.config.minOutOfSampleTrades).toBe(5)
+    expect(result.reason).toBe('normal')
+    expect(result.constrainedByFrequency).toBe(false)
   })
 
   it('generates config for medium-frequency trading (8-20 trades/month)', () => {
@@ -754,14 +756,16 @@ describe('auto configuration calculation', () => {
       tradesPerMonth: 10,
     }
 
-    const config = calculateAutoConfig(frequency)
+    const result = calculateAutoConfig(frequency)
 
     // Medium frequency: ~10 trades in IS, ~3 in OOS
-    expect(config.inSampleDays).toBe(30) // 3 days * 10 trades
-    expect(config.outOfSampleDays).toBe(9) // 3 days * 3 trades
-    expect(config.stepSizeDays).toBe(9)
-    expect(config.minInSampleTrades).toBe(10)
-    expect(config.minOutOfSampleTrades).toBe(3)
+    expect(result.config.inSampleDays).toBe(30) // 3 days * 10 trades
+    expect(result.config.outOfSampleDays).toBe(9) // 3 days * 3 trades
+    expect(result.config.stepSizeDays).toBe(9)
+    expect(result.config.minInSampleTrades).toBe(10)
+    expect(result.config.minOutOfSampleTrades).toBe(3)
+    expect(result.reason).toBe('normal')
+    expect(result.constrainedByFrequency).toBe(false)
   })
 
   it('generates config for low-frequency trading (4-8 trades/month)', () => {
@@ -772,13 +776,15 @@ describe('auto configuration calculation', () => {
       tradesPerMonth: 4,
     }
 
-    const config = calculateAutoConfig(frequency)
+    const result = calculateAutoConfig(frequency)
 
     // Low frequency: larger windows needed
-    expect(config.inSampleDays).toBe(75) // 7.5 days * 10 trades
-    expect(config.outOfSampleDays).toBe(23) // 7.5 days * 3 trades, rounded
-    expect(config.minInSampleTrades).toBe(6)
-    expect(config.minOutOfSampleTrades).toBe(2)
+    expect(result.config.inSampleDays).toBe(75) // 7.5 days * 10 trades
+    expect(result.config.outOfSampleDays).toBe(23) // 7.5 days * 3 trades, rounded
+    expect(result.config.minInSampleTrades).toBe(6)
+    expect(result.config.minOutOfSampleTrades).toBe(2)
+    expect(result.reason).toBe('low-frequency')
+    expect(result.constrainedByFrequency).toBe(true)
   })
 
   it('generates config for very low-frequency trading (<4 trades/month)', () => {
@@ -789,13 +795,15 @@ describe('auto configuration calculation', () => {
       tradesPerMonth: 2,
     }
 
-    const config = calculateAutoConfig(frequency)
+    const result = calculateAutoConfig(frequency)
 
     // Very low frequency: larger windows
-    expect(config.inSampleDays).toBe(150) // 15 days * 10 trades
-    expect(config.outOfSampleDays).toBe(45) // 15 days * 3 trades
-    expect(config.minInSampleTrades).toBe(4)
-    expect(config.minOutOfSampleTrades).toBe(1)
+    expect(result.config.inSampleDays).toBe(150) // 15 days * 10 trades
+    expect(result.config.outOfSampleDays).toBe(45) // 15 days * 3 trades
+    expect(result.config.minInSampleTrades).toBe(4)
+    expect(result.config.minOutOfSampleTrades).toBe(1)
+    expect(result.reason).toBe('very-low-frequency')
+    expect(result.constrainedByFrequency).toBe(true)
   })
 
   it('applies maximum bounds for extremely sparse trading', () => {
@@ -806,11 +814,13 @@ describe('auto configuration calculation', () => {
       tradesPerMonth: 0.5,
     }
 
-    const config = calculateAutoConfig(frequency)
+    const result = calculateAutoConfig(frequency)
 
     // Should hit max bounds
-    expect(config.inSampleDays).toBe(180) // Max bound
-    expect(config.outOfSampleDays).toBe(60) // Max bound
+    expect(result.config.inSampleDays).toBe(180) // Max bound
+    expect(result.config.outOfSampleDays).toBe(60) // Max bound
+    expect(result.reason).toBe('very-low-frequency')
+    expect(result.constrainedByFrequency).toBe(true)
   })
 
   it('scales down windows when insufficient data for 3 windows', () => {
@@ -821,12 +831,12 @@ describe('auto configuration calculation', () => {
       tradesPerMonth: 6.67,
     }
 
-    const config = calculateAutoConfig(frequency)
+    const result = calculateAutoConfig(frequency)
 
     // With 90 days, default IS=45, OOS=14 would only allow ~3 windows
     // Should scale to fit
-    expect(config.inSampleDays).toBeLessThanOrEqual(90)
-    expect(config.inSampleDays! + config.outOfSampleDays!).toBeLessThan(90)
+    expect(result.config.inSampleDays).toBeLessThanOrEqual(90)
+    expect(result.config.inSampleDays! + result.config.outOfSampleDays!).toBeLessThan(90)
   })
 })
 
