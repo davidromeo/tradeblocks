@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { calculateStreakDistributions } from '@/lib/calculations/streak-analysis';
+import { calculateStreakDistributions, calculateRunsTest } from '@/lib/calculations/streak-analysis';
 import { Trade } from '@/lib/models/trade';
 
 describe('Streak Analysis', () => {
@@ -285,6 +285,177 @@ describe('Streak Analysis', () => {
       expect(result.statistics.avgLossStreak).toBe(1);  // (1 + 1 + 1) / 3
       expect(result.statistics.totalWinStreaks).toBe(4);
       expect(result.statistics.totalLossStreaks).toBe(3);
+    });
+  });
+
+  describe('Runs Test (Wald-Wolfowitz)', () => {
+    describe('Edge Cases', () => {
+      it('should return undefined for empty trades', () => {
+        const result = calculateRunsTest([]);
+        expect(result).toBeUndefined();
+      });
+
+      it('should return undefined for single trade', () => {
+        const trades = [createMockTrade(100)];
+        const result = calculateRunsTest(trades);
+        expect(result).toBeUndefined();
+      });
+
+      it('should return undefined for all wins', () => {
+        const trades = [
+          createMockTrade(100, 0),
+          createMockTrade(200, 1),
+          createMockTrade(300, 2),
+        ];
+        const result = calculateRunsTest(trades);
+        expect(result).toBeUndefined();
+      });
+
+      it('should return undefined for all losses', () => {
+        const trades = [
+          createMockTrade(-100, 0),
+          createMockTrade(-200, 1),
+          createMockTrade(-300, 2),
+        ];
+        const result = calculateRunsTest(trades);
+        expect(result).toBeUndefined();
+      });
+    });
+
+    describe('Clustered Sequences (Too Few Runs)', () => {
+      it('should detect highly clustered sequence', () => {
+        // WWWWWWWWWWLLLLLLLLLL (10 wins, 10 losses, 2 runs)
+        const trades = [
+          ...Array.from({ length: 10 }, (_, i) => createMockTrade(100, i)),
+          ...Array.from({ length: 10 }, (_, i) => createMockTrade(-100, i + 10)),
+        ];
+        const result = calculateRunsTest(trades);
+
+        expect(result).toBeDefined();
+        expect(result!.numRuns).toBe(2);
+        expect(result!.pValue).toBeLessThan(0.05);
+        expect(result!.isNonRandom).toBe(true);
+        expect(result!.patternType).toBe('clustered');
+        expect(result!.sampleSize).toBe(20);
+        expect(result!.isSufficientSample).toBe(true);
+      });
+    });
+
+    describe('Alternating Sequences (Too Many Runs)', () => {
+      it('should detect alternating sequence as non-random', () => {
+        // WLWLWLWLWLWLWLWLWLWL (20 trades, 20 runs)
+        const trades = Array.from({ length: 20 }, (_, i) =>
+          createMockTrade(i % 2 === 0 ? 100 : -100, i)
+        );
+        const result = calculateRunsTest(trades);
+
+        expect(result).toBeDefined();
+        expect(result!.numRuns).toBe(20);
+        expect(result!.pValue).toBeLessThan(0.05);
+        expect(result!.isNonRandom).toBe(true);
+        expect(result!.patternType).toBe('alternating');
+      });
+    });
+
+    describe('Random-looking Sequences', () => {
+      it('should not detect random-looking sequence as non-random', () => {
+        // A mixed pattern that should appear random
+        // WWLWLLWWWLWLLWWLWLWL
+        const pattern = [1, 1, -1, 1, -1, -1, 1, 1, 1, -1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1];
+        const trades = pattern.map((p, i) => createMockTrade(p * 100, i));
+        const result = calculateRunsTest(trades);
+
+        expect(result).toBeDefined();
+        // This mixed pattern should have runs close to expected
+        expect(result!.pValue).toBeGreaterThan(0.05);
+        expect(result!.isNonRandom).toBe(false);
+        expect(result!.patternType).toBe('random');
+      });
+    });
+
+    describe('Sample Size Warning', () => {
+      it('should mark small samples as insufficient', () => {
+        const trades = [
+          createMockTrade(100, 0),
+          createMockTrade(-100, 1),
+          createMockTrade(100, 2),
+          createMockTrade(-100, 3),
+        ];
+        const result = calculateRunsTest(trades);
+
+        expect(result).toBeDefined();
+        expect(result!.sampleSize).toBe(4);
+        expect(result!.isSufficientSample).toBe(false);
+      });
+
+      it('should mark samples of 20+ as sufficient', () => {
+        const trades = Array.from({ length: 20 }, (_, i) =>
+          createMockTrade(i % 3 === 0 ? -100 : 100, i)
+        );
+        const result = calculateRunsTest(trades);
+
+        expect(result).toBeDefined();
+        expect(result!.sampleSize).toBe(20);
+        expect(result!.isSufficientSample).toBe(true);
+      });
+    });
+
+    describe('Integration with calculateStreakDistributions', () => {
+      it('should include runs test in streak distribution results', () => {
+        const trades = Array.from({ length: 20 }, (_, i) =>
+          createMockTrade(i % 2 === 0 ? 100 : -100, i)
+        );
+        const result = calculateStreakDistributions(trades);
+
+        expect(result.runsTest).toBeDefined();
+        expect(result.runsTest!.numRuns).toBe(20);
+        expect(result.runsTest!.sampleSize).toBe(20);
+      });
+
+      it('should return undefined runsTest for all wins', () => {
+        const trades = [
+          createMockTrade(100, 0),
+          createMockTrade(200, 1),
+          createMockTrade(300, 2),
+        ];
+        const result = calculateStreakDistributions(trades);
+
+        expect(result.runsTest).toBeUndefined();
+      });
+    });
+
+    describe('Interpretation Messages', () => {
+      it('should provide clustering message for streaky (fewer runs)', () => {
+        // WWWWWWWWWWLLLLLLLLLL
+        const trades = [
+          ...Array.from({ length: 10 }, (_, i) => createMockTrade(100, i)),
+          ...Array.from({ length: 10 }, (_, i) => createMockTrade(-100, i + 10)),
+        ];
+        const result = calculateRunsTest(trades);
+
+        expect(result!.interpretation).toContain('clustering');
+        expect(result!.interpretation).toContain('Adaptive position sizing');
+      });
+
+      it('should provide random message for non-streaky', () => {
+        // Mixed pattern
+        const pattern = [1, 1, -1, 1, -1, -1, 1, 1, 1, -1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1];
+        const trades = pattern.map((p, i) => createMockTrade(p * 100, i));
+        const result = calculateRunsTest(trades);
+
+        expect(result!.interpretation).toContain('random');
+        expect(result!.interpretation).toContain('unlikely to help');
+      });
+
+      it('should warn about small sample size', () => {
+        const trades = [
+          createMockTrade(100, 0),
+          createMockTrade(-100, 1),
+        ];
+        const result = calculateRunsTest(trades);
+
+        expect(result!.interpretation).toContain('sample size is small');
+      });
     });
   });
 });

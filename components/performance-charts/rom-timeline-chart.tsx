@@ -37,7 +37,7 @@ export function ROMTimelineChart({ className }: ROMTimelineChartProps) {
     traces.push({
       x: dates,
       y: romValues,
-      type: 'scatter',
+      type: 'scattergl',
       mode: 'markers',
       name: 'ROM Values',
       marker: {

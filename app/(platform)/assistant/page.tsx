@@ -448,13 +448,6 @@ export default function AssistantPage() {
                     >
                       Correlation
                     </Link>
-                    {", or "}
-                    <Link
-                      href="/comparison-blocks"
-                      className="underline hover:text-foreground"
-                    >
-                      Comparison
-                    </Link>
                     .
                   </div>
                 </div>

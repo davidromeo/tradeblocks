@@ -16,6 +16,7 @@ import type { Layout, PlotData, Shape } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
+import { formatMinutesToTime, generateTimeAxisTicksFromData } from "@/lib/utils/time-formatting";
 import { WhatIfExplorer2D, YAxisConfig, YAxisRange } from "./what-if-explorer-2d";
 
 /**
@@ -55,6 +56,9 @@ function isDateField(field: string): boolean {
 function formatValueForHover(value: number, field: string): string {
   if (isDateField(field)) {
     return new Date(value).toLocaleDateString();
+  }
+  if (field === "timeOfDayMinutes") {
+    return formatMinutesToTime(value);
   }
   return value.toFixed(2);
 }
@@ -183,7 +187,7 @@ export function ScatterChart({
         chartTraces.push({
           x: y1Points.map((p) => toPlotlyValue(p.x, xAxis.field)),
           y: y1Points.map((p) => p.y),
-          type: "scatter",
+          type: "scattergl",
           mode: "markers",
           marker: {
             color: AXIS_COLORS.y1,
@@ -193,7 +197,7 @@ export function ScatterChart({
           hovertemplate: y1Points.map(
             (p) =>
               `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-              `${yInfo?.label ?? yAxis.field}: ${p.y.toFixed(2)}<extra></extra>`
+              `${yInfo?.label ?? yAxis.field}: ${formatValueForHover(p.y, yAxis.field)}<extra></extra>`
           ),
         });
       }
@@ -215,7 +219,7 @@ export function ScatterChart({
           chartTraces.push({
             x: y2Points.map((p) => toPlotlyValue(p.x, xAxis.field)),
             y: y2Points.map((p) => p.y),
-            type: "scatter",
+            type: "scattergl",
             mode: "markers",
             marker: {
               color: AXIS_COLORS.y2,
@@ -226,7 +230,7 @@ export function ScatterChart({
             hovertemplate: y2Points.map(
               (p) =>
                 `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-                `${y2Info?.label ?? yAxis2.field}: ${p.y.toFixed(2)}<extra></extra>`
+                `${y2Info?.label ?? yAxis2.field}: ${formatValueForHover(p.y, yAxis2.field)}<extra></extra>`
             ),
           });
         }
@@ -249,7 +253,7 @@ export function ScatterChart({
           chartTraces.push({
             x: y3Points.map((p) => toPlotlyValue(p.x, xAxis.field)),
             y: y3Points.map((p) => p.y),
-            type: "scatter",
+            type: "scattergl",
             mode: "markers",
             marker: {
               color: AXIS_COLORS.y3,
@@ -260,7 +264,7 @@ export function ScatterChart({
             hovertemplate: y3Points.map(
               (p) =>
                 `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(p.x, xAxis.field)}<br>` +
-                `${y3Info?.label ?? yAxis3.field}: ${p.y.toFixed(2)}<extra></extra>`
+                `${y3Info?.label ?? yAxis3.field}: ${formatValueForHover(p.y, yAxis3.field)}<extra></extra>`
             ),
           });
         }
@@ -270,17 +274,35 @@ export function ScatterChart({
       const hasY3 = yAxis3 && yAxis3.field !== "none";
       const rightMargin = hasY3 ? 110 : 50;
 
+      // Generate custom tick labels for time of day fields (X and Y axes)
+      const isXTimeField = xAxis.field === "timeOfDayMinutes";
+      const isYTimeField = yAxis.field === "timeOfDayMinutes";
+      const xTimeTicks = isXTimeField
+        ? generateTimeAxisTicksFromData(y1Points.map((p) => p.x))
+        : null;
+      const yTimeTicks = isYTimeField
+        ? generateTimeAxisTicksFromData(y1Points.map((p) => p.y))
+        : null;
+
       const chartLayout: Partial<Layout> = {
         xaxis: {
           title: { text: xInfo?.label ?? xAxis.field },
           zeroline: true,
           type: isDateField(xAxis.field) ? "date" : undefined,
+          ...(xTimeTicks && {
+            tickvals: xTimeTicks.tickvals,
+            ticktext: xTimeTicks.ticktext,
+          }),
         },
         yaxis: {
           title: { text: yInfo?.label ?? yAxis.field },
           zeroline: true,
           zerolinewidth: 1,
           zerolinecolor: "#94a3b8",
+          ...(yTimeTicks && {
+            tickvals: yTimeTicks.tickvals,
+            ticktext: yTimeTicks.ticktext,
+          }),
         },
         showlegend: true,
         legend: {
@@ -296,7 +318,7 @@ export function ScatterChart({
           t: 50,
           r: rightMargin,
           b: 60,
-          l: 70,
+          l: isYTimeField ? 95 : 70, // Extra space for time labels on Y-axis
         },
       };
 
@@ -428,7 +450,7 @@ export function ScatterChart({
         size,
         hover:
           `${xInfo?.label ?? xAxis.field}: ${formatValueForHover(x, xAxis.field)}<br>` +
-          `${yInfo?.label ?? yAxis.field}: ${y.toFixed(2)}`,
+          `${yInfo?.label ?? yAxis.field}: ${formatValueForHover(y, yAxis.field)}`,
       });
     }
 
@@ -464,7 +486,7 @@ export function ScatterChart({
           x: outOfRangePoints.map((p) => p.xPlotly),
           y: outOfRangePoints.map((p) => p.y),
           mode: "markers",
-          type: "scatter",
+          type: "scattergl",
           marker: {
             color: "rgba(148, 163, 184, 0.4)", // Gray/faded
             size: outOfRangePoints.map((p) => p.size ?? 8),
@@ -487,7 +509,7 @@ export function ScatterChart({
               x: losers.map((p) => p.xPlotly),
               y: losers.map((p) => p.y),
               mode: "markers",
-              type: "scatter",
+              type: "scattergl",
               marker: {
                 color: "rgb(239, 68, 68)", // Red
                 size: losers.map((p) => p.size ?? 8),
@@ -502,7 +524,7 @@ export function ScatterChart({
               x: winners.map((p) => p.xPlotly),
               y: winners.map((p) => p.y),
               mode: "markers",
-              type: "scatter",
+              type: "scattergl",
               marker: {
                 color: "rgb(34, 197, 94)", // Green
                 size: winners.map((p) => p.size ?? 8),
@@ -520,7 +542,7 @@ export function ScatterChart({
             x: inRangePoints.map((p) => p.xPlotly),
             y: inRangePoints.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: colorValues,
               colorscale: "RdYlBu",
@@ -541,7 +563,7 @@ export function ScatterChart({
             x: inRangePoints.map((p) => p.xPlotly),
             y: inRangePoints.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: "rgb(59, 130, 246)", // Blue
               size: inRangePoints.map((p) => p.size ?? 8),
@@ -566,7 +588,7 @@ export function ScatterChart({
             x: losers.map((p) => p.xPlotly),
             y: losers.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: "rgb(239, 68, 68)", // Red
               size: losers.map((p) => p.size ?? 8),
@@ -581,7 +603,7 @@ export function ScatterChart({
             x: winners.map((p) => p.xPlotly),
             y: winners.map((p) => p.y),
             mode: "markers",
-            type: "scatter",
+            type: "scattergl",
             marker: {
               color: "rgb(34, 197, 94)", // Green
               size: winners.map((p) => p.size ?? 8),
@@ -599,7 +621,7 @@ export function ScatterChart({
           x: points.map((p) => p.xPlotly),
           y: points.map((p) => p.y),
           mode: "markers",
-          type: "scatter",
+          type: "scattergl",
           marker: {
             color: colorValues,
             colorscale: "RdYlBu",
@@ -620,7 +642,7 @@ export function ScatterChart({
           x: points.map((p) => p.xPlotly),
           y: points.map((p) => p.y),
           mode: "markers",
-          type: "scatter",
+          type: "scattergl",
           marker: {
             color: "rgb(59, 130, 246)",
             size: points.map((p) => p.size ?? 8),
@@ -675,17 +697,35 @@ export function ScatterChart({
       });
     }
 
+    // Generate custom tick labels for time of day fields (X and Y axes)
+    const isXTimeField = xAxis.field === "timeOfDayMinutes";
+    const isYTimeField = yAxis.field === "timeOfDayMinutes";
+    const xTimeTicks = isXTimeField
+      ? generateTimeAxisTicksFromData(points.map((p) => p.x))
+      : null;
+    const yTimeTicks = isYTimeField
+      ? generateTimeAxisTicksFromData(points.map((p) => p.y))
+      : null;
+
     const chartLayout: Partial<Layout> = {
       xaxis: {
         title: { text: xInfo?.label ?? xAxis.field },
         zeroline: true,
         type: isDateField(xAxis.field) ? "date" : undefined,
+        ...(xTimeTicks && {
+          tickvals: xTimeTicks.tickvals,
+          ticktext: xTimeTicks.ticktext,
+        }),
       },
       yaxis: {
         title: { text: yInfo?.label ?? yAxis.field },
         zeroline: true,
         zerolinewidth: 1,
         zerolinecolor: "#94a3b8",
+        ...(yTimeTicks && {
+          tickvals: yTimeTicks.tickvals,
+          ticktext: yTimeTicks.ticktext,
+        }),
       },
       showlegend: showLegend,
       legend: showLegend
@@ -703,7 +743,7 @@ export function ScatterChart({
         t: showLegend ? 50 : 20,
         r: rightMargin,
         b: 60,
-        l: 70,
+        l: isYTimeField ? 95 : 70, // Extra space for time labels on Y-axis
       },
       shapes: shapes.length > 0 ? shapes : undefined,
     };

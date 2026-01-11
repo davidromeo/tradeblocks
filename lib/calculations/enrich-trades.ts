@@ -9,6 +9,16 @@ import { Trade } from '@/lib/models/trade'
 import { EnrichedTrade } from '@/lib/models/enriched-trade'
 import { DailyLogEntry } from '@/lib/models/daily-log'
 import { calculateMFEMAEData, MFEMAEDataPoint } from './mfe-mae'
+import type { StaticDataset, StaticDatasetRow } from '@/lib/models/static-dataset'
+import { getMatchedValuesForTrade } from './static-dataset-matcher'
+
+/**
+ * Static dataset with its rows for matching
+ */
+export interface StaticDatasetWithRows {
+  dataset: StaticDataset
+  rows: StaticDatasetRow[]
+}
 
 /**
  * Options for enriching trades
@@ -16,6 +26,8 @@ import { calculateMFEMAEData, MFEMAEDataPoint } from './mfe-mae'
 export interface EnrichTradesOptions {
   /** Daily log entries to join custom fields from (by date) */
   dailyLogs?: DailyLogEntry[]
+  /** Static datasets with their rows for timestamp-based matching */
+  staticDatasets?: StaticDatasetWithRows[]
 }
 
 /**
@@ -122,7 +134,8 @@ function enrichSingleTrade(
   trade: Trade,
   index: number,
   mfeMaePoint?: MFEMAEDataPoint,
-  dailyCustomFields?: Record<string, number | string>
+  dailyCustomFields?: Record<string, number | string>,
+  staticDatasetFields?: Record<string, Record<string, number | string>>
 ): EnrichedTrade {
   const totalFees = trade.openingCommissionsFees + (trade.closingCommissionsFees ?? 0)
   const netPl = trade.pl - totalFees
@@ -196,6 +209,9 @@ function enrichSingleTrade(
 
     // Daily custom fields (joined by trade date)
     dailyCustomFields,
+
+    // Static dataset fields (matched by timestamp)
+    staticDatasetFields,
   }
 }
 
@@ -206,7 +222,7 @@ function enrichSingleTrade(
  * additional derived fields like ROM, duration, VIX changes, etc.
  *
  * @param trades - Array of trades to enrich
- * @param options - Optional configuration including daily logs for joining custom fields
+ * @param options - Optional configuration including daily logs and static datasets
  */
 export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): EnrichedTrade[] {
   // Calculate MFE/MAE data for all trades
@@ -233,7 +249,17 @@ export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): En
       dailyCustomFields = dailyCustomFieldsMap.get(dateKey)
     }
 
-    return enrichSingleTrade(trade, index, mfeMaePoint, dailyCustomFields)
+    // Match static dataset values by timestamp
+    let staticDatasetFields: Record<string, Record<string, number | string>> | undefined
+    if (options?.staticDatasets && options.staticDatasets.length > 0) {
+      staticDatasetFields = getMatchedValuesForTrade(trade, options.staticDatasets)
+      // Only include if we got matches
+      if (Object.keys(staticDatasetFields).length === 0) {
+        staticDatasetFields = undefined
+      }
+    }
+
+    return enrichSingleTrade(trade, index, mfeMaePoint, dailyCustomFields, staticDatasetFields)
   })
 }
 

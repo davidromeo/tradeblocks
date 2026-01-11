@@ -9,6 +9,7 @@
  */
 
 import { Trade } from '../models/trade'
+import { ReportingTrade } from '../models/reporting-trade'
 import { yieldToMain, checkCancelled } from './async-helpers'
 
 /**
@@ -26,6 +27,28 @@ export interface TradeGroupKey {
 export interface CombinedTrade extends Trade {
   originalTradeCount: number // Number of trades that were combined
   combinedLegs: string[] // Array of leg strings from each trade
+}
+
+/**
+ * Result of combining multiple ReportingTrade leg groups into a single trade
+ */
+export interface CombinedReportingTrade extends ReportingTrade {
+  originalTradeCount: number // Number of trades that were combined
+  combinedLegs: string[] // Array of leg strings from each trade
+}
+
+/**
+ * Type guard to check if a Trade is a CombinedTrade
+ */
+export function isCombinedTrade(trade: Trade): trade is CombinedTrade {
+  return 'originalTradeCount' in trade && 'combinedLegs' in trade
+}
+
+/**
+ * Type guard to check if a ReportingTrade is a CombinedReportingTrade
+ */
+export function isCombinedReportingTrade(trade: ReportingTrade): trade is CombinedReportingTrade {
+  return 'originalTradeCount' in trade && 'combinedLegs' in trade
 }
 
 /**
@@ -162,21 +185,31 @@ export function combineLegGroup(trades: Trade[]): CombinedTrade {
   const gap = firstTrade.gap
   const movement = firstTrade.movement
 
-  // Max profit/loss: sum if available for all trades, otherwise undefined
+  // Max profit/loss handling:
+  // - For single trades (originalTradeCount === 1): preserve original percentage values from CSV
+  // - For combined trades (originalTradeCount > 1): derive dollar amounts from margin
   let maxProfit: number | undefined
-  if (trades.every(t => t.maxProfit !== undefined)) {
-    maxProfit = trades.reduce((sum, t) => sum + t.maxProfit!, 0)
-  }
-
-  // Use margin requirement as ground truth for worst-case loss.
   let maxLoss: number | undefined
-  if (maxMargin && Number.isFinite(maxMargin) && maxMargin > 0) {
-    maxLoss = -maxMargin
-  } else if (trades.every(t => t.maxLoss !== undefined)) {
-    maxLoss = trades.reduce((sum, t) => sum + t.maxLoss!, 0)
-  } else if (totalPremium < 0) {
-    // Fallback: For debit trades, the max loss is at least the premium paid
-    maxLoss = totalPremium
+
+  if (trades.length === 1) {
+    // Single trade: preserve original values (percentages from CSV)
+    maxProfit = firstTrade.maxProfit
+    maxLoss = firstTrade.maxLoss
+  } else {
+    // Combined trades: sum maxProfit, use margin for maxLoss
+    if (trades.every(t => t.maxProfit !== undefined)) {
+      maxProfit = trades.reduce((sum, t) => sum + t.maxProfit!, 0)
+    }
+
+    // Use margin requirement as ground truth for worst-case loss
+    if (maxMargin && Number.isFinite(maxMargin) && maxMargin > 0) {
+      maxLoss = -maxMargin
+    } else if (trades.every(t => t.maxLoss !== undefined)) {
+      maxLoss = trades.reduce((sum, t) => sum + t.maxLoss!, 0)
+    } else if (totalPremium < 0) {
+      // Fallback: For debit trades, the max loss is at least the premium paid
+      maxLoss = totalPremium
+    }
   }
 
   const combined: CombinedTrade = {
@@ -347,4 +380,141 @@ export function analyzeLegGroups(trades: Trade[]): {
     avgGroupSize: groupSizes.length > 0 ? groupSizes.reduce((a, b) => a + b, 0) / groupSizes.length : 0,
     groupSizeDistribution: distribution,
   }
+}
+
+// =============================================================================
+// ReportingTrade Combining Functions
+// =============================================================================
+
+/**
+ * Generate a unique key for grouping ReportingTrades by entry timestamp
+ */
+function generateReportingGroupKey(trade: ReportingTrade): string {
+  const dateStr = trade.dateOpened.toISOString().split('T')[0]
+  const timeStr = trade.timeOpened ?? '00:00:00'
+  return `${dateStr}|${timeStr}|${trade.strategy}`
+}
+
+/**
+ * Group ReportingTrades by their entry timestamp (date + time + strategy)
+ * Returns a map where the key is the group identifier and value is array of trades
+ */
+export function groupReportingTradesByEntry(trades: ReportingTrade[]): Map<string, ReportingTrade[]> {
+  const groups = new Map<string, ReportingTrade[]>()
+
+  for (const trade of trades) {
+    const key = generateReportingGroupKey(trade)
+    const group = groups.get(key) || []
+    group.push(trade)
+    groups.set(key, group)
+  }
+
+  return groups
+}
+
+/**
+ * Combine a group of ReportingTrades that were opened at the same time into a single trade record
+ *
+ * Rules for combining (simpler than Trade - fewer fields):
+ * - Opening fields: Use first trade's values (should be identical)
+ * - Closing fields: Use the last closing time among all trades
+ * - Premium: Sum of all initial premiums
+ * - P/L: Sum of all P/Ls
+ * - Contracts: Use first trade's contract count (strategy unit size)
+ * - Legs: Concatenate all leg descriptions
+ */
+export function combineReportingLegGroup(trades: ReportingTrade[]): CombinedReportingTrade {
+  if (trades.length === 0) {
+    throw new Error('Cannot combine empty reporting trade group')
+  }
+
+  // Sort trades by closing time
+  const sortedTrades = [...trades].sort((a, b) => {
+    if (!a.dateClosed && !b.dateClosed) return 0
+    if (!a.dateClosed) return 1
+    if (!b.dateClosed) return -1
+
+    const dateCompare = a.dateClosed.getTime() - b.dateClosed.getTime()
+    if (dateCompare !== 0) return dateCompare
+
+    const timeA = a.timeClosed || '00:00:00'
+    const timeB = b.timeClosed || '00:00:00'
+    return timeA.localeCompare(timeB)
+  })
+
+  const firstTrade = sortedTrades[0]
+  const lastTrade = sortedTrades[sortedTrades.length - 1]
+
+  // Aggregate numeric values
+  const totalPremium = trades.reduce((sum, t) => sum + t.initialPremium, 0)
+  const totalPL = trades.reduce((sum, t) => sum + t.pl, 0)
+  const totalContracts = firstTrade.numContracts // Strategy unit size
+
+  // Combine leg descriptions
+  const combinedLegs = trades.map(t => t.legs)
+  const combinedLegsString = combinedLegs.join(' | ')
+
+  // Calculate total closing cost if all trades have it
+  let avgClosingCost: number | undefined
+  const tradesWithClosingCost = trades.filter(t => t.avgClosingCost !== undefined)
+  if (tradesWithClosingCost.length === trades.length) {
+    avgClosingCost = tradesWithClosingCost.reduce((sum, t) => sum + t.avgClosingCost!, 0)
+  }
+
+  // Weighted average closing price
+  let closingPrice: number | undefined
+  if (trades.every(t => t.closingPrice !== undefined)) {
+    const totalPremiumAbs = trades.reduce((sum, t) => sum + Math.abs(t.initialPremium), 0)
+    if (totalPremiumAbs > 0) {
+      closingPrice = trades.reduce(
+        (sum, t) => sum + (t.closingPrice! * Math.abs(t.initialPremium)),
+        0
+      ) / totalPremiumAbs
+    }
+  }
+
+  return {
+    strategy: firstTrade.strategy,
+    dateOpened: firstTrade.dateOpened,
+    timeOpened: firstTrade.timeOpened,
+    openingPrice: firstTrade.openingPrice,
+    legs: combinedLegsString,
+    initialPremium: totalPremium,
+    numContracts: totalContracts,
+    pl: totalPL,
+    closingPrice,
+    dateClosed: lastTrade.dateClosed,
+    timeClosed: lastTrade.timeClosed,
+    avgClosingCost,
+    reasonForClose: lastTrade.reasonForClose,
+    originalTradeCount: trades.length,
+    combinedLegs,
+  }
+}
+
+/**
+ * Process all ReportingTrades and combine leg groups that share the same entry timestamp
+ *
+ * @param trades - Array of ReportingTrades to process
+ * @returns Array of trades with leg groups combined
+ */
+export function combineAllReportingLegGroups(trades: ReportingTrade[]): CombinedReportingTrade[] {
+  const groups = groupReportingTradesByEntry(trades)
+  const combinedTrades: CombinedReportingTrade[] = []
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  for (const [_, groupTrades] of groups) {
+    combinedTrades.push(combineReportingLegGroup(groupTrades))
+  }
+
+  // Sort chronologically
+  combinedTrades.sort((a, b) => {
+    const dateCompare = a.dateOpened.getTime() - b.dateOpened.getTime()
+    if (dateCompare !== 0) return dateCompare
+    const timeA = a.timeOpened || '00:00:00'
+    const timeB = b.timeOpened || '00:00:00'
+    return timeA.localeCompare(timeB)
+  })
+
+  return combinedTrades
 }

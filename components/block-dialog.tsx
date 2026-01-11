@@ -87,7 +87,6 @@ import {
   TradeProcessor,
 } from "@/lib/processing/trade-processor";
 import { useBlockStore } from "@/lib/stores/block-store";
-import { useComparisonStore } from "@/lib/stores/comparison-store";
 import { cn } from "@/lib/utils";
 import {
   findMissingHeaders,
@@ -248,7 +247,6 @@ export function BlockDialog({
     refreshBlock,
     deleteBlock,
   } = useBlockStore();
-  const resetComparison = useComparisonStore((state) => state.reset);
 
   // Reset form when dialog opens/closes or mode changes
   useEffect(() => {
@@ -1011,6 +1009,14 @@ export function BlockDialog({
                 uploadedAt: now,
               }
             : undefined,
+          dateRange:
+            processedPreview.trades?.stats.dateRange.start &&
+            processedPreview.trades?.stats.dateRange.end
+              ? {
+                  start: processedPreview.trades.stats.dateRange.start,
+                  end: processedPreview.trades.stats.dateRange.end,
+                }
+              : undefined,
           processingStatus: "completed" as const,
           dataReferences: {
             tradesStorageKey: `block_${timestamp}_trades`,
@@ -1493,6 +1499,17 @@ export function BlockDialog({
             uploadedAt: new Date(),
           };
 
+          // Update dateRange when trades are replaced
+          if (
+            processedData.trades.stats.dateRange.start &&
+            processedData.trades.stats.dateRange.end
+          ) {
+            metadataUpdates.dateRange = {
+              start: processedData.trades.stats.dateRange.start,
+              end: processedData.trades.stats.dateRange.end,
+            };
+          }
+
           // Save trades to IndexedDB (replace all existing trades)
           await updateTradesForBlock(block.id, processedData.trades.trades);
 
@@ -1585,9 +1602,6 @@ export function BlockDialog({
             block.id,
             processedData.reporting.trades
           );
-
-          // Clear comparison data since reporting trades changed
-          resetComparison();
         } else if (
           !reportingLog.file &&
           reportingLog.status === "empty" &&
@@ -1599,9 +1613,6 @@ export function BlockDialog({
           metadataUpdates.reportingLog = undefined;
           metadataUpdates.strategyAlignment = undefined;
           await deleteReportingTradesByBlock(block.id);
-
-          // Clear comparison data since reporting log was removed
-          resetComparison();
         }
 
         if (Object.keys(metadataUpdates).length > 1) {

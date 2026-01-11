@@ -36,6 +36,10 @@ export interface Block {
     rowCount: number;
     fileSize: number;
   };
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
   stats: {
     totalPnL: number;
     winRate: number;
@@ -115,6 +119,12 @@ function convertProcessedBlockToBlock(
       ? {
           mappings: processedBlock.strategyAlignment.mappings ?? [],
           updatedAt: new Date(processedBlock.strategyAlignment.updatedAt),
+        }
+      : undefined,
+    dateRange: processedBlock.dateRange
+      ? {
+          start: new Date(processedBlock.dateRange.start),
+          end: new Date(processedBlock.dateRange.end),
         }
       : undefined,
     stats: {
@@ -580,24 +590,23 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
 
   // Clear all data and reload (for recovery from corrupted state)
   clearAllData: async () => {
+    // Helper to delete a database with timeout (won't hang on corruption)
+    const safeDeleteDb = (dbName: string, timeoutMs = 3000): Promise<void> => {
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          console.warn(`Deletion of ${dbName} timed out - will complete after reload`);
+          resolve();
+        }, timeoutMs);
+
+        const req = indexedDB.deleteDatabase(dbName);
+        req.onsuccess = () => { clearTimeout(timeout); resolve(); };
+        req.onerror = () => { clearTimeout(timeout); resolve(); }; // Don't block on error
+        req.onblocked = () => { clearTimeout(timeout); resolve(); }; // Will complete after reload
+      });
+    };
+
     try {
-      // Delete the main TradeBlocksDB
-      const { deleteDatabase } = await import("../db");
-      await deleteDatabase();
-
-      // Also delete the cache database if it exists
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const req = indexedDB.deleteDatabase("tradeblocks-cache");
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
-          req.onblocked = () => resolve(); // Continue even if blocked
-        });
-      } catch {
-        // Ignore cache deletion errors
-      }
-
-      // Clear all tradeblocks-related localStorage entries
+      // Clear localStorage first (this is synchronous and always works)
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -615,10 +624,22 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
 
+      // Also clear sessionStorage
+      sessionStorage.clear();
+
+      // Delete the main TradeBlocksDB
+      const { deleteDatabase } = await import("../db");
+      await deleteDatabase();
+
+      // Also delete the cache database if it exists
+      await safeDeleteDb("tradeblocks-cache");
+
+      // Force reload with cache bypass
       window.location.reload();
     } catch (error) {
       console.error("Failed to clear database:", error);
-      // Even if delete fails, try to reload - user can try again
+      // Even if delete fails, reload anyway - the blocked deletion will
+      // complete once the page unloads and all connections are closed
       window.location.reload();
     }
   },

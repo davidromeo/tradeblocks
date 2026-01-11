@@ -26,6 +26,7 @@ export interface FlexibleFilterResult {
  * - Standard fields: field name directly on trade (e.g., "openingVix")
  * - Custom trade fields: "custom.fieldName" (from trade.customFields)
  * - Daily custom fields: "daily.fieldName" (from trade.dailyCustomFields)
+ * - Static dataset fields: "datasetName.column" (from trade.staticDatasetFields)
  */
 function getTradeFieldValue(trade: EnrichedTrade, field: string): number | null {
   let value: unknown
@@ -39,6 +40,13 @@ function getTradeFieldValue(trade: EnrichedTrade, field: string): number | null 
   else if (field.startsWith('daily.')) {
     const dailyFieldName = field.slice(6) // Remove 'daily.' prefix
     value = trade.dailyCustomFields?.[dailyFieldName]
+  }
+  // Handle static dataset fields (datasetName.column) - contains a dot but not custom. or daily.
+  else if (field.includes('.')) {
+    const dotIndex = field.indexOf('.')
+    const datasetName = field.substring(0, dotIndex)
+    const columnName = field.substring(dotIndex + 1)
+    value = trade.staticDatasetFields?.[datasetName]?.[columnName]
   }
   // Handle standard fields
   else {

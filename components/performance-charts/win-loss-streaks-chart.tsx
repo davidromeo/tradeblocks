@@ -3,24 +3,89 @@
 import { useMemo } from 'react'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
 import { ChartWrapper } from './chart-wrapper'
+import { Badge } from '@/components/ui/badge'
+import { AlertTriangle, TrendingUp, Shuffle, ArrowLeftRight } from 'lucide-react'
 import type { PlotData, Layout } from 'plotly.js'
+import type { RunsTestResult } from '@/lib/calculations/streak-analysis'
+
+function RunsTestCard({ runsTest }: { runsTest: RunsTestResult }) {
+  const pValueFormatted = runsTest.pValue < 0.001
+    ? '< 0.001'
+    : runsTest.pValue.toFixed(3)
+
+  // Determine badge styling based on pattern type
+  const getBadgeContent = () => {
+    switch (runsTest.patternType) {
+      case 'clustered':
+        return {
+          label: 'Clustered',
+          icon: <TrendingUp className="h-3 w-3" />,
+          className: 'bg-amber-500 hover:bg-amber-500',
+          bgClass: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
+        }
+      case 'alternating':
+        return {
+          label: 'Alternating',
+          icon: <ArrowLeftRight className="h-3 w-3" />,
+          className: 'bg-blue-500 hover:bg-blue-500',
+          bgClass: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800'
+        }
+      default:
+        return {
+          label: 'Random',
+          icon: <Shuffle className="h-3 w-3" />,
+          className: '',
+          bgClass: 'bg-muted/40 border-border/60'
+        }
+    }
+  }
+
+  const badgeContent = getBadgeContent()
+
+  return (
+    <div className={`rounded-lg border p-3 mt-3 ${badgeContent.bgClass}`}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">Runs Test</span>
+          <span className="text-sm text-muted-foreground">p = {pValueFormatted}</span>
+        </div>
+        <Badge
+          variant={runsTest.isNonRandom ? 'default' : 'muted'}
+          className={badgeContent.className}
+        >
+          {badgeContent.icon}
+          {badgeContent.label}
+        </Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {runsTest.interpretation}
+      </p>
+      {!runsTest.isSufficientSample && (
+        <div className="flex items-center gap-1 mt-2 text-xs text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3" />
+          <span>Sample size ({runsTest.sampleSize} trades) is below recommended minimum of 20</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function WinLossStreaksChart() {
   const data = usePerformanceStore(state => state.data)
 
-  const { plotData, layout, statistics } = useMemo(() => {
+  const { plotData, layout, statistics, runsTest } = useMemo(() => {
     if (!data?.streakData) {
-      return { plotData: [], layout: {}, statistics: null }
+      return { plotData: [], layout: {}, statistics: null, runsTest: undefined }
     }
 
-    const { winDistribution, lossDistribution, statistics } = data.streakData
+    const { winDistribution, lossDistribution, statistics, runsTest } = data.streakData
 
     // Get streak lengths
     const winLengths = Object.keys(winDistribution).map(Number).sort((a, b) => a - b)
     const lossLengths = Object.keys(lossDistribution).map(Number).sort((a, b) => a - b)
 
     if (winLengths.length === 0 && lossLengths.length === 0) {
-      return { plotData: [], layout: {}, statistics: null }
+      return { plotData: [], layout: {}, statistics: null, runsTest: undefined }
     }
 
     const traces: Partial<PlotData>[] = []
@@ -113,7 +178,7 @@ export function WinLossStreaksChart() {
       ],
     }
 
-    return { plotData: traces, layout: chartLayout, statistics }
+    return { plotData: traces, layout: chartLayout, statistics, runsTest }
   }, [data?.streakData])
 
   const tooltip = {
@@ -136,12 +201,13 @@ export function WinLossStreaksChart() {
 
   return (
     <ChartWrapper
-      title="🎯 Win/Loss Streak Analysis"
+      title="Win/Loss Streak Analysis"
       description="Distribution of consecutive wins and losses"
       tooltip={tooltip}
       data={plotData}
       layout={layout}
       style={{ width: '100%', height: '450px' }}
+      headerAddon={runsTest && <RunsTestCard runsTest={runsTest} />}
     />
   )
 }

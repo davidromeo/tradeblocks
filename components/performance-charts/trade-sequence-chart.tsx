@@ -15,7 +15,7 @@ type ViewMode = 'dollars' | 'percent'
 
 export function TradeSequenceChart({ className, showTrend = true }: TradeSequenceChartProps) {
   const { data } = usePerformanceStore()
-  const [viewMode, setViewMode] = useState<ViewMode>('dollars')
+  const [viewMode, setViewMode] = useState<ViewMode>('percent')
 
   const { plotData, layout } = useMemo(() => {
     if (!data?.tradeSequence || data.tradeSequence.length === 0) {
@@ -46,7 +46,7 @@ export function TradeSequenceChart({ className, showTrend = true }: TradeSequenc
     traces.push({
       x: tradeNumbers,
       y: returns,
-      type: 'scatter',
+      type: 'scattergl',
       mode: 'markers',
       name: 'Trade Returns',
       marker: {

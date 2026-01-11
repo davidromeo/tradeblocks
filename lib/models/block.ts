@@ -45,6 +45,12 @@ export interface ProcessedBlock {
     uploadedAt: Date;
   };
 
+  // Date range of trades (min/max dateOpened)
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
+
   // Processing status
   processingStatus: "pending" | "processing" | "completed" | "error";
   processingError?: string;

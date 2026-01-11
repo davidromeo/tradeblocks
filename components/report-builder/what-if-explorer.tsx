@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
 import { ThresholdMetric, getFieldInfo } from "@/lib/models/report-config";
+import { formatMinutesToTime } from "@/lib/utils/time-formatting";
 import { ArrowUp, ArrowDown, Sparkles, ChevronDown, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -268,6 +269,15 @@ export function WhatIfExplorer({
   const xInfo = getFieldInfo(xAxisField);
   const fieldLabel = xInfo?.label ?? xAxisField;
   const metricLabel = metric === "rom" ? "ROM" : metric === "plPct" ? "P/L %" : "P/L";
+  const isTimeField = xAxisField === "timeOfDayMinutes";
+
+  // Format X value based on field type
+  const formatXValue = (v: number) => {
+    if (isTimeField) {
+      return formatMinutesToTime(v);
+    }
+    return v.toFixed(2);
+  };
 
   // Format metric value
   const formatMetric = (v: number | null) => {
@@ -290,7 +300,7 @@ export function WhatIfExplorer({
           </Label>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium">
-              {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
+              {formatXValue(whatIfResults.rangeMin)} - {formatXValue(whatIfResults.rangeMax)}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -373,7 +383,7 @@ export function WhatIfExplorer({
             {fieldLabel} Range
           </div>
           <div className="font-medium">
-            {whatIfResults.rangeMin.toFixed(2)} - {whatIfResults.rangeMax.toFixed(2)}
+            {formatXValue(whatIfResults.rangeMin)} - {formatXValue(whatIfResults.rangeMax)}
           </div>
         </div>
 
