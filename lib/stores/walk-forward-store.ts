@@ -248,9 +248,9 @@ export const PARAMETER_METADATA: Record<
   string,
   { label: string; min: number; max: number; step: number; precision: number }
 > = {
-  kellyMultiplier: { label: 'Kelly Multiplier', min: 0.1, max: 3, step: 0.05, precision: 2 },
+  kellyMultiplier: { label: 'Kelly Multiplier', min: 0, max: 2, step: 0.05, precision: 2 },
   fixedFractionPct: { label: 'Fixed Fraction %', min: 0.25, max: 10, step: 0.25, precision: 2 },
-  maxDrawdownPct: { label: 'Max Drawdown %', min: 2, max: 50, step: 1, precision: 0 },
+  maxDrawdownPct: { label: 'Max Drawdown %', min: 0.5, max: 50, step: 0.5, precision: 1 },
   maxDailyLossPct: { label: 'Max Daily Loss %', min: 0.25, max: 10, step: 0.25, precision: 2 },
   consecutiveLossLimit: { label: 'Consecutive Losses', min: 1, max: 10, step: 1, precision: 0 },
 }
