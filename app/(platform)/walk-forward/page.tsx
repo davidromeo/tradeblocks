@@ -53,16 +53,11 @@ import { WalkForwardAnalysisChart } from "@/components/walk-forward/analysis-cha
 import { WalkForwardPeriodSelector } from "@/components/walk-forward/period-selector";
 import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics";
 import { RunSwitcher } from "@/components/walk-forward/run-switcher";
+import { WalkForwardAnalysis } from "@/components/walk-forward/walk-forward-analysis";
 import { WalkForwardSummary } from "@/components/walk-forward/walk-forward-summary";
-import {
-  generateVerdictExplanation,
-  detectRedFlags,
-  generateInsights,
-} from "@/lib/calculations/walk-forward-interpretation";
 import {
   getRecommendedParameters,
   formatParameterName,
-  assessResults,
 } from "@/lib/calculations/walk-forward-verdict";
 import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
 import { useBlockStore } from "@/lib/stores/block-store";
@@ -307,18 +302,6 @@ export default function WalkForwardPage() {
     });
   }, [filteredPeriodSummaries]);
 
-  // Interpretation data for Analysis tab
-  const interpretationData = useMemo(() => {
-    if (!results) return null;
-    const assessment = assessResults(results.results);
-    return {
-      assessment,
-      explanation: generateVerdictExplanation(results.results, assessment),
-      redFlags: detectRedFlags(results.results),
-      insights: generateInsights(results.results, assessment),
-    };
-  }, [results]);
-
   const periodCount = results?.results.periods.length ?? 0;
 
   const handleExport = (format: "csv" | "json") => {
@@ -472,7 +455,7 @@ export default function WalkForwardPage() {
 
       {/* Tab-based organization for detailed results */}
       {results && (
-        <Tabs defaultValue="details" className="w-full">
+        <Tabs defaultValue="analysis" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="analysis" className="flex items-center gap-2">
               <Lightbulb className="h-4 w-4" />
@@ -494,27 +477,7 @@ export default function WalkForwardPage() {
 
           {/* Analysis Tab */}
           <TabsContent value="analysis" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Analysis</CardTitle>
-                <CardDescription>
-                  Understanding your walk-forward results
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {interpretationData ? (
-                  <p className="text-sm text-muted-foreground">
-                    Analysis content coming in next plan. Interpretation data is ready with{" "}
-                    {interpretationData.redFlags.length} red flags detected and{" "}
-                    {interpretationData.insights.length} insights generated.
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No analysis data available.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <WalkForwardAnalysis results={results.results} />
           </TabsContent>
 
           {/* Charts Tab */}
