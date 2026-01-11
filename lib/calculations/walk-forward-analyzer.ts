@@ -727,6 +727,26 @@ export class WalkForwardAnalyzer {
     }
   }
 
+  /**
+   * Calculates summary metrics for walk-forward analysis results.
+   *
+   * The `degradationFactor` (efficiency ratio) compares out-of-sample to in-sample performance.
+   * This is equivalent to Walk Forward Efficiency (WFE) from Pardo's methodology.
+   *
+   * **Why we don't annualize:** Unlike raw return comparisons, we compare the same target metric
+   * (e.g., Sharpe Ratio to Sharpe Ratio, or Net P&L to Net P&L) across IS and OOS periods.
+   * Ratio metrics like Sharpe already normalize for time. Annualization would be appropriate
+   * for comparing raw dollar returns across different period lengths, but our optimization
+   * targets are typically normalized metrics. The Pardo annualization formula applies to
+   * raw profit comparisons, not ratio-based target metrics.
+   *
+   * Formula: `degradationFactor = avgOutOfSamplePerformance / avgInSamplePerformance`
+   * - 1.0 = OOS matches IS perfectly (rare)
+   * - 0.8 = OOS retains 80% of IS performance (good)
+   * - 0.5 = OOS retains 50% of IS performance (concerning)
+   *
+   * @see Pardo, Robert. "The Evaluation and Optimization of Trading Strategies" (2008)
+   */
   private calculateSummary(periods: WalkForwardPeriodResult[]): WalkForwardSummary {
     if (periods.length === 0) {
       return {
@@ -786,6 +806,24 @@ export class WalkForwardAnalyzer {
     return summary
   }
 
+  /**
+   * Calculates parameter stability across walk-forward periods using coefficient of variation.
+   *
+   * For each optimized parameter, we calculate how much the optimal value varied
+   * across periods. Lower variance = higher stability = more robust parameters.
+   *
+   * **Statistical approach:**
+   * - Uses sample variance (N-1 denominator) rather than population variance (N)
+   * - Sample variance is preferred for small samples (N<30) per standard statistical practice
+   * - The coefficient of variation (CV = stdDev/mean) normalizes across different parameter scales
+   * - CV is inverted to produce a 0-1 stability score (1 = perfectly stable, 0 = highly variable)
+   *
+   * **Interpretation:**
+   * - CV < 0.3 (30%): Parameter is stable across periods
+   * - CV >= 0.3: Parameter shows meaningful variation (potential over-optimization risk)
+   *
+   * @returns Stability score between 0 and 1, where 1 indicates perfectly stable parameters
+   */
   private calculateParameterStability(periods: WalkForwardPeriodResult[]): number {
     if (periods.length <= 1) return 1
 
@@ -810,8 +848,10 @@ export class WalkForwardAnalyzer {
 
       const mean =
         values.reduce((sum, value) => sum + value, 0) / values.length
+      // Use sample variance (N-1) for small sample accuracy
+      // Population variance (N) underestimates true variability for small samples
       const variance =
-        values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length
+        values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / (values.length - 1)
       const stdDev = Math.sqrt(variance)
 
       // Normalize by mean to avoid requiring parameter ranges here
@@ -837,6 +877,32 @@ export class WalkForwardAnalyzer {
     return deltas.reduce((sum, delta) => sum + delta, 0) / deltas.length
   }
 
+  /**
+   * Calculates a composite robustness score combining efficiency, stability, and consistency.
+   *
+   * **IMPORTANT:** This is a TradeBlocks-specific composite metric, NOT an industry-standard formula.
+   * Individual platforms (MultiCharts, TradeStation, AmiBroker) use configurable weights and
+   * thresholds rather than a single composite score. This metric provides a quick overview
+   * but users should examine individual components for detailed analysis.
+   *
+   * **Components (equally weighted):**
+   * 1. **Efficiency Score** (normalized degradation factor): How well OOS matched IS performance
+   *    - Degradation factor of 1.0 (100% retention) = efficiency score of 0.5
+   *    - Degradation factor of 2.0+ = efficiency score of 1.0 (capped)
+   *    - Based on Pardo's Walk Forward Efficiency concept
+   *
+   * 2. **Stability Score** (parameter stability): How consistent optimal parameters were
+   *    - Uses coefficient of variation (CV) per standard statistical practice
+   *    - Lower CV = higher stability
+   *
+   * 3. **Consistency Score**: Percentage of periods with non-negative OOS performance
+   *    - Similar to MultiCharts "% Profitable Runs" metric
+   *    - 70%+ considered good per MultiCharts robustness criteria
+   *
+   * Formula: `robustnessScore = (efficiencyScore + stabilityScore + consistencyScore) / 3`
+   *
+   * @returns Score between 0 and 1, where higher indicates more robust strategy
+   */
   private calculateRobustnessScore(summary: WalkForwardSummary, consistencyScore: number): number {
     const efficiencyScore = this.normalize(summary.degradationFactor, 0, 2)
     const stabilityScore = Math.min(Math.max(summary.parameterStability, 0), 1)

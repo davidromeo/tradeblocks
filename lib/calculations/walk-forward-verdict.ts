@@ -25,17 +25,33 @@ export interface RecommendedParametersResult {
 /**
  * Assesses walk-forward analysis results and provides an overall verdict.
  *
- * Evaluation criteria:
- * - Efficiency: How well out-of-sample performance held up vs in-sample (degradation factor)
- *   - 80%+ = good, 60-80% = moderate, <60% = concerning
- * - Stability: How consistent optimal parameters were across windows
- *   - 70%+ = good, 50-70% = moderate, <50% = concerning
- * - Consistency: Percentage of windows with non-negative out-of-sample performance
- *   - 70%+ = good, 50-70% = moderate, <50% = concerning
+ * **Threshold Sources and Rationale:**
  *
- * Overall verdict is calculated from component scores:
- * - good (2) + moderate (1) + concerning (0)
+ * **Efficiency (degradationFactor):**
+ * - 80%+ = good, 60-80% = moderate, <60% = concerning
+ * - Source: Based on Pardo's 50-60% Walk Forward Efficiency threshold
+ * - TradeBlocks uses higher thresholds (60%/80%) because we compare normalized
+ *   ratio metrics (Sharpe, profit factor) rather than raw returns. Ratio metrics
+ *   should degrade less than raw P&L since they're already risk-adjusted.
+ *
+ * **Stability (parameterStability):**
+ * - 70%+ = good, 50-70% = moderate, <50% = concerning
+ * - Source: Standard statistical coefficient of variation (CV) thresholds
+ * - CV < 0.3 (30%) is widely considered "low variability" in statistics
+ * - Our 70%/50% stability maps to ~30%/50% CV after inversion (1 - CV)
+ *
+ * **Consistency (% profitable OOS periods):**
+ * - 70%+ = good, 50-70% = moderate, <50% = concerning
+ * - Source: MultiCharts Walk Forward Optimization robustness criteria
+ * - Similar to MultiCharts "% Profitable Runs" metric
+ * - 50% is the random-chance baseline; robust strategies should exceed it significantly
+ *
+ * **Overall Verdict Scoring:**
+ * - Each component scores: good=2, moderate=1, concerning=0
  * - Total 5+ = good, 3-4 = moderate, 0-2 = concerning
+ *
+ * @see Pardo, Robert. "The Evaluation and Optimization of Trading Strategies" (2008)
+ * @see MultiCharts Walk Forward Optimization documentation
  */
 export function assessResults(results: WalkForwardResults): VerdictAssessment {
   const { summary, stats } = results
