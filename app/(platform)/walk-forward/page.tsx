@@ -8,6 +8,9 @@ import {
   Download,
   Loader2,
   TrendingUp,
+  BarChart3,
+  TableIcon,
+  Settings2,
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 
@@ -20,11 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -109,7 +108,6 @@ export default function WalkForwardPage() {
   const [minOosTrades, setMinOosTrades] = useState(0);
   const [periodRange, setPeriodRange] = useState<[number, number]>([1, 1]);
   const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
-  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const activeBlockId = activeBlock?.id ?? null;
 
@@ -427,21 +425,365 @@ export default function WalkForwardPage() {
         <WalkForwardSummary results={results.results} />
       )}
 
-      {/* Detailed Breakdown - collapsible section with full details */}
+      {/* Tab-based organization for detailed results */}
       {results && (
-        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <CollapsibleTrigger asChild>
-            <Button variant="outline" className="w-full justify-between px-4 py-3 h-auto border-dashed hover:bg-muted/50">
-              <span className="text-sm font-medium">
-                {detailsOpen ? "Hide detailed breakdown" : "Show detailed breakdown"}
-              </span>
-              <ChevronDown className={cn(
-                "h-4 w-4 transition-transform",
-                detailsOpen && "rotate-180"
-              )} />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 pt-4">
+        <Tabs defaultValue="charts" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="charts" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Charts</span>
+            </TabsTrigger>
+            <TabsTrigger value="windows" className="flex items-center gap-2">
+              <TableIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Window Data</span>
+            </TabsTrigger>
+            <TabsTrigger value="details" className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Detailed Metrics</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Charts Tab */}
+          <TabsContent value="charts" className="mt-4 space-y-4">
+            <WalkForwardAnalysisChart
+              periods={results.results.periods}
+              targetMetricLabel={targetMetricLabel}
+            />
+          </TabsContent>
+
+          {/* Window Data Tab */}
+          <TabsContent value="windows" className="mt-4">
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle>Window Table</CardTitle>
+                    <CardDescription>
+                      Scan retention, drawdowns, and samples quickly. Use filters to
+                      surface weak slices.
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={!results}
+                      onClick={() => handleExport("csv")}
+                      size="sm"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={!results}
+                      onClick={() => handleExport("json")}
+                      size="sm"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      JSON
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 pt-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <Checkbox
+                      checked={showFailingOnly}
+                      onCheckedChange={(v) => setShowFailingOnly(Boolean(v))}
+                    />
+                    <span className="text-muted-foreground">
+                      Only failing windows (&lt;60% retention)
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-xs">
+                      Min OOS trades
+                    </span>
+                    <div className="w-32">
+                      <Slider
+                        min={0}
+                        max={Math.max(
+                          ...periodSummaries.map((p) => p.oosTrades ?? 0),
+                          20
+                        )}
+                        step={1}
+                        value={[minOosTrades]}
+                        onValueChange={(v) => setMinOosTrades(v[0] ?? 0)}
+                      />
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {minOosTrades}
+                    </Badge>
+                  </div>
+                  {periodCount > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground text-xs">
+                        Window range
+                      </span>
+                      <div className="w-44">
+                        <Slider
+                          min={1}
+                          max={periodCount}
+                          step={1}
+                          value={[periodRange[0], periodRange[1]]}
+                          onValueChange={(v) => {
+                            if (!v || v.length < 2) return;
+                            const [a, b] = v as [number, number];
+                            setPeriodRange([Math.min(a, b), Math.max(a, b)]);
+                          }}
+                        />
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {periodRange[0]}–{periodRange[1]} / {periodCount}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {filteredPeriodSummaries.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground">
+                    {periodSummaries.length === 0
+                      ? "Run the analysis to populate this table."
+                      : "No windows match the current filters."}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto" style={{ maxHeight: 560 }}>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Window</TableHead>
+                          <TableHead>IS Range</TableHead>
+                          <TableHead>OOS Range</TableHead>
+                          <TableHead className="text-right">OOS Retention</TableHead>
+                          <TableHead className="text-right">Delta</TableHead>
+                          <TableHead className="text-right">OOS Trades</TableHead>
+                          <TableHead className="text-right">Max DD</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredPeriodSummaries.map((period) => {
+                          const delta =
+                            period.outSampleMetric - period.inSampleMetric;
+                          const deltaClass =
+                            delta >= 0 ? "text-emerald-600" : "text-rose-600";
+                          const StatusIcon = period.status.icon;
+                          const isOpen = Boolean(openDetails[period.label]);
+
+                          return (
+                            <React.Fragment key={period.label}>
+                              <TableRow>
+                                <TableCell className="font-medium">
+                                  <button
+                                    className="inline-flex items-center gap-2 text-left font-semibold"
+                                    onClick={() =>
+                                      setOpenDetails((prev) => ({
+                                        ...prev,
+                                        [period.label]: !prev[period.label],
+                                      }))
+                                    }
+                                  >
+                                    {isOpen ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                    {period.label}
+                                  </button>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {period.inSampleRange}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {period.outSampleRange}
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  {period.efficiencyPct.toFixed(1)}%
+                                </TableCell>
+                                <TableCell className={cn("text-right", deltaClass)}>
+                                  {delta >= 0 ? "+" : ""}
+                                  {formatMetricValue(delta)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {period.oosTrades ?? "—"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {period.oosDrawdown != null
+                                    ? `${Math.abs(period.oosDrawdown).toFixed(2)}%`
+                                    : "—"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <span
+                                    className={cn(
+                                      "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs",
+                                      period.status.chipClass
+                                    )}
+                                  >
+                                    <StatusIcon className="h-3 w-3" />
+                                    {period.status.label}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                              {isOpen && (
+                                <TableRow>
+                                  <TableCell colSpan={9} className="bg-muted/30">
+                                    <div className="p-4 space-y-4">
+                                      {/* Performance Summary Row */}
+                                      <div className="flex flex-wrap items-center gap-6">
+                                        <span
+                                          className={cn(
+                                            "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs",
+                                            period.status.chipClass
+                                          )}
+                                        >
+                                          <period.status.icon className="h-3 w-3" />
+                                          {period.status.label}
+                                        </span>
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                          <span className="h-2 w-2 rounded-full bg-blue-500" />
+                                          <span>IS</span>
+                                          <span className="font-semibold text-foreground">
+                                            {formatMetricValue(period.inSampleMetric)}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                          <span className="h-2 w-2 rounded-full bg-orange-500" />
+                                          <span>OOS</span>
+                                          <span className="font-semibold text-foreground">
+                                            {formatMetricValue(period.outSampleMetric)}
+                                          </span>
+                                        </div>
+                                        <div className="flex-1 min-w-[200px] max-w-[400px] space-y-1">
+                                          <div
+                                            className="h-2 rounded-full bg-blue-500/15"
+                                            title="IS P&L scaled within this window"
+                                          >
+                                            <div
+                                              className="h-2 rounded-full bg-blue-500"
+                                              style={{
+                                                width: `${miniBars.find((m) => m.label === period.label)?.isWidth ?? 0}%`,
+                                              }}
+                                            />
+                                          </div>
+                                          <div
+                                            className="h-2 rounded-full bg-orange-500/15"
+                                            title="OOS P&L scaled within this window"
+                                          >
+                                            <div
+                                              className="h-2 rounded-full bg-orange-500"
+                                              style={{
+                                                width: `${miniBars.find((m) => m.label === period.label)?.oosWidth ?? 0}%`,
+                                              }}
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Winning Parameters - Full Width */}
+                                      {period.parameters.length > 0 && (
+                                        <div className="space-y-2">
+                                          <p className="text-xs font-semibold text-muted-foreground">
+                                            Winning Parameters
+                                          </p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {period.parameters.map((item) => (
+                                              <div
+                                                key={`${period.label}-${item}`}
+                                                className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-xs"
+                                              >
+                                                <span className="text-muted-foreground">
+                                                  {item.split(":")[0]}:
+                                                </span>
+                                                <span className="font-semibold text-foreground">
+                                                  {item.split(":").slice(1).join(":").trim()}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Strategy Weights */}
+                                      {period.strategyWeights.length > 0 && (
+                                        <div className="space-y-2">
+                                          <p className="text-xs font-semibold text-muted-foreground">
+                                            Strategy Weights
+                                          </p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {period.strategyWeights.map(({ strategy, weight }) => (
+                                              <div
+                                                key={`${period.label}-strategy-${strategy}`}
+                                                className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 dark:bg-blue-950/30 px-2.5 py-1 text-xs"
+                                              >
+                                                <span className="text-muted-foreground truncate max-w-[150px]" title={strategy}>
+                                                  {strategy}:
+                                                </span>
+                                                <span className="font-semibold text-foreground">
+                                                  {weight.toFixed(2)}x
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Diversification Metrics */}
+                                      {period.diversificationMetrics && (
+                                        <div className="space-y-2">
+                                          <p className="text-xs font-semibold text-muted-foreground">
+                                            Diversification
+                                          </p>
+                                          <div className="flex flex-wrap gap-2">
+                                            <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                              <span className="text-muted-foreground">Correlation:</span>
+                                              <span className="font-semibold text-foreground">
+                                                {period.diversificationMetrics.avgCorrelation.toFixed(3)}
+                                              </span>
+                                            </div>
+                                            <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                              <span className="text-muted-foreground">Tail Risk:</span>
+                                              <span className="font-semibold text-foreground">
+                                                {period.diversificationMetrics.avgTailDependence.toFixed(3)}
+                                              </span>
+                                            </div>
+                                            <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                              <span className="text-muted-foreground">Eff Factors:</span>
+                                              <span className="font-semibold text-foreground">
+                                                {period.diversificationMetrics.effectiveFactors.toFixed(2)}
+                                              </span>
+                                            </div>
+                                            <div className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-xs">
+                                              <span className="text-muted-foreground">High-Risk Pairs:</span>
+                                              <span className="font-semibold text-foreground">
+                                                {(period.diversificationMetrics.highRiskPairsPct * 100).toFixed(1)}%
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Footer Note */}
+                                      <div className="text-[11px] text-muted-foreground/70 pt-1 border-t border-border/30">
+                                        Bar length shows relative |P&L| within this window.
+                                        Only the winning combo per window is stored.
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Detailed Metrics Tab */}
+          <TabsContent value="details" className="mt-4 space-y-4">
             {/* Configuration Summary */}
             <Card>
               <CardHeader className="pb-3">
@@ -534,19 +876,11 @@ export default function WalkForwardPage() {
                 )}
               </CardContent>
             </Card>
-          </CollapsibleContent>
-        </Collapsible>
+          </TabsContent>
+        </Tabs>
       )}
 
-      {/* RobustnessMetrics shown when no results yet (for empty state) */}
-      {!results && (
-        <RobustnessMetrics
-          results={null}
-          targetMetricLabel={targetMetricLabel}
-        />
-      )}
-
-      {/* Analysis placeholder when no results */}
+      {/* Empty state when no results */}
       {!results && (
         <Card>
           <CardHeader>
@@ -559,14 +893,6 @@ export default function WalkForwardPage() {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Charts - only show when results exist */}
-      {results && (
-        <WalkForwardAnalysisChart
-          periods={results.results.periods}
-          targetMetricLabel={targetMetricLabel}
-        />
       )}
 
       <Card className="overflow-hidden">
