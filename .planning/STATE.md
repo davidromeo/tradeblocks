@@ -14,7 +14,7 @@ Plan: 3 of 3 in current phase
 Status: Phase complete
 Last activity: 2026-01-11 — Completed 01-03-PLAN.md
 
-Progress: ███░░░░░░░ 10% (3/29 plans)
+Progress: ███░░░░░░░ 14% (3/22 plans)
 
 ## Performance Metrics
 
@@ -59,7 +59,9 @@ None yet.
 
 ### Key Finding
 
-Phase 2 (Parameter Selection UI) and Phase 3 (Parameter Range Configuration) appear to already have working UI in period-selector.tsx. Verification needed before starting Phase 2.
+~~Phase 2 (Parameter Selection UI) and Phase 3 (Parameter Range Configuration) appear to already have working UI in period-selector.tsx. Verification needed before starting Phase 2.~~
+
+**VERIFIED (2026-01-11):** Parameter selection + range configuration already exist. Phases 2+3 merged into "Phase 2: Parameter UI Polish" - just needs Collapsible wrapper + preset removal.
 
 ### Audit Reference
 

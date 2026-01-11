@@ -15,9 +15,8 @@ None
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Audit & Analysis** - Analyze current WFA implementation, identify gaps
-- [ ] **Phase 2: Parameter Selection UI** - Let users choose which parameters participate in optimization
-- [ ] **Phase 3: Parameter Range Configuration** - Custom min/max/step for each selected parameter
-- [ ] **Phase 4: Input Validation Fixes** - Fix overly tight constraints on text inputs
+- [ ] **Phase 2: Parameter UI Polish** - Wrap parameters in collapsible containers, remove presets (MERGED: selection + ranges already exist)
+- [ ] **Phase 3: Input Validation Fixes** - Fix overly tight constraints on text inputs
 - [ ] **Phase 5: Optimization Targets** - Audit and implement missing optimization targets
 - [ ] **Phase 6: Results Summary View** - High-level overview before detailed data
 - [ ] **Phase 7: Terminology Explanations** - Inline IS/OOS, windows, robustness explanations
@@ -38,37 +37,24 @@ Plans:
 - [x] 01-02: Audit walk-forward-store.ts and UI components
 - [x] 01-03: Document findings and prioritize gaps
 
-### Phase 2: Parameter Selection UI
-**Goal**: Users can choose which parameters participate in optimization (instead of all-automatic)
+### Phase 2: Parameter UI Polish
+**Goal**: Wrap parameter controls in collapsible containers matching diversification pattern, remove preset buttons
 **Depends on**: Phase 1
-**Research**: Unlikely (internal UI using established patterns)
-**Plans**: TBD
+**Research**: None (codebase verification complete - UI already exists)
+**Note**: MERGED from original Phase 2 (Parameter Selection) + Phase 3 (Range Configuration). Both features already implemented in period-selector.tsx.
 
 Plans:
-- [ ] 02-01: Design parameter selection interface
-- [ ] 02-02: Implement parameter toggle controls
-- [ ] 02-03: Connect selection to analyzer engine
+- [ ] 02-01: Wrap parameters in Collapsible container + remove presets
 
-### Phase 3: Parameter Range Configuration
-**Goal**: Users can set custom min/max/step for each selected parameter
-**Depends on**: Phase 2
-**Research**: Unlikely (internal UI patterns)
-**Plans**: TBD
-
-Plans:
-- [ ] 03-01: Design range input UI for each parameter
-- [ ] 03-02: Implement range controls with validation
-- [ ] 03-03: Integrate ranges into optimization sweep
-
-### Phase 4: Input Validation Fixes
+### Phase 3: Input Validation Fixes
 **Goal**: Fix overly tight constraints that prevent valid smaller values
-**Depends on**: Phase 3
+**Depends on**: Phase 2
 **Research**: Unlikely (fixing existing validation code)
 **Plans**: TBD
 
 Plans:
-- [ ] 04-01: Audit all WFA input validations
-- [ ] 04-02: Fix constraint issues and improve input UX
+- [ ] 03-01: Audit all WFA input validations
+- [ ] 03-02: Fix constraint issues and improve input UX
 
 ### Phase 5: Optimization Targets
 **Goal**: Identify what optimization targets exist vs missing, implement gaps
@@ -143,14 +129,14 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 → 10
+(Phase 4 merged into Phase 2)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Audit & Analysis | 3/3 | Complete | 2026-01-11 |
-| 2. Parameter Selection UI | 0/3 | Not started | - |
-| 3. Parameter Range Configuration | 0/3 | Not started | - |
-| 4. Input Validation Fixes | 0/2 | Not started | - |
+| 2. Parameter UI Polish | 0/1 | Not started | - |
+| 3. Input Validation Fixes | 0/2 | Not started | - |
 | 5. Optimization Targets | 0/3 | Not started | - |
 | 6. Results Summary View | 0/3 | Not started | - |
 | 7. Terminology Explanations | 0/3 | Not started | - |
@@ -163,6 +149,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 See `.planning/AUDIT-FINDINGS.md` for detailed findings from Phase 1.
 
 **Key discoveries affecting roadmap:**
-- Phases 2-3 UI may already be complete (needs verification)
+- ~~Phases 2-3 UI may already be complete (needs verification)~~ **VERIFIED**: Selection + ranges exist, merged into Phase 2 polish
 - Phase 5 is critical: broken diversification targets
 - Recommended priority: Phase 5 → Phase 6 → Phase 8

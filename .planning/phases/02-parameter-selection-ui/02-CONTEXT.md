@@ -1,6 +1,7 @@
-# Phase 2: Parameter Selection UI - Context
+# Phase 2: Parameter UI Polish - Context
 
 **Gathered:** 2026-01-11
+**Updated:** 2026-01-11 (scope verified and merged with Phase 3)
 **Status:** Ready for planning
 
 <vision>
@@ -45,13 +46,35 @@ If parameter selection and range configuration (min/max/step) are already combin
 <notes>
 ## Additional Context
 
-Phase 1 audit noted that Phases 2-3 UI may already be partially implemented in `period-selector.tsx`. Verification needed during planning/research to understand current state before building.
-
 The user prefers extending proven patterns over introducing new UX concepts. The diversification sweep container is the reference implementation to follow.
 
 </notes>
 
+<verification>
+## Codebase Verification (2026-01-11)
+
+**Finding: Phase 2 + 3 scope already 80% implemented**
+
+| Feature | Status | Location |
+|---------|--------|----------|
+| Parameter toggle checkboxes | ✅ Exists | period-selector.tsx:178-308 |
+| Min/max/step range inputs | ✅ Exists | period-selector.tsx:237-282 |
+| Combination estimates | ✅ Exists | period-selector.tsx:704-739 |
+| Diversification container pattern | ✅ Reference | period-selector.tsx:863-1090 |
+| Collapsible wrapper for parameters | ❌ Missing | Needs wrapping |
+| Preset buttons (to remove) | ⚠️ Exists | period-selector.tsx:138-151, 725 |
+
+**Actual scope:**
+1. Wrap parameters in Collapsible container matching diversification pattern
+2. Remove preset buttons (conservative/moderate/aggressive)
+3. Default to collapsed state
+
+**Decision:** Merged original Phase 2 (Parameter Selection) + Phase 3 (Range Configuration) into single polish task.
+
+</verification>
+
 ---
 
-*Phase: 02-parameter-selection-ui*
+*Phase: 02-parameter-ui-polish*
 *Context gathered: 2026-01-11*
+*Verification completed: 2026-01-11*
