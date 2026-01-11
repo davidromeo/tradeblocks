@@ -10,6 +10,9 @@ interface RobustnessMetricsProps {
 }
 
 export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetricsProps) {
+  // targetMetricLabel kept in interface for API stability; not currently used in tooltips
+  void targetMetricLabel
+
   if (!results) {
     return (
       <Card>
@@ -38,8 +41,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={Number.isFinite(efficiencyPct) ? efficiencyPct : 0}
         format="percentage"
         tooltip={{
-          flavor: "How well out-of-sample performance held up relative to the training window.",
-          detailed: `A value near 100% means the strategy maintained ${targetMetricLabel} gains when exposed to unseen data.`,
+          flavor: "How much of your optimized performance survived real-world testing.",
+          detailed: `If you achieved $1,000 during optimization and $800 on new data, efficiency is 80%. Values above 70% suggest a robust strategy. Below 50% is a red flag—your strategy may be overfit to historical quirks that won't repeat.`,
         }}
         isPositive={efficiencyPct >= 90}
       />
@@ -48,8 +51,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={summary.parameterStability * 100}
         format="percentage"
         tooltip={{
-          flavor: "Measures how noisy the optimal parameters are across walk-forward steps.",
-          detailed: "High stability implies position sizing or risk limits do not drastically swing between windows, which usually improves robustness.",
+          flavor: "Whether the 'best' settings stayed similar across different time periods.",
+          detailed: "If optimal parameters swing wildly (e.g., Kelly 0.3 one window, 1.5 the next), the strategy may be unstable. High stability (70%+) means you can use a single set of parameters with confidence.",
         }}
         isPositive={summary.parameterStability >= 0.7}
       />
@@ -58,8 +61,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={(stats.consistencyScore || 0) * 100}
         format="percentage"
         tooltip={{
-          flavor: "Percent of periods where out-of-sample performance stayed non-negative.",
-          detailed: "Consistency above 60% often indicates the strategy adapts well to new market regimes.",
+          flavor: "How often your strategy stayed profitable across different time periods.",
+          detailed: "If you tested 10 windows and 7 were profitable out-of-sample, consistency is 70%. High consistency (60%+) suggests your strategy adapts well to different market conditions. Low consistency means performance varies wildly—some periods win big, others lose.",
         }}
         isPositive={stats.consistencyScore >= 0.6}
       />
@@ -69,8 +72,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         subtitle={`% change from in-sample`}
         format="percentage"
         tooltip={{
-          flavor: "Average percentage change between in-sample and out-of-sample performance.",
-          detailed: "Shows how much the target metric shifts when moving from optimization to forward-testing. Values near 0% indicate stable performance; large negative values suggest overfitting.",
+          flavor: "How much performance dropped when tested on new data.",
+          detailed: "This shows the gap between optimization results and real-world testing. A value near 0% means your strategy performs similarly on new data as it did during training. Negative values (like -15%) mean out-of-sample performance was 15% worse. Large negative drops (beyond -20%) often indicate overfitting—the strategy memorized past patterns that don't repeat.",
         }}
         isPositive={avgDeltaPct >= -10}
       />
@@ -79,8 +82,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={summary.robustnessScore * 100}
         format="percentage"
         tooltip={{
-          flavor: "Blends efficiency, stability, and consistency into a single quality gauge.",
-          detailed: "Use this reading to compare different blocks or parameter presets at a glance.",
+          flavor: "A combined quality score for comparing different analysis runs.",
+          detailed: "Blends efficiency, parameter stability, and consistency into one number. Useful for quickly comparing runs with different settings—higher is better. Don't fixate on the absolute number; use it to see if changes improved or hurt overall robustness.",
         }}
         className="md:col-span-2 lg:col-span-4"
         isPositive={summary.robustnessScore >= 0.6}
