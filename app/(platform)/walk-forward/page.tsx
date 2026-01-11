@@ -62,6 +62,9 @@ const TARGET_LABELS: Record<WalkForwardOptimizationTarget, string> = {
   cagr: "CAGR",
   avgDailyPl: "Avg Daily P/L",
   winRate: "Win Rate",
+  minAvgCorrelation: "Min Avg Correlation",
+  minTailRisk: "Min Tail Risk",
+  maxEffectiveFactors: "Max Effective Factors",
 };
 
 function formatDate(date: Date): string {

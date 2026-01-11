@@ -608,11 +608,12 @@ export const useWalkForwardStore = create<WalkForwardStore>((set, get) => ({
       const db = await import('@/lib/db')
       const { normalizeTradesToOneLot } = await import('@/lib/utils/trade-normalization')
 
-      let trades = await db.getTradesByBlock(blockId)
+      const storedTrades = await db.getTradesByBlock(blockId)
       const dailyLogs = await db.getDailyLogsByBlock(blockId)
 
       // Phase 1: Filter by selected strategies
       const selectedStrategies = get().selectedStrategies
+      let trades: Trade[] = storedTrades
       if (selectedStrategies.length > 0) {
         const allowedStrategies = new Set(selectedStrategies)
         trades = trades.filter((trade) => allowedStrategies.has(trade.strategy || 'Unknown'))

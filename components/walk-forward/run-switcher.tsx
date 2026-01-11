@@ -206,15 +206,8 @@ function TableRowWithDetails({
     })
   }
 
-  // Parameter ranges summary
-  const enabledParams = Object.entries(config.parameterRanges || {}).filter(([, range]) => {
-    // Check if it's an extended range with enabled flag
-    if (Array.isArray(range) && range.length === 4) {
-      return range[3] === true
-    }
-    // Legacy format - always enabled if present
-    return true
-  })
+  // Parameter ranges summary - config uses legacy 3-element ranges, all are enabled
+  const enabledParams = Object.entries(config.parameterRanges || {})
 
   return (
     <>

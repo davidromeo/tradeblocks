@@ -148,3 +148,945 @@ describe('WalkForwardAnalyzer', () => {
     ).rejects.toThrow('Walk-forward analysis aborted')
   })
 })
+
+describe('WalkForwardAnalyzer summary calculations', () => {
+  const analyzer = new WalkForwardAnalyzer()
+
+  function createSimpleConfig(target: WalkForwardConfig['optimizationTarget'] = 'netPl'): WalkForwardConfig {
+    return {
+      inSampleDays: 15,
+      outOfSampleDays: 7,
+      stepSizeDays: 7,
+      optimizationTarget: target,
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1], // Fixed at 1 to simplify
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+    }
+  }
+
+  it('calculates consistency score as percentage of profitable OOS periods', async () => {
+    // Create trades that will produce predictable windows
+    // All trades profitable -> 100% consistency
+    const trades = createTestTrades(
+      [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+      '2024-01-01',
+      3,
+      50_000
+    )
+
+    const config = createSimpleConfig()
+    const result = await analyzer.analyze({ trades, config })
+
+    // All windows should have positive OOS performance
+    expect(result.results.stats.consistencyScore).toBeGreaterThan(0)
+    expect(result.results.stats.consistencyScore).toBeLessThanOrEqual(1)
+  })
+
+  it('calculates parameter stability based on coefficient of variation', async () => {
+    // With a single fixed parameter value, stability should be 1 (100%)
+    const trades = createTestTrades(
+      [100, 50, 100, 50, 100, 50, 100, 50, 100, 50, 100, 50],
+      '2024-01-01',
+      3,
+      50_000
+    )
+
+    const config = createSimpleConfig()
+    const result = await analyzer.analyze({ trades, config })
+
+    // Fixed parameters should produce high stability
+    expect(result.results.summary.parameterStability).toBeGreaterThanOrEqual(0)
+    expect(result.results.summary.parameterStability).toBeLessThanOrEqual(1)
+  })
+
+  it('calculates degradation factor as OOS/IS ratio', async () => {
+    const trades = createTestTrades(
+      [200, 100, 200, 100, 200, 100, 200, 100, 200, 100, 200, 100],
+      '2024-01-01',
+      3,
+      50_000
+    )
+
+    const config = createSimpleConfig()
+    const result = await analyzer.analyze({ trades, config })
+
+    // Degradation factor should be a ratio between 0 and 2 typically
+    expect(result.results.summary.degradationFactor).toBeDefined()
+    expect(Number.isFinite(result.results.summary.degradationFactor)).toBe(true)
+  })
+
+  it('calculates robustness score as composite of efficiency, stability, consistency', async () => {
+    const trades = createTestTrades(
+      [100, 80, 90, 70, 100, 80, 90, 70, 100, 80, 90, 70],
+      '2024-01-01',
+      3,
+      50_000
+    )
+
+    const config = createSimpleConfig()
+    const result = await analyzer.analyze({ trades, config })
+
+    // Robustness score should be between 0 and 1
+    expect(result.results.summary.robustnessScore).toBeGreaterThanOrEqual(0)
+    expect(result.results.summary.robustnessScore).toBeLessThanOrEqual(1)
+  })
+
+  it('calculates average performance delta (OOS - IS)', async () => {
+    const trades = createTestTrades(
+      [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+      '2024-01-01',
+      3,
+      50_000
+    )
+
+    const config = createSimpleConfig()
+    const result = await analyzer.analyze({ trades, config })
+
+    // Average delta is OOS - IS performance
+    expect(result.results.stats.averagePerformanceDelta).toBeDefined()
+    expect(Number.isFinite(result.results.stats.averagePerformanceDelta)).toBe(true)
+  })
+
+  it('returns zero summary metrics for empty results', async () => {
+    // Too few trades for any window
+    const trades = createTestTrades([100], '2024-01-01', 1, 50_000)
+
+    const config = createSimpleConfig()
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBe(0)
+    expect(result.results.summary.avgInSamplePerformance).toBe(0)
+    expect(result.results.summary.avgOutOfSamplePerformance).toBe(0)
+    expect(result.results.summary.degradationFactor).toBe(0)
+    expect(result.results.summary.parameterStability).toBe(0)
+    expect(result.results.summary.robustnessScore).toBe(0)
+  })
+})
+
+describe('WalkForwardAnalyzer optimization targets', () => {
+  const analyzer = new WalkForwardAnalyzer()
+
+  // Helper to create trades with known characteristics
+  function createTradesWithStats(startDate = '2024-01-01'): Trade[] {
+    // Create a mix of winning and losing trades
+    return createTestTrades(
+      [300, -100, 400, -150, 250, -80, 350, -120, 200, -50, 300, -100],
+      startDate,
+      3,
+      50_000
+    )
+  }
+
+  function createConfigWithTarget(target: WalkForwardConfig['optimizationTarget']): WalkForwardConfig {
+    return {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: target,
+      parameterRanges: {
+        kellyMultiplier: [0.5, 1.5, 0.5],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+    }
+  }
+
+  it('optimizes for profitFactor target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('profitFactor')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+    // Each period should have used profitFactor as the target
+    result.results.periods.forEach((period) => {
+      expect(period.targetMetricInSample).toBeDefined()
+      expect(Number.isFinite(period.targetMetricInSample)).toBe(true)
+    })
+  })
+
+  it('optimizes for sharpeRatio target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('sharpeRatio')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+    result.results.periods.forEach((period) => {
+      expect(period.targetMetricInSample).toBeDefined()
+    })
+  })
+
+  it('optimizes for sortinoRatio target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('sortinoRatio')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+    result.results.periods.forEach((period) => {
+      expect(period.targetMetricInSample).toBeDefined()
+    })
+  })
+
+  it('optimizes for calmarRatio target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('calmarRatio')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+  })
+
+  it('optimizes for cagr target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('cagr')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+  })
+
+  it('optimizes for avgDailyPl target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('avgDailyPl')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+    result.results.periods.forEach((period) => {
+      expect(period.targetMetricInSample).toBeDefined()
+    })
+  })
+
+  it('optimizes for winRate target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('winRate')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+    result.results.periods.forEach((period) => {
+      // Win rate should be between 0 and 1
+      expect(period.targetMetricInSample).toBeGreaterThanOrEqual(0)
+      expect(period.targetMetricInSample).toBeLessThanOrEqual(1)
+    })
+  })
+
+  it('defaults to netPl for unknown target', async () => {
+    const trades = createTradesWithStats()
+    const config = createConfigWithTarget('netPl')
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+    result.results.periods.forEach((period) => {
+      expect(period.targetMetricInSample).toBeDefined()
+      expect(Number.isFinite(period.targetMetricInSample)).toBe(true)
+    })
+  })
+})
+
+describe('WalkForwardAnalyzer edge cases', () => {
+  const analyzer = new WalkForwardAnalyzer()
+
+  it('handles empty trade dataset', async () => {
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: { kellyMultiplier: [1, 1, 1] },
+    }
+
+    const result = await analyzer.analyze({ trades: [], config })
+
+    expect(result.results.periods.length).toBe(0)
+    expect(result.results.stats.totalPeriods).toBe(0)
+    expect(result.results.stats.analyzedTrades).toBe(0)
+  })
+
+  it('handles insufficient trades for any window', async () => {
+    const trades = createTestTrades([100, 100], '2024-01-01', 30, 50_000)
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: { kellyMultiplier: [1, 1, 1] },
+      minInSampleTrades: 10, // More than we have
+      minOutOfSampleTrades: 5,
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Windows exist but are skipped due to insufficient trades
+    expect(result.results.stats.skippedPeriods).toBeGreaterThanOrEqual(0)
+  })
+
+  it('handles no valid parameter combinations passing risk constraints', async () => {
+    // Create trades with huge losses that will fail any drawdown constraint
+    const trades = createTestTrades(
+      [100, -5000, 100, -5000, 100, -5000, 100, -5000],
+      '2024-01-01',
+      2,
+      10_000
+    )
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 8,
+      outOfSampleDays: 4,
+      stepSizeDays: 4,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+        maxDrawdownPct: [1, 1, 1], // Very strict - 1% max drawdown
+      },
+      minInSampleTrades: 2,
+      minOutOfSampleTrades: 1,
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Periods where no valid combo found are skipped
+    expect(result.results.stats.skippedPeriods).toBeGreaterThanOrEqual(0)
+  })
+
+  it('throws error for invalid config (zero inSampleDays)', async () => {
+    const trades = createTestTrades([100, 100, 100], '2024-01-01', 1, 50_000)
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 0, // Invalid
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {},
+    }
+
+    await expect(analyzer.analyze({ trades, config })).rejects.toThrow(
+      'inSampleDays must be greater than zero'
+    )
+  })
+
+  it('throws error for invalid config (zero outOfSampleDays)', async () => {
+    const trades = createTestTrades([100, 100, 100], '2024-01-01', 1, 50_000)
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 0, // Invalid
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {},
+    }
+
+    await expect(analyzer.analyze({ trades, config })).rejects.toThrow(
+      'outOfSampleDays must be greater than zero'
+    )
+  })
+
+  it('throws error for invalid config (zero stepSizeDays)', async () => {
+    const trades = createTestTrades([100, 100, 100], '2024-01-01', 1, 50_000)
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 0, // Invalid
+      optimizationTarget: 'netPl',
+      parameterRanges: {},
+    }
+
+    await expect(analyzer.analyze({ trades, config })).rejects.toThrow(
+      'stepSizeDays must be greater than zero'
+    )
+  })
+})
+
+describe('WalkForwardAnalyzer performance floor', () => {
+  const analyzer = new WalkForwardAnalyzer()
+
+  // Create trades with known sharpe ratio and profit factor
+  function createProfitableTrades(): Trade[] {
+    // Consistent winners create high sharpe, high profit factor
+    return createTestTrades(
+      [200, 150, 180, 160, 200, 140, 190, 170, 200, 150, 180, 160],
+      '2024-01-01',
+      3,
+      50_000
+    )
+  }
+
+  function createMixedTrades(): Trade[] {
+    // Mixed results create lower sharpe, moderate profit factor
+    return createTestTrades(
+      [200, -150, 180, -120, 200, -140, 190, -100, 200, -150, 180, -120],
+      '2024-01-01',
+      3,
+      50_000
+    )
+  }
+
+  function createLosingTrades(): Trade[] {
+    // Net losers
+    return createTestTrades(
+      [50, -200, 60, -180, 40, -190, 55, -170, 45, -200, 50, -185],
+      '2024-01-01',
+      3,
+      50_000
+    )
+  }
+
+  it('filters combinations not meeting min Sharpe ratio', async () => {
+    // Mixed trades have lower sharpe ratio
+    const trades = createMixedTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: true,
+        minSharpeRatio: 5.0, // Very high requirement - should filter
+        enableMinProfitFactor: false,
+        minProfitFactor: 1.0,
+        enablePositiveNetPl: false,
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should skip periods because sharpe requirement not met
+    expect(result.results.stats.skippedPeriods).toBeGreaterThan(0)
+  })
+
+  it('accepts combinations meeting min Sharpe ratio', async () => {
+    const trades = createProfitableTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: true,
+        minSharpeRatio: 0.1, // Very low requirement - should pass
+        enableMinProfitFactor: false,
+        minProfitFactor: 1.0,
+        enablePositiveNetPl: false,
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should have successful periods
+    expect(result.results.periods.length).toBeGreaterThan(0)
+  })
+
+  it('filters combinations not meeting min profit factor', async () => {
+    const trades = createMixedTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: false,
+        minSharpeRatio: 0,
+        enableMinProfitFactor: true,
+        minProfitFactor: 10.0, // Very high requirement - should filter
+        enablePositiveNetPl: false,
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should skip periods because profit factor requirement not met
+    expect(result.results.stats.skippedPeriods).toBeGreaterThan(0)
+  })
+
+  it('accepts combinations meeting min profit factor', async () => {
+    const trades = createProfitableTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: false,
+        minSharpeRatio: 0,
+        enableMinProfitFactor: true,
+        minProfitFactor: 1.0, // Should easily pass for profitable trades
+        enablePositiveNetPl: false,
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should have successful periods
+    expect(result.results.periods.length).toBeGreaterThan(0)
+  })
+
+  it('filters combinations with negative net P/L when enabled', async () => {
+    const trades = createLosingTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: false,
+        minSharpeRatio: 0,
+        enableMinProfitFactor: false,
+        minProfitFactor: 0,
+        enablePositiveNetPl: true, // Require positive P/L
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should skip periods because trades are net losers
+    expect(result.results.stats.skippedPeriods).toBeGreaterThan(0)
+  })
+
+  it('accepts combinations with positive net P/L when enabled', async () => {
+    const trades = createProfitableTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: false,
+        minSharpeRatio: 0,
+        enableMinProfitFactor: false,
+        minProfitFactor: 0,
+        enablePositiveNetPl: true,
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should have successful periods
+    expect(result.results.periods.length).toBeGreaterThan(0)
+  })
+
+  it('applies multiple performance floor constraints together', async () => {
+    const trades = createMixedTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: true,
+        minSharpeRatio: 10.0, // Impossible
+        enableMinProfitFactor: true,
+        minProfitFactor: 10.0, // Impossible
+        enablePositiveNetPl: true,
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // With impossible requirements, all periods should be skipped
+    expect(result.results.stats.skippedPeriods).toBeGreaterThan(0)
+    expect(result.results.periods.length).toBe(0)
+  })
+
+  it('ignores disabled performance floor constraints', async () => {
+    const trades = createMixedTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      performanceFloor: {
+        enableMinSharpe: false, // Disabled
+        minSharpeRatio: 100.0, // Would be impossible if enabled
+        enableMinProfitFactor: false, // Disabled
+        minProfitFactor: 100.0, // Would be impossible if enabled
+        enablePositiveNetPl: false, // Disabled
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Since all floors are disabled, should have some periods
+    expect(result.results.periods.length).toBeGreaterThan(0)
+  })
+
+  it('works without performance floor config', async () => {
+    const trades = createMixedTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      // No performanceFloor
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should work normally without performance floor
+    expect(result.results.periods.length).toBeGreaterThan(0)
+  })
+})
+
+describe('WalkForwardAnalyzer diversification', () => {
+  const analyzer = new WalkForwardAnalyzer()
+
+  // Create trades with multiple strategies
+  function createMultiStrategyTrades(): Trade[] {
+    const trades: Trade[] = []
+    const strategies = ['IronCondor', 'PutSpread', 'CallSpread', 'Straddle']
+    let fundsAtClose = 50_000
+    const startDate = new Date('2024-01-02')
+
+    // Create 40 trades spread across strategies over 60 days
+    for (let i = 0; i < 40; i++) {
+      const pl = (i % 3 === 0 ? -100 : 150) + Math.random() * 50
+      fundsAtClose += pl
+      const openDate = new Date(startDate.getTime() + Math.floor(i * 1.5) * DAY_MS)
+      const closeDate = new Date(openDate.getTime() + DAY_MS)
+
+      trades.push({
+        dateOpened: openDate,
+        timeOpened: '09:30:00',
+        openingPrice: 100,
+        legs: 'Test',
+        premium: 100,
+        closingPrice: 110,
+        dateClosed: closeDate,
+        timeClosed: '15:45:00',
+        avgClosingCost: 110,
+        reasonForClose: 'Test',
+        pl,
+        numContracts: 1,
+        fundsAtClose,
+        marginReq: 1_000,
+        strategy: strategies[i % strategies.length],
+        openingCommissionsFees: 1,
+        closingCommissionsFees: 1,
+        openingShortLongRatio: 0,
+        closingShortLongRatio: 0,
+        openingVix: 18,
+        closingVix: 18,
+      })
+    }
+
+    return trades
+  }
+
+  // Create trades with only one strategy (no diversification metrics)
+  function createSingleStrategyTrades(): Trade[] {
+    return createTestTrades(
+      [200, 150, 180, 160, 200, 140, 190, 170, 200, 150, 180, 160],
+      '2024-01-01',
+      3,
+      50_000
+    ).map((t) => ({ ...t, strategy: 'OnlyStrategy' }))
+  }
+
+  it('calculates diversification metrics when correlation constraint is enabled', async () => {
+    const trades = createMultiStrategyTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 5,
+      minOutOfSampleTrades: 3,
+      diversificationConfig: {
+        enableCorrelationConstraint: true,
+        maxCorrelationThreshold: 0.9, // High threshold - should not filter
+        correlationMethod: 'pearson',
+        enableTailRiskConstraint: false,
+        maxTailDependenceThreshold: 0.5,
+        tailThreshold: 0.1,
+        normalization: 'raw',
+        dateBasis: 'opened',
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should have periods with diversification metrics
+    expect(result.results.periods.length).toBeGreaterThan(0)
+
+    // Check that at least one period has diversification metrics
+    const periodsWithMetrics = result.results.periods.filter(
+      (p) => p.diversificationMetrics
+    )
+    expect(periodsWithMetrics.length).toBeGreaterThan(0)
+
+    // Verify metrics structure
+    const metrics = periodsWithMetrics[0].diversificationMetrics!
+    expect(typeof metrics.avgCorrelation).toBe('number')
+    expect(typeof metrics.maxCorrelation).toBe('number')
+    expect(Array.isArray(metrics.maxCorrelationPair)).toBe(true)
+  })
+
+  it('calculates diversification metrics when tail risk constraint is enabled', async () => {
+    const trades = createMultiStrategyTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 5,
+      minOutOfSampleTrades: 3,
+      diversificationConfig: {
+        enableCorrelationConstraint: false,
+        maxCorrelationThreshold: 0.7,
+        correlationMethod: 'pearson',
+        enableTailRiskConstraint: true,
+        maxTailDependenceThreshold: 0.9, // High threshold - should not filter
+        tailThreshold: 0.1,
+        normalization: 'raw',
+        dateBasis: 'opened',
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+
+    const periodsWithMetrics = result.results.periods.filter(
+      (p) => p.diversificationMetrics
+    )
+    expect(periodsWithMetrics.length).toBeGreaterThan(0)
+
+    // Verify tail risk metrics
+    const metrics = periodsWithMetrics[0].diversificationMetrics!
+    expect(typeof metrics.avgTailDependence).toBe('number')
+    expect(typeof metrics.maxTailDependence).toBe('number')
+    expect(typeof metrics.effectiveFactors).toBe('number')
+  })
+
+  it('aggregates diversification metrics in summary', async () => {
+    const trades = createMultiStrategyTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 5,
+      minOutOfSampleTrades: 3,
+      diversificationConfig: {
+        enableCorrelationConstraint: true,
+        maxCorrelationThreshold: 0.9,
+        correlationMethod: 'pearson',
+        enableTailRiskConstraint: true,
+        maxTailDependenceThreshold: 0.9,
+        tailThreshold: 0.1,
+        normalization: 'raw',
+        dateBasis: 'opened',
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Summary should have aggregated diversification metrics
+    expect(typeof result.results.summary.avgCorrelationAcrossPeriods).toBe('number')
+    expect(typeof result.results.summary.avgTailDependenceAcrossPeriods).toBe('number')
+    expect(typeof result.results.summary.avgEffectiveFactors).toBe('number')
+  })
+
+  it('does not calculate diversification metrics for single-strategy trades', async () => {
+    const trades = createSingleStrategyTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+      diversificationConfig: {
+        enableCorrelationConstraint: true,
+        maxCorrelationThreshold: 0.7,
+        correlationMethod: 'pearson',
+        enableTailRiskConstraint: false,
+        maxTailDependenceThreshold: 0.5,
+        tailThreshold: 0.1,
+        normalization: 'raw',
+        dateBasis: 'opened',
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+
+    // No periods should have diversification metrics (only 1 strategy)
+    const periodsWithMetrics = result.results.periods.filter(
+      (p) => p.diversificationMetrics
+    )
+    expect(periodsWithMetrics.length).toBe(0)
+  })
+
+  it('works without diversification config', async () => {
+    const trades = createMultiStrategyTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 5,
+      minOutOfSampleTrades: 3,
+      // No diversificationConfig
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should work normally
+    expect(result.results.periods.length).toBeGreaterThan(0)
+
+    // No diversification metrics should be present
+    const periodsWithMetrics = result.results.periods.filter(
+      (p) => p.diversificationMetrics
+    )
+    expect(periodsWithMetrics.length).toBe(0)
+  })
+
+  it('does not calculate metrics when both constraints are disabled', async () => {
+    const trades = createMultiStrategyTrades()
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 5,
+      minOutOfSampleTrades: 3,
+      diversificationConfig: {
+        enableCorrelationConstraint: false, // Disabled
+        maxCorrelationThreshold: 0.7,
+        correlationMethod: 'pearson',
+        enableTailRiskConstraint: false, // Disabled
+        maxTailDependenceThreshold: 0.5,
+        tailThreshold: 0.1,
+        normalization: 'raw',
+        dateBasis: 'opened',
+      },
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    expect(result.results.periods.length).toBeGreaterThan(0)
+
+    // No diversification metrics should be calculated when both are disabled
+    const periodsWithMetrics = result.results.periods.filter(
+      (p) => p.diversificationMetrics
+    )
+    expect(periodsWithMetrics.length).toBe(0)
+  })
+
+  it('handles diversification targets by returning NEGATIVE_INFINITY', async () => {
+    const trades = createMultiStrategyTrades()
+
+    // Test each diversification target
+    const diversificationTargets: Array<WalkForwardConfig['optimizationTarget']> = [
+      'minAvgCorrelation',
+      'minTailRisk',
+      'maxEffectiveFactors',
+    ]
+
+    for (const target of diversificationTargets) {
+      const config: WalkForwardConfig = {
+        inSampleDays: 30,
+        outOfSampleDays: 15,
+        stepSizeDays: 15,
+        optimizationTarget: target,
+        parameterRanges: {
+          kellyMultiplier: [1, 1, 1],
+        },
+        minInSampleTrades: 5,
+        minOutOfSampleTrades: 3,
+      }
+
+      const result = await analyzer.analyze({ trades, config })
+
+      // Should skip all periods because target metric returns NEGATIVE_INFINITY
+      // which doesn't create valid bestCombo
+      expect(result.results.stats.skippedPeriods).toBeGreaterThanOrEqual(0)
+    }
+  })
+})

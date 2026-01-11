@@ -6,6 +6,9 @@ import {
   estimateCombinationsFromRanges,
   suggestStepForRange,
   PARAMETER_METADATA,
+  calculateTradeFrequency,
+  calculateAutoConfig,
+  TradeFrequencyInfo,
 } from '@/lib/stores/walk-forward-store'
 import type {
   WalkForwardExtendedParameterRanges,
@@ -622,5 +625,253 @@ describe('strategy weight sweep config', () => {
     ).length
 
     expect(enabledCount).toBe(3)
+  })
+})
+
+describe('trade frequency calculation', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000
+
+  function createTradesWithDates(dates: string[]): typeof mockTrades {
+    return dates.map((dateStr, idx) => ({
+      ...mockTrades[0],
+      dateOpened: new Date(dateStr),
+      dateClosed: new Date(new Date(dateStr).getTime() + DAY_MS),
+    }))
+  }
+
+  it('returns null for empty trades array', () => {
+    const result = calculateTradeFrequency([])
+    expect(result).toBeNull()
+  })
+
+  it('returns null for single trade', () => {
+    const result = calculateTradeFrequency([mockTrades[0]])
+    expect(result).toBeNull()
+  })
+
+  it('calculates frequency for daily trades', () => {
+    // 10 trades over 9 days (daily trading)
+    const trades = createTradesWithDates([
+      '2024-01-01',
+      '2024-01-02',
+      '2024-01-03',
+      '2024-01-04',
+      '2024-01-05',
+      '2024-01-06',
+      '2024-01-07',
+      '2024-01-08',
+      '2024-01-09',
+      '2024-01-10',
+    ])
+
+    const result = calculateTradeFrequency(trades)
+
+    expect(result).not.toBeNull()
+    expect(result!.totalTrades).toBe(10)
+    expect(result!.tradingDays).toBe(9)
+    expect(result!.avgDaysBetweenTrades).toBe(1) // 9 days / 9 intervals
+    expect(result!.tradesPerMonth).toBeCloseTo(33.33, 1) // (10/9) * 30
+  })
+
+  it('calculates frequency for weekly trades', () => {
+    // 5 trades over ~28 days (weekly trading)
+    const trades = createTradesWithDates([
+      '2024-01-01',
+      '2024-01-08',
+      '2024-01-15',
+      '2024-01-22',
+      '2024-01-29',
+    ])
+
+    const result = calculateTradeFrequency(trades)
+
+    expect(result).not.toBeNull()
+    expect(result!.totalTrades).toBe(5)
+    expect(result!.tradingDays).toBe(28)
+    expect(result!.avgDaysBetweenTrades).toBe(7) // 28 days / 4 intervals
+    expect(result!.tradesPerMonth).toBeCloseTo(5.36, 1) // (5/28) * 30
+  })
+
+  it('calculates frequency for sparse trades', () => {
+    // 3 trades over ~60 days (very sparse)
+    const trades = createTradesWithDates([
+      '2024-01-01',
+      '2024-02-01',
+      '2024-03-01',
+    ])
+
+    const result = calculateTradeFrequency(trades)
+
+    expect(result).not.toBeNull()
+    expect(result!.totalTrades).toBe(3)
+    expect(result!.tradingDays).toBe(60)
+    expect(result!.avgDaysBetweenTrades).toBe(30) // 60 days / 2 intervals
+    expect(result!.tradesPerMonth).toBeCloseTo(1.5, 1) // (3/60) * 30
+  })
+
+  it('handles unsorted trades', () => {
+    // Trades in random order
+    const trades = createTradesWithDates([
+      '2024-01-15',
+      '2024-01-01',
+      '2024-01-29',
+      '2024-01-08',
+      '2024-01-22',
+    ])
+
+    const result = calculateTradeFrequency(trades)
+
+    expect(result).not.toBeNull()
+    expect(result!.totalTrades).toBe(5)
+    expect(result!.tradingDays).toBe(28) // Jan 1 to Jan 29
+  })
+})
+
+describe('auto configuration calculation', () => {
+  it('generates config for high-frequency trading (20+ trades/month)', () => {
+    const frequency: TradeFrequencyInfo = {
+      totalTrades: 100,
+      tradingDays: 90,
+      avgDaysBetweenTrades: 0.9,
+      tradesPerMonth: 33,
+    }
+
+    const config = calculateAutoConfig(frequency)
+
+    // High frequency should use smaller windows
+    expect(config.inSampleDays).toBe(14) // Minimum bound
+    expect(config.outOfSampleDays).toBe(7) // Minimum bound
+    expect(config.stepSizeDays).toBe(7)
+    expect(config.minInSampleTrades).toBe(15)
+    expect(config.minOutOfSampleTrades).toBe(5)
+  })
+
+  it('generates config for medium-frequency trading (8-20 trades/month)', () => {
+    const frequency: TradeFrequencyInfo = {
+      totalTrades: 40,
+      tradingDays: 120,
+      avgDaysBetweenTrades: 3,
+      tradesPerMonth: 10,
+    }
+
+    const config = calculateAutoConfig(frequency)
+
+    // Medium frequency: ~10 trades in IS, ~3 in OOS
+    expect(config.inSampleDays).toBe(30) // 3 days * 10 trades
+    expect(config.outOfSampleDays).toBe(9) // 3 days * 3 trades
+    expect(config.stepSizeDays).toBe(9)
+    expect(config.minInSampleTrades).toBe(10)
+    expect(config.minOutOfSampleTrades).toBe(3)
+  })
+
+  it('generates config for low-frequency trading (4-8 trades/month)', () => {
+    const frequency: TradeFrequencyInfo = {
+      totalTrades: 24,
+      tradingDays: 180,
+      avgDaysBetweenTrades: 7.5,
+      tradesPerMonth: 4,
+    }
+
+    const config = calculateAutoConfig(frequency)
+
+    // Low frequency: larger windows needed
+    expect(config.inSampleDays).toBe(75) // 7.5 days * 10 trades
+    expect(config.outOfSampleDays).toBe(23) // 7.5 days * 3 trades, rounded
+    expect(config.minInSampleTrades).toBe(6)
+    expect(config.minOutOfSampleTrades).toBe(2)
+  })
+
+  it('generates config for very low-frequency trading (<4 trades/month)', () => {
+    const frequency: TradeFrequencyInfo = {
+      totalTrades: 12,
+      tradingDays: 365, // Longer history to avoid scaling
+      avgDaysBetweenTrades: 15,
+      tradesPerMonth: 2,
+    }
+
+    const config = calculateAutoConfig(frequency)
+
+    // Very low frequency: larger windows
+    expect(config.inSampleDays).toBe(150) // 15 days * 10 trades
+    expect(config.outOfSampleDays).toBe(45) // 15 days * 3 trades
+    expect(config.minInSampleTrades).toBe(4)
+    expect(config.minOutOfSampleTrades).toBe(1)
+  })
+
+  it('applies maximum bounds for extremely sparse trading', () => {
+    const frequency: TradeFrequencyInfo = {
+      totalTrades: 6,
+      tradingDays: 365,
+      avgDaysBetweenTrades: 73,
+      tradesPerMonth: 0.5,
+    }
+
+    const config = calculateAutoConfig(frequency)
+
+    // Should hit max bounds
+    expect(config.inSampleDays).toBe(180) // Max bound
+    expect(config.outOfSampleDays).toBe(60) // Max bound
+  })
+
+  it('scales down windows when insufficient data for 3 windows', () => {
+    const frequency: TradeFrequencyInfo = {
+      totalTrades: 20,
+      tradingDays: 90, // Short history
+      avgDaysBetweenTrades: 4.5,
+      tradesPerMonth: 6.67,
+    }
+
+    const config = calculateAutoConfig(frequency)
+
+    // With 90 days, default IS=45, OOS=14 would only allow ~3 windows
+    // Should scale to fit
+    expect(config.inSampleDays).toBeLessThanOrEqual(90)
+    expect(config.inSampleDays! + config.outOfSampleDays!).toBeLessThan(90)
+  })
+})
+
+describe('autoConfigureFromBlock action', () => {
+  it('applies auto-configuration from block trades', async () => {
+    const DAY_MS = 24 * 60 * 60 * 1000
+
+    // Create trades spanning 90 days with ~daily frequency
+    const trades = Array.from({ length: 30 }, (_, idx) => ({
+      ...mockTrades[0],
+      dateOpened: new Date(new Date('2024-01-01').getTime() + idx * 3 * DAY_MS),
+      dateClosed: new Date(new Date('2024-01-02').getTime() + idx * 3 * DAY_MS),
+    }))
+
+    mockedDb.getTradesByBlock.mockResolvedValue(trades)
+
+    await useWalkForwardStore.getState().autoConfigureFromBlock('block-1')
+    const state = useWalkForwardStore.getState()
+
+    expect(state.tradeFrequency).not.toBeNull()
+    expect(state.tradeFrequency!.totalTrades).toBe(30)
+    expect(state.autoConfigApplied).toBe(true)
+
+    // Config should have been updated
+    expect(state.config.inSampleDays).toBeGreaterThan(0)
+    expect(state.config.outOfSampleDays).toBeGreaterThan(0)
+  })
+
+  it('handles block with insufficient trades', async () => {
+    mockedDb.getTradesByBlock.mockResolvedValue([mockTrades[0]])
+
+    await useWalkForwardStore.getState().autoConfigureFromBlock('block-1')
+    const state = useWalkForwardStore.getState()
+
+    expect(state.tradeFrequency).toBeNull()
+    expect(state.autoConfigApplied).toBe(false)
+  })
+
+  it('handles empty block', async () => {
+    mockedDb.getTradesByBlock.mockResolvedValue([])
+
+    await useWalkForwardStore.getState().autoConfigureFromBlock('block-1')
+    const state = useWalkForwardStore.getState()
+
+    expect(state.tradeFrequency).toBeNull()
+    expect(state.autoConfigApplied).toBe(false)
   })
 })

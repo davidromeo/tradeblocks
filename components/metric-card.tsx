@@ -20,7 +20,8 @@ interface MetricCardProps {
   subtitle?: string;
   trend?: "up" | "down" | "neutral";
   tooltip?: TooltipContent;
-  format?: "currency" | "percentage" | "number" | "ratio";
+  format?: "currency" | "percentage" | "number" | "ratio" | "decimal";
+  decimalPlaces?: number;
   isPositive?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
@@ -33,6 +34,7 @@ export function MetricCard({
   trend,
   tooltip,
   format = "number",
+  decimalPlaces = 2,
   isPositive,
   size = "md",
   className,
@@ -49,9 +51,11 @@ export function MetricCard({
           maximumFractionDigits: 0,
         }).format(val);
       case "percentage":
-        return `${val.toFixed(2)}%`;
+        return `${val.toFixed(decimalPlaces)}%`;
       case "ratio":
-        return val.toFixed(2);
+        return val.toFixed(decimalPlaces);
+      case "decimal":
+        return val.toFixed(decimalPlaces);
       default:
         return val.toLocaleString();
     }

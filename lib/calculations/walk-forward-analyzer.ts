@@ -9,10 +9,20 @@ import {
   WalkForwardResults,
   WalkForwardSummary,
   WalkForwardWindow,
+  PerformanceFloorConfig,
+  DiversificationConfig,
+  PeriodDiversificationMetrics,
 } from '../models/walk-forward'
 import { PortfolioStatsCalculator } from './portfolio-stats'
 import { calculateKellyMetrics } from './kelly'
 import { PortfolioStats } from '../models/portfolio-stats'
+import {
+  calculateCorrelationMatrix,
+  calculateCorrelationAnalytics,
+  CorrelationOptions,
+} from './correlation'
+import { performTailRiskAnalysis } from './tail-risk-analysis'
+import { TailRiskAnalysisOptions } from '../models/tail-risk'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_MIN_IN_SAMPLE_TRADES = 10
@@ -143,7 +153,7 @@ export class WalkForwardAnalyzer {
         )
         const inSampleStats = calculator.calculatePortfolioStats(scaledInSampleTrades)
 
-        if (!this.isRiskAcceptable(params, inSampleStats, scaledInSampleTrades)) {
+        if (!this.isRiskAcceptable(params, inSampleStats, scaledInSampleTrades, options.config.performanceFloor)) {
           continue
         }
 
@@ -189,6 +199,22 @@ export class WalkForwardAnalyzer {
       )
       const outSampleStats = calculator.calculatePortfolioStats(scaledOutSampleTrades)
 
+      // Calculate diversification metrics if enabled
+      let diversificationMetrics: PeriodDiversificationMetrics | undefined
+      const diversificationConfig = options.config.diversificationConfig
+      if (
+        diversificationConfig?.enableCorrelationConstraint ||
+        diversificationConfig?.enableTailRiskConstraint
+      ) {
+        const metrics = this.calculateDiversificationMetrics(
+          scaledOutSampleTrades,
+          diversificationConfig
+        )
+        if (metrics) {
+          diversificationMetrics = metrics
+        }
+      }
+
       const period: WalkForwardPeriodResult = {
         ...window,
         optimalParameters: bestCombo.params,
@@ -196,6 +222,7 @@ export class WalkForwardAnalyzer {
         outOfSampleMetrics: outSampleStats,
         targetMetricInSample: bestCombo.score,
         targetMetricOutOfSample: this.getTargetMetricValue(outSampleStats, options.config.optimizationTarget),
+        diversificationMetrics,
       }
 
       periods.push(period)
@@ -449,8 +476,10 @@ export class WalkForwardAnalyzer {
   private isRiskAcceptable(
     params: Record<string, number>,
     stats: PortfolioStats,
-    scaledTrades: Trade[]
+    scaledTrades: Trade[],
+    performanceFloor?: PerformanceFloorConfig
   ): boolean {
+    // Parameter-based risk constraints
     if (typeof params.maxDrawdownPct === 'number' && stats.maxDrawdown > params.maxDrawdownPct) {
       return false
     }
@@ -466,6 +495,117 @@ export class WalkForwardAnalyzer {
       const initialCapital = PortfolioStatsCalculator.calculateInitialCapital(scaledTrades)
       const maxDailyLoss = this.calculateMaxDailyLossPct(scaledTrades, initialCapital)
       if (maxDailyLoss > params.maxDailyLossPct) {
+        return false
+      }
+    }
+
+    // Performance floor checks (Phase 2)
+    if (performanceFloor) {
+      if (performanceFloor.enableMinSharpe && performanceFloor.minSharpeRatio > 0) {
+        const sharpe = stats.sharpeRatio ?? Number.NEGATIVE_INFINITY
+        if (sharpe < performanceFloor.minSharpeRatio) {
+          return false
+        }
+      }
+
+      if (performanceFloor.enableMinProfitFactor && performanceFloor.minProfitFactor > 0) {
+        const pf = stats.profitFactor ?? 0
+        if (pf < performanceFloor.minProfitFactor) {
+          return false
+        }
+      }
+
+      if (performanceFloor.enablePositiveNetPl) {
+        const netPl = stats.netPl ?? 0
+        if (netPl <= 0) {
+          return false
+        }
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Calculate diversification metrics for a set of trades
+   * Returns null if there aren't enough strategies for meaningful analysis
+   */
+  private calculateDiversificationMetrics(
+    trades: Trade[],
+    config: DiversificationConfig
+  ): PeriodDiversificationMetrics | null {
+    // Need at least 2 strategies for correlation/diversification analysis
+    const strategies = new Set(trades.map((t) => t.strategy).filter(Boolean))
+    if (strategies.size < 2) {
+      return null
+    }
+
+    // Build correlation options from config
+    const correlationOptions: CorrelationOptions = {
+      method: config.correlationMethod,
+      normalization: config.normalization,
+      dateBasis: config.dateBasis,
+      alignment: 'shared',
+      timePeriod: 'daily',
+    }
+
+    // Calculate correlation matrix
+    const correlationMatrix = calculateCorrelationMatrix(trades, correlationOptions)
+    const correlationAnalytics = calculateCorrelationAnalytics(correlationMatrix)
+
+    // Calculate tail risk if enabled
+    let tailRiskResult = null
+    if (config.enableTailRiskConstraint) {
+      const tailRiskOptions: TailRiskAnalysisOptions = {
+        tailThreshold: config.tailThreshold,
+        normalization: config.normalization,
+        dateBasis: config.dateBasis,
+      }
+      tailRiskResult = performTailRiskAnalysis(trades, tailRiskOptions)
+    }
+
+    // Handle NaN values for strongest correlation (occurs when no valid pairs)
+    const maxCorrelation = Number.isNaN(correlationAnalytics.strongest.value)
+      ? 0
+      : correlationAnalytics.strongest.value
+    const maxCorrelationPair = correlationAnalytics.strongest.pair[0]
+      ? correlationAnalytics.strongest.pair
+      : (['', ''] as [string, string])
+
+    return {
+      avgCorrelation: Number.isNaN(correlationAnalytics.averageCorrelation)
+        ? 0
+        : correlationAnalytics.averageCorrelation,
+      maxCorrelation,
+      maxCorrelationPair,
+      avgTailDependence: tailRiskResult?.analytics.averageJointTailRisk ?? 0,
+      maxTailDependence: tailRiskResult?.analytics.highestJointTailRisk.value ?? 0,
+      maxTailDependencePair: (tailRiskResult?.analytics.highestJointTailRisk.pair ?? [
+        '',
+        '',
+      ]) as [string, string],
+      effectiveFactors: tailRiskResult?.effectiveFactors ?? correlationMatrix.strategies.length,
+      highRiskPairsPct: tailRiskResult?.analytics.highRiskPairsPct ?? 0,
+    }
+  }
+
+  /**
+   * Check if diversification constraints are met
+   */
+  private isDiversificationAcceptable(
+    metrics: PeriodDiversificationMetrics,
+    config: DiversificationConfig
+  ): boolean {
+    // Check correlation constraint
+    if (config.enableCorrelationConstraint) {
+      if (metrics.maxCorrelation > config.maxCorrelationThreshold) {
+        return false
+      }
+    }
+
+    // Check tail risk constraint
+    if (config.enableTailRiskConstraint) {
+      if (metrics.maxTailDependence > config.maxTailDependenceThreshold) {
         return false
       }
     }
@@ -533,6 +673,13 @@ export class WalkForwardAnalyzer {
         return stats.avgDailyPl ?? Number.NEGATIVE_INFINITY
       case 'winRate':
         return stats.winRate ?? Number.NEGATIVE_INFINITY
+      // Diversification targets are not yet supported for optimization
+      // They require computing correlation/tail risk for EACH parameter combination
+      // which is expensive. For now, they're used as constraints, not targets.
+      case 'minAvgCorrelation':
+      case 'minTailRisk':
+      case 'maxEffectiveFactors':
+        return Number.NEGATIVE_INFINITY
       case 'netPl':
       default:
         return stats.netPl ?? Number.NEGATIVE_INFINITY
@@ -606,13 +753,37 @@ export class WalkForwardAnalyzer {
     const degradationFactor = avgInSample !== 0 ? avgOutSample / avgInSample : 0
     const parameterStability = this.calculateParameterStability(periods)
 
-    return {
+    const summary: WalkForwardSummary = {
       avgInSamplePerformance: avgInSample,
       avgOutOfSamplePerformance: avgOutSample,
       degradationFactor,
       parameterStability,
       robustnessScore: 0,
     }
+
+    // Aggregate diversification metrics across periods
+    const periodsWithDiversification = periods.filter((p) => p.diversificationMetrics)
+    if (periodsWithDiversification.length > 0) {
+      summary.avgCorrelationAcrossPeriods =
+        periodsWithDiversification.reduce(
+          (sum, p) => sum + (p.diversificationMetrics?.avgCorrelation ?? 0),
+          0
+        ) / periodsWithDiversification.length
+
+      summary.avgTailDependenceAcrossPeriods =
+        periodsWithDiversification.reduce(
+          (sum, p) => sum + (p.diversificationMetrics?.avgTailDependence ?? 0),
+          0
+        ) / periodsWithDiversification.length
+
+      summary.avgEffectiveFactors =
+        periodsWithDiversification.reduce(
+          (sum, p) => sum + (p.diversificationMetrics?.effectiveFactors ?? 0),
+          0
+        ) / periodsWithDiversification.length
+    }
+
+    return summary
   }
 
   private calculateParameterStability(periods: WalkForwardPeriodResult[]): number {
