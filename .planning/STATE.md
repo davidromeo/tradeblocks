@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 ## Current Position
 
 Phase: 10 of 10 (Integration & Polish)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-01-11 — Completed 10-01-PLAN.md
+Last activity: 2026-01-11 — Completed 10-02-PLAN.md
 
-Progress: ███████████████░ 82% (14/17 plans complete)
+Progress: ████████████████░ 88% (15/17 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 15
 - Average duration: ~11 min
-- Total execution time: ~2.3 hours
+- Total execution time: ~2.6 hours
 
 **By Phase:**
 
@@ -35,11 +35,11 @@ Progress: ███████████████░ 82% (14/17 plans comp
 | 07-terminology-explanations | 1/1 | 5 min | 5 min |
 | 08-interpretation-guidance | 3/3 | 15 min | 5 min |
 | 09-calculation-robustness | 1/1 | 6 min | 6 min |
-| 10-integration-polish | 1/3 | 15 min | 15 min |
+| 10-integration-polish | 2/3 | 32 min | 16 min |
 
 **Recent Trend:**
-- Last 5 plans: 07-01 (5 min), 08-01 (5 min), 08-02 (5 min), 09-01 (6 min), 10-01 (15 min)
-- Trend: Small logic modules (5-6 min), UI + validation features (15 min)
+- Last 5 plans: 08-01 (5 min), 08-02 (5 min), 09-01 (6 min), 10-01 (15 min), 10-02 (17 min)
+- Trend: Small logic modules (5-6 min), UI + validation + testing features (15-17 min)
 
 ## Accumulated Context
 
@@ -70,6 +70,9 @@ Progress: ███████████████░ 82% (14/17 plans comp
 | 09-01 | Robustness score is TradeBlocks-specific | Composite metric, not industry standard; document accordingly |
 | 10-01 | Pre-run guidance uses same ConfigurationObservation interface | Consistency between pre-run and post-run guidance |
 | 10-01 | Amber styling for constrained auto-config alerts | Visual distinction when settings are limited by trade frequency |
+| 10-02 | Error boundary wraps results only, not config | Config stays accessible if results fail |
+| 10-02 | Kelly bounds 0-2, MaxDD bounds 0.5-50 | Sensible ranges: 0=no Kelly, 2=double max; 0.5% for conservative filtering |
+| 10-02 | Run enables with params OR constraints OR weights | Any valid sweep/constraint configuration enables analysis |
 
 ### Deferred Issues
 
@@ -91,5 +94,5 @@ Full audit findings documented in `.planning/AUDIT-FINDINGS.md`
 ## Session Continuity
 
 Last session: 2026-01-11
-Stopped at: Completed 10-01-PLAN.md (pre-run config guidance)
+Stopped at: Completed 10-02-PLAN.md (edge cases & error handling)
 Resume file: None
