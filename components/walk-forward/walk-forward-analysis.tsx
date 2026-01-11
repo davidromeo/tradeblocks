@@ -9,17 +9,18 @@ import {
 } from "@/components/ui/hover-card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import type { WalkForwardResults } from "@/lib/models/walk-forward"
-import { CheckCircle2, AlertTriangle, XCircle, HelpCircle, Lightbulb } from "lucide-react"
+import type { WalkForwardAnalysis as WalkForwardAnalysisType } from "@/lib/models/walk-forward"
+import { CheckCircle2, AlertTriangle, XCircle, HelpCircle, Lightbulb, Settings2 } from "lucide-react"
 import { assessResults, type Assessment } from "@/lib/calculations/walk-forward-verdict"
 import {
   generateVerdictExplanation,
   detectRedFlags,
   generateInsights,
+  detectConfigurationObservations,
 } from "@/lib/calculations/walk-forward-interpretation"
 
 interface WalkForwardAnalysisProps {
-  results: WalkForwardResults
+  analysis: WalkForwardAnalysisType
 }
 
 const verdictStyles: Record<Assessment, {
@@ -60,7 +61,9 @@ const assessmentLabels: Record<Assessment, string> = {
   concerning: "Low",
 }
 
-export function WalkForwardAnalysis({ results }: WalkForwardAnalysisProps) {
+export function WalkForwardAnalysis({ analysis }: WalkForwardAnalysisProps) {
+  const { config, results } = analysis
+
   const interpretationData = useMemo(() => {
     const assessment = assessResults(results)
     return {
@@ -68,10 +71,11 @@ export function WalkForwardAnalysis({ results }: WalkForwardAnalysisProps) {
       explanation: generateVerdictExplanation(results, assessment),
       redFlags: detectRedFlags(results),
       insights: generateInsights(results, assessment),
+      configObservations: detectConfigurationObservations(config, results),
     }
-  }, [results])
+  }, [config, results])
 
-  const { assessment, explanation, redFlags, insights } = interpretationData
+  const { assessment, explanation, redFlags, insights, configObservations } = interpretationData
   const style = verdictStyles[assessment.overall]
   const Icon = style.icon
 
@@ -141,6 +145,39 @@ export function WalkForwardAnalysis({ results }: WalkForwardAnalysisProps) {
             ))}
           </div>
         </div>
+
+        {/* Configuration Notes Section (Conditional) */}
+        {configObservations.length > 0 && (
+          <div className="border-t pt-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-muted-foreground" />
+              <h4 className="text-sm font-semibold">Configuration Notes</h4>
+            </div>
+
+            <div className="space-y-3">
+              {configObservations.map((obs, index) => {
+                const isWarning = obs.severity === 'warning'
+                const bgClass = isWarning
+                  ? "bg-amber-500/5 border-amber-500/20"
+                  : "bg-slate-500/5 border-slate-500/20"
+                const textClass = isWarning
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-slate-700 dark:text-slate-400"
+
+                return (
+                  <div key={index} className={cn("rounded-lg border p-3", bgClass)}>
+                    <p className={cn("text-sm font-medium", textClass)}>
+                      {obs.title}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {obs.description}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Things to Note Section (Conditional) */}
         {redFlags.length > 0 && (

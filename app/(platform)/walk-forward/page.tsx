@@ -477,7 +477,7 @@ export default function WalkForwardPage() {
 
           {/* Analysis Tab */}
           <TabsContent value="analysis" className="mt-4">
-            <WalkForwardAnalysis results={results.results} />
+            <WalkForwardAnalysis analysis={results} />
           </TabsContent>
 
           {/* Charts Tab */}
