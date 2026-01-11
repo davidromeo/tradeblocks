@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-11)
 
 **Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** Phase 8 — Interpretation Guidance
+**Current focus:** Phase 9 — Calculation Robustness
 
 ## Current Position
 
-Phase: 8 of 10 (Interpretation Guidance)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-01-11 — Completed 08-03-PLAN.md
+Phase: 9 of 10 (Calculation Robustness)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-01-11 — Completed 09-01-PLAN.md
 
-Progress: ████████████░ 60% (12/20 plans)
+Progress: █████████████░ 65% (13/20 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: ~11 min
-- Total execution time: ~2.2 hours
+- Total execution time: ~2.3 hours
 
 **By Phase:**
 
@@ -34,10 +34,11 @@ Progress: ████████████░ 60% (12/20 plans)
 | 06-results-summary-view | 1/1 | ~45 min | ~45 min |
 | 07-terminology-explanations | 1/1 | 5 min | 5 min |
 | 08-interpretation-guidance | 3/3 | 15 min | 5 min |
+| 09-calculation-robustness | 1/3 | 6 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (5 min), 06-01 (~45 min), 07-01 (5 min), 08-01 (5 min)
-- Trend: Small logic modules (5 min), UI restructuring slower (42-45 min)
+- Last 5 plans: 06-01 (~45 min), 07-01 (5 min), 08-01 (5 min), 08-02 (5 min), 09-01 (6 min)
+- Trend: Small logic modules (5-6 min), UI restructuring slower (42-45 min)
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Progress: ████████████░ 60% (12/20 plans)
 | 08-02 | Analysis as default tab | Changed defaultValue so newcomers land on interpretation first |
 | 08-02 | Configuration-awareness deferred to 08-03 | ISS-003/ISS-004 logged; distinguish strategy vs config issues |
 | 08-03 | info vs warning severity for config observations | info (slate) for informational, warning (amber) for actionable |
+| 09-01 | No annualization for efficiency ratio | Same-metric comparisons (Sharpe to Sharpe) don't need annualization |
+| 09-01 | Sample variance (N-1) for stability | More accurate variability for typical 5-10 period WFA |
+| 09-01 | Robustness score is TradeBlocks-specific | Composite metric, not industry standard; document accordingly |
 
 ### Deferred Issues
 
@@ -84,5 +88,5 @@ Full audit findings documented in `.planning/AUDIT-FINDINGS.md`
 ## Session Continuity
 
 Last session: 2026-01-11
-Stopped at: Completed 08-03-PLAN.md (Phase 8 complete)
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None

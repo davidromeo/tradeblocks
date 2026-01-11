@@ -104,7 +104,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 09-01: Review calculation formulas against standards
+- [x] 09-01: Review calculation formulas against standards
 - [ ] 09-02: Add/fix unit tests for calculations
 - [ ] 09-03: Fix any identified calculation issues
 
@@ -134,7 +134,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 | 6. Results Summary View | 1/1 | Complete | 2026-01-11 |
 | 7. Terminology Explanations | 1/1 | Complete | 2026-01-11 |
 | 8. Interpretation Guidance | 3/3 | Complete | 2026-01-11 |
-| 9. Calculation Robustness | 0/3 | Not started | - |
+| 9. Calculation Robustness | 1/3 | In progress | - |
 | 10. Integration & Polish | 0/3 | Not started | - |
 
 ## Audit Notes
