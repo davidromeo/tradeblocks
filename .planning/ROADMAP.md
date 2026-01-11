@@ -18,7 +18,7 @@ None
 - [x] **Phase 2: Parameter UI Polish** - Wrap parameters in collapsible containers, remove presets (MERGED: selection + ranges already exist)
 - [x] **Phase 3: Input Validation Fixes** - Fix overly tight constraints on text inputs
 - [x] **Phase 5: Optimization Targets** - Audit and implement missing optimization targets
-- [ ] **Phase 6: Results Summary View** - High-level overview before detailed data
+- [x] **Phase 6: Results Summary View** - High-level overview before detailed data
 - [ ] **Phase 7: Terminology Explanations** - Inline IS/OOS, windows, robustness explanations
 - [ ] **Phase 8: Interpretation Guidance** - Help users understand if results are good or bad
 - [ ] **Phase 9: Calculation Robustness** - Validate calculations are mathematically correct
@@ -72,9 +72,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 06-01: Design summary view layout
-- [ ] 06-02: Implement key metrics summary
-- [ ] 06-03: Add expandable details section
+- [x] 06-01: Restructure results page with summary view and tab-based organization
 
 ### Phase 7: Terminology Explanations
 **Goal**: Inline explanations of IS/OOS, windows, robustness concepts
@@ -135,7 +133,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 | 2. Parameter UI Polish | 1/1 | Complete | 2026-01-11 |
 | 3. Input Validation Fixes | 1/1 | Complete | 2026-01-11 |
 | 5. Optimization Targets | 1/1 | Complete | 2026-01-11 |
-| 6. Results Summary View | 0/3 | Not started | - |
+| 6. Results Summary View | 1/1 | Complete | 2026-01-11 |
 | 7. Terminology Explanations | 0/3 | Not started | - |
 | 8. Interpretation Guidance | 0/3 | Not started | - |
 | 9. Calculation Robustness | 0/3 | Not started | - |
