@@ -88,11 +88,33 @@ export function WalkForwardSummary({ results }: WalkForwardSummaryProps) {
             <Icon className="h-6 w-6" />
           </div>
           <div className="space-y-1">
-            <h2 className={cn("text-lg font-semibold", style.text)}>
-              {assessment.overall === "good" ? "Looking Good" :
-               assessment.overall === "moderate" ? "Mixed Results" :
-               "Needs Attention"}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className={cn("text-lg font-semibold", style.text)}>
+                {assessment.overall === "good" ? "Looking Good" :
+                 assessment.overall === "moderate" ? "Mixed Results" :
+                 "Needs Attention"}
+              </h2>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <HelpCircle className="h-4 w-4 text-muted-foreground/60 cursor-help hover:text-muted-foreground transition-colors" />
+                </HoverCardTrigger>
+                <HoverCardContent className="w-96 p-0 overflow-hidden">
+                  <div className="space-y-3">
+                    <div className="bg-primary/5 border-b px-4 py-3">
+                      <h4 className="text-sm font-semibold text-primary">What Walk-Forward Analysis Tests</h4>
+                    </div>
+                    <div className="px-4 pb-4 space-y-3">
+                      <p className="text-sm font-medium text-foreground leading-relaxed">
+                        Did your strategy work on data it never saw during optimization?
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Walk-forward analysis splits your trading history into training windows (in-sample) and testing windows (out-of-sample). During training, the optimizer finds the best parameters. Those parameters are then tested on the next chunk of unseen data—simulating what happens when you trade live with optimized settings. If performance holds up on unseen data, your strategy is robust. If it collapses, you may have overfit to historical noise.
+                      </p>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <p className="text-sm text-muted-foreground">
               {summaryMessages[assessment.overall]}
             </p>
@@ -105,19 +127,19 @@ export function WalkForwardSummary({ results }: WalkForwardSummaryProps) {
             label="Efficiency"
             value={getEfficiencyLabel(efficiencyPct)}
             assessment={assessment.efficiency}
-            tooltip="How well performance held up when tested on new data"
+            tooltip="Compares out-of-sample performance to in-sample. High efficiency means your optimized settings worked well on new data."
           />
           <MetricCard
             label="Stability"
             value={getStabilityLabel(assessment.stability)}
             assessment={assessment.stability}
-            tooltip="How consistent the optimal settings were across time"
+            tooltip="How much the optimal parameters changed across different time periods. Stable parameters suggest a consistent strategy."
           />
           <MetricCard
             label="Consistency"
             value={getConsistencyLabel(consistencyPct, windowCount)}
             assessment={assessment.consistency}
-            tooltip="How often the strategy stayed profitable on new data"
+            tooltip="What fraction of out-of-sample windows were profitable. Higher means your strategy worked across different market conditions."
           />
         </div>
       </CardContent>
