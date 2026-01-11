@@ -20,7 +20,27 @@ Enhancements discovered during execution. Not critical - address in future phase
 - **Description:** Users don't understand what Avg Performance Delta means or why it matters. The current tooltip is too shallow.
 - **Impact:** Medium (confusing for newcomers)
 - **Effort:** Low
-- **Status:** Planned for Phase 7-01 Task 1
+- **Status:** ~~Planned for Phase 7-01 Task 1~~ **RESOLVED** in Phase 7
+
+### ISS-003: Configuration-aware interpretation guidance
+
+- **Discovered:** Phase 8-02 checkpoint (2026-01-11)
+- **Type:** UX
+- **Description:** Analysis tab only evaluates output metrics (efficiency, stability, consistency) and assumes configuration was sensible. It can't distinguish between "strategy is overfit" vs "configuration was too aggressive". Example: 14d IS / 7d OOS with 16 windows may not give strategies enough time to show their edge - poor results could be config-driven, not strategy-driven.
+- **Impact:** Medium (users may blame strategies when config is the issue)
+- **Effort:** Medium
+- **Suggested approach:**
+  - Phase 8-03: Add post-hoc "Configuration Observations" section to Analysis tab (detect short windows, aggressive ratios)
+  - Phase 10: Add pre-run configuration guidance in setup UI (help users understand tradeoffs before running)
+
+### ISS-004: Pre-run configuration guidance
+
+- **Discovered:** Phase 8-02 checkpoint (2026-01-11)
+- **Type:** UX
+- **Description:** Users should understand configuration tradeoffs BEFORE running analysis. Short windows favor noise over signal. More windows with less data per window may hurt strategy evaluation.
+- **Impact:** Medium (prevents "bad config → bad results → blame strategy" loop)
+- **Effort:** Medium
+- **Suggested phase:** Phase 10 (Integration & Polish)
 
 ## Closed Enhancements
 
