@@ -427,8 +427,12 @@ export default function WalkForwardPage() {
 
       {/* Tab-based organization for detailed results */}
       {results && (
-        <Tabs defaultValue="charts" className="w-full">
+        <Tabs defaultValue="details" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="details" className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Detailed Metrics</span>
+            </TabsTrigger>
             <TabsTrigger value="charts" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Charts</span>
@@ -436,10 +440,6 @@ export default function WalkForwardPage() {
             <TabsTrigger value="windows" className="flex items-center gap-2">
               <TableIcon className="h-4 w-4" />
               <span className="hidden sm:inline">Window Data</span>
-            </TabsTrigger>
-            <TabsTrigger value="details" className="flex items-center gap-2">
-              <Settings2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Detailed Metrics</span>
             </TabsTrigger>
           </TabsList>
 
