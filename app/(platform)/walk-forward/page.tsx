@@ -54,6 +54,7 @@ import { WalkForwardPeriodSelector } from "@/components/walk-forward/period-sele
 import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics";
 import { RunSwitcher } from "@/components/walk-forward/run-switcher";
 import { WalkForwardAnalysis } from "@/components/walk-forward/walk-forward-analysis";
+import { WalkForwardErrorBoundary } from "@/components/walk-forward/walk-forward-error-boundary";
 import { WalkForwardSummary } from "@/components/walk-forward/walk-forward-summary";
 import {
   getRecommendedParameters,
@@ -448,13 +449,13 @@ export default function WalkForwardPage() {
         onDelete={deleteAnalysis}
       />
 
-      {/* Summary - high-level overview shown first when results exist */}
+      {/* Results section wrapped in error boundary - config stays accessible on error */}
       {results && (
-        <WalkForwardSummary results={results.results} />
-      )}
+        <WalkForwardErrorBoundary>
+          {/* Summary - high-level overview shown first when results exist */}
+          <WalkForwardSummary results={results.results} />
 
-      {/* Tab-based organization for detailed results */}
-      {results && (
+          {/* Tab-based organization for detailed results */}
         <Tabs defaultValue="analysis" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="analysis" className="flex items-center gap-2">
@@ -944,6 +945,7 @@ export default function WalkForwardPage() {
             </Card>
           </TabsContent>
         </Tabs>
+        </WalkForwardErrorBoundary>
       )}
 
     </div>
