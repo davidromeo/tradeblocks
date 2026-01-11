@@ -15,8 +15,8 @@ None
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Audit & Analysis** - Analyze current WFA implementation, identify gaps
-- [ ] **Phase 2: Parameter UI Polish** - Wrap parameters in collapsible containers, remove presets (MERGED: selection + ranges already exist)
-- [ ] **Phase 3: Input Validation Fixes** - Fix overly tight constraints on text inputs
+- [x] **Phase 2: Parameter UI Polish** - Wrap parameters in collapsible containers, remove presets (MERGED: selection + ranges already exist)
+- [x] **Phase 3: Input Validation Fixes** - Fix overly tight constraints on text inputs
 - [ ] **Phase 5: Optimization Targets** - Audit and implement missing optimization targets
 - [ ] **Phase 6: Results Summary View** - High-level overview before detailed data
 - [ ] **Phase 7: Terminology Explanations** - Inline IS/OOS, windows, robustness explanations
@@ -54,19 +54,16 @@ Plans:
 
 Plans:
 - [x] 03-01: Fix window config and remaining numeric inputs with free text editing
-- [ ] 03-02: Additional validation fixes if needed
+- ~~03-02: Additional validation fixes if needed~~ (Not needed - no further issues found)
 
 ### Phase 5: Optimization Targets
-**Goal**: Identify what optimization targets exist vs missing, implement gaps
+**Goal**: Fix broken diversification targets by removing them from UI (8 targets work, 3 are broken)
 **Depends on**: Phase 1
-**Research**: Likely (need industry-standard WFA optimization metrics)
-**Research topics**: Standard WFA optimization targets (Sharpe, Sortino, profit factor, drawdown, etc.), common ranking criteria
-**Plans**: TBD
+**Research**: None (audit complete in Phase 1, fix is straightforward)
+**Note**: Diversification CONSTRAINTS work correctly; only optimization TARGETS are broken. Computing diversification metrics per parameter combination is too expensive, so we remove broken targets rather than implementing them.
 
 Plans:
-- [ ] 05-01: Audit existing optimization targets
-- [ ] 05-02: Research and implement missing targets
-- [ ] 05-03: Add target selection UI
+- [ ] 05-01: Remove broken diversification targets from dropdown, keep working constraints
 
 ### Phase 6: Results Summary View
 **Goal**: High-level summary that newcomers can understand before diving into details
@@ -136,8 +133,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 |-------|----------------|--------|-----------|
 | 1. Audit & Analysis | 3/3 | Complete | 2026-01-11 |
 | 2. Parameter UI Polish | 1/1 | Complete | 2026-01-11 |
-| 3. Input Validation Fixes | 1/2 | In progress | - |
-| 5. Optimization Targets | 0/3 | Not started | - |
+| 3. Input Validation Fixes | 1/1 | Complete | 2026-01-11 |
+| 5. Optimization Targets | 0/1 | Not started | - |
 | 6. Results Summary View | 0/3 | Not started | - |
 | 7. Terminology Explanations | 0/3 | Not started | - |
 | 8. Interpretation Guidance | 0/3 | Not started | - |
