@@ -3,7 +3,6 @@ import {
   assessResults,
   getRecommendedParameters,
   formatParameterName,
-  type Assessment,
 } from '@/lib/calculations/walk-forward-verdict'
 import type { WalkForwardResults, WalkForwardPeriodResult } from '@/lib/models/walk-forward'
 import { PortfolioStats } from '@/lib/models/portfolio-stats'

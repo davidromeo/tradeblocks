@@ -632,7 +632,7 @@ describe('trade frequency calculation', () => {
   const DAY_MS = 24 * 60 * 60 * 1000
 
   function createTradesWithDates(dates: string[]): typeof mockTrades {
-    return dates.map((dateStr, idx) => ({
+    return dates.map((dateStr) => ({
       ...mockTrades[0],
       dateOpened: new Date(dateStr),
       dateClosed: new Date(new Date(dateStr).getTime() + DAY_MS),
