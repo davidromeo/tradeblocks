@@ -1455,3 +1455,181 @@ describe('WalkForwardAnalyzer calculation functions', () => {
     })
   })
 })
+
+/**
+ * Edge case tests and large dataset validation
+ */
+describe('WalkForwardAnalyzer edge cases and stress tests', () => {
+  const analyzer = new WalkForwardAnalyzer()
+
+  it('handles very large datasets (100+ trades) without overflow', async () => {
+    // Generate 120 trades over 8 months
+    const pls: number[] = []
+    for (let i = 0; i < 120; i++) {
+      // Alternating pattern with some randomness
+      pls.push(i % 3 === 0 ? -50 + (i % 7) * 10 : 100 + (i % 5) * 20)
+    }
+
+    const trades = createTestTrades(pls, '2024-01-01', 2, 100_000)
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 60,
+      outOfSampleDays: 30,
+      stepSizeDays: 30,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [0.5, 1.5, 0.5],
+      },
+      minInSampleTrades: 10,
+      minOutOfSampleTrades: 5,
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should produce multiple periods without any calculation errors
+    expect(result.results.periods.length).toBeGreaterThan(0)
+    expect(result.results.stats.analyzedTrades).toBe(120)
+
+    // All metrics should be finite numbers
+    expect(Number.isFinite(result.results.summary.avgInSamplePerformance)).toBe(true)
+    expect(Number.isFinite(result.results.summary.avgOutOfSamplePerformance)).toBe(true)
+    expect(Number.isFinite(result.results.summary.degradationFactor)).toBe(true)
+    expect(Number.isFinite(result.results.summary.parameterStability)).toBe(true)
+    expect(Number.isFinite(result.results.summary.robustnessScore)).toBe(true)
+  })
+
+  it('handles negative P&L dominating dataset gracefully', async () => {
+    // 80% of trades are losers
+    const pls: number[] = []
+    for (let i = 0; i < 50; i++) {
+      pls.push(i % 5 === 0 ? 500 : -100) // Only every 5th trade is a winner
+    }
+
+    const trades = createTestTrades(pls, '2024-01-01', 2, 100_000)
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [0.5, 1.5, 0.5],
+      },
+      minInSampleTrades: 5,
+      minOutOfSampleTrades: 3,
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should still produce valid results even with mostly losing trades
+    expect(result.results.summary.degradationFactor).toBeDefined()
+    expect(result.results.summary.parameterStability).toBeDefined()
+    expect(result.results.summary.robustnessScore).toBeGreaterThanOrEqual(0)
+    expect(result.results.summary.robustnessScore).toBeLessThanOrEqual(1)
+  })
+
+  it('handles single trade per period (minimum viable case)', async () => {
+    // Create trades with exactly enough for minimum windows
+    const trades = createTestTrades(
+      [100, 100, 100, 100, 100, 100, 100, 100],
+      '2024-01-01',
+      10,
+      50_000
+    )
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 30,
+      outOfSampleDays: 15,
+      stepSizeDays: 15,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1],
+      },
+      minInSampleTrades: 1, // Minimum
+      minOutOfSampleTrades: 1, // Minimum
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Should work with minimum trade requirements
+    if (result.results.periods.length > 0) {
+      result.results.periods.forEach((period) => {
+        expect(period.inSampleMetrics.totalTrades).toBeGreaterThanOrEqual(1)
+        expect(period.outOfSampleMetrics.totalTrades).toBeGreaterThanOrEqual(1)
+      })
+    }
+  })
+
+  it('handles parameter stability with only one unique value across all periods', async () => {
+    // All periods will have identical parameter because only one option
+    const trades = createTestTrades(
+      [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+      '2024-01-01',
+      3,
+      50_000
+    )
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 15,
+      outOfSampleDays: 7,
+      stepSizeDays: 7,
+      optimizationTarget: 'netPl',
+      parameterRanges: {
+        kellyMultiplier: [1, 1, 1], // Only one option: 1
+        fixedFractionPct: [2, 2, 1], // Only one option: 2
+      },
+      minInSampleTrades: 2,
+      minOutOfSampleTrades: 1,
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // With identical parameters across all periods, stability should be 1.0
+    if (result.results.periods.length > 1) {
+      expect(result.results.summary.parameterStability).toBe(1)
+    }
+  })
+
+  it('produces no NaN or undefined values in full analysis results', async () => {
+    const trades = createTestTrades(
+      [200, -100, 150, -50, 180, -80, 120, -40, 200, -100, 150, -50],
+      '2024-01-01',
+      3,
+      50_000
+    )
+
+    const config: WalkForwardConfig = {
+      inSampleDays: 18,
+      outOfSampleDays: 9,
+      stepSizeDays: 9,
+      optimizationTarget: 'sharpeRatio',
+      parameterRanges: {
+        kellyMultiplier: [0.5, 1.5, 0.5],
+      },
+      minInSampleTrades: 3,
+      minOutOfSampleTrades: 2,
+    }
+
+    const result = await analyzer.analyze({ trades, config })
+
+    // Verify summary values
+    expect(Number.isNaN(result.results.summary.avgInSamplePerformance)).toBe(false)
+    expect(Number.isNaN(result.results.summary.avgOutOfSamplePerformance)).toBe(false)
+    expect(Number.isNaN(result.results.summary.degradationFactor)).toBe(false)
+    expect(Number.isNaN(result.results.summary.parameterStability)).toBe(false)
+    expect(Number.isNaN(result.results.summary.robustnessScore)).toBe(false)
+
+    // Verify stats values
+    expect(result.results.stats.totalPeriods).toBeDefined()
+    expect(result.results.stats.evaluatedPeriods).toBeDefined()
+    expect(result.results.stats.consistencyScore).toBeDefined()
+    expect(Number.isNaN(result.results.stats.consistencyScore)).toBe(false)
+    expect(Number.isNaN(result.results.stats.averagePerformanceDelta)).toBe(false)
+
+    // Verify period values
+    result.results.periods.forEach((period) => {
+      expect(Number.isFinite(period.targetMetricInSample)).toBe(true)
+      expect(Number.isFinite(period.targetMetricOutOfSample)).toBe(true)
+    })
+  })
+})

@@ -456,3 +456,225 @@ describe('formatParameterName', () => {
     expect(formatParameterName('anotherOne')).toBe('anotherOne')
   })
 })
+
+/**
+ * Threshold boundary tests for assessResults
+ *
+ * These tests verify the exact boundary behavior of assessment thresholds:
+ * - Efficiency: 80%/60% boundaries (based on Pardo WFE guidelines)
+ * - Stability: 70%/50% boundaries (based on CV thresholds)
+ * - Consistency: 70%/50% boundaries (based on MultiCharts robustness)
+ */
+describe('assessResults threshold boundaries', () => {
+  describe('efficiency threshold boundaries', () => {
+    it('returns "good" at exactly 80% efficiency', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80, // Exactly 80%
+        parameterStability: 0.70,
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.efficiency).toBe('good')
+    })
+
+    it('returns "moderate" at 79.9% efficiency (just below 80%)', () => {
+      const results = createMockResults({
+        degradationFactor: 0.799, // Just below 80%
+        parameterStability: 0.70,
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.efficiency).toBe('moderate')
+    })
+
+    it('returns "moderate" at exactly 60% efficiency', () => {
+      const results = createMockResults({
+        degradationFactor: 0.60, // Exactly 60%
+        parameterStability: 0.70,
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.efficiency).toBe('moderate')
+    })
+
+    it('returns "concerning" at 59.9% efficiency (just below 60%)', () => {
+      const results = createMockResults({
+        degradationFactor: 0.599, // Just below 60%
+        parameterStability: 0.70,
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.efficiency).toBe('concerning')
+    })
+  })
+
+  describe('stability threshold boundaries', () => {
+    it('returns "good" at exactly 70% stability', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.70, // Exactly 70%
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.stability).toBe('good')
+    })
+
+    it('returns "moderate" at 69.9% stability (just below 70%)', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.699, // Just below 70%
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.stability).toBe('moderate')
+    })
+
+    it('returns "moderate" at exactly 50% stability', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.50, // Exactly 50%
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.stability).toBe('moderate')
+    })
+
+    it('returns "concerning" at 49.9% stability (just below 50%)', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.499, // Just below 50%
+        consistencyScore: 0.70,
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.stability).toBe('concerning')
+    })
+  })
+
+  describe('consistency threshold boundaries', () => {
+    it('returns "good" at exactly 70% consistency', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.70,
+        consistencyScore: 0.70, // Exactly 70%
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.consistency).toBe('good')
+    })
+
+    it('returns "moderate" at 69.9% consistency (just below 70%)', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.70,
+        consistencyScore: 0.699, // Just below 70%
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.consistency).toBe('moderate')
+    })
+
+    it('returns "moderate" at exactly 50% consistency', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.70,
+        consistencyScore: 0.50, // Exactly 50%
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.consistency).toBe('moderate')
+    })
+
+    it('returns "concerning" at 49.9% consistency (just below 50%)', () => {
+      const results = createMockResults({
+        degradationFactor: 0.80,
+        parameterStability: 0.70,
+        consistencyScore: 0.499, // Just below 50%
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.consistency).toBe('concerning')
+    })
+  })
+
+  describe('overall verdict scoring boundaries', () => {
+    it('returns "good" when total score is exactly 5', () => {
+      // good (2) + good (2) + moderate (1) = 5
+      const results = createMockResults({
+        degradationFactor: 0.80, // good (2)
+        parameterStability: 0.70, // good (2)
+        consistencyScore: 0.50, // moderate (1)
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.overall).toBe('good')
+    })
+
+    it('returns "moderate" when total score is exactly 4', () => {
+      // good (2) + moderate (1) + moderate (1) = 4
+      const results = createMockResults({
+        degradationFactor: 0.80, // good (2)
+        parameterStability: 0.50, // moderate (1)
+        consistencyScore: 0.50, // moderate (1)
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.overall).toBe('moderate')
+    })
+
+    it('returns "moderate" when total score is exactly 3', () => {
+      // moderate (1) + moderate (1) + moderate (1) = 3
+      const results = createMockResults({
+        degradationFactor: 0.60, // moderate (1)
+        parameterStability: 0.50, // moderate (1)
+        consistencyScore: 0.50, // moderate (1)
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.overall).toBe('moderate')
+    })
+
+    it('returns "concerning" when total score is exactly 2', () => {
+      // good (2) + concerning (0) + concerning (0) = 2
+      const results = createMockResults({
+        degradationFactor: 0.80, // good (2)
+        parameterStability: 0.40, // concerning (0)
+        consistencyScore: 0.40, // concerning (0)
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.overall).toBe('concerning')
+    })
+
+    it('returns "concerning" when total score is 1', () => {
+      // moderate (1) + concerning (0) + concerning (0) = 1
+      const results = createMockResults({
+        degradationFactor: 0.60, // moderate (1)
+        parameterStability: 0.40, // concerning (0)
+        consistencyScore: 0.40, // concerning (0)
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.overall).toBe('concerning')
+    })
+
+    it('returns "concerning" when total score is 0', () => {
+      // concerning (0) + concerning (0) + concerning (0) = 0
+      const results = createMockResults({
+        degradationFactor: 0.50, // concerning (0)
+        parameterStability: 0.40, // concerning (0)
+        consistencyScore: 0.40, // concerning (0)
+      })
+
+      const verdict = assessResults(results)
+      expect(verdict.overall).toBe('concerning')
+    })
+  })
+})
