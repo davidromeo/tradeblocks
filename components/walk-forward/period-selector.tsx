@@ -446,8 +446,8 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
                       </p>
                       <p className="text-xs text-muted-foreground leading-relaxed">
                         This simulates real trading by applying optimized parameters to future data they
-                        were never trained on. Performance here reveals whether your strategy is robust
-                        or overfit. Default: 15 days (typically 1/3 of in-sample, range: 10-20 days).
+                        were never trained on. Performance here reveals whether results are robust
+                        or just fit to historical noise. Default: 15 days (typically 1/3 of in-sample, range: 10-20 days).
                       </p>
                     </div>
                   </div>

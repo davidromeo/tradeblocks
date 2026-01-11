@@ -42,9 +42,9 @@ const overallStyles: Record<Assessment, {
 }
 
 const summaryMessages: Record<Assessment, string> = {
-  good: "Your strategy held up well when tested on new data.",
-  moderate: "Your strategy showed mixed results across different time periods.",
-  concerning: "Your strategy may be overfit to historical data.",
+  good: "Results held up well when tested on new data.",
+  moderate: "Results showed mixed performance across different time periods.",
+  concerning: "Results may not generalize—consider adjusting your WFA configuration.",
 }
 
 function getEfficiencyLabel(pct: number): string {
@@ -105,10 +105,10 @@ export function WalkForwardSummary({ results }: WalkForwardSummaryProps) {
                     </div>
                     <div className="px-4 pb-4 space-y-3">
                       <p className="text-sm font-medium text-foreground leading-relaxed">
-                        Did your strategy work on data it never saw during optimization?
+                        Did the optimized parameters work on data they never saw?
                       </p>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Walk-forward analysis splits your trading history into training windows (in-sample) and testing windows (out-of-sample). During training, the optimizer finds the best parameters. Those parameters are then tested on the next chunk of unseen data—simulating what happens when you trade live with optimized settings. If performance holds up on unseen data, your strategy is robust. If it collapses, you may have overfit to historical noise.
+                        Walk-forward analysis splits your trading history into training windows (in-sample) and testing windows (out-of-sample). During training, the optimizer finds the best parameters. Those parameters are then tested on the next chunk of unseen data—simulating what happens when you trade live with optimized settings. If performance holds up on unseen data, the results are robust. If it collapses, the optimization may have fit to noise rather than a real edge.
                       </p>
                     </div>
                   </div>
@@ -139,7 +139,7 @@ export function WalkForwardSummary({ results }: WalkForwardSummaryProps) {
             label="Consistency"
             value={getConsistencyLabel(consistencyPct, windowCount)}
             assessment={assessment.consistency}
-            tooltip="What fraction of out-of-sample windows were profitable. Higher means your strategy worked across different market conditions."
+            tooltip="What fraction of out-of-sample windows were profitable. Higher means the optimized parameters worked across different market conditions."
           />
         </div>
       </CardContent>

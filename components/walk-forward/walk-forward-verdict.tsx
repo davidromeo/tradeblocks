@@ -155,7 +155,7 @@ export function WalkForwardVerdict({ results, targetMetricLabel }: WalkForwardVe
               </div>
               <p className="text-xs text-muted-foreground">
                 Measures how much of your in-sample performance carried over to out-of-sample testing.
-                80%+ suggests real edge; below 60% may indicate overfitting.
+                80%+ suggests a real edge; below 60% may indicate the optimization fit to noise.
               </p>
             </div>
             <div className="space-y-1">
@@ -165,7 +165,7 @@ export function WalkForwardVerdict({ results, targetMetricLabel }: WalkForwardVe
               </div>
               <p className="text-xs text-muted-foreground">
                 Shows how much optimal parameters jumped around between windows.
-                Stable parameters (70%+) suggest a more robust strategy.
+                Stable parameters (70%+) suggest more reliable results.
               </p>
             </div>
             <div className="space-y-1">
@@ -175,7 +175,7 @@ export function WalkForwardVerdict({ results, targetMetricLabel }: WalkForwardVe
               </div>
               <p className="text-xs text-muted-foreground">
                 Percentage of windows where out-of-sample performance was positive.
-                High consistency (70%+) means the strategy adapts well to new data.
+                High consistency (70%+) means the optimized parameters adapt well to new data.
               </p>
             </div>
           </div>

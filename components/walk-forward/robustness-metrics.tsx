@@ -42,7 +42,7 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         format="percentage"
         tooltip={{
           flavor: "How much of your optimized performance survived real-world testing.",
-          detailed: `If you achieved $1,000 during optimization and $800 on new data, efficiency is 80%. Values above 70% suggest a robust strategy. Below 50% is a red flag—your strategy may be overfit to historical quirks that won't repeat.`,
+          detailed: `If you achieved $1,000 during optimization and $800 on new data, efficiency is 80%. Values above 70% suggest robust results. Below 50% is a red flag—the optimized parameters may not generalize beyond the training data.`,
         }}
         isPositive={efficiencyPct >= 90}
       />
@@ -52,7 +52,7 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         format="percentage"
         tooltip={{
           flavor: "Whether the 'best' settings stayed similar across different time periods.",
-          detailed: "If optimal parameters swing wildly (e.g., Kelly 0.3 one window, 1.5 the next), the strategy may be unstable. High stability (70%+) means you can use a single set of parameters with confidence.",
+          detailed: "If optimal parameters swing wildly (e.g., Kelly 0.3 one window, 1.5 the next), the results may be unreliable. High stability (70%+) means you can use a single set of parameters with confidence.",
         }}
         isPositive={summary.parameterStability >= 0.7}
       />
@@ -61,8 +61,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={(stats.consistencyScore || 0) * 100}
         format="percentage"
         tooltip={{
-          flavor: "How often your strategy stayed profitable across different time periods.",
-          detailed: "If you tested 10 windows and 7 were profitable out-of-sample, consistency is 70%. High consistency (60%+) suggests your strategy adapts well to different market conditions. Low consistency means performance varies wildly—some periods win big, others lose.",
+          flavor: "How often results stayed profitable across different time periods.",
+          detailed: "If you tested 10 windows and 7 were profitable out-of-sample, consistency is 70%. High consistency (60%+) suggests the optimized parameters adapt well to different market conditions. Low consistency means performance varies wildly—some periods win big, others lose.",
         }}
         isPositive={stats.consistencyScore >= 0.6}
       />
@@ -73,7 +73,7 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         format="percentage"
         tooltip={{
           flavor: "How much performance dropped when tested on new data.",
-          detailed: "This shows the gap between optimization results and real-world testing. A value near 0% means your strategy performs similarly on new data as it did during training. Negative values (like -15%) mean out-of-sample performance was 15% worse. Large negative drops (beyond -20%) often indicate overfitting—the strategy memorized past patterns that don't repeat.",
+          detailed: "This shows the gap between optimization results and real-world testing. A value near 0% means performance held steady on new data. Negative values (like -15%) mean out-of-sample performance was 15% worse. Large negative drops (beyond -20%) often indicate the optimization fit to noise rather than a real edge.",
         }}
         isPositive={avgDeltaPct >= -10}
       />

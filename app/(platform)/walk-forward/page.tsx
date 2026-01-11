@@ -396,7 +396,7 @@ export default function WalkForwardPage() {
                         </div>
                         <div>
                           <dt className="font-medium text-foreground inline">Robustness: </dt>
-                          <dd className="inline">Whether your strategy performs consistently across different time periods, not just one lucky stretch.</dd>
+                          <dd className="inline">Whether results hold up consistently across different time periods, not just one lucky stretch.</dd>
                         </div>
                       </dl>
                     </div>
