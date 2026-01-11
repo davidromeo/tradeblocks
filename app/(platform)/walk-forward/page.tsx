@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Download,
   HelpCircle,
+  Lightbulb,
   Loader2,
   TrendingUp,
   BarChart3,
@@ -54,8 +55,14 @@ import { RobustnessMetrics } from "@/components/walk-forward/robustness-metrics"
 import { RunSwitcher } from "@/components/walk-forward/run-switcher";
 import { WalkForwardSummary } from "@/components/walk-forward/walk-forward-summary";
 import {
+  generateVerdictExplanation,
+  detectRedFlags,
+  generateInsights,
+} from "@/lib/calculations/walk-forward-interpretation";
+import {
   getRecommendedParameters,
   formatParameterName,
+  assessResults,
 } from "@/lib/calculations/walk-forward-verdict";
 import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
 import { useBlockStore } from "@/lib/stores/block-store";
@@ -300,6 +307,18 @@ export default function WalkForwardPage() {
     });
   }, [filteredPeriodSummaries]);
 
+  // Interpretation data for Analysis tab
+  const interpretationData = useMemo(() => {
+    if (!results) return null;
+    const assessment = assessResults(results.results);
+    return {
+      assessment,
+      explanation: generateVerdictExplanation(results.results, assessment),
+      redFlags: detectRedFlags(results.results),
+      insights: generateInsights(results.results, assessment),
+    };
+  }, [results]);
+
   const periodCount = results?.results.periods.length ?? 0;
 
   const handleExport = (format: "csv" | "json") => {
@@ -454,7 +473,11 @@ export default function WalkForwardPage() {
       {/* Tab-based organization for detailed results */}
       {results && (
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="analysis" className="flex items-center gap-2">
+              <Lightbulb className="h-4 w-4" />
+              <span className="hidden sm:inline">Analysis</span>
+            </TabsTrigger>
             <TabsTrigger value="details" className="flex items-center gap-2">
               <Settings2 className="h-4 w-4" />
               <span className="hidden sm:inline">Detailed Metrics</span>
@@ -468,6 +491,31 @@ export default function WalkForwardPage() {
               <span className="hidden sm:inline">Window Data</span>
             </TabsTrigger>
           </TabsList>
+
+          {/* Analysis Tab */}
+          <TabsContent value="analysis" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Analysis</CardTitle>
+                <CardDescription>
+                  Understanding your walk-forward results
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {interpretationData ? (
+                  <p className="text-sm text-muted-foreground">
+                    Analysis content coming in next plan. Interpretation data is ready with{" "}
+                    {interpretationData.redFlags.length} red flags detected and{" "}
+                    {interpretationData.insights.length} insights generated.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No analysis data available.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Charts Tab */}
           <TabsContent value="charts" className="mt-4 space-y-4">
