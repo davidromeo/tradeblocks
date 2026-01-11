@@ -63,8 +63,14 @@ const assessmentLabels: Record<Assessment, string> = {
 
 export function WalkForwardAnalysis({ analysis }: WalkForwardAnalysisProps) {
   const { config, results } = analysis
+  const hasEmptyPeriods = results.periods.length === 0
 
+  // Always call useMemo to satisfy React hooks rules, but handle empty case gracefully
   const interpretationData = useMemo(() => {
+    // Return empty/null data for empty periods case
+    if (results.periods.length === 0) {
+      return null
+    }
     const assessment = assessResults(results)
     return {
       assessment,
@@ -75,7 +81,58 @@ export function WalkForwardAnalysis({ analysis }: WalkForwardAnalysisProps) {
     }
   }, [config, results])
 
-  const { assessment, explanation, redFlags, insights, configObservations } = interpretationData
+  // Handle empty periods - show informative message instead of crashing
+  if (hasEmptyPeriods) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Analysis</CardTitle>
+          <CardDescription>
+            Understanding your walk-forward results
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-7 w-7" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold text-amber-700 dark:text-amber-400">
+                No Data to Analyze
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                The analysis completed but produced no windows to evaluate. This typically happens when your configuration is too restrictive for the available data.
+              </p>
+            </div>
+          </div>
+          <div className="border-t pt-4 space-y-3">
+            <h4 className="text-sm font-semibold">Common Causes</h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <span className="text-muted-foreground/40 select-none mt-0.5">-</span>
+                <span><strong>Window sizes too large:</strong> Try shorter in-sample or out-of-sample periods</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-muted-foreground/40 select-none mt-0.5">-</span>
+                <span><strong>Performance floors too strict:</strong> Lower min Sharpe or profit factor thresholds</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-muted-foreground/40 select-none mt-0.5">-</span>
+                <span><strong>Insufficient trades:</strong> Ensure your block has enough trades for the selected windows</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-muted-foreground/40 select-none mt-0.5">-</span>
+                <span><strong>All combos filtered:</strong> Every parameter combination may have failed the IS performance checks</span>
+              </li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Safe to assert non-null after the empty check
+  const { assessment, explanation, redFlags, insights, configObservations } = interpretationData!
   const style = verdictStyles[assessment.overall]
   const Icon = style.icon
 

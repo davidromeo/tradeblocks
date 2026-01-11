@@ -68,6 +68,38 @@ function getConsistencyLabel(consistencyPct: number, windowCount: number): strin
 }
 
 export function WalkForwardSummary({ results }: WalkForwardSummaryProps) {
+  // Handle empty periods - show informative message instead of crashing
+  if (results.periods.length === 0) {
+    return (
+      <Card className="border-l-4 border-l-amber-500">
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold text-amber-700 dark:text-amber-400">
+                No Windows Generated
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                The analysis completed but no windows met the criteria.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg bg-muted/50 p-4 space-y-2">
+            <p className="text-sm font-medium">Try adjusting your configuration:</p>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+              <li>Reduce in-sample or out-of-sample window sizes</li>
+              <li>Lower the minimum trade requirements</li>
+              <li>Relax performance floor thresholds (min Sharpe, min PF)</li>
+              <li>Check if the selected date range has sufficient data</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const assessment = assessResults(results)
   const style = overallStyles[assessment.overall]
   const Icon = style.icon
