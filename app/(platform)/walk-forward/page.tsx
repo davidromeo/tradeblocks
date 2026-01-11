@@ -144,41 +144,6 @@ export default function WalkForwardPage() {
         config.optimizationTarget) as WalkForwardOptimizationTarget
     ] ?? "Net Profit";
 
-  const insights = useMemo(() => {
-    if (!results) return [];
-    const { periods, summary, stats } = results.results;
-    if (!periods.length) return [];
-
-    const avgKelly =
-      periods.reduce(
-        (sum, period) => sum + (period.optimalParameters.kellyMultiplier ?? 0),
-        0
-      ) / periods.length;
-    const bestPeriod = periods.reduce((best, period) => {
-      return period.targetMetricOutOfSample > best.targetMetricOutOfSample
-        ? period
-        : best;
-    }, periods[0]);
-
-    const consistency = Math.round((stats.consistencyScore ?? 0) * 100);
-    const efficiency = Math.round(summary.degradationFactor * 100);
-
-    return [
-      `Out-of-sample performance retained ${efficiency}% of ${targetMetricLabel} on average.`,
-      `Kelly multiplier averaged ${avgKelly.toFixed(2)}x, suggesting a ${
-        avgKelly > 1 ? "growth" : "capital preservation"
-      } bias.`,
-      `Best OOS window (${formatDate(
-        bestPeriod.outOfSampleStart
-      )} → ${formatDate(
-        bestPeriod.outOfSampleEnd
-      )}) delivered ${bestPeriod.targetMetricOutOfSample.toFixed(
-        2
-      )} ${targetMetricLabel}.`,
-      `Consistency: ${consistency}% of windows stayed non-negative after rolling forward.`,
-    ];
-  }, [results, targetMetricLabel]);
-
   const formatMetricValue = (value: number) => {
     if (!Number.isFinite(value)) return "—";
     const abs = Math.abs(value);
@@ -793,7 +758,69 @@ export default function WalkForwardPage() {
 
           {/* Detailed Metrics Tab */}
           <TabsContent value="details" className="mt-4 space-y-4">
-            {/* Configuration Summary */}
+            {/* Robustness Metrics - most important, first */}
+            <RobustnessMetrics
+              results={results.results}
+              targetMetricLabel={targetMetricLabel}
+            />
+
+            {/* Parameter Observations - actionable info */}
+            {(() => {
+              const { params, hasSuggestions } = getRecommendedParameters(results.results.periods);
+              if (!hasSuggestions) return null;
+              return (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Settings2 className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium">Parameter Observations</CardTitle>
+                      <HoverCard>
+                        <HoverCardTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-80">
+                          <p className="text-sm">
+                            These values represent the average optimal parameters found across all walk-forward windows.
+                            <strong className="block mt-2">Note:</strong> These are observations, not recommendations.
+                            Market conditions change, and past optimal parameters may not be ideal going forward.
+                          </p>
+                        </HoverCardContent>
+                      </HoverCard>
+                    </div>
+                    <CardDescription className="text-xs">
+                      Average values across {results.results.periods.length} optimization windows
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {Object.entries(params).map(([key, data]) => (
+                        <div key={key} className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {formatParameterName(key)}
+                            </span>
+                            {data.stable && (
+                              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                                Stable
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-lg font-semibold">{data.value}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Range: {data.range[0]} – {data.range[1]}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">
+                      Parameters marked as &quot;stable&quot; showed less than 30% variation across windows.
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Run Configuration - reference info, last */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Run Configuration</CardTitle>
@@ -850,89 +877,6 @@ export default function WalkForwardPage() {
                     </Badge>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Robustness Metrics */}
-            <RobustnessMetrics
-              results={results.results}
-              targetMetricLabel={targetMetricLabel}
-            />
-
-            {/* Parameter Observations */}
-            {(() => {
-              const { params, hasSuggestions } = getRecommendedParameters(results.results.periods);
-              if (!hasSuggestions) return null;
-              return (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-2">
-                      <Settings2 className="h-4 w-4 text-muted-foreground" />
-                      <CardTitle className="text-sm font-medium">Parameter Observations</CardTitle>
-                      <HoverCard>
-                        <HoverCardTrigger asChild>
-                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                        </HoverCardTrigger>
-                        <HoverCardContent className="w-80">
-                          <p className="text-sm">
-                            These values represent the average optimal parameters found across all walk-forward windows.
-                            <strong className="block mt-2">Note:</strong> These are observations, not recommendations.
-                            Market conditions change, and past optimal parameters may not be ideal going forward.
-                          </p>
-                        </HoverCardContent>
-                      </HoverCard>
-                    </div>
-                    <CardDescription className="text-xs">
-                      Average values across {results.results.periods.length} optimization windows
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {Object.entries(params).map(([key, data]) => (
-                        <div key={key} className="rounded-lg border bg-muted/30 p-3 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-muted-foreground">
-                              {formatParameterName(key)}
-                            </span>
-                            {data.stable && (
-                              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
-                                Stable
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-lg font-semibold">{data.value}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Range: {data.range[0]} – {data.range[1]}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">
-                      Parameters marked as &quot;stable&quot; showed less than 30% variation across windows.
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })()}
-
-            {/* Analysis Insights */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Analysis</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {insights.length > 0 ? (
-                  <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-                    {insights.map((insight, index) => (
-                      <li key={index}>{insight}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <AlertTriangle className="h-4 w-4" />
-                    No insights available.
-                  </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
