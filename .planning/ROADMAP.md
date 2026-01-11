@@ -53,8 +53,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 03-01: Audit all WFA input validations
-- [ ] 03-02: Fix constraint issues and improve input UX
+- [x] 03-01: Fix window config and remaining numeric inputs with free text editing
+- [ ] 03-02: Additional validation fixes if needed
 
 ### Phase 5: Optimization Targets
 **Goal**: Identify what optimization targets exist vs missing, implement gaps
@@ -136,7 +136,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 5 → 6 → 7 → 8 → 9 →
 |-------|----------------|--------|-----------|
 | 1. Audit & Analysis | 3/3 | Complete | 2026-01-11 |
 | 2. Parameter UI Polish | 1/1 | Complete | 2026-01-11 |
-| 3. Input Validation Fixes | 0/2 | Not started | - |
+| 3. Input Validation Fixes | 1/2 | In progress | - |
 | 5. Optimization Targets | 0/3 | Not started | - |
 | 6. Results Summary View | 0/3 | Not started | - |
 | 7. Terminology Explanations | 0/3 | Not started | - |
