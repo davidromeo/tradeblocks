@@ -141,6 +141,12 @@ export class WalkForwardAnalyzer {
         score: number
       } | null = null
 
+      // Check if diversification constraints need to be enforced during optimization
+      const diversificationConfig = options.config.diversificationConfig
+      const enforceDiversificationConstraints =
+        diversificationConfig?.enableCorrelationConstraint ||
+        diversificationConfig?.enableTailRiskConstraint
+
       for (const params of combinationIterator.values) {
         this.throwIfAborted(options.signal)
         tested++
@@ -155,6 +161,19 @@ export class WalkForwardAnalyzer {
 
         if (!this.isRiskAcceptable(params, inSampleStats, scaledInSampleTrades, options.config.performanceFloor)) {
           continue
+        }
+
+        // Check diversification constraints if enabled
+        // This rejects parameter combinations where strategies are too correlated
+        // or have excessive tail dependence during the in-sample period
+        if (enforceDiversificationConstraints && diversificationConfig) {
+          const inSampleDivMetrics = this.calculateDiversificationMetrics(
+            scaledInSampleTrades,
+            diversificationConfig
+          )
+          if (inSampleDivMetrics && !this.isDiversificationAcceptable(inSampleDivMetrics, diversificationConfig)) {
+            continue
+          }
         }
 
         const targetValue = this.getTargetMetricValue(inSampleStats, options.config.optimizationTarget)
@@ -199,13 +218,9 @@ export class WalkForwardAnalyzer {
       )
       const outSampleStats = calculator.calculatePortfolioStats(scaledOutSampleTrades)
 
-      // Calculate diversification metrics if enabled
+      // Calculate diversification metrics for OOS period if enabled
       let diversificationMetrics: PeriodDiversificationMetrics | undefined
-      const diversificationConfig = options.config.diversificationConfig
-      if (
-        diversificationConfig?.enableCorrelationConstraint ||
-        diversificationConfig?.enableTailRiskConstraint
-      ) {
+      if (enforceDiversificationConstraints && diversificationConfig) {
         const metrics = this.calculateDiversificationMetrics(
           scaledOutSampleTrades,
           diversificationConfig
@@ -413,19 +428,28 @@ export class WalkForwardAnalyzer {
 
     const positionMultiplier = this.calculatePositionMultiplier(params, baseline)
     const strategyWeights = this.buildStrategyWeights(params)
+    const hasStrategyWeights = Object.keys(strategyWeights).length > 0
 
     // trades are already sorted from filterTrades() which preserves sortedTrades order
     let runningEquity = initialCapital
+    const scaledTrades: Trade[] = []
 
-    return trades.map((trade) => {
+    for (const trade of trades) {
       const strategyWeight = strategyWeights[this.normalizeStrategyKey(trade.strategy)] ?? 1
+
+      // Skip trades from strategies with zero weight (excluded from this combination)
+      // This prevents zero-P/L trades from inflating trade counts and diluting metrics
+      if (hasStrategyWeights && strategyWeight === 0) {
+        continue
+      }
+
       const scale = positionMultiplier * strategyWeight
       const scaledPl = trade.pl * scale
 
       runningEquity += scaledPl
 
       // Only include fields used by PortfolioStatsCalculator to reduce object copy overhead
-      return {
+      scaledTrades.push({
         pl: scaledPl,
         dateOpened: trade.dateOpened,
         timeOpened: trade.timeOpened,
@@ -435,8 +459,10 @@ export class WalkForwardAnalyzer {
         openingCommissionsFees: trade.openingCommissionsFees * Math.abs(scale),
         closingCommissionsFees: trade.closingCommissionsFees * Math.abs(scale),
         strategy: trade.strategy,
-      } as Trade
-    })
+      } as Trade)
+    }
+
+    return scaledTrades
   }
 
   private calculatePositionMultiplier(params: Record<string, number>, baseline: ScalingBaseline): number {
