@@ -9,10 +9,20 @@ import {
   WalkForwardResults,
   WalkForwardSummary,
   WalkForwardWindow,
+  PerformanceFloorConfig,
+  DiversificationConfig,
+  PeriodDiversificationMetrics,
 } from '../models/walk-forward'
 import { PortfolioStatsCalculator } from './portfolio-stats'
 import { calculateKellyMetrics } from './kelly'
 import { PortfolioStats } from '../models/portfolio-stats'
+import {
+  calculateCorrelationMatrix,
+  calculateCorrelationAnalytics,
+  CorrelationOptions,
+} from './correlation'
+import { performTailRiskAnalysis } from './tail-risk-analysis'
+import { TailRiskAnalysisOptions } from '../models/tail-risk'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_MIN_IN_SAMPLE_TRADES = 10
@@ -131,6 +141,12 @@ export class WalkForwardAnalyzer {
         score: number
       } | null = null
 
+      // Check if diversification constraints need to be enforced during optimization
+      const diversificationConfig = options.config.diversificationConfig
+      const enforceDiversificationConstraints =
+        diversificationConfig?.enableCorrelationConstraint ||
+        diversificationConfig?.enableTailRiskConstraint
+
       for (const params of combinationIterator.values) {
         this.throwIfAborted(options.signal)
         tested++
@@ -143,8 +159,21 @@ export class WalkForwardAnalyzer {
         )
         const inSampleStats = calculator.calculatePortfolioStats(scaledInSampleTrades)
 
-        if (!this.isRiskAcceptable(params, inSampleStats, scaledInSampleTrades)) {
+        if (!this.isRiskAcceptable(params, inSampleStats, scaledInSampleTrades, options.config.performanceFloor)) {
           continue
+        }
+
+        // Check diversification constraints if enabled
+        // This rejects parameter combinations where strategies are too correlated
+        // or have excessive tail dependence during the in-sample period
+        if (enforceDiversificationConstraints && diversificationConfig) {
+          const inSampleDivMetrics = this.calculateDiversificationMetrics(
+            scaledInSampleTrades,
+            diversificationConfig
+          )
+          if (inSampleDivMetrics && !this.isDiversificationAcceptable(inSampleDivMetrics, diversificationConfig)) {
+            continue
+          }
         }
 
         const targetValue = this.getTargetMetricValue(inSampleStats, options.config.optimizationTarget)
@@ -189,6 +218,18 @@ export class WalkForwardAnalyzer {
       )
       const outSampleStats = calculator.calculatePortfolioStats(scaledOutSampleTrades)
 
+      // Calculate diversification metrics for OOS period if enabled
+      let diversificationMetrics: PeriodDiversificationMetrics | undefined
+      if (enforceDiversificationConstraints && diversificationConfig) {
+        const metrics = this.calculateDiversificationMetrics(
+          scaledOutSampleTrades,
+          diversificationConfig
+        )
+        if (metrics) {
+          diversificationMetrics = metrics
+        }
+      }
+
       const period: WalkForwardPeriodResult = {
         ...window,
         optimalParameters: bestCombo.params,
@@ -196,6 +237,7 @@ export class WalkForwardAnalyzer {
         outOfSampleMetrics: outSampleStats,
         targetMetricInSample: bestCombo.score,
         targetMetricOutOfSample: this.getTargetMetricValue(outSampleStats, options.config.optimizationTarget),
+        diversificationMetrics,
       }
 
       periods.push(period)
@@ -386,19 +428,28 @@ export class WalkForwardAnalyzer {
 
     const positionMultiplier = this.calculatePositionMultiplier(params, baseline)
     const strategyWeights = this.buildStrategyWeights(params)
+    const hasStrategyWeights = Object.keys(strategyWeights).length > 0
 
     // trades are already sorted from filterTrades() which preserves sortedTrades order
     let runningEquity = initialCapital
+    const scaledTrades: Trade[] = []
 
-    return trades.map((trade) => {
+    for (const trade of trades) {
       const strategyWeight = strategyWeights[this.normalizeStrategyKey(trade.strategy)] ?? 1
+
+      // Skip trades from strategies with zero weight (excluded from this combination)
+      // This prevents zero-P/L trades from inflating trade counts and diluting metrics
+      if (hasStrategyWeights && strategyWeight === 0) {
+        continue
+      }
+
       const scale = positionMultiplier * strategyWeight
       const scaledPl = trade.pl * scale
 
       runningEquity += scaledPl
 
       // Only include fields used by PortfolioStatsCalculator to reduce object copy overhead
-      return {
+      scaledTrades.push({
         pl: scaledPl,
         dateOpened: trade.dateOpened,
         timeOpened: trade.timeOpened,
@@ -408,8 +459,10 @@ export class WalkForwardAnalyzer {
         openingCommissionsFees: trade.openingCommissionsFees * Math.abs(scale),
         closingCommissionsFees: trade.closingCommissionsFees * Math.abs(scale),
         strategy: trade.strategy,
-      } as Trade
-    })
+      } as Trade)
+    }
+
+    return scaledTrades
   }
 
   private calculatePositionMultiplier(params: Record<string, number>, baseline: ScalingBaseline): number {
@@ -449,8 +502,10 @@ export class WalkForwardAnalyzer {
   private isRiskAcceptable(
     params: Record<string, number>,
     stats: PortfolioStats,
-    scaledTrades: Trade[]
+    scaledTrades: Trade[],
+    performanceFloor?: PerformanceFloorConfig
   ): boolean {
+    // Parameter-based risk constraints
     if (typeof params.maxDrawdownPct === 'number' && stats.maxDrawdown > params.maxDrawdownPct) {
       return false
     }
@@ -466,6 +521,124 @@ export class WalkForwardAnalyzer {
       const initialCapital = PortfolioStatsCalculator.calculateInitialCapital(scaledTrades)
       const maxDailyLoss = this.calculateMaxDailyLossPct(scaledTrades, initialCapital)
       if (maxDailyLoss > params.maxDailyLossPct) {
+        return false
+      }
+    }
+
+    // Performance floor checks (Phase 2)
+    if (performanceFloor) {
+      if (performanceFloor.enableMinSharpe && performanceFloor.minSharpeRatio > 0) {
+        const sharpe = stats.sharpeRatio ?? Number.NEGATIVE_INFINITY
+        if (sharpe < performanceFloor.minSharpeRatio) {
+          return false
+        }
+      }
+
+      if (performanceFloor.enableMinProfitFactor && performanceFloor.minProfitFactor > 0) {
+        const pf = stats.profitFactor ?? 0
+        if (pf < performanceFloor.minProfitFactor) {
+          return false
+        }
+      }
+
+      if (performanceFloor.enablePositiveNetPl) {
+        const netPl = stats.netPl ?? 0
+        if (netPl <= 0) {
+          return false
+        }
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Calculate diversification metrics for a set of trades
+   * Returns null if there aren't enough strategies for meaningful analysis
+   */
+  private calculateDiversificationMetrics(
+    trades: Trade[],
+    config: DiversificationConfig
+  ): PeriodDiversificationMetrics | null {
+    // Need at least 2 strategies for correlation/diversification analysis
+    const strategies = new Set(trades.map((t) => t.strategy).filter(Boolean))
+    if (strategies.size < 2) {
+      return null
+    }
+
+    // Build correlation options from config
+    const correlationOptions: CorrelationOptions = {
+      method: config.correlationMethod,
+      normalization: config.normalization,
+      dateBasis: config.dateBasis,
+      alignment: 'shared',
+      timePeriod: 'daily',
+    }
+
+    // Calculate correlation matrix
+    const correlationMatrix = calculateCorrelationMatrix(trades, correlationOptions)
+    const correlationAnalytics = calculateCorrelationAnalytics(correlationMatrix)
+
+    // Calculate tail risk if enabled
+    let tailRiskResult = null
+    if (config.enableTailRiskConstraint) {
+      const tailRiskOptions: TailRiskAnalysisOptions = {
+        tailThreshold: config.tailThreshold,
+        normalization: config.normalization,
+        dateBasis: config.dateBasis,
+      }
+      tailRiskResult = performTailRiskAnalysis(trades, tailRiskOptions)
+    }
+
+    // Handle NaN values for strongest correlation (occurs when no valid pairs)
+    const maxCorrelation = Number.isNaN(correlationAnalytics.strongest.value)
+      ? 0
+      : correlationAnalytics.strongest.value
+    const maxCorrelationPair = correlationAnalytics.strongest.pair[0]
+      ? correlationAnalytics.strongest.pair
+      : (['', ''] as [string, string])
+
+    // Calculate total pairs for this period
+    const numStrategies = correlationMatrix.strategies.length
+    const totalPairs = (numStrategies * (numStrategies - 1)) / 2
+
+    return {
+      avgCorrelation: Number.isNaN(correlationAnalytics.averageCorrelation)
+        ? 0
+        : correlationAnalytics.averageCorrelation,
+      maxCorrelation,
+      maxCorrelationPair,
+      avgTailDependence: tailRiskResult?.analytics.averageJointTailRisk ?? 0,
+      maxTailDependence: tailRiskResult?.analytics.highestJointTailRisk.value ?? 0,
+      maxTailDependencePair: (tailRiskResult?.analytics.highestJointTailRisk.pair ?? [
+        '',
+        '',
+      ]) as [string, string],
+      effectiveFactors: tailRiskResult?.effectiveFactors ?? correlationMatrix.strategies.length,
+      highRiskPairsPct: tailRiskResult?.analytics.highRiskPairsPct ?? 0,
+      // Track insufficient tail data for UI display
+      insufficientTailDataPairs: tailRiskResult?.insufficientDataPairs ?? totalPairs,
+      totalPairs,
+    }
+  }
+
+  /**
+   * Check if diversification constraints are met
+   */
+  private isDiversificationAcceptable(
+    metrics: PeriodDiversificationMetrics,
+    config: DiversificationConfig
+  ): boolean {
+    // Check correlation constraint
+    if (config.enableCorrelationConstraint) {
+      if (metrics.maxCorrelation > config.maxCorrelationThreshold) {
+        return false
+      }
+    }
+
+    // Check tail risk constraint
+    if (config.enableTailRiskConstraint) {
+      if (metrics.maxTailDependence > config.maxTailDependenceThreshold) {
         return false
       }
     }
@@ -533,6 +706,13 @@ export class WalkForwardAnalyzer {
         return stats.avgDailyPl ?? Number.NEGATIVE_INFINITY
       case 'winRate':
         return stats.winRate ?? Number.NEGATIVE_INFINITY
+      // Diversification targets are not yet supported for optimization
+      // They require computing correlation/tail risk for EACH parameter combination
+      // which is expensive. For now, they're used as constraints, not targets.
+      case 'minAvgCorrelation':
+      case 'minTailRisk':
+      case 'maxEffectiveFactors':
+        return Number.NEGATIVE_INFINITY
       case 'netPl':
       default:
         return stats.netPl ?? Number.NEGATIVE_INFINITY
@@ -580,6 +760,26 @@ export class WalkForwardAnalyzer {
     }
   }
 
+  /**
+   * Calculates summary metrics for walk-forward analysis results.
+   *
+   * The `degradationFactor` (efficiency ratio) compares out-of-sample to in-sample performance.
+   * This is equivalent to Walk Forward Efficiency (WFE) from Pardo's methodology.
+   *
+   * **Why we don't annualize:** Unlike raw return comparisons, we compare the same target metric
+   * (e.g., Sharpe Ratio to Sharpe Ratio, or Net P&L to Net P&L) across IS and OOS periods.
+   * Ratio metrics like Sharpe already normalize for time. Annualization would be appropriate
+   * for comparing raw dollar returns across different period lengths, but our optimization
+   * targets are typically normalized metrics. The Pardo annualization formula applies to
+   * raw profit comparisons, not ratio-based target metrics.
+   *
+   * Formula: `degradationFactor = avgOutOfSamplePerformance / avgInSamplePerformance`
+   * - 1.0 = OOS matches IS perfectly (rare)
+   * - 0.8 = OOS retains 80% of IS performance (good)
+   * - 0.5 = OOS retains 50% of IS performance (concerning)
+   *
+   * @see Pardo, Robert. "The Evaluation and Optimization of Trading Strategies" (2008)
+   */
   private calculateSummary(periods: WalkForwardPeriodResult[]): WalkForwardSummary {
     if (periods.length === 0) {
       return {
@@ -606,15 +806,57 @@ export class WalkForwardAnalyzer {
     const degradationFactor = avgInSample !== 0 ? avgOutSample / avgInSample : 0
     const parameterStability = this.calculateParameterStability(periods)
 
-    return {
+    const summary: WalkForwardSummary = {
       avgInSamplePerformance: avgInSample,
       avgOutOfSamplePerformance: avgOutSample,
       degradationFactor,
       parameterStability,
       robustnessScore: 0,
     }
+
+    // Aggregate diversification metrics across periods
+    const periodsWithDiversification = periods.filter((p) => p.diversificationMetrics)
+    if (periodsWithDiversification.length > 0) {
+      summary.avgCorrelationAcrossPeriods =
+        periodsWithDiversification.reduce(
+          (sum, p) => sum + (p.diversificationMetrics?.avgCorrelation ?? 0),
+          0
+        ) / periodsWithDiversification.length
+
+      summary.avgTailDependenceAcrossPeriods =
+        periodsWithDiversification.reduce(
+          (sum, p) => sum + (p.diversificationMetrics?.avgTailDependence ?? 0),
+          0
+        ) / periodsWithDiversification.length
+
+      summary.avgEffectiveFactors =
+        periodsWithDiversification.reduce(
+          (sum, p) => sum + (p.diversificationMetrics?.effectiveFactors ?? 0),
+          0
+        ) / periodsWithDiversification.length
+    }
+
+    return summary
   }
 
+  /**
+   * Calculates parameter stability across walk-forward periods using coefficient of variation.
+   *
+   * For each optimized parameter, we calculate how much the optimal value varied
+   * across periods. Lower variance = higher stability = more robust parameters.
+   *
+   * **Statistical approach:**
+   * - Uses sample variance (N-1 denominator) rather than population variance (N)
+   * - Sample variance is preferred for small samples (N<30) per standard statistical practice
+   * - The coefficient of variation (CV = stdDev/mean) normalizes across different parameter scales
+   * - CV is inverted to produce a 0-1 stability score (1 = perfectly stable, 0 = highly variable)
+   *
+   * **Interpretation:**
+   * - CV < 0.3 (30%): Parameter is stable across periods
+   * - CV >= 0.3: Parameter shows meaningful variation (potential over-optimization risk)
+   *
+   * @returns Stability score between 0 and 1, where 1 indicates perfectly stable parameters
+   */
   private calculateParameterStability(periods: WalkForwardPeriodResult[]): number {
     if (periods.length <= 1) return 1
 
@@ -639,8 +881,10 @@ export class WalkForwardAnalyzer {
 
       const mean =
         values.reduce((sum, value) => sum + value, 0) / values.length
+      // Use sample variance (N-1) for small sample accuracy
+      // Population variance (N) underestimates true variability for small samples
       const variance =
-        values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length
+        values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / (values.length - 1)
       const stdDev = Math.sqrt(variance)
 
       // Normalize by mean to avoid requiring parameter ranges here
@@ -666,6 +910,32 @@ export class WalkForwardAnalyzer {
     return deltas.reduce((sum, delta) => sum + delta, 0) / deltas.length
   }
 
+  /**
+   * Calculates a composite robustness score combining efficiency, stability, and consistency.
+   *
+   * **IMPORTANT:** This is a TradeBlocks-specific composite metric, NOT an industry-standard formula.
+   * Individual platforms (MultiCharts, TradeStation, AmiBroker) use configurable weights and
+   * thresholds rather than a single composite score. This metric provides a quick overview
+   * but users should examine individual components for detailed analysis.
+   *
+   * **Components (equally weighted):**
+   * 1. **Efficiency Score** (normalized degradation factor): How well OOS matched IS performance
+   *    - Degradation factor of 1.0 (100% retention) = efficiency score of 0.5
+   *    - Degradation factor of 2.0+ = efficiency score of 1.0 (capped)
+   *    - Based on Pardo's Walk Forward Efficiency concept
+   *
+   * 2. **Stability Score** (parameter stability): How consistent optimal parameters were
+   *    - Uses coefficient of variation (CV) per standard statistical practice
+   *    - Lower CV = higher stability
+   *
+   * 3. **Consistency Score**: Percentage of periods with non-negative OOS performance
+   *    - Similar to MultiCharts "% Profitable Runs" metric
+   *    - 70%+ considered good per MultiCharts robustness criteria
+   *
+   * Formula: `robustnessScore = (efficiencyScore + stabilityScore + consistencyScore) / 3`
+   *
+   * @returns Score between 0 and 1, where higher indicates more robust strategy
+   */
   private calculateRobustnessScore(summary: WalkForwardSummary, consistencyScore: number): number {
     const efficiencyScore = this.normalize(summary.degradationFactor, 0, 2)
     const stabilityScore = Math.min(Math.max(summary.parameterStability, 0), 1)

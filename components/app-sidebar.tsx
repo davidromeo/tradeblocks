@@ -79,13 +79,11 @@ const navData = {
       title: "Walk-Forward",
       href: "/walk-forward",
       icon: IconTimelineEvent,
-      badge: "Beta",
     },
     {
       title: "Trading Calendar",
       href: "/trading-calendar",
       icon: IconCalendar,
-      badge: "New",
     },
     {
       title: "TradeBlocks Assistant",

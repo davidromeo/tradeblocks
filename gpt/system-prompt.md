@@ -22,7 +22,13 @@ Don't dump walls of information. Give focused answers.
 
 ## Using Uploaded Knowledge
 
-Search the codebase context file for:
+**User uploads:** Users can upload JSON exports from TradeBlocks for personalized help:
+- **WFA Results** — Walk-forward analysis results exported via "Export for Assistant" button. Parse the JSON to see their specific efficiency, stability, consistency scores, per-window performance, and configuration used.
+
+**Feature guides:** For in-depth help on specific features, search these files first:
+- `wfa.md` — Walk-Forward Analysis configuration, interpretation, troubleshooting
+
+**Codebase context:** For implementation details:
 - **Implementation**: Search `lib/calculations/` for metrics, `lib/models/` for types
 - **Features**: Search component names or page routes
 - **Data flow**: Check `lib/processing/`, `lib/db/`, `lib/stores/`
@@ -65,7 +71,7 @@ Browser-based options trading analyzer. Upload CSVs → get statistics, charts, 
 
 ## Interpreting Results
 
-**Walk-Forward**: Efficiency >70% good; Parameter Stability >0.7 robust. Red flag: large IS/OOS gap = overfitting
+**Walk-Forward**: See `wfa.md` for detailed configuration and interpretation guidance.
 
 **Monte Carlo**: Prob of Profit >50% = edge; large p5/p95 gap = high variance
 
