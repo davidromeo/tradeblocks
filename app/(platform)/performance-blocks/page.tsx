@@ -291,7 +291,7 @@ export default function PerformanceBlocksPage() {
           </TabsTrigger>
           <TabsTrigger value="report-builder" className="px-2.5 sm:px-3">
             <code className="flex items-center gap-1 text-[13px] [&>svg]:h-4 [&>svg]:w-4">
-              <Proportions /> Report Builder (Beta)
+              <Proportions /> Report Builder
             </code>
           </TabsTrigger>
         </TabsList>
