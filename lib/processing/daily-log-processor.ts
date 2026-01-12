@@ -284,12 +284,27 @@ export class DailyLogProcessor {
   }
 
   /**
+   * Parse a YYYY-MM-DD date string preserving the calendar date.
+   * Same approach as trade-processor.ts for consistency.
+   */
+  private parseDatePreservingCalendarDay(dateStr: string): Date {
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (match) {
+      const [, year, month, day] = match
+      // Create date at midnight local time - this preserves the calendar date
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+    }
+    // Fall back to default parsing for other formats
+    return new Date(dateStr)
+  }
+
+  /**
    * Convert validated CSV row to DailyLogEntry object
    */
   private convertToDailyLogEntry(rawData: Record<string, string>, blockId?: string): DailyLogEntry {
     try {
-      // Parse date
-      const date = new Date(rawData['Date'])
+      // Parse date preserving calendar day (same as trade processor)
+      const date = this.parseDatePreservingCalendarDay(rawData['Date'])
       if (isNaN(date.getTime())) {
         throw new Error(`Invalid Date: ${rawData['Date']}`)
       }
