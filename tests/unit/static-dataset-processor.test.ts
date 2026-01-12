@@ -201,7 +201,7 @@ describe('parseTimestamp in static dataset processor', () => {
   })
 
   describe('ISO 8601 with time', () => {
-    it('parses ISO format with T separator', async () => {
+    it('parses ISO format with T separator and Z timezone', async () => {
       const csv = `time,close
 2024-01-15T10:30:00Z,4500`
 
@@ -228,6 +228,42 @@ describe('parseTimestamp in static dataset processor', () => {
 
       expect(result.rows).toHaveLength(1)
       // 10:30 EST = 10:30 Eastern
+      const etFormatted = formatInEastern(result.rows[0].timestamp)
+      expect(etFormatted).toMatch(/01\/15\/2024/)
+      expect(etFormatted).toMatch(/10:30:00/)
+    })
+
+    it('parses ISO local time format (no timezone) as Eastern Time', async () => {
+      // This was a regression: 2024-01-15T10:30:00 (no Z or offset) was being dropped
+      // because it didn't match any pattern - not the date-only YYYY-MM-DD pattern,
+      // not the ISO with timezone pattern, and not the space-separated pattern
+      const csv = `time,close
+2024-01-15T10:30:00,4500`
+
+      const result = await processStaticDatasetContent(csv, {
+        name: 'test',
+        fileName: 'test.csv',
+      })
+
+      expect(result.errors).toHaveLength(0)
+      expect(result.rows).toHaveLength(1)
+      // Should be parsed as 10:30 Eastern Time
+      const etFormatted = formatInEastern(result.rows[0].timestamp)
+      expect(etFormatted).toMatch(/01\/15\/2024/)
+      expect(etFormatted).toMatch(/10:30:00/)
+    })
+
+    it('parses ISO local time format without seconds', async () => {
+      const csv = `time,close
+2024-01-15T10:30,4500`
+
+      const result = await processStaticDatasetContent(csv, {
+        name: 'test',
+        fileName: 'test.csv',
+      })
+
+      expect(result.errors).toHaveLength(0)
+      expect(result.rows).toHaveLength(1)
       const etFormatted = formatInEastern(result.rows[0].timestamp)
       expect(etFormatted).toMatch(/01\/15\/2024/)
       expect(etFormatted).toMatch(/10:30:00/)
@@ -261,6 +297,29 @@ describe('parseTimestamp in static dataset processor', () => {
       // Time should be preserved (local time interpretation)
       const etFormatted = formatInEastern(result.rows[0].timestamp)
       expect(etFormatted).toMatch(/05\/20\/2022/)
+    })
+
+    it('parses YYYY-MM-DD HH:mm:ss format treating time as Eastern Time', async () => {
+      // This test reproduces the exact issue from the bug report
+      // "2025-12-16 15:19:00" should be treated as 3:19 PM Eastern Time
+      const csv = `t,somevalue
+2025-12-16 15:19:00,42`
+
+      const result = await processStaticDatasetContent(csv, {
+        name: 'test',
+        fileName: 'test.csv',
+      })
+
+      expect(result.errors).toHaveLength(0)
+      expect(result.rows).toHaveLength(1)
+      
+      // Verify it was parsed as Eastern Time
+      const etFormatted = formatInEastern(result.rows[0].timestamp)
+      expect(etFormatted).toMatch(/12\/16\/2025/)
+      expect(etFormatted).toMatch(/15:19:00/)
+      
+      // The value should be preserved
+      expect(result.rows[0].values.somevalue).toBe(42)
     })
   })
 

@@ -82,6 +82,14 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 
 ### Critical Implementation Details
 
+**Timezone Handling**: All dates and times are processed and displayed as **US Eastern Time** (America/New_York). This is critical because:
+- Trading data originates from US markets operating on Eastern Time
+- CSVs contain dates/times in Eastern Time format
+- When parsing dates, preserve the calendar date as-is (don't convert to UTC)
+- When displaying times, show Eastern Time (with DST awareness)
+- Use `toLocaleDateString('en-US')` or manual string extraction instead of `.toISOString()` which converts to UTC
+- Static datasets in `tests/data/` explicitly handle Eastern Time with DST awareness
+
 **Date Handling**: Trades use separate `dateOpened` (Date object) and `timeOpened` (string) fields. When processing CSVs, parse dates carefully and maintain consistency with legacy format.
 
 **Trade P&L Calculations**:
@@ -204,3 +212,22 @@ IndexedDB stores (via `lib/db/`) handle persistence of:
 **When starting work on a Next.js project, ALWAYS call the `init` tool from
 next-devtools-mcp FIRST to set up proper context and establish documentation
 requirements. Do this automatically without being asked.**
+
+## GSD Workflow Rules
+
+1. **Use GSD method for all features:**
+   - `/gsd:discuss-phase` - Understand requirements
+   - `/gsd:plan-phase` - Create PLAN.md with tasks
+   - `/gsd:execute-plan` - Execute with subagents
+   - NEVER code without a plan
+
+2. **Subagent execution:**
+   - Spawn multiple subagents IN PARALLEL (single message, multiple Task calls)
+   - Each subagent gets fresh 200k context
+   - Subagents commit their own work and create SUMMARY.md
+   - Main context only for orchestration (~5% usage)
+   - NEVER use TaskOutput to read full subagent output
+
+3. **Plans location:** `.planning/phases/XX-name/`
+
+4. **After subagent work:** Always run `npm run typecheck` before final commit

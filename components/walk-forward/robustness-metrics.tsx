@@ -1,8 +1,11 @@
 "use client"
 
 import { MetricCard } from "@/components/metric-card"
-import { Card, CardContent } from "@/components/ui/card"
-import type { WalkForwardResults } from "@/lib/models/walk-forward"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
+import { HelpCircle } from "lucide-react"
+import type { WalkForwardPeriodResult, WalkForwardResults } from "@/lib/models/walk-forward"
+import { cn } from "@/lib/utils"
 
 interface RobustnessMetricsProps {
   results: WalkForwardResults | null
@@ -10,6 +13,9 @@ interface RobustnessMetricsProps {
 }
 
 export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetricsProps) {
+  // targetMetricLabel kept in interface for API stability; not currently used in tooltips
+  void targetMetricLabel
+
   if (!results) {
     return (
       <Card>
@@ -38,8 +44,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={Number.isFinite(efficiencyPct) ? efficiencyPct : 0}
         format="percentage"
         tooltip={{
-          flavor: "How well out-of-sample performance held up relative to the training window.",
-          detailed: `A value near 100% means the strategy maintained ${targetMetricLabel} gains when exposed to unseen data.`,
+          flavor: "How much of your optimized performance survived real-world testing.",
+          detailed: `If you achieved $1,000 during optimization and $800 on new data, efficiency is 80%. Values above 70% suggest robust results. Below 50% is a red flag—the optimized parameters may not generalize beyond the training data.`,
         }}
         isPositive={efficiencyPct >= 90}
       />
@@ -48,8 +54,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={summary.parameterStability * 100}
         format="percentage"
         tooltip={{
-          flavor: "Measures how noisy the optimal parameters are across walk-forward steps.",
-          detailed: "High stability implies position sizing or risk limits do not drastically swing between windows, which usually improves robustness.",
+          flavor: "Whether the 'best' settings stayed similar across different time periods.",
+          detailed: "If optimal parameters swing wildly (e.g., Kelly 0.3 one window, 1.5 the next), the results may be unreliable. High stability (70%+) means you can use a single set of parameters with confidence.",
         }}
         isPositive={summary.parameterStability >= 0.7}
       />
@@ -58,8 +64,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={(stats.consistencyScore || 0) * 100}
         format="percentage"
         tooltip={{
-          flavor: "Percent of periods where out-of-sample performance stayed non-negative.",
-          detailed: "Consistency above 60% often indicates the strategy adapts well to new market regimes.",
+          flavor: "How often results stayed profitable across different time periods.",
+          detailed: "If you tested 10 windows and 7 were profitable out-of-sample, consistency is 70%. High consistency (60%+) suggests the optimized parameters adapt well to different market conditions. Low consistency means performance varies wildly—some periods win big, others lose.",
         }}
         isPositive={stats.consistencyScore >= 0.6}
       />
@@ -69,8 +75,8 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         subtitle={`% change from in-sample`}
         format="percentage"
         tooltip={{
-          flavor: "Average percentage change between in-sample and out-of-sample performance.",
-          detailed: "Shows how much the target metric shifts when moving from optimization to forward-testing. Values near 0% indicate stable performance; large negative values suggest overfitting.",
+          flavor: "How much performance dropped when tested on new data.",
+          detailed: "This shows the gap between optimization results and real-world testing. A value near 0% means performance held steady on new data. Negative values (like -15%) mean out-of-sample performance was 15% worse. Large negative drops (beyond -20%) often indicate the optimization fit to noise rather than a real edge.",
         }}
         isPositive={avgDeltaPct >= -10}
       />
@@ -79,12 +85,146 @@ export function RobustnessMetrics({ results, targetMetricLabel }: RobustnessMetr
         value={summary.robustnessScore * 100}
         format="percentage"
         tooltip={{
-          flavor: "Blends efficiency, stability, and consistency into a single quality gauge.",
-          detailed: "Use this reading to compare different blocks or parameter presets at a glance.",
+          flavor: "A combined quality score for comparing different analysis runs.",
+          detailed: "Blends efficiency, parameter stability, and consistency into one number. Useful for quickly comparing runs with different settings—higher is better. Don't fixate on the absolute number; use it to see if changes improved or hurt overall robustness.",
         }}
         className="md:col-span-2 lg:col-span-4"
         isPositive={summary.robustnessScore >= 0.6}
       />
+
+      {/* Diversification Metrics - only shown when diversification analysis was enabled */}
+      {(summary.avgCorrelationAcrossPeriods !== undefined ||
+        summary.avgTailDependenceAcrossPeriods !== undefined ||
+        summary.avgEffectiveFactors !== undefined) && (
+        <Card className="md:col-span-2 lg:col-span-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Diversification Metrics</CardTitle>
+            <CardDescription className="text-xs">
+              Average values across all walk-forward periods
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              {summary.avgCorrelationAcrossPeriods !== undefined && (
+                <MetricCard
+                  title="Avg Correlation"
+                  value={summary.avgCorrelationAcrossPeriods}
+                  format="decimal"
+                  decimalPlaces={3}
+                  tooltip={{
+                    flavor: "Average pairwise correlation between strategies across all periods.",
+                    detailed: "Lower values indicate better diversification. Values below 0.5 are generally good; below 0.3 is excellent.",
+                  }}
+                  isPositive={summary.avgCorrelationAcrossPeriods < 0.5}
+                />
+              )}
+              {summary.avgTailDependenceAcrossPeriods !== undefined && (
+                <TailDependenceMetric
+                  avgTailDependence={summary.avgTailDependenceAcrossPeriods}
+                  periods={results.periods}
+                />
+              )}
+              {summary.avgEffectiveFactors !== undefined && (
+                <MetricCard
+                  title="Effective Factors"
+                  value={summary.avgEffectiveFactors}
+                  format="decimal"
+                  decimalPlaces={2}
+                  tooltip={{
+                    flavor: "Average number of independent risk factors across all periods.",
+                    detailed: "Higher values indicate better diversification. Close to the number of strategies means each contributes unique risk/return.",
+                  }}
+                  isPositive={summary.avgEffectiveFactors >= 2}
+                />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
+  )
+}
+
+/**
+ * Special component for tail dependence that handles insufficient data state
+ */
+function TailDependenceMetric({
+  avgTailDependence,
+  periods,
+}: {
+  avgTailDependence: number
+  periods: WalkForwardPeriodResult[]
+}) {
+  // Check if all periods have insufficient tail data
+  const periodsWithDiversification = periods.filter((p) => p.diversificationMetrics)
+  const hasInsufficientData = periodsWithDiversification.every((p) => {
+    const metrics = p.diversificationMetrics
+    if (!metrics) return true
+    // If insufficientTailDataPairs equals totalPairs, no valid data exists
+    return (
+      metrics.insufficientTailDataPairs !== undefined &&
+      metrics.totalPairs !== undefined &&
+      metrics.insufficientTailDataPairs >= metrics.totalPairs
+    )
+  })
+
+  // Also check if avgTailDependence is 0 and maxTailDependence is 0 across all periods
+  // This catches older results that don't have the new fields
+  const allZeroTailMetrics =
+    avgTailDependence === 0 &&
+    periodsWithDiversification.every(
+      (p) =>
+        p.diversificationMetrics?.avgTailDependence === 0 &&
+        p.diversificationMetrics?.maxTailDependence === 0 &&
+        p.diversificationMetrics?.maxTailDependencePair?.[0] === "" &&
+        p.diversificationMetrics?.maxTailDependencePair?.[1] === ""
+    )
+
+  const showInsufficientData = hasInsufficientData || allZeroTailMetrics
+
+  if (showInsufficientData) {
+    return (
+      <div className={cn("rounded-lg p-4 space-y-1", "bg-muted/50")}>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Avg Tail Dependence</span>
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+            </HoverCardTrigger>
+            <HoverCardContent className="w-80">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Insufficient tail data</p>
+                <p className="text-xs text-muted-foreground">
+                  Tail dependence requires strategies to have simultaneous extreme losses
+                  on shared trading days. With short OOS windows or sparse trading schedules,
+                  there may not be enough co-occurring tail events to calculate meaningful estimates.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Try:</strong> Longer OOS windows, higher tail threshold (e.g., 25%),
+                  or strategies that trade more frequently on overlapping days.
+                </p>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        </div>
+        <p className="text-sm font-medium text-muted-foreground/70">
+          Insufficient data
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <MetricCard
+      title="Avg Tail Dependence"
+      value={avgTailDependence}
+      format="decimal"
+      decimalPlaces={3}
+      tooltip={{
+        flavor: "Average joint tail risk between strategies across all periods.",
+        detailed: "Measures how often strategies experience extreme losses together. Lower is better.",
+      }}
+      isPositive={avgTailDependence < 0.4}
+    />
   )
 }
