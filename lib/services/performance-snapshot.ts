@@ -639,7 +639,9 @@ function calculateDayOfWeekData(trades: Trade[]) {
 
   trades.forEach(trade => {
     const tradeDate = trade.dateOpened instanceof Date ? trade.dateOpened : new Date(trade.dateOpened)
-    const jsDay = tradeDate.getUTCDay()
+    // Use getDay() (local timezone) not getUTCDay() because dates are parsed at local midnight
+    // via parseDatePreservingCalendarDay() in trade-processor.ts
+    const jsDay = tradeDate.getDay()
 
     const pythonWeekday = jsDay === 0 ? 6 : jsDay - 1
     const day = dayNames[pythonWeekday]
@@ -734,8 +736,9 @@ function calculateMonthlyReturns(trades: Trade[]) {
 
   trades.forEach(trade => {
     const date = new Date(trade.dateOpened)
-    const year = date.getUTCFullYear()
-    const month = date.getUTCMonth() + 1
+    // Use local methods since dates are parsed at local midnight
+    const year = date.getFullYear()
+    const month = date.getMonth() + 1
     const monthKey = `${year}-${String(month).padStart(2, '0')}`
 
     monthlyData[monthKey] = (monthlyData[monthKey] || 0) + trade.pl
@@ -745,7 +748,7 @@ function calculateMonthlyReturns(trades: Trade[]) {
   const years = new Set<number>()
 
   trades.forEach(trade => {
-    years.add(new Date(trade.dateOpened).getUTCFullYear())
+    years.add(new Date(trade.dateOpened).getFullYear())
   })
 
   Array.from(years).sort().forEach(year => {
@@ -791,8 +794,9 @@ function calculateMonthlyReturnsPercentFromDailyLogs(
   const monthlyPL: Record<string, number> = {}
   trades.forEach(trade => {
     const date = new Date(trade.dateOpened)
-    const year = date.getUTCFullYear()
-    const month = date.getUTCMonth() + 1
+    // Use local methods since dates are parsed at local midnight
+    const year = date.getFullYear()
+    const month = date.getMonth() + 1
     const monthKey = `${year}-${String(month).padStart(2, '0')}`
     monthlyPL[monthKey] = (monthlyPL[monthKey] || 0) + trade.pl
   })
@@ -802,8 +806,9 @@ function calculateMonthlyReturnsPercentFromDailyLogs(
 
   sortedLogs.forEach(log => {
     const date = new Date(log.date)
-    const year = date.getUTCFullYear()
-    const month = date.getUTCMonth() + 1
+    // Use local methods since dates are parsed at local midnight
+    const year = date.getFullYear()
+    const month = date.getMonth() + 1
     const monthKey = `${year}-${String(month).padStart(2, '0')}`
 
     const balance = getEquityValueFromDailyLog(log)
@@ -880,8 +885,9 @@ function calculateMonthlyReturnsPercentFromTrades(
 
   sortedTrades.forEach(trade => {
     const date = new Date(trade.dateOpened)
-    const year = date.getUTCFullYear()
-    const month = date.getUTCMonth() + 1
+    // Use local methods since dates are parsed at local midnight
+    const year = date.getFullYear()
+    const month = date.getMonth() + 1
     const monthKey = `${year}-${String(month).padStart(2, '0')}`
 
     years.add(year)

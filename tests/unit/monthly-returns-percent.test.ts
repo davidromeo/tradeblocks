@@ -3,12 +3,20 @@ import { processChartData } from '@/lib/services/performance-snapshot'
 import { Trade } from '@/lib/models/trade'
 import { DailyLogEntry } from '@/lib/models/daily-log'
 
+/**
+ * Helper to create a date at local midnight (same as parseDatePreservingCalendarDay)
+ * This simulates how CSV dates are parsed in production
+ */
+function localDate(year: number, month: number, day: number): Date {
+  return new Date(year, month - 1, day)
+}
+
 describe('Monthly Returns Percentage Calculation', () => {
   it('calculates monthly returns percentage from trades with compounding', async () => {
-    // Create trades across multiple months
+    // Create trades across multiple months using local midnight dates
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2024-01-15'),
+        dateOpened: localDate(2024, 1, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -20,10 +28,10 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-20')
+        dateClosed: localDate(2024, 1, 20)
       },
       {
-        dateOpened: new Date('2024-02-15'),
+        dateOpened: localDate(2024, 2, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 2',
@@ -35,10 +43,10 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-02-20')
+        dateClosed: localDate(2024, 2, 20)
       },
       {
-        dateOpened: new Date('2024-03-15'),
+        dateOpened: localDate(2024, 3, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 3',
@@ -50,7 +58,7 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-03-20')
+        dateClosed: localDate(2024, 3, 20)
       }
     ]
 
@@ -76,7 +84,7 @@ describe('Monthly Returns Percentage Calculation', () => {
   it('calculates monthly returns percentage from daily logs', async () => {
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2024-01-15'),
+        dateOpened: localDate(2024, 1, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -88,10 +96,10 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-20')
+        dateClosed: localDate(2024, 1, 20)
       },
       {
-        dateOpened: new Date('2024-02-15'),
+        dateOpened: localDate(2024, 2, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 2',
@@ -103,34 +111,34 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-02-20')
+        dateClosed: localDate(2024, 2, 20)
       }
     ]
 
     const dailyLogs: DailyLogEntry[] = [
       {
-        date: new Date('2024-01-01'),
+        date: localDate(2024, 1, 1),
         netLiquidity: 100000,
         currentFunds: 100000,
         tradingFunds: 100000,
         drawdownPct: 0
       },
       {
-        date: new Date('2024-01-31'),
+        date: localDate(2024, 1, 31),
         netLiquidity: 105000,
         currentFunds: 105000,
         tradingFunds: 105000,
         drawdownPct: 0
       },
       {
-        date: new Date('2024-02-01'),
+        date: localDate(2024, 2, 1),
         netLiquidity: 105000,
         currentFunds: 105000,
         tradingFunds: 105000,
         drawdownPct: 0
       },
       {
-        date: new Date('2024-02-29'),
+        date: localDate(2024, 2, 29),
         netLiquidity: 115000,
         currentFunds: 115000,
         tradingFunds: 115000,
@@ -153,7 +161,7 @@ describe('Monthly Returns Percentage Calculation', () => {
   it('falls back to trade-based percentages when monthly balances are missing', async () => {
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2024-01-10'),
+        dateOpened: localDate(2024, 1, 10),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -165,10 +173,10 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-15')
+        dateClosed: localDate(2024, 1, 15)
       },
       {
-        dateOpened: new Date('2024-02-12'),
+        dateOpened: localDate(2024, 2, 12),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 2',
@@ -180,21 +188,21 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-02-20')
+        dateClosed: localDate(2024, 2, 20)
       }
     ]
 
     // Daily logs only cover January so February should fall back to trade-derived data
     const dailyLogs: DailyLogEntry[] = [
       {
-        date: new Date('2024-01-01'),
+        date: localDate(2024, 1, 1),
         netLiquidity: 100000,
         currentFunds: 100000,
         tradingFunds: 100000,
         drawdownPct: 0
       },
       {
-        date: new Date('2024-01-31'),
+        date: localDate(2024, 1, 31),
         netLiquidity: 105000,
         currentFunds: 105000,
         tradingFunds: 105000,
@@ -219,7 +227,7 @@ describe('Monthly Returns Percentage Calculation', () => {
   it('handles single month of trades', async () => {
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2024-01-15'),
+        dateOpened: localDate(2024, 1, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -231,7 +239,7 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-20')
+        dateClosed: localDate(2024, 1, 20)
       }
     ]
 
@@ -250,7 +258,7 @@ describe('Monthly Returns Percentage Calculation', () => {
   it('handles negative returns correctly', async () => {
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2024-01-15'),
+        dateOpened: localDate(2024, 1, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -262,7 +270,7 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-20')
+        dateClosed: localDate(2024, 1, 20)
       }
     ]
 
@@ -276,7 +284,7 @@ describe('Monthly Returns Percentage Calculation', () => {
   it('maintains consistency between dollar and percent returns', async () => {
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2024-01-15'),
+        dateOpened: localDate(2024, 1, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -288,7 +296,7 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-20')
+        dateClosed: localDate(2024, 1, 20)
       }
     ]
 
@@ -304,7 +312,7 @@ describe('Monthly Returns Percentage Calculation', () => {
   it('handles multiple trades in same month', async () => {
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2024-01-05'),
+        dateOpened: localDate(2024, 1, 5),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -316,10 +324,10 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-10')
+        dateClosed: localDate(2024, 1, 10)
       },
       {
-        dateOpened: new Date('2024-01-15'),
+        dateOpened: localDate(2024, 1, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 2',
@@ -331,7 +339,7 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-20')
+        dateClosed: localDate(2024, 1, 20)
       }
     ]
 
@@ -347,7 +355,7 @@ describe('Monthly Returns Percentage Calculation', () => {
   it('handles trades spanning multiple years', async () => {
     const trades: Trade[] = [
       {
-        dateOpened: new Date('2023-12-15'),
+        dateOpened: localDate(2023, 12, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 1',
@@ -359,10 +367,10 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2023-12-20')
+        dateClosed: localDate(2023, 12, 20)
       },
       {
-        dateOpened: new Date('2024-01-15'),
+        dateOpened: localDate(2024, 1, 15),
         timeOpened: '09:30:00',
         openingPrice: 100,
         legs: 'Trade 2',
@@ -374,7 +382,7 @@ describe('Monthly Returns Percentage Calculation', () => {
         openingCommissionsFees: 10,
         closingCommissionsFees: 10,
         openingShortLongRatio: 0.5,
-        dateClosed: new Date('2024-01-20')
+        dateClosed: localDate(2024, 1, 20)
       }
     ]
 

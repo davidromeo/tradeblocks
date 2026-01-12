@@ -32,11 +32,11 @@ export interface EnrichTradesOptions {
 
 /**
  * Creates a date key string for matching trades to daily logs
- * Format: YYYY-MM-DD in UTC to avoid timezone issues
+ * Format: YYYY-MM-DD using local time (dates are parsed at local midnight)
  */
 function getDateKey(date: Date): string {
   const d = new Date(date)
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 /**
@@ -114,14 +114,16 @@ function extractTimeOfDayMinutes(timeOpened: string): number | undefined {
 /**
  * Calculates ISO week number for a given date
  * ISO weeks start on Monday and week 1 contains the first Thursday of the year
+ * Uses local time methods since dates are parsed at local midnight
  */
 function getISOWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  // Create a copy using local date components to avoid timezone issues
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   // Set to nearest Thursday (current date + 4 - current day number, making Sunday=7)
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const dayNum = d.getDay() || 7
+  d.setDate(d.getDate() + 4 - dayNum)
   // Get first day of year
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  const yearStart = new Date(d.getFullYear(), 0, 1)
   // Calculate full weeks to nearest Thursday
   const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
   return weekNo
@@ -162,8 +164,8 @@ function enrichSingleTrade(
     : undefined
 
   // Parse date (may be Date object or ISO string from IndexedDB)
-  // The date in the CSV is stored as Eastern Time date, parsed as UTC midnight
-  // Use getUTCDay() to get the correct day without timezone shift
+  // The date in the CSV is parsed at local midnight via parseDatePreservingCalendarDay()
+  // Use getDay() (local timezone) not getUTCDay() to match the parsing approach
   const dateOpened = new Date(trade.dateOpened)
 
   return {
@@ -184,11 +186,11 @@ function enrichSingleTrade(
 
     // Timing (data is already in Eastern Time from the CSV)
     durationHours: computeDurationHours(trade),
-    dayOfWeek: dateOpened.getUTCDay(),
+    dayOfWeek: dateOpened.getDay(),
     hourOfDay: extractHourOfDay(trade.timeOpened),
     timeOfDayMinutes: extractTimeOfDayMinutes(trade.timeOpened),
-    dayOfMonth: dateOpened.getUTCDate(),
-    monthOfYear: dateOpened.getUTCMonth() + 1, // 1-12 instead of 0-11
+    dayOfMonth: dateOpened.getDate(),
+    monthOfYear: dateOpened.getMonth() + 1, // 1-12 instead of 0-11
     weekOfYear: getISOWeekNumber(dateOpened),
     dateOpenedTimestamp: dateOpened.getTime(),
 
