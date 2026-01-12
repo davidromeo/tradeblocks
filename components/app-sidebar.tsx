@@ -46,7 +46,6 @@ const navGroups = [
         title: "Portfolio Builder",
         href: "/portfolio-builder",
         icon: IconStack3,
-        badge: "New",
       },
       {
         title: "Static Datasets",
@@ -72,7 +71,6 @@ const navGroups = [
         title: "Trading Calendar",
         href: "/trading-calendar",
         icon: IconCalendar,
-        badge: "New",
       },
     ],
   },
@@ -108,7 +106,6 @@ const navGroups = [
         title: "Walk-Forward",
         href: "/walk-forward",
         icon: IconTimelineEvent,
-        badge: "Beta",
       },
       {
         title: "TradeBlocks Assistant",
