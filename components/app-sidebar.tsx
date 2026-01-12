@@ -63,7 +63,7 @@ const navGroups = [
         icon: IconLayoutDashboard,
       },
       {
-        title: "Performance Blocks",
+        title: "Charts & Reports",
         href: "/performance-blocks",
         icon: IconReportAnalytics,
       },

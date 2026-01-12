@@ -21,7 +21,7 @@ const routeMeta: Record<
     description: "Measure the health of your active trading block at a glance.",
   },
   "/performance-blocks": {
-    title: "Performance Blocks",
+    title: "Charts & Reports",
     description: "Equity curves, streaks, and drawdown coverage across time.",
   },
   "/risk-simulator": {
