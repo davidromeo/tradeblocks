@@ -36,6 +36,7 @@ import {
   THRESHOLD_METRIC_LABELS,
   ThresholdMetric,
 } from "@/lib/models/report-config";
+import { isDiscreteTimingField } from "@/lib/utils/time-formatting";
 import { HelpCircle } from "lucide-react";
 import { BucketEditor } from "./bucket-editor";
 import { ChartAxisSelector } from "./chart-axis-selector";
@@ -337,8 +338,8 @@ export const ResultsPanel = memo(function ResultsPanel({
                 />
               )}
 
-              {/* Bucket count for box plot */}
-              {chartType === "box" && (
+              {/* Bucket count for box plot (hidden for discrete timing fields which use natural categories) */}
+              {chartType === "box" && !isDiscreteTimingField(xAxis.field) && (
                 <div className="min-w-0">
                   <Label className="text-xs text-muted-foreground mb-1 block">
                     Buckets
