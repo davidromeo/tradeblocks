@@ -1,9 +1,80 @@
 /**
- * Time of Day Formatting Utilities
+ * Time and Date Formatting Utilities
  *
- * Utilities for formatting time-of-day values (minutes since midnight)
- * as readable times and generating axis tick labels.
+ * Utilities for formatting time-of-day values (minutes since midnight),
+ * day-of-week, month, and hour values as readable labels for charts.
  */
+
+// Day of week labels - index matches JavaScript getDay() (0 = Sunday)
+export const DAY_OF_WEEK_LABELS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+export const DAY_OF_WEEK_LABELS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const
+
+// Month labels - index 0-11 matches JavaScript getMonth()
+export const MONTH_LABELS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
+export const MONTH_LABELS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const
+
+/**
+ * Format day of week number (0-6) as readable label
+ * @param dayOfWeek - Day of week (0 = Sunday, 6 = Saturday) from JavaScript getDay()
+ * @param short - Use short form (Mon) vs full form (Monday)
+ * @returns Day name or undefined if invalid
+ */
+export function formatDayOfWeek(dayOfWeek: number, short = true): string | undefined {
+  if (dayOfWeek < 0 || dayOfWeek > 6) return undefined
+  return short ? DAY_OF_WEEK_LABELS_SHORT[dayOfWeek] : DAY_OF_WEEK_LABELS_FULL[dayOfWeek]
+}
+
+/**
+ * Format month number (1-12) as readable label
+ * Note: This uses 1-indexed months (1 = January) as used in EnrichedTrade.monthOfYear
+ * @param monthOfYear - Month (1 = January, 12 = December)
+ * @param short - Use short form (Jan) vs full form (January)
+ * @returns Month name or undefined if invalid
+ */
+export function formatMonthOfYear(monthOfYear: number, short = true): string | undefined {
+  if (monthOfYear < 1 || monthOfYear > 12) return undefined
+  return short ? MONTH_LABELS_SHORT[monthOfYear - 1] : MONTH_LABELS_FULL[monthOfYear - 1]
+}
+
+/**
+ * Format hour of day (0-23) as readable label (e.g., "9am", "12pm", "3pm")
+ * @param hourOfDay - Hour (0 = midnight, 23 = 11pm)
+ * @returns Formatted hour string or undefined if invalid
+ */
+export function formatHourOfDay(hourOfDay: number): string | undefined {
+  if (hourOfDay < 0 || hourOfDay > 23) return undefined
+  if (hourOfDay === 0) return '12am'
+  if (hourOfDay === 12) return '12pm'
+  if (hourOfDay < 12) return `${hourOfDay}am`
+  return `${hourOfDay - 12}pm`
+}
+
+/**
+ * Check if a field represents a discrete timing field with fixed buckets
+ * (as opposed to continuous numeric values)
+ */
+export function isDiscreteTimingField(field: string): boolean {
+  return field === 'dayOfWeek' || field === 'monthOfYear' || field === 'hourOfDay'
+}
+
+/**
+ * Get appropriate timing label for a field value
+ * @param field - The field name (dayOfWeek, monthOfYear, hourOfDay)
+ * @param value - The numeric value
+ * @returns Human-readable label or null if not a timing field
+ */
+export function getTimingLabel(field: string, value: number): string | null {
+  if (field === 'dayOfWeek') {
+    return formatDayOfWeek(value) ?? null
+  }
+  if (field === 'monthOfYear') {
+    return formatMonthOfYear(value) ?? null
+  }
+  if (field === 'hourOfDay') {
+    return formatHourOfDay(value) ?? null
+  }
+  return null
+}
 
 /**
  * Format minutes since midnight as readable time (e.g., "11:45 AM ET")
