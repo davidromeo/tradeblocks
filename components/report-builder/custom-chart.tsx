@@ -824,14 +824,18 @@ export function CustomChart({
     // Use date axis type for date fields
     const isXAxisDate = isDateField(xAxis.field);
 
+    // Box plots use categorical string labels on X-axis (bucket ranges like "9:30 AM - 10:30 AM")
+    // so we need to explicitly set category type for proper rendering
+    const isBoxPlot = chartType === "box";
+
     // Check for time fields to generate custom tick labels.
     // For bar charts, the X-axis is already converted to string category labels
     // in buildBarTraces (e.g., "09:30", "10:00"), while the time tick helpers
     // generate numeric tickvals. Mixing numeric tickvals with string category
     // labels would cause a mismatch, so we only apply time tick formatting to
-    // non-bar charts.
+    // non-bar/non-box charts.
     const isXTimeField =
-      xAxis.field === "timeOfDayMinutes" && chartType !== "bar";
+      xAxis.field === "timeOfDayMinutes" && chartType !== "bar" && !isBoxPlot;
     const isYTimeField =
       yAxis.field === "timeOfDayMinutes" && chartType !== "bar";
 
@@ -864,11 +868,14 @@ export function CustomChart({
     // Increase left margin for time axis labels on Y-axis
     const leftMargin = isYTimeField ? 95 : 70;
 
+    // Determine X-axis type: date for timestamps, category for box plots, undefined otherwise
+    const xAxisType = isXAxisDate ? "date" : isBoxPlot ? "category" : undefined;
+
     const chartLayout: Partial<Layout> = {
       xaxis: {
         title: { text: xInfo?.label ?? xAxis.field },
         zeroline: chartType !== "histogram",
-        type: isXAxisDate ? "date" : undefined,
+        type: xAxisType,
         ...(xTimeTicks && {
           tickvals: xTimeTicks.tickvals,
           ticktext: xTimeTicks.ticktext,
