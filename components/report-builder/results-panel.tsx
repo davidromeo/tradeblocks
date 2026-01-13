@@ -7,7 +7,7 @@
  * Wrapped in React.memo for performance - only re-renders when props actually change.
  */
 
-import { memo } from "react";
+import { memo, useState, useEffect } from "react";
 import { MultiSelect } from "@/components/multi-select";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -15,6 +15,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -35,6 +36,7 @@ import {
   THRESHOLD_METRIC_LABELS,
   ThresholdMetric,
 } from "@/lib/models/report-config";
+import { isDiscreteTimingField } from "@/lib/utils/time-formatting";
 import { HelpCircle } from "lucide-react";
 import { BucketEditor } from "./bucket-editor";
 import { ChartAxisSelector } from "./chart-axis-selector";
@@ -134,6 +136,7 @@ interface ResultsPanelProps {
   tableBuckets: number[];
   tableColumns: string[];
   thresholdMetric: ThresholdMetric;
+  boxBucketCount: number;
   reportName?: string; // Name of loaded/saved report
   showWhatIf: boolean;
   staticDatasets?: StaticDatasetFieldInfo[];
@@ -148,6 +151,7 @@ interface ResultsPanelProps {
   onTableBucketsChange: (buckets: number[]) => void;
   onTableColumnsChange: (columns: string[]) => void;
   onThresholdMetricChange: (metric: ThresholdMetric) => void;
+  onBoxBucketCountChange: (count: number) => void;
 }
 
 export const ResultsPanel = memo(function ResultsPanel({
@@ -164,6 +168,7 @@ export const ResultsPanel = memo(function ResultsPanel({
   tableBuckets,
   tableColumns,
   thresholdMetric,
+  boxBucketCount,
   reportName,
   showWhatIf,
   staticDatasets,
@@ -178,6 +183,7 @@ export const ResultsPanel = memo(function ResultsPanel({
   onTableBucketsChange,
   onTableColumnsChange,
   onThresholdMetricChange,
+  onBoxBucketCountChange,
 }: ResultsPanelProps) {
   // Check if we're showing a filtered subset
   const isFiltered = filteredTrades.length !== trades.length;
@@ -187,7 +193,29 @@ export const ResultsPanel = memo(function ResultsPanel({
     if (chartType === "histogram") return "grid-cols-2 lg:grid-cols-3"; // type + x + metric
     if (chartType === "threshold") return "grid-cols-2 lg:grid-cols-3"; // type + x + metric
     if (chartType === "table") return "grid-cols-2"; // type + x (buckets on second row)
-    return "grid-cols-2 lg:grid-cols-3"; // type + x + y (bar, box)
+    if (chartType === "box") return "grid-cols-2 lg:grid-cols-4"; // type + x + y + buckets
+    return "grid-cols-2 lg:grid-cols-3"; // type + x + y (bar)
+  };
+
+  // State for box bucket count input (two-state pattern for free editing)
+  const [boxBucketInputValue, setBoxBucketInputValue] = useState<string>(
+    String(boxBucketCount)
+  );
+
+  // Sync input value when prop changes (e.g., loading a saved report)
+  useEffect(() => {
+    setBoxBucketInputValue(String(boxBucketCount));
+  }, [boxBucketCount]);
+
+  const handleBoxBucketBlur = () => {
+    const val = parseInt(boxBucketInputValue, 10);
+    if (!isNaN(val) && val >= 2) {
+      onBoxBucketCountChange(val);
+      setBoxBucketInputValue(String(val));
+    } else {
+      // Revert to last valid value
+      setBoxBucketInputValue(String(boxBucketCount));
+    }
   };
 
   return (
@@ -308,6 +336,24 @@ export const ResultsPanel = memo(function ResultsPanel({
                   onChange={onYAxisChange}
                   trades={trades}
                 />
+              )}
+
+              {/* Bucket count for box plot (hidden for discrete timing fields which use natural categories) */}
+              {chartType === "box" && !isDiscreteTimingField(xAxis.field) && (
+                <div className="min-w-0">
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Buckets
+                  </Label>
+                  <Input
+                    type="number"
+                    min={2}
+                    className="h-8 w-full"
+                    value={boxBucketInputValue}
+                    onChange={(e) => setBoxBucketInputValue(e.target.value)}
+                    onBlur={handleBoxBucketBlur}
+                    onKeyDown={(e) => e.key === "Enter" && handleBoxBucketBlur()}
+                  />
+                </div>
               )}
 
               {/* Metric selector for threshold and histogram */}
@@ -475,6 +521,7 @@ export const ResultsPanel = memo(function ResultsPanel({
               yAxis3={yAxis3}
               colorBy={colorBy}
               sizeBy={sizeBy}
+              boxBucketCount={boxBucketCount}
             />
           )}
 

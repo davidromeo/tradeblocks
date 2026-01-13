@@ -300,6 +300,60 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     updatedAt: '2024-01-01T00:00:00.000Z'
   },
 
+  // Box Plot Analysis
+  {
+    id: 'builtin-box-month',
+    name: 'P/L % by Month',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'box',
+    xAxis: { field: 'monthOfYear', label: 'Month of Year' },
+    yAxis: { field: 'plPct', label: 'P/L %' },
+    boxBucketCount: 12,
+    category: 'timing',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'builtin-box-weekday',
+    name: 'P/L % by Day of Week',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'box',
+    xAxis: { field: 'dayOfWeek', label: 'Day of Week' },
+    yAxis: { field: 'plPct', label: 'P/L %' },
+    boxBucketCount: 7,
+    category: 'timing',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'builtin-box-vix',
+    name: 'P/L % by VIX Range',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'box',
+    xAxis: { field: 'openingVix', label: 'Opening VIX' },
+    yAxis: { field: 'plPct', label: 'P/L %' },
+    boxBucketCount: 5,
+    category: 'market',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'builtin-box-hour',
+    name: 'P/L % by Hour of Day',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'box',
+    xAxis: { field: 'hourOfDay', label: 'Hour of Day' },
+    yAxis: { field: 'plPct', label: 'P/L %' },
+    boxBucketCount: 8,
+    category: 'timing',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+
   // Threshold Analysis
   {
     id: 'builtin-slr-threshold',
