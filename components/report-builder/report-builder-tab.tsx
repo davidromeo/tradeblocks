@@ -71,6 +71,7 @@ export function ReportBuilderTab() {
   const [tableBuckets, setTableBuckets] = useState<number[]>(() => getDefaultBucketEdges('openingVix'))
   const [tableColumns, setTableColumns] = useState<string[]>(DEFAULT_TABLE_COLUMNS)
   const [thresholdMetric, setThresholdMetric] = useState<ThresholdMetric>('plPct')
+  const [boxBucketCount, setBoxBucketCount] = useState<number>(4)
   const [reportName, setReportName] = useState<string | undefined>(undefined)
   const [showWhatIf, setShowWhatIf] = useState(true)
   const [keepFilters, setKeepFilters] = useState(false)
@@ -96,6 +97,7 @@ export function ReportBuilderTab() {
     setTableBuckets(report.tableBuckets ?? getDefaultBucketEdges(report.xAxis.field))
     setTableColumns(report.tableColumns ?? DEFAULT_TABLE_COLUMNS)
     setThresholdMetric(report.thresholdMetric ?? 'plPct')
+    setBoxBucketCount(report.boxBucketCount ?? 4)
     setReportName(keepFilters ? undefined : report.name)
   }, [keepFilters])
 
@@ -188,6 +190,11 @@ export function ReportBuilderTab() {
     setReportName(undefined)
   }, [])
 
+  const handleBoxBucketCountChange = useCallback((count: number) => {
+    setBoxBucketCount(count)
+    setReportName(undefined)
+  }, [])
+
   if (enrichedTrades.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -216,6 +223,7 @@ export function ReportBuilderTab() {
             tableBuckets={tableBuckets}
             tableColumns={tableColumns}
             thresholdMetric={thresholdMetric}
+            boxBucketCount={boxBucketCount}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -255,6 +263,7 @@ export function ReportBuilderTab() {
           tableBuckets={tableBuckets}
           tableColumns={tableColumns}
           thresholdMetric={thresholdMetric}
+          boxBucketCount={boxBucketCount}
           reportName={reportName}
           showWhatIf={showWhatIf}
           staticDatasets={staticDatasetFieldInfo}
@@ -269,6 +278,7 @@ export function ReportBuilderTab() {
           onTableBucketsChange={handleTableBucketsChange}
           onTableColumnsChange={handleTableColumnsChange}
           onThresholdMetricChange={handleThresholdMetricChange}
+          onBoxBucketCountChange={handleBoxBucketCountChange}
         />
 
         {/* Right Panel - Filters (only shown when toggled) */}

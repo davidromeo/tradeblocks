@@ -26,6 +26,7 @@ interface CustomChartProps {
   yAxis3?: ChartAxisConfig  // Tertiary Y-axis (far right)
   colorBy?: ChartAxisConfig
   sizeBy?: ChartAxisConfig
+  boxBucketCount?: number   // Number of buckets for box plot (default: 4)
   className?: string
 }
 
@@ -415,9 +416,10 @@ function buildLineTraces(
 function buildBoxTraces(
   trades: EnrichedTrade[],
   xAxis: ChartAxisConfig,
-  yAxis: ChartAxisConfig
+  yAxis: ChartAxisConfig,
+  bucketCount: number = 4
 ): Partial<PlotData>[] {
-  // For box plots, we'll create quartile buckets of X and show Y distribution
+  // For box plots, we'll create N buckets of X and show Y distribution
   const xValues: number[] = []
   const yValues: number[] = []
 
@@ -435,24 +437,47 @@ function buildBoxTraces(
     return []
   }
 
-  // Create quartile labels
-  const sorted = [...xValues].sort((a, b) => a - b)
-  const q1 = sorted[Math.floor(sorted.length * 0.25)]
-  const q2 = sorted[Math.floor(sorted.length * 0.5)]
-  const q3 = sorted[Math.floor(sorted.length * 0.75)]
+  // Calculate bucket boundaries based on data range
+  const minX = Math.min(...xValues)
+  const maxX = Math.max(...xValues)
+  const range = maxX - minX
+  const bucketSize = range / bucketCount
 
-  const getQuartile = (x: number): string => {
-    if (x <= q1) return 'Q1 (Low)'
-    if (x <= q2) return 'Q2'
-    if (x <= q3) return 'Q3'
-    return 'Q4 (High)'
+  // Generate bucket label for a given X value
+  const getBucketLabel = (x: number): string => {
+    if (bucketSize === 0) return `${minX.toFixed(1)}`
+
+    const bucketIndex = Math.min(
+      Math.floor((x - minX) / bucketSize),
+      bucketCount - 1
+    )
+
+    const bucketStart = minX + bucketIndex * bucketSize
+    const bucketEnd = bucketStart + bucketSize
+
+    // Format based on whether values are integers or decimals
+    const isInteger = Number.isInteger(minX) && Number.isInteger(maxX)
+    if (isInteger) {
+      const start = Math.round(bucketStart)
+      const end = Math.round(bucketEnd)
+      // For the last bucket, use the actual max value
+      const displayEnd = bucketIndex === bucketCount - 1 ? Math.round(maxX) : end - 1
+      return start === displayEnd ? `${start}` : `${start}-${displayEnd}`
+    } else {
+      return `${bucketStart.toFixed(1)}-${bucketEnd.toFixed(1)}`
+    }
   }
 
-  const xLabels = xValues.map(getQuartile)
+  const xLabels = xValues.map(getBucketLabel)
+
+  // Sort the labels array to ensure consistent bucket ordering
+  // Create pairs of [label, yValue] and sort by the bucket start value
+  const pairs = xLabels.map((label, i) => ({ label, y: yValues[i], x: xValues[i] }))
+  pairs.sort((a, b) => a.x - b.x)
 
   return [{
-    x: xLabels,
-    y: yValues,
+    x: pairs.map(p => p.label),
+    y: pairs.map(p => p.y),
     type: 'box',
     marker: {
       color: 'rgb(59, 130, 246)'
@@ -582,6 +607,7 @@ export function CustomChart({
   yAxis3,
   colorBy,
   sizeBy,
+  boxBucketCount = 4,
   className
 }: CustomChartProps) {
   const { traces, layout } = useMemo(() => {
@@ -667,7 +693,7 @@ export function CustomChart({
         chartTraces = buildBarTraces(trades, xAxis, yAxis)
         break
       case 'box':
-        chartTraces = buildBoxTraces(trades, xAxis, yAxis)
+        chartTraces = buildBoxTraces(trades, xAxis, yAxis, boxBucketCount)
         break
     }
 
@@ -803,7 +829,7 @@ export function CustomChart({
     }
 
     return { traces: chartTraces, layout: chartLayout }
-  }, [trades, chartType, xAxis, yAxis, yAxis2, yAxis3, colorBy, sizeBy])
+  }, [trades, chartType, xAxis, yAxis, yAxis2, yAxis3, colorBy, sizeBy, boxBucketCount])
 
   if (trades.length === 0) {
     return (

@@ -45,6 +45,7 @@ interface SaveReportDialogProps {
   tableBuckets?: number[]
   tableColumns?: string[]
   thresholdMetric?: ThresholdMetric
+  boxBucketCount?: number
 }
 
 export function SaveReportDialog({
@@ -58,7 +59,8 @@ export function SaveReportDialog({
   sizeBy,
   tableBuckets,
   tableColumns,
-  thresholdMetric
+  thresholdMetric,
+  boxBucketCount
 }: SaveReportDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -79,7 +81,8 @@ export function SaveReportDialog({
       sizeBy,
       tableBuckets,
       tableColumns,
-      thresholdMetric
+      thresholdMetric,
+      boxBucketCount
     })
 
     setName('')
@@ -149,6 +152,10 @@ export function SaveReportDialog({
             {/* Threshold metric */}
             {chartType === 'threshold' && thresholdMetric && (
               <p><strong>Metric:</strong> {THRESHOLD_METRIC_LABELS[thresholdMetric]}</p>
+            )}
+            {/* Box plot bucket count */}
+            {chartType === 'box' && boxBucketCount && (
+              <p><strong>Buckets:</strong> {boxBucketCount}</p>
             )}
             {/* Table buckets and columns */}
             {chartType === 'table' && tableBuckets && tableBuckets.length > 0 && (

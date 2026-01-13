@@ -118,6 +118,7 @@ export interface ReportConfig {
   tableBuckets?: number[]     // Bucket thresholds for table type (e.g., [15, 20, 25, 30])
   tableColumns?: string[]     // Selected columns for table type (e.g., ['count', 'winRate', 'pl:avg'])
   thresholdMetric?: ThresholdMetric  // Secondary Y-axis metric for threshold chart (default: 'pl')
+  boxBucketCount?: number     // Number of buckets for box plot (default: 4)
   category?: ReportCategory   // Category for grouping preset reports in menus
   isBuiltIn?: boolean         // True for preset reports
   createdAt: string
