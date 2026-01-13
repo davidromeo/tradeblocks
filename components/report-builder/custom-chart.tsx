@@ -477,6 +477,8 @@ function buildBoxTraces(
 
   // Check if this is a discrete timing field (day of week, month, hour)
   const isDiscrete = isDiscreteTimingField(xAxis.field);
+  // Check if this is time of day (continuous but needs time formatting)
+  const isTimeOfDay = xAxis.field === "timeOfDayMinutes";
 
   // For discrete timing fields, use the actual values as bucket keys
   // For continuous fields, create N equal-sized buckets
@@ -498,17 +500,25 @@ function buildBoxTraces(
       bucketEdges.push(sorted[idx]);
     }
 
+    // Helper to format a value (time formatting for timeOfDayMinutes)
+    const formatValue = (val: number): string => {
+      if (isTimeOfDay) {
+        return formatMinutesToTime(val, false); // No timezone suffix for compact display
+      }
+      return val.toFixed(1);
+    };
+
     getBucketLabel = (x: number) => {
       for (let i = 0; i < bucketEdges.length; i++) {
         if (x <= bucketEdges[i]) {
           const low = i === 0 ? sorted[0] : bucketEdges[i - 1];
           const high = bucketEdges[i];
-          return `${low.toFixed(1)} - ${high.toFixed(1)}`;
+          return `${formatValue(low)} - ${formatValue(high)}`;
         }
       }
       const low = bucketEdges[bucketEdges.length - 1];
       const high = sorted[sorted.length - 1];
-      return `${low.toFixed(1)} - ${high.toFixed(1)}`;
+      return `${formatValue(low)} - ${formatValue(high)}`;
     };
   }
 
