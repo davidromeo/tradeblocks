@@ -39,6 +39,10 @@ const DAILY_LOG_TEMPLATE_CSV = `Date,Net Liquidity,Current Funds,Withdrawn,Tradi
 2024-01-16,50000.00,50400.00,0,10000.00,275.00,2.75,0
 2024-01-17,50000.00,50150.00,0,10000.00,-250.00,-2.44,-0.50`
 
+const REPORTING_LOG_TEMPLATE_CSV = `Strategy,Date Opened,Time Opened,Opening Price,Legs,Initial Premium,No. of Contracts,P/L,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close
+Bull Put Spread,2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,1,125.00,1.25,2024-01-15,15:45:00,1.25,Profit Target
+Bear Call Spread,2024-01-16,10:15:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,2,275.00,0.50,2024-01-18,14:30:00,0.50,Profit Target`
+
 // Trade log fields
 const REQUIRED_TRADE_FIELDS = [
   { name: "Date Opened", description: "Trade open date (YYYY-MM-DD or MM/DD/YY)" },
@@ -86,7 +90,27 @@ const OPTIONAL_DAILY_FIELDS = [
   { name: "Withdrawn", description: "Amount withdrawn (default: 0)" },
 ]
 
-function downloadTemplate(type: 'complete' | 'minimal' | 'daily-log') {
+// Reporting log fields
+const REQUIRED_REPORTING_FIELDS = [
+  { name: "Strategy", description: "Strategy name (e.g., 'Bull Put Spread')" },
+  { name: "Date Opened", description: "Trade open date (YYYY-MM-DD or MM/DD/YY)" },
+  { name: "Opening Price", description: "Underlying price at trade open" },
+  { name: "Legs", description: "Option legs description (e.g., 'SPX 15JAN24 4500P/4450P')" },
+  { name: "Initial Premium", description: "Initial premium received/paid" },
+  { name: "No. of Contracts", description: "Number of contracts traded" },
+  { name: "P/L", description: "Profit/Loss for the trade" },
+]
+
+const OPTIONAL_REPORTING_FIELDS = [
+  { name: "Time Opened", description: "Trade open time" },
+  { name: "Closing Price", description: "Underlying price at trade close" },
+  { name: "Date Closed", description: "Trade close date" },
+  { name: "Time Closed", description: "Trade close time" },
+  { name: "Avg. Closing Cost", description: "Average cost to close the position" },
+  { name: "Reason For Close", description: "Why the trade was closed" },
+]
+
+function downloadTemplate(type: 'complete' | 'minimal' | 'daily-log' | 'reporting-log') {
   let content: string
   let filename: string
 
@@ -102,6 +126,10 @@ function downloadTemplate(type: 'complete' | 'minimal' | 'daily-log') {
     case 'daily-log':
       content = DAILY_LOG_TEMPLATE_CSV
       filename = 'tradeblocks-dailylog-template.csv'
+      break
+    case 'reporting-log':
+      content = REPORTING_LOG_TEMPLATE_CSV
+      filename = 'tradeblocks-reporting-log-template.csv'
       break
   }
 
@@ -129,7 +157,7 @@ export function ImportGuideDialog() {
         <DialogHeader>
           <DialogTitle>CSV Import Guide</DialogTitle>
           <DialogDescription>
-            Format requirements for importing trade logs and daily logs
+            Format requirements for importing trade logs, daily logs, and reporting logs
           </DialogDescription>
         </DialogHeader>
 
@@ -174,6 +202,14 @@ export function ImportGuideDialog() {
                         <span className="font-medium">Daily Log</span>
                         <span className="text-xs text-muted-foreground">
                           Portfolio daily values
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => downloadTemplate('reporting-log')}>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">Reporting Log</span>
+                        <span className="text-xs text-muted-foreground">
+                          Backtest vs actual comparison
                         </span>
                       </div>
                     </DropdownMenuItem>
@@ -294,6 +330,51 @@ export function ImportGuideDialog() {
               </div>
             </div>
 
+            {/* Reporting Log Section */}
+            <div>
+              <h3 className="text-sm font-semibold text-primary mb-3 sticky top-0 bg-background py-1">
+                Reporting Log Fields
+              </h3>
+
+              {/* Required Fields */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="destructive" className="text-xs">Required</Badge>
+                  <span className="text-xs text-muted-foreground">Must have values</span>
+                </div>
+                <div className="space-y-2">
+                  {REQUIRED_REPORTING_FIELDS.map(field => (
+                    <div
+                      key={field.name}
+                      className="rounded-lg border bg-muted/30 p-2"
+                    >
+                      <div className="font-medium text-sm">{field.name}</div>
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional Fields */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="secondary" className="text-xs">Optional</Badge>
+                  <span className="text-xs text-muted-foreground">Can be empty</span>
+                </div>
+                <div className="space-y-2">
+                  {OPTIONAL_REPORTING_FIELDS.map(field => (
+                    <div
+                      key={field.name}
+                      className="rounded-lg border bg-muted/30 p-2"
+                    >
+                      <div className="font-medium text-sm">{field.name}</div>
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* Tips Section */}
             <div className="rounded-lg border bg-muted/50 p-4">
               <h3 className="font-semibold text-sm mb-2">Tips</h3>
@@ -303,6 +384,7 @@ export function ImportGuideDialog() {
                 <li>• Currency symbols ($) and commas are automatically removed from numbers</li>
                 <li>• Open trades can have empty closing fields</li>
                 <li>• Daily logs enable more accurate drawdown and Sharpe ratio calculations</li>
+                <li>• Reporting logs are used to compare backtest results against actual trades</li>
               </ul>
             </div>
           </div>

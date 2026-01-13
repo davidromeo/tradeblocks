@@ -351,6 +351,11 @@ const DAILY_LOG_TEMPLATE_CSV = `Date,Net Liquidity,Current Funds,Withdrawn,Tradi
 2024-01-16,50000.00,50400.00,0,10000.00,275.00,2.75,0
 2024-01-17,50000.00,50150.00,0,10000.00,-250.00,-2.44,-0.50`;
 
+// Template for reporting results (strategy log) CSV - for comparing backtest vs actual trades
+const REPORTING_LOG_TEMPLATE_CSV = `Strategy,Date Opened,Time Opened,Opening Price,Legs,Initial Premium,No. of Contracts,P/L,Closing Price,Date Closed,Time Closed,Avg. Closing Cost,Reason For Close
+Bull Put Spread,2024-01-15,09:30:00,4535.25,SPX 15JAN24 4500P/4450P,2.50,1,125.00,1.25,2024-01-15,15:45:00,1.25,Profit Target
+Bear Call Spread,2024-01-16,10:15:00,4542.75,SPX 19JAN24 4600C/4650C,3.25,2,275.00,0.50,2024-01-18,14:30:00,0.50,Profit Target`;
+
 export default function BlockManagementPage() {
   const blocks = useBlockStore(state => state.blocks);
   const isInitialized = useBlockStore(state => state.isInitialized);
@@ -388,7 +393,7 @@ export default function BlockManagementPage() {
     setIsBlockDialogOpen(true);
   };
 
-  const handleDownloadTemplate = (type: 'complete' | 'minimal' | 'daily-log') => {
+  const handleDownloadTemplate = (type: 'complete' | 'minimal' | 'daily-log' | 'reporting-log') => {
     let content: string;
     let filename: string;
 
@@ -404,6 +409,10 @@ export default function BlockManagementPage() {
       case 'daily-log':
         content = DAILY_LOG_TEMPLATE_CSV;
         filename = 'tradeblocks-dailylog-template.csv';
+        break;
+      case 'reporting-log':
+        content = REPORTING_LOG_TEMPLATE_CSV;
+        filename = 'tradeblocks-reporting-log-template.csv';
         break;
     }
 
@@ -462,6 +471,14 @@ export default function BlockManagementPage() {
                   <span className="font-medium">Daily Log Template</span>
                   <span className="text-xs text-muted-foreground">
                     Daily portfolio values for enhanced stats
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownloadTemplate('reporting-log')}>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">Reporting Log Template</span>
+                  <span className="text-xs text-muted-foreground">
+                    Strategy results for backtest vs actual comparison
                   </span>
                 </div>
               </DropdownMenuItem>
