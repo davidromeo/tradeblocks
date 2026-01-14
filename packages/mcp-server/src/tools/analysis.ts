@@ -918,6 +918,18 @@ export function registerAnalysisTools(
           .array(z.string())
           .optional()
           .describe("Filter to specific strategies only (default: all strategies)"),
+        tickerFilter: z
+          .string()
+          .optional()
+          .describe("Filter trades by underlying ticker symbol (e.g., 'SPY', 'AAPL')"),
+        dateRangeFrom: z
+          .string()
+          .optional()
+          .describe("Start date for analysis (ISO format: YYYY-MM-DD). Only include trades on or after this date."),
+        dateRangeTo: z
+          .string()
+          .optional()
+          .describe("End date for analysis (ISO format: YYYY-MM-DD). Only include trades on or before this date."),
         varianceThreshold: z
           .number()
           .min(0.5)
@@ -935,6 +947,9 @@ export function registerAnalysisTools(
       normalization,
       dateBasis,
       strategyFilter,
+      tickerFilter,
+      dateRangeFrom,
+      dateRangeTo,
       varianceThreshold,
     }) => {
       try {
@@ -958,6 +973,14 @@ export function registerAnalysisTools(
           };
         }
 
+        // Build date range if provided
+        const dateRange = dateRangeFrom || dateRangeTo
+          ? {
+              from: dateRangeFrom ? new Date(dateRangeFrom) : undefined,
+              to: dateRangeTo ? new Date(dateRangeTo) : undefined,
+            }
+          : undefined;
+
         // Perform tail risk analysis with all options
         const result = performTailRiskAnalysis(trades, {
           tailThreshold,
@@ -965,6 +988,8 @@ export function registerAnalysisTools(
           normalization,
           dateBasis,
           strategyFilter,
+          tickerFilter,
+          dateRange,
           varianceThreshold,
         });
 
@@ -983,6 +1008,8 @@ export function registerAnalysisTools(
           `| Normalization | ${normalization} |`,
           `| Date Basis | ${dateBasis} |`,
           `| Strategy Filter | ${strategyFilter?.length ? strategyFilter.join(", ") : "All strategies"} |`,
+          `| Ticker Filter | ${tickerFilter ?? "All tickers"} |`,
+          `| Date Range | ${dateRangeFrom || dateRangeTo ? `${dateRangeFrom ?? "start"} to ${dateRangeTo ?? "end"}` : "All dates"} |`,
           `| Variance Threshold | ${formatPercent(result.varianceThreshold * 100)} |`,
           "",
           "### Analytics",
@@ -1042,6 +1069,9 @@ export function registerAnalysisTools(
             normalization,
             dateBasis,
             strategyFilter: strategyFilter ?? null,
+            tickerFilter: tickerFilter ?? null,
+            dateRangeFrom: dateRangeFrom ?? null,
+            dateRangeTo: dateRangeTo ?? null,
             varianceThreshold,
           },
           strategies: result.strategies,
