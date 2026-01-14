@@ -64,26 +64,77 @@ export function registerAnalysisTools(
           .string()
           .optional()
           .describe("Filter by strategy name (case-insensitive)"),
+        // Window count mode (convenience parameters)
         isWindowCount: z
           .number()
           .min(2)
           .default(5)
-          .describe("Number of in-sample windows (default: 5)"),
+          .describe(
+            "Number of in-sample windows (default: 5). Used to calculate inSampleDays if not explicitly provided."
+          ),
         oosWindowCount: z
           .number()
           .min(1)
           .default(1)
-          .describe("Number of out-of-sample windows (default: 1)"),
+          .describe(
+            "Number of out-of-sample windows (default: 1). Used to calculate outOfSampleDays if not explicitly provided."
+          ),
+        // Explicit days mode (overrides window count calculations)
+        inSampleDays: z
+          .number()
+          .min(7)
+          .optional()
+          .describe(
+            "Explicit in-sample period in days. Overrides isWindowCount calculation if provided."
+          ),
+        outOfSampleDays: z
+          .number()
+          .min(1)
+          .optional()
+          .describe(
+            "Explicit out-of-sample period in days. Overrides oosWindowCount calculation if provided."
+          ),
+        stepSizeDays: z
+          .number()
+          .min(1)
+          .optional()
+          .describe(
+            "Days to slide forward each period. If not provided, equals outOfSampleDays."
+          ),
+        // Optimization settings
         optimizationTarget: z
           .enum([
             "netPl",
+            "profitFactor",
             "sharpeRatio",
             "sortinoRatio",
             "calmarRatio",
+            "cagr",
+            "avgDailyPl",
             "winRate",
           ])
           .default("sharpeRatio")
           .describe("Metric to optimize for (default: sharpeRatio)"),
+        // Trade constraints
+        minInSampleTrades: z
+          .number()
+          .min(5)
+          .default(10)
+          .describe("Minimum trades required in in-sample period (default: 10)"),
+        minOutOfSampleTrades: z
+          .number()
+          .min(1)
+          .default(3)
+          .describe("Minimum trades required in out-of-sample period (default: 3)"),
+        // Data handling
+        normalizeTo1Lot: z
+          .boolean()
+          .default(false)
+          .describe("Normalize trades to 1-lot by dividing P&L by contract count"),
+        selectedStrategies: z
+          .array(z.string())
+          .optional()
+          .describe("Filter to specific strategies only (default: all strategies)"),
       }),
     },
     async ({
@@ -91,7 +142,14 @@ export function registerAnalysisTools(
       strategy,
       isWindowCount,
       oosWindowCount,
+      inSampleDays: explicitInSampleDays,
+      outOfSampleDays: explicitOutOfSampleDays,
+      stepSizeDays: explicitStepSizeDays,
       optimizationTarget,
+      minInSampleTrades,
+      minOutOfSampleTrades,
+      normalizeTo1Lot,
+      selectedStrategies,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -112,6 +170,16 @@ export function registerAnalysisTools(
           };
         }
 
+        // Apply selectedStrategies filter if provided (in addition to single strategy filter)
+        if (selectedStrategies && selectedStrategies.length > 0) {
+          const strategySet = new Set(
+            selectedStrategies.map((s) => s.toLowerCase())
+          );
+          trades = trades.filter((t) =>
+            strategySet.has(t.strategy.toLowerCase())
+          );
+        }
+
         // Calculate date range and window sizes
         const sortedTrades = [...trades].sort(
           (a, b) =>
@@ -125,12 +193,24 @@ export function registerAnalysisTools(
           (lastDate.getTime() - firstDate.getTime()) / (24 * 60 * 60 * 1000)
         );
 
-        // Calculate window sizes dynamically
-        const totalWindows = isWindowCount + oosWindowCount;
-        const daysPerWindow = Math.floor(totalDays / totalWindows);
-        const inSampleDays = daysPerWindow * isWindowCount;
-        const outOfSampleDays = daysPerWindow * oosWindowCount;
-        const stepSizeDays = daysPerWindow;
+        // Determine window sizes: explicit days override window count calculations
+        let inSampleDays: number;
+        let outOfSampleDays: number;
+        let stepSizeDays: number;
+
+        if (explicitInSampleDays !== undefined && explicitOutOfSampleDays !== undefined) {
+          // Use explicit day values
+          inSampleDays = explicitInSampleDays;
+          outOfSampleDays = explicitOutOfSampleDays;
+          stepSizeDays = explicitStepSizeDays ?? outOfSampleDays;
+        } else {
+          // Calculate from window counts (original behavior)
+          const totalWindows = isWindowCount + oosWindowCount;
+          const daysPerWindow = Math.floor(totalDays / totalWindows);
+          inSampleDays = daysPerWindow * isWindowCount;
+          outOfSampleDays = daysPerWindow * oosWindowCount;
+          stepSizeDays = explicitStepSizeDays ?? daysPerWindow;
+        }
 
         // Run walk-forward analysis
         const analyzer = new WalkForwardAnalyzer();
@@ -142,6 +222,10 @@ export function registerAnalysisTools(
             stepSizeDays,
             optimizationTarget,
             parameterRanges: {},
+            minInSampleTrades,
+            minOutOfSampleTrades,
+            normalizeTo1Lot,
+            selectedStrategies,
           },
         });
 
@@ -160,11 +244,22 @@ export function registerAnalysisTools(
         }
 
         lines.push(
+          "### Configuration",
+          "",
+          `| Parameter | Value |`,
+          `|-----------|-------|`,
+          `| In-Sample Days | ${inSampleDays} |`,
+          `| Out-of-Sample Days | ${outOfSampleDays} |`,
+          `| Step Size Days | ${stepSizeDays} |`,
+          `| Optimization Target | ${optimizationTarget} |`,
+          `| Min IS Trades | ${minInSampleTrades} |`,
+          `| Min OOS Trades | ${minOutOfSampleTrades} |`,
+          `| Normalize to 1-Lot | ${normalizeTo1Lot ? "Yes" : "No"} |`,
+          "",
           "### Summary",
           "",
           `| Metric | Value |`,
           `|--------|-------|`,
-          `| Optimization Target | ${optimizationTarget} |`,
           `| Total Periods | ${results.stats.totalPeriods} |`,
           `| Evaluated Periods | ${results.stats.evaluatedPeriods} |`,
           `| Skipped Periods | ${results.stats.skippedPeriods} |`,
@@ -224,6 +319,10 @@ export function registerAnalysisTools(
             optimizationTarget,
             isWindowCount,
             oosWindowCount,
+            minInSampleTrades,
+            minOutOfSampleTrades,
+            normalizeTo1Lot,
+            selectedStrategies: selectedStrategies ?? null,
           },
           summary: {
             avgInSamplePerformance: results.summary.avgInSamplePerformance,
