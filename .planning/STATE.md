@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-11)
 
 **Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v2.0 Claude Integration — Phase 11 complete, ready for Phase 12
+**Current focus:** v2.0 Claude Integration — Phase 12 complete, ready for Phase 13
 
 ## Current Position
 
-Phase: 12 of 14 (Core Integration Layer) — IN PROGRESS
-Plan: 2 of 3 complete
-Status: Plan 02 complete + FIX complete, ready for Plan 03
-Last activity: 2026-01-14 — JSON-first output pattern, expanded tool schemas
+Phase: 12 of 14 (Core Integration Layer) — COMPLETE
+Plan: 3 of 3 complete
+Status: Phase 12 complete, ready for Phase 13
+Last activity: 2026-01-14 — 14 MCP tools complete, MFE/MAE chart type added
 
-Progress: ██████░░░░ 67%
+Progress: ████████░░ 100% (Phase 12)
 
 ## v2.0 Goal
 
@@ -56,6 +56,13 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Kelly warnings for portfolio > 25% or strategy > 50%
 - UAT-001 Fix: Expanded all tool schemas to expose underlying calculation module parameters
 
+**v2.0 Phase 12-03:**
+- 16 chart types in get_performance_charts including MFE/MAE for stop loss/take profit optimization
+- MFE/MAE implemented inline to avoid bundle dependency issues
+- Backtest vs actual supports three scaling modes: raw, perContract, toReported
+- All performance tools expose full parameters (dateRange, normalizeTo1Lot, etc.)
+- Report Builder documented for Phase 13 consideration (custom filtered reports via MCP)
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -76,5 +83,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Phase 12 Plan 02 + FIX complete, ready for Plan 03
+Stopped at: Phase 12 complete, ready for Phase 13
 Resume file: None

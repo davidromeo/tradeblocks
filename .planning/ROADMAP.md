@@ -43,27 +43,40 @@ Plans:
 - [x] 11-01: Monorepo Foundation (pnpm workspace + MCP server scaffold) - completed 2026-01-14
 - [x] 11-02: MCP Server Scaffold (stdio transport, list_backtests tool) - completed 2026-01-14
 
-### Phase 12: Core Integration Layer
+### Phase 12: Core Integration Layer ✓
 
 **Goal**: Build MCP server tools exposing data queries, statistics, and analysis capabilities
 **Depends on**: Phase 11
-**Status**: In progress
+**Status**: Complete
+**Completed**: 2026-01-14
 **Plans**: 3
 
 Plans:
 - [x] 12-01: Block Loading and Core Tools (block-loader, output-formatter, 6 Tier 1 tools) - completed 2026-01-14
 - [x] 12-02: Analysis Tools (WFA, Monte Carlo, correlation, tail risk, position sizing) - completed 2026-01-14
-- [ ] 12-03: Performance Tools (chart data, period returns, backtest vs actual)
+- [x] 12-03: Performance Tools (chart data, period returns, backtest vs actual, MFE/MAE) - completed 2026-01-14
+
+**Deliverables:**
+- 14 MCP tools (6 core + 5 analysis + 3 performance)
+- JSON-first output pattern for Claude reasoning
+- Full parameter exposure for all calculation modules
 
 ### Phase 13: Analysis Capabilities
 
-**Goal**: Add WFA execution, report generation, automated exploration modes
+**Goal**: Add Report Builder integration, custom report generation, automated exploration modes
 **Depends on**: Phase 12
-**Research**: Unlikely (internal patterns established from Phase 12)
+**Research**: May need research for Report Builder MCP design
 **Plans**: TBD
 
+**Consideration: Report Builder MCP Integration**
+The Report Builder (`lib/models/report-config.ts`) is a powerful feature that could be exposed via MCP:
+- `ReportConfig` - Filter conditions, chart types, axis configuration
+- `FilterConfig` - Multiple conditions with AND/OR logic
+- Potential tools: `list_preset_reports`, `run_report`, `create_custom_report`
+- Would allow Claude to create custom filtered views without hardcoding queries
+
 Plans:
-- [ ] 13-01: TBD
+- [ ] 13-01: TBD (may include Report Builder integration)
 
 ### Phase 14: Polish & Documentation
 
@@ -89,7 +102,7 @@ Plans:
 | 9. Calculation Robustness | v1.0 | 1/1 | Complete | 2026-01-11 |
 | 10. Integration & Polish | v1.0 | 3/3 | Complete | 2026-01-11 |
 | 11. Research & Architecture | v2.0 | 2/2 | Complete | 2026-01-14 |
-| 12. Core Integration Layer | v2.0 | 2/3 | In progress | - |
+| 12. Core Integration Layer | v2.0 | 3/3 | Complete | 2026-01-14 |
 | 13. Analysis Capabilities | v2.0 | 0/? | Not started | - |
 | 14. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
