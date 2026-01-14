@@ -9,13 +9,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadBlock, listBlocks, saveMetadata } from "../utils/block-loader.js";
 import type { BlockMetadata } from "../utils/block-loader.js";
 import {
-  formatBlockList,
-  formatBlockInfo,
-  formatStatsTable,
-  formatStrategyComparison,
-  formatBlocksComparison,
-  formatTradesTable,
-  createDualOutput,
+  createToolOutput,
+  formatCurrency,
+  formatPercent,
+  formatRatio,
 } from "../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@lib/calculations/portfolio-stats";
 import type { Trade } from "@lib/models/trade";
@@ -144,7 +141,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           blocks = blocks.slice(0, limit);
         }
 
-        const output = formatBlockList(blocks);
+        // Brief summary for user display
+        const summary = `Found ${blocks.length} backtest(s)${totalBeforeLimit > blocks.length ? ` (showing ${blocks.length} of ${totalBeforeLimit})` : ""}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -173,7 +171,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           count: blocks.length,
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -213,13 +211,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           end: dates.length > 0 ? new Date(Math.max(...dates)) : null,
         };
 
-        const output = formatBlockInfo(
-          blockId,
-          trades.length,
-          dailyLogs?.length ?? 0,
-          dateRange,
-          strategies
-        );
+        // Brief summary for user display
+        const summary = `Block: ${blockId} | ${trades.length} trades | ${strategies.length} strategies | Daily log: ${dailyLogs?.length ? "Yes" : "No"}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -233,7 +226,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           },
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -313,19 +306,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           isStrategyFiltered
         );
 
-        // Build header showing applied filters
-        const filterInfo: string[] = [];
-        if (strategy) filterInfo.push(`Strategy: ${strategy}`);
-        if (tickerFilter) filterInfo.push(`Ticker: ${tickerFilter}`);
-        if (startDate) filterInfo.push(`From: ${startDate}`);
-        if (endDate) filterInfo.push(`To: ${endDate}`);
-
-        const header =
-          filterInfo.length > 0
-            ? `## Block: ${blockId}\n\n**Filters:** ${filterInfo.join(", ")}\n\n`
-            : `## Block: ${blockId}\n\n`;
-
-        const output = header + formatStatsTable(stats);
+        // Brief summary for user display
+        const summary = `Stats: ${blockId}${strategy ? ` (${strategy})` : ""} | ${stats.totalTrades} trades | Win: ${formatPercent(stats.winRate * 100)} | Net P&L: ${formatCurrency(stats.netPl)} | Sharpe: ${formatRatio(stats.sharpeRatio)}`;
 
         // Cache stats if no filters applied
         if (!isFiltered && !block.metadata) {
@@ -408,7 +390,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           },
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -521,23 +503,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           strategies = strategies.slice(0, limit);
         }
 
-        // Build header showing applied filters
-        const filterInfo: string[] = [];
-        if (startDate) filterInfo.push(`From: ${startDate}`);
-        if (endDate) filterInfo.push(`To: ${endDate}`);
-        if (tickerFilter) filterInfo.push(`Ticker: ${tickerFilter}`);
-        if (minTrades) filterInfo.push(`Min trades: ${minTrades}`);
-
-        const header = filterInfo.length > 0
-          ? `## Block: ${blockId}\n\n**Filters:** ${filterInfo.join(", ")}\n**Sort:** ${sortBy} (${sortOrder})\n\n`
-          : `## Block: ${blockId}\n\n**Sort:** ${sortBy} (${sortOrder})\n\n`;
-
-        // Rebuild stats object for formatter
-        const filteredStats: Record<string, typeof strategies[0]> = {};
-        for (const s of strategies) {
-          filteredStats[s.strategyName] = s;
-        }
-        const output = header + formatStrategyComparison(filteredStats);
+        // Brief summary for user display
+        const summary = `Strategy Comparison: ${blockId} | ${strategies.length} strategies${totalBeforeLimit > strategies.length ? ` (of ${totalBeforeLimit})` : ""} | Sorted by ${sortBy}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -551,7 +518,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             sortOrder,
             limit: limit ?? null,
           },
-          strategies: structuredStrategies.map((s) => ({
+          strategies: strategies.map((s) => ({
             name: s.strategyName,
             trades: s.tradeCount,
             winRate: s.winRate,
@@ -561,10 +528,10 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             profitFactor: s.profitFactor,
           })),
           totalStrategies: totalBeforeLimit,
-          count: structuredStrategies.length,
+          count: strategies.length,
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -686,15 +653,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           }
         });
 
-        const output = formatBlocksComparison(blockStats);
-
         // Add note about any failed blocks
         const loadedIds = blockStats.map((b) => b.blockId);
         const failedIds = blockIds.filter((id) => !loadedIds.includes(id));
-        const footer =
-          failedIds.length > 0
-            ? `\n\n*Note: Failed to load: ${failedIds.join(", ")}*`
-            : "";
+
+        // Brief summary for user display
+        const summary = `Block Comparison: ${blockStats.length} blocks loaded${failedIds.length > 0 ? ` (${failedIds.length} failed)` : ""} | Sorted by ${sortBy}`;
 
         // Build structured data for Claude reasoning
         // If specific metrics requested, filter to those only
@@ -736,7 +700,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           failedBlocks: failedIds,
         };
 
-        return createDualOutput(output + footer, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -878,29 +842,15 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           }
         });
 
-        // Build header showing applied filters
-        const filterInfo: string[] = [];
-        if (strategy) filterInfo.push(`Strategy: ${strategy}`);
-        if (tickerFilter) filterInfo.push(`Ticker: ${tickerFilter}`);
-        if (startDate) filterInfo.push(`From: ${startDate}`);
-        if (endDate) filterInfo.push(`To: ${endDate}`);
-        if (minPl !== undefined) filterInfo.push(`Min P&L: $${minPl}`);
-        if (maxPl !== undefined) filterInfo.push(`Max P&L: $${maxPl}`);
-        if (outcome !== "all") filterInfo.push(`Outcome: ${outcome}`);
-
-        const header =
-          filterInfo.length > 0
-            ? `## Block: ${blockId}\n\n**Filters:** ${filterInfo.join(", ")}\n**Sort:** ${sortBy} (${sortOrder})\n\n`
-            : `## Block: ${blockId}\n\n**Sort:** ${sortBy} (${sortOrder})\n\n`;
-
-        const output = header + formatTradesTable(trades, page, pageSize);
-
         // Calculate pagination info
         const totalTrades = trades.length;
         const totalPages = Math.ceil(totalTrades / pageSize);
         const startIdx = (page - 1) * pageSize;
         const endIdx = Math.min(startIdx + pageSize, totalTrades);
         const pageTrades = trades.slice(startIdx, endIdx);
+
+        // Brief summary for user display
+        const summary = `Trades: ${blockId} | Page ${page}/${totalPages} | ${startIdx + 1}-${endIdx} of ${totalTrades} trades`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -932,7 +882,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           },
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [

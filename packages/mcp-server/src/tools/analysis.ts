@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadBlock } from "../utils/block-loader.js";
 import {
-  createDualOutput,
+  createToolOutput,
   formatPercent,
   formatRatio,
   formatCurrency,
@@ -18,7 +18,6 @@ import { WalkForwardAnalyzer } from "@lib/calculations/walk-forward-analyzer";
 import {
   assessResults,
   getRecommendedParameters,
-  formatParameterName,
 } from "@lib/calculations/walk-forward-verdict";
 import {
   runMonteCarloSimulation,
@@ -360,114 +359,8 @@ export function registerAnalysisTools(
         const verdict = assessResults(results);
         const recommended = getRecommendedParameters(results.periods);
 
-        // Build markdown output
-        const lines: string[] = [
-          `## Walk-Forward Analysis: ${blockId}`,
-          "",
-        ];
-
-        // Show active filters
-        const activeFilters: string[] = [];
-        if (strategy) activeFilters.push(`Strategy: ${strategy}`);
-        if (selectedStrategies?.length) activeFilters.push(`Strategies: ${selectedStrategies.join(", ")}`);
-        if (tickerFilter) activeFilters.push(`Ticker: ${tickerFilter}`);
-        if (dateRangeFrom || dateRangeTo) {
-          activeFilters.push(`Date Range: ${dateRangeFrom ?? "start"} to ${dateRangeTo ?? "end"}`);
-        }
-        if (activeFilters.length > 0) {
-          lines.push(`**Filters:** ${activeFilters.join(" | ")}`, "");
-        }
-
-        lines.push(
-          "### Configuration",
-          "",
-          `| Parameter | Value |`,
-          `|-----------|-------|`,
-          `| In-Sample Days | ${inSampleDays} |`,
-          `| Out-of-Sample Days | ${outOfSampleDays} |`,
-          `| Step Size Days | ${stepSizeDays} |`,
-          `| Optimization Target | ${optimizationTarget} |`,
-          `| Min IS Trades | ${minInSampleTrades} |`,
-          `| Min OOS Trades | ${minOutOfSampleTrades} |`,
-          `| Normalize to 1-Lot | ${normalizeTo1Lot ? "Yes" : "No"} |`
-        );
-
-        // Add performance floor constraints if set
-        if (hasPerformanceFloor) {
-          if (minSharpeRatio !== undefined) {
-            lines.push(`| Min Sharpe Ratio | ${formatRatio(minSharpeRatio)} |`);
-          }
-          if (minProfitFactor !== undefined) {
-            lines.push(`| Min Profit Factor | ${formatRatio(minProfitFactor)} |`);
-          }
-          if (requirePositiveNetPl) {
-            lines.push(`| Require Positive Net P&L | Yes |`);
-          }
-        }
-
-        // Add diversification constraints if enabled
-        if (hasDiversificationConstraints) {
-          if (enableCorrelationConstraint) {
-            lines.push(`| Max Correlation | ${formatRatio(maxCorrelationThreshold)} (${correlationMethod}) |`);
-          }
-          if (enableTailRiskConstraint) {
-            lines.push(`| Max Tail Dependence | ${formatRatio(maxTailDependenceThreshold)} (${formatPercent(tailThreshold * 100)} tail) |`);
-          }
-        }
-
-        lines.push(
-          "",
-          "### Summary",
-          "",
-          `| Metric | Value |`,
-          `|--------|-------|`,
-          `| Total Periods | ${results.stats.totalPeriods} |`,
-          `| Evaluated Periods | ${results.stats.evaluatedPeriods} |`,
-          `| Skipped Periods | ${results.stats.skippedPeriods} |`,
-          `| Analyzed Trades | ${results.stats.analyzedTrades} |`,
-          "",
-          "### Performance Metrics",
-          "",
-          `| Metric | Value |`,
-          `|--------|-------|`,
-          `| Avg In-Sample Performance | ${formatRatio(results.summary.avgInSamplePerformance)} |`,
-          `| Avg Out-of-Sample Performance | ${formatRatio(results.summary.avgOutOfSamplePerformance)} |`,
-          `| Efficiency (WFE) | ${formatPercent(results.summary.degradationFactor * 100)} |`,
-          `| Parameter Stability | ${formatPercent(results.summary.parameterStability * 100)} |`,
-          `| Consistency Score | ${formatPercent(results.stats.consistencyScore * 100)} |`,
-          `| Robustness Score | ${formatPercent(results.summary.robustnessScore * 100)} |`,
-          "",
-          "### Verdict",
-          "",
-          `**${verdict.title}**`,
-          "",
-          verdict.description,
-          "",
-          `| Component | Assessment |`,
-          `|-----------|------------|`,
-          `| Efficiency | ${verdict.efficiency} |`,
-          `| Stability | ${verdict.stability} |`,
-          `| Consistency | ${verdict.consistency} |`,
-          `| **Overall** | **${verdict.overall}** |`,
-          ""
-        );
-
-        // Add recommended parameters if available
-        if (recommended.hasSuggestions) {
-          lines.push("### Recommended Parameters", "");
-          lines.push(
-            `| Parameter | Value | Range | Stable |`,
-            `|-----------|-------|-------|--------|`
-          );
-          for (const [key, suggestion] of Object.entries(recommended.params)) {
-            lines.push(
-              `| ${formatParameterName(key)} | ${suggestion.value} | ${suggestion.range[0]} - ${suggestion.range[1]} | ${suggestion.stable ? "Yes" : "No"} |`
-            );
-          }
-          lines.push("");
-        }
-
-        const output = lines.join("\n");
+        // Brief summary for user display
+        const summary = `Walk-Forward: ${blockId} | ${results.stats.evaluatedPeriods} periods | WFE: ${formatPercent(results.summary.degradationFactor * 100)} | Verdict: ${verdict.overall}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -548,7 +441,7 @@ export function registerAnalysisTools(
           })),
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -749,79 +642,8 @@ export function registerAnalysisTools(
         const result = runMonteCarloSimulation(trades, params);
         const stats = result.statistics;
 
-        // Build markdown output
-        const lines: string[] = [
-          `## Monte Carlo Simulation: ${blockId}`,
-          "",
-        ];
-
-        if (strategy) {
-          lines.push(`**Strategy Filter:** ${strategy}`, "");
-        }
-
-        lines.push(
-          "### Configuration",
-          "",
-          `| Parameter | Value |`,
-          `|-----------|-------|`,
-          `| Simulations | ${numSimulations.toLocaleString()} |`,
-          `| Simulation Length | ${params.simulationLength} trades |`,
-          `| Resample Method | ${params.resampleMethod} |`,
-          `| Resample Window | ${params.resampleWindow ? `${params.resampleWindow} items` : "All data"} |`,
-          `| Initial Capital | ${formatCurrency(params.initialCapital)} |`,
-          `| Trades Per Year | ${Math.round(params.tradesPerYear)} |`,
-          `| Normalize to 1-Lot | ${params.normalizeTo1Lot ? "Yes" : "No"} |`,
-          `| Worst-Case Testing | ${includeWorstCase ? "Enabled" : "Disabled"} |`,
-          ...(includeWorstCase
-            ? [
-                `| Worst-Case Percentage | ${worstCasePercentage}% |`,
-                `| Worst-Case Mode | ${worstCaseMode} |`,
-                `| Worst-Case Based On | ${worstCaseBasedOn} |`,
-                `| Worst-Case Sizing | ${worstCaseSizing} |`,
-              ]
-            : []),
-          ...(historicalInitialCapital
-            ? [`| Historical Initial Capital | ${formatCurrency(historicalInitialCapital)} |`]
-            : []),
-          "",
-          "### Return Statistics",
-          "",
-          `| Metric | Value |`,
-          `|--------|-------|`,
-          `| Mean Total Return | ${formatPercent(stats.meanTotalReturn * 100)} |`,
-          `| Median Total Return | ${formatPercent(stats.medianTotalReturn * 100)} |`,
-          `| Mean Annualized Return | ${formatPercent(stats.meanAnnualizedReturn * 100)} |`,
-          `| Probability of Profit | ${formatPercent(stats.probabilityOfProfit * 100)} |`,
-          "",
-          "### Risk Metrics",
-          "",
-          `| Metric | Value |`,
-          `|--------|-------|`,
-          `| Mean Max Drawdown | ${formatPercent(stats.meanMaxDrawdown * 100)} |`,
-          `| Median Max Drawdown | ${formatPercent(stats.medianMaxDrawdown * 100)} |`,
-          `| Mean Sharpe Ratio | ${formatRatio(stats.meanSharpeRatio)} |`,
-          "",
-          "### Value at Risk (VaR)",
-          "",
-          `| Percentile | Return |`,
-          `|------------|--------|`,
-          `| 5th (95% VaR) | ${formatPercent(stats.valueAtRisk.p5 * 100)} |`,
-          `| 10th (90% VaR) | ${formatPercent(stats.valueAtRisk.p10 * 100)} |`,
-          `| 25th | ${formatPercent(stats.valueAtRisk.p25 * 100)} |`,
-          "",
-          "### Percentile Bands (Final Values)",
-          "",
-          `| Percentile | Value |`,
-          `|------------|-------|`,
-          `| 5th | ${formatCurrency(params.initialCapital * (1 + result.percentiles.p5[result.percentiles.p5.length - 1]))} |`,
-          `| 25th | ${formatCurrency(params.initialCapital * (1 + result.percentiles.p25[result.percentiles.p25.length - 1]))} |`,
-          `| 50th (Median) | ${formatCurrency(params.initialCapital * (1 + result.percentiles.p50[result.percentiles.p50.length - 1]))} |`,
-          `| 75th | ${formatCurrency(params.initialCapital * (1 + result.percentiles.p75[result.percentiles.p75.length - 1]))} |`,
-          `| 95th | ${formatCurrency(params.initialCapital * (1 + result.percentiles.p95[result.percentiles.p95.length - 1]))} |`,
-          ""
-        );
-
-        const output = lines.join("\n");
+        // Brief summary for user display
+        const summary = `Monte Carlo: ${blockId}${strategy ? ` (${strategy})` : ""} | ${numSimulations} sims | Mean Return: ${formatPercent(stats.meanTotalReturn * 100)} | P(Profit): ${formatPercent(stats.probabilityOfProfit * 100)} | 95% VaR: ${formatPercent(stats.valueAtRisk.p5 * 100)}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -871,7 +693,7 @@ export function registerAnalysisTools(
           actualResamplePoolSize: result.actualResamplePoolSize,
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -1018,71 +840,7 @@ export function registerAnalysisTools(
         });
         const analytics = calculateCorrelationAnalytics(matrix, minSamples);
 
-        // Build markdown output
-        const lines: string[] = [
-          `## Correlation Matrix: ${blockId}`,
-          "",
-        ];
-
-        // Show active filters
-        const activeFilters: string[] = [];
-        if (strategyFilter?.length) activeFilters.push(`Strategies: ${strategyFilter.join(", ")}`);
-        if (tickerFilter) activeFilters.push(`Ticker: ${tickerFilter}`);
-        if (dateRangeFrom || dateRangeTo) {
-          activeFilters.push(`Date Range: ${dateRangeFrom ?? "start"} to ${dateRangeTo ?? "end"}`);
-        }
-        if (activeFilters.length > 0) {
-          lines.push(`**Filters:** ${activeFilters.join(" | ")}`, "");
-        }
-
-        lines.push(
-          "### Configuration",
-          "",
-          `| Parameter | Value |`,
-          `|-----------|-------|`,
-          `| Method | ${method.charAt(0).toUpperCase() + method.slice(1)} |`,
-          `| Alignment | ${alignment} |`,
-          `| Normalization | ${normalization} |`,
-          `| Date Basis | ${dateBasis} |`,
-          `| Time Period | ${timePeriod} |`,
-          `| Min Samples | ${minSamples} |`,
-          `| Highlight Threshold | |r| > ${highlightThreshold} |`,
-          "",
-          "### Matrix",
-          ""
-        );
-
-        // Build table header
-        const header = ["| Strategy |", ...matrix.strategies.map((s) => ` ${s} |`)].join("");
-        lines.push(header);
-        lines.push("|" + "-".repeat(10) + "|" + matrix.strategies.map(() => "-".repeat(8) + "|").join(""));
-
-        // Build table rows
-        for (let i = 0; i < matrix.strategies.length; i++) {
-          const row = [`| ${matrix.strategies[i]} |`];
-          for (let j = 0; j < matrix.strategies.length; j++) {
-            const val = matrix.correlationData[i][j];
-            row.push(` ${Number.isNaN(val) ? "N/A" : val.toFixed(2)} |`);
-          }
-          lines.push(row.join(""));
-        }
-
-        lines.push("");
-        lines.push("### Analytics", "");
-        lines.push(`| Metric | Value |`);
-        lines.push(`|--------|-------|`);
-        lines.push(`| Average Correlation | ${Number.isNaN(analytics.averageCorrelation) ? "N/A" : formatRatio(analytics.averageCorrelation)} |`);
-        lines.push(`| Strongest Correlation | ${Number.isNaN(analytics.strongest.value) ? "N/A" : formatRatio(analytics.strongest.value)} (${analytics.strongest.pair.join(" / ")}) |`);
-        lines.push(`| Weakest Correlation | ${Number.isNaN(analytics.weakest.value) ? "N/A" : formatRatio(analytics.weakest.value)} (${analytics.weakest.pair.join(" / ")}) |`);
-        lines.push(`| Strategy Count | ${analytics.strategyCount} |`);
-
-        if (analytics.insufficientDataPairs > 0) {
-          lines.push(`| Insufficient Data Pairs | ${analytics.insufficientDataPairs} |`);
-        }
-
-        lines.push("");
-
-        // Add warnings for highly correlated pairs (using configurable threshold)
+        // Find highly correlated pairs
         const highlyCorrelated: Array<{ pair: [string, string]; value: number; sampleSize: number }> = [];
         for (let i = 0; i < matrix.strategies.length; i++) {
           for (let j = i + 1; j < matrix.strategies.length; j++) {
@@ -1098,16 +856,9 @@ export function registerAnalysisTools(
           }
         }
 
-        if (highlyCorrelated.length > 0) {
-          lines.push("### Warnings", "");
-          lines.push(`**Highly correlated pairs (|r| > ${highlightThreshold}):**`, "");
-          for (const { pair, value, sampleSize } of highlyCorrelated) {
-            lines.push(`- ${pair[0]} / ${pair[1]}: ${formatRatio(value)} (n=${sampleSize})`);
-          }
-          lines.push("");
-        }
-
-        const output = lines.join("\n");
+        // Brief summary for user display
+        const avgCorr = Number.isNaN(analytics.averageCorrelation) ? "N/A" : formatRatio(analytics.averageCorrelation);
+        const summary = `Correlation: ${blockId} | ${strategies.length} strategies | Avg: ${avgCorr} | High-corr pairs: ${highlyCorrelated.length}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -1147,7 +898,7 @@ export function registerAnalysisTools(
           highlyCorrelatedPairs: highlyCorrelated,
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -1272,72 +1023,12 @@ export function registerAnalysisTools(
           varianceThreshold,
         });
 
-        // Build markdown output
-        const lines: string[] = [
-          `## Tail Risk Analysis: ${blockId}`,
-          "",
-          "### Configuration",
-          "",
-          `| Parameter | Value |`,
-          `|-----------|-------|`,
-          `| Strategies | ${result.strategies.length} |`,
-          `| Trading Days | ${result.tradingDaysUsed} |`,
-          `| Tail Threshold | ${formatPercent(result.tailThreshold * 100)} (worst ${formatPercent(result.tailThreshold * 100)}) |`,
-          `| Min Trading Days | ${minTradingDays} |`,
-          `| Normalization | ${normalization} |`,
-          `| Date Basis | ${dateBasis} |`,
-          `| Strategy Filter | ${strategyFilter?.length ? strategyFilter.join(", ") : "All strategies"} |`,
-          `| Ticker Filter | ${tickerFilter ?? "All tickers"} |`,
-          `| Date Range | ${dateRangeFrom || dateRangeTo ? `${dateRangeFrom ?? "start"} to ${dateRangeTo ?? "end"}` : "All dates"} |`,
-          `| Variance Threshold | ${formatPercent(result.varianceThreshold * 100)} |`,
-          "",
-          "### Analytics",
-          "",
-          `| Metric | Value |`,
-          `|--------|-------|`,
-          `| Highest Joint Tail Risk | ${formatRatio(result.analytics.highestJointTailRisk.value)} (${result.analytics.highestJointTailRisk.pair.join(" / ")}) |`,
-          `| Lowest Joint Tail Risk | ${formatRatio(result.analytics.lowestJointTailRisk.value)} (${result.analytics.lowestJointTailRisk.pair.join(" / ")}) |`,
-          `| Average Joint Tail Risk | ${formatRatio(result.analytics.averageJointTailRisk)} |`,
-          `| High Risk Pairs | ${formatPercent(result.analytics.highRiskPairsPct * 100)} |`,
-          `| Effective Factors | ${result.effectiveFactors} of ${result.strategies.length} |`,
-          "",
-          "### Marginal Contributions",
-          "",
-          `| Strategy | Risk Contribution | Concentration | Avg Tail Dependence |`,
-          `|----------|-------------------|---------------|---------------------|`,
-        ];
+        // Determine risk level for summary
+        const riskLevel = result.analytics.averageJointTailRisk > 0.5 ? "HIGH" :
+          result.analytics.averageJointTailRisk > 0.3 ? "MODERATE" : "LOW";
 
-        for (const mc of result.marginalContributions) {
-          lines.push(
-            `| ${mc.strategy} | ${formatPercent(mc.tailRiskContribution)} | ${formatRatio(mc.concentrationScore)} | ${formatRatio(mc.avgTailDependence)} |`
-          );
-        }
-
-        lines.push("");
-
-        // Add interpretation
-        lines.push("### Interpretation", "");
-        if (result.analytics.averageJointTailRisk > 0.5) {
-          lines.push("**High tail dependence detected.** Strategies tend to have extreme losses together.");
-          lines.push("Consider reducing position sizes or diversifying into less correlated strategies.");
-        } else if (result.analytics.averageJointTailRisk > 0.3) {
-          lines.push("**Moderate tail dependence.** Some co-movement during extreme events.");
-          lines.push("Monitor during high volatility periods.");
-        } else {
-          lines.push("**Low tail dependence.** Good diversification during extreme events.");
-          lines.push("Strategies appear to provide independent risk profiles.");
-        }
-
-        lines.push("");
-
-        if (result.insufficientDataPairs > 0) {
-          lines.push(
-            `*Note: ${result.insufficientDataPairs} strategy pairs had insufficient data for tail risk calculation.*`,
-            ""
-          );
-        }
-
-        const output = lines.join("\n");
+        // Brief summary for user display
+        const summary = `Tail Risk: ${blockId} | ${result.strategies.length} strategies | Avg Joint Risk: ${formatRatio(result.analytics.averageJointTailRisk)} | Level: ${riskLevel}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -1376,7 +1067,7 @@ export function registerAnalysisTools(
           copulaCorrelationMatrix: result.copulaCorrelationMatrix,
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
@@ -1506,84 +1197,6 @@ export function registerAnalysisTools(
           kellyFraction === "full" ? 1.0 : kellyFraction === "half" ? 0.5 : 0.25;
         const maxAllocationFraction = maxAllocationPct / 100;
 
-        // Build markdown output
-        const lines: string[] = [
-          `## Position Sizing: ${blockId}`,
-          "",
-        ];
-
-        if (strategy) {
-          lines.push(`**Strategy Filter:** ${strategy}`, "");
-        }
-
-        lines.push(
-          "### Configuration",
-          "",
-          `| Parameter | Value |`,
-          `|-----------|-------|`,
-          `| Capital Base | ${formatCurrency(capitalBase)} |`,
-          `| Kelly Fraction | ${kellyFraction} (${formatPercent(kellyMultiplier * 100)} multiplier) |`,
-          `| Max Allocation | ${formatPercent(maxAllocationPct)} |`,
-          `| Include Negative Kelly | ${includeNegativeKelly ? "Yes" : "No"} |`,
-          `| Use Margin Returns | ${useMarginReturns ? "Yes" : "No"} |`,
-          `| Min Trades | ${minTrades} |`,
-          `| Sort By | ${sortBy} (${sortOrder}) |`,
-          ""
-        );
-        lines.push(
-          "### Portfolio-Level Kelly",
-          "",
-          `| Metric | Value |`,
-          `|--------|-------|`,
-          `| Win Rate | ${formatPercent(portfolioKelly.winRate * 100)} |`,
-          `| Avg Win | ${formatCurrency(portfolioKelly.avgWin)} |`,
-          `| Avg Loss | ${formatCurrency(portfolioKelly.avgLoss)} |`,
-          `| Payoff Ratio | ${formatRatio(portfolioKelly.payoffRatio)} |`,
-          `| Kelly Fraction | ${portfolioKelly.hasValidKelly ? formatPercent(portfolioKelly.percent) : "N/A"} |`,
-          `| Recommended Allocation | ${portfolioKelly.hasValidKelly ? formatCurrency(capitalBase * Math.max(0, portfolioKelly.fraction)) : "N/A"} |`
-        );
-
-        // Add margin-based returns info if available and requested
-        if (useMarginReturns && portfolioKelly.avgWinPct !== undefined) {
-          lines.push(
-            `| Avg Win (% of Margin) | ${formatPercent(portfolioKelly.avgWinPct)} |`,
-            `| Avg Loss (% of Margin) | ${formatPercent(portfolioKelly.avgLossPct ?? 0)} |`,
-            `| Normalized Kelly | ${portfolioKelly.normalizedKellyPct !== undefined ? formatPercent(portfolioKelly.normalizedKellyPct) : "N/A"} |`
-          );
-        }
-
-        if (portfolioKelly.hasUnrealisticValues) {
-          lines.push(
-            `| ⚠️ Unrealistic Values | Yes (likely from compounding backtest) |`
-          );
-        }
-
-        lines.push("");
-
-        if (!portfolioKelly.hasValidKelly) {
-          lines.push("*Kelly fraction cannot be calculated (insufficient wins/losses or zero avg loss).*", "");
-        }
-
-        if (skippedStrategies.length > 0) {
-          lines.push(`*Skipped ${skippedStrategies.length} strategies with < ${minTrades} trades: ${skippedStrategies.join(", ")}*`, "");
-        }
-
-        // Per-strategy Kelly
-        lines.push("### Per-Strategy Kelly", "");
-
-        // Add extra column for margin-based Kelly if requested
-        if (useMarginReturns) {
-          lines.push(
-            `| Strategy | Win Rate | Payoff | Kelly % | Norm Kelly | Allocation |`,
-            `|----------|----------|--------|---------|------------|------------|`
-          );
-        } else {
-          lines.push(
-            `| Strategy | Win Rate | Payoff | Kelly % | Allocation |`,
-            `|----------|----------|--------|---------|------------|`
-          );
-        }
-
         const strategyResults: Array<{
           name: string;
           kelly: ReturnType<typeof calculateKellyMetrics>;
@@ -1648,70 +1261,26 @@ export function registerAnalysisTools(
           return sortOrder === "desc" ? -comparison : comparison;
         });
 
-        // Output sorted results
-        for (const { name, kelly, adjustedAllocation } of strategyResults) {
-          if (useMarginReturns) {
-            lines.push(
-              `| ${name} | ${formatPercent(kelly.winRate * 100)} | ${formatRatio(kelly.payoffRatio)} | ${kelly.hasValidKelly ? formatPercent(kelly.percent) : "N/A"} | ${kelly.normalizedKellyPct !== undefined ? formatPercent(kelly.normalizedKellyPct) : "N/A"} | ${kelly.hasValidKelly ? formatCurrency(adjustedAllocation) : "N/A"} |`
-            );
-          } else {
-            lines.push(
-              `| ${name} | ${formatPercent(kelly.winRate * 100)} | ${formatRatio(kelly.payoffRatio)} | ${kelly.hasValidKelly ? formatPercent(kelly.percent) : "N/A"} | ${kelly.hasValidKelly ? formatCurrency(adjustedAllocation) : "N/A"} |`
-            );
-          }
-        }
-
-        lines.push("");
-
-        // Add warnings
+        // Build warnings
         const warnings: string[] = [];
         if (portfolioKelly.hasValidKelly && portfolioKelly.fraction > 0.25) {
-          warnings.push("Portfolio Kelly exceeds 25% - consider using half-Kelly or quarter-Kelly for safety.");
+          warnings.push("Portfolio Kelly exceeds 25%");
         }
-
         for (const { name, kelly } of strategyResults) {
           if (kelly.hasValidKelly && kelly.fraction > 0.5) {
-            warnings.push(`${name} has Kelly > 50% - likely unrealistic, verify data quality.`);
+            warnings.push(`${name} has Kelly > 50%`);
           }
           if (kelly.hasValidKelly && kelly.fraction < 0) {
-            warnings.push(`${name} has negative Kelly - strategy has negative edge, consider removing.`);
+            warnings.push(`${name} has negative Kelly`);
           }
         }
 
-        if (warnings.length > 0) {
-          lines.push("### Warnings", "");
-          for (const warning of warnings) {
-            lines.push(`- ${warning}`);
-          }
-          lines.push("");
-        }
-
-        // Add recommendations
-        lines.push("### Recommendations", "");
-        if (portfolioKelly.hasValidKelly && portfolioKelly.fraction > 0) {
-          const fullKellyAlloc = Math.min(portfolioKelly.fraction, maxAllocationFraction);
-          const halfKellyAlloc = Math.min(portfolioKelly.fraction / 2, maxAllocationFraction);
-          const quarterKellyAlloc = Math.min(portfolioKelly.fraction / 4, maxAllocationFraction);
-
-          const selectedLabel = kellyFraction === "full" ? " (selected)" : "";
-          const halfLabel = kellyFraction === "half" ? " (selected)" : "";
-          const quarterLabel = kellyFraction === "quarter" ? " (selected)" : "";
-
-          lines.push(`- **Full Kelly:** ${formatPercent(fullKellyAlloc * 100)} (${formatCurrency(capitalBase * fullKellyAlloc)})${selectedLabel}`);
-          lines.push(`- **Half Kelly:** ${formatPercent(halfKellyAlloc * 100)} (${formatCurrency(capitalBase * halfKellyAlloc)}) - recommended for most traders${halfLabel}`);
-          lines.push(`- **Quarter Kelly:** ${formatPercent(quarterKellyAlloc * 100)} (${formatCurrency(capitalBase * quarterKellyAlloc)}) - conservative approach${quarterLabel}`);
-
-          if (portfolioKelly.fraction > maxAllocationFraction) {
-            lines.push(`\n*Note: Full Kelly (${formatPercent(portfolioKelly.percent)}) exceeds max allocation cap (${formatPercent(maxAllocationPct)})*`);
-          }
-        } else {
-          lines.push("- Strategy does not have a positive edge based on historical data.");
-          lines.push("- Consider paper trading or further optimization before allocating capital.");
-        }
-
-        lines.push("");
-
-        const output = lines.join("\n");
+        // Brief summary for user display
+        const kellyDisplay = portfolioKelly.hasValidKelly ? formatPercent(portfolioKelly.percent) : "N/A";
+        const allocDisplay = portfolioKelly.hasValidKelly
+          ? formatCurrency(capitalBase * Math.max(0, Math.min(portfolioKelly.fraction * kellyMultiplier, maxAllocationFraction)))
+          : "N/A";
+        const summary = `Position Sizing: ${blockId}${strategy ? ` (${strategy})` : ""} | Kelly: ${kellyDisplay} | ${kellyFraction} allocation: ${allocDisplay} | ${strategyResults.length} strategies`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -1783,7 +1352,7 @@ export function registerAnalysisTools(
           warnings,
         };
 
-        return createDualOutput(output, structuredData);
+        return createToolOutput(summary, structuredData);
       } catch (error) {
         return {
           content: [
