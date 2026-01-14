@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 
 ## Current Position
 
-Phase: 11 of 14 (Research & Architecture) — COMPLETE
-Plan: 2 of 2 complete
-Status: Phase complete, ready for Phase 12
-Last activity: 2026-01-14 — MCP server scaffold complete
+Phase: 12 of 14 (Core Integration Layer) — IN PROGRESS
+Plan: 1 of 3 complete
+Status: Plan 01 complete, ready for Plan 02
+Last activity: 2026-01-14 — Block loading and core tools implemented
 
-Progress: ██░░░░░░░░ 15%
+Progress: ███░░░░░░░ 25%
 
 ## v2.0 Goal
 
@@ -39,6 +39,12 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
   - .block.json stores metadata + cached stats
 - MCP "reprocess" = re-parse CSVs + recalculate (different from UI "recalculate")
 
+**v2.0 Phase 12-01:**
+- CSV parsing inline in block-loader (TradeProcessor uses browser File API)
+- Strategy filtering forces trade-based calculations (daily logs = full portfolio)
+- Automatic metadata caching in .block.json for faster listing
+- ESM imports require .js extension in TypeScript
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -59,5 +65,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Phase 11 complete
+Stopped at: Phase 12 Plan 01 complete
 Resume file: None
