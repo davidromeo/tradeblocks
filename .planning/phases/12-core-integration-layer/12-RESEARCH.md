@@ -7,13 +7,28 @@
 <research_summary>
 ## Summary
 
-Researched MCP server development patterns for building the TradeBlocks integration layer. The standard approach uses the official `@modelcontextprotocol/sdk` with McpServer API, Zod for schema validation, and stdio transport for local CLI integration.
+Researched MCP server development patterns and conducted comprehensive codebase analysis to ensure full feature coverage for the TradeBlocks integration layer.
 
-Key finding: MCP tool design follows a "Less is More" principle - expose workflow-based tools that handle complete user goals rather than granular API functions. For TradeBlocks, this means tools like `get_block_statistics` (complete stats for a block) rather than separate tools for each metric.
+**TradeBlocks has 10 major features** across analysis, risk, and portfolio management:
+1. Block Management & Statistics
+2. Performance Analysis (equity curves, drawdowns, returns)
+3. Walk-Forward Analysis (strategy robustness testing)
+4. Trading Calendar (backtest vs actual comparison)
+5. Position Sizing (Kelly criterion)
+6. Risk Simulator (Monte Carlo with worst-case scenarios)
+7. Tail Risk Analysis (Gaussian copula)
+8. Correlation Matrix (Kendall/Spearman/Pearson)
+9. Static Datasets (external data matching)
+10. Report Builder (custom charts)
 
-The existing TradeBlocks codebase already has well-structured data access patterns in `lib/db/` and calculation logic in `lib/calculations/` - the MCP server can reuse these directly via the shared @lib/* path alias established in Phase 11.
+**Key finding:** The existing lib/calculations/ directory already has production-tested implementations for ALL major calculations (portfolio stats, Monte Carlo, Kelly, tail risk, correlation, WFA). The MCP server is primarily a thin adapter layer.
 
-**Primary recommendation:** Build ~8-12 focused MCP tools that expose block queries, trade filtering, statistics calculation, and cross-block comparison. Reuse existing `PortfolioStatsCalculator` and db store functions. Keep tool descriptions clear and tool count minimal to avoid model confusion.
+**Tool design:** 14 workflow-based tools organized into three tiers:
+- **Tier 1 (Core):** Block listing, statistics, strategy comparison, cross-block comparison
+- **Tier 2 (Analysis):** WFA, Monte Carlo, correlation, tail risk, position sizing
+- **Tier 3 (Performance):** Chart data, period returns, backtest vs actual comparison
+
+**Primary recommendation:** Build 14 MCP tools covering all major features. Defer Static Datasets and Report Builder to Phase 13. Reuse existing calculation modules via @lib/* imports. Keep tool descriptions clear and return structured markdown for Claude parsing.
 </research_summary>
 
 <standard_stack>
@@ -153,13 +168,19 @@ server.tool("get_block_details", "Get full details for a block", { blockId }, as
 
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
-| Statistics calculation | Custom formulas | `PortfolioStatsCalculator` from lib/calculations | Already handles edge cases, matches Python implementation |
+| Portfolio statistics | Custom formulas | `PortfolioStatsCalculator` from lib/calculations | Handles edge cases, matches Python numpy |
+| Monte Carlo simulation | Custom simulation loop | `runMonteCarloSimulation` from lib/calculations/monte-carlo | Includes worst-case testing, percentile bands |
+| Kelly criterion | Manual Kelly formula | `calculateKellyFraction` from lib/calculations/kelly | Per-strategy and portfolio-level calculations |
+| Tail risk analysis | Custom copula math | `calculateTailDependence` from lib/calculations/tail-risk | Gaussian copula with Kendall's tau |
+| Correlation matrix | Manual correlation | `calculateCorrelationMatrix` from lib/calculations/correlation | Kendall, Spearman, Pearson methods |
+| Walk-forward analysis | Custom WFA logic | `WalkForwardOptimizer` from lib/calculations | Multiple optimization targets, robustness metrics |
+| Margin timeline | Manual margin calc | `calculateMarginTimeline` from lib/calculations/margin-timeline | Handles compounding vs fixed capital |
 | CSV parsing | Manual parsing | `TradeProcessor` from lib/processing | Handles column mapping, validation, errors |
 | Date handling | Direct Date objects | Existing date utils | Eastern timezone handling is tricky |
-| Filtering trades | Custom filter logic | Existing store functions | `getTradesByStrategy`, `getTradesByDateRange` exist |
-| Zod schemas | JSON Schema | Zod | SDK requires Zod, better TypeScript integration |
+| Performance snapshots | Manual chart data | `buildPerformanceSnapshot` from lib/services | Cached, handles all chart types |
+| Calendar comparison | Custom matching | `scaleStrategyComparison` from lib/services/calendar-data | Handles scaling modes |
 
-**Key insight:** TradeBlocks lib/ already has production-tested implementations for every calculation and data operation needed. The MCP server is primarily a thin adapter layer that exposes existing functionality via MCP protocol.
+**Key insight:** TradeBlocks lib/ already has production-tested implementations for EVERY calculation and analysis feature. The MCP server is primarily a thin adapter layer that exposes existing functionality via MCP protocol.
 </dont_hand_roll>
 
 <common_pitfalls>
@@ -314,32 +335,200 @@ async function loadBlock(baseDir: string, blockId: string) {
 <tool_design>
 ## Proposed Tool Design for Phase 12
 
-Based on user requirements (full API surface, read-only, cross-block intelligence, filtering, stats):
+Based on comprehensive feature inventory (full API surface, read-only, cross-block intelligence):
 
-### Discovery Tools
-1. **list_backtests** - List all available backtest blocks with summary stats
-2. **get_block_info** - Get detailed info for a specific block
+### Tier 1: Core Tools (Always Available)
+These tools cover the fundamental operations:
 
-### Query Tools
-3. **get_trades** - Get trades with optional filtering (strategy, date range, paginated)
-4. **get_strategies** - List unique strategies in a block
-5. **get_daily_log** - Get daily portfolio values (if available)
+| # | Tool | Description | Maps to Feature |
+|---|------|-------------|-----------------|
+| 1 | **list_backtests** | List all available backtest blocks with summary stats | Block Management |
+| 2 | **get_block_info** | Get detailed info for a specific block (trade count, date range, strategies) | Block Management |
+| 3 | **get_statistics** | Full portfolio stats with optional strategy/date filter | Block Statistics |
+| 4 | **get_strategy_comparison** | Compare all strategies within a block | Block Statistics |
+| 5 | **compare_blocks** | Compare stats across multiple blocks | Cross-block intelligence |
+| 6 | **get_trades** | Get trades with filtering (strategy, date, paginated) | Data queries |
 
-### Statistics Tools
-6. **get_statistics** - Calculate full portfolio stats with optional strategy filter
-7. **get_strategy_comparison** - Compare all strategies within a block
-8. **compare_blocks** - Compare stats across multiple blocks
+### Tier 2: Analysis Tools (Advanced)
+These expose the advanced analysis features:
 
-### Analysis Tools
-9. **get_performance_summary** - Summary metrics formatted for reporting
-10. **analyze_drawdowns** - Detailed drawdown analysis
-11. **get_period_returns** - Monthly/weekly P&L breakdown
+| # | Tool | Description | Maps to Feature |
+|---|------|-------------|-----------------|
+| 7 | **run_walk_forward** | Execute WFA with configurable periods and optimization target | Walk-Forward Analysis |
+| 8 | **run_monte_carlo** | Monte Carlo simulation with worst-case scenarios | Risk Simulator |
+| 9 | **get_correlation_matrix** | Strategy correlation (Kendall/Spearman/Pearson) | Correlation Matrix |
+| 10 | **get_tail_risk** | Gaussian copula tail dependence analysis | Tail Risk Analysis |
+| 11 | **get_position_sizing** | Kelly criterion-based capital allocation | Position Sizing |
 
-### Export Tools
-12. **export_analysis** - Generate summary report in text format
+### Tier 3: Performance & Reporting Tools
 
-**Total: 12 tools** - at the upper limit but each serves a distinct workflow purpose.
+| # | Tool | Description | Maps to Feature |
+|---|------|-------------|-----------------|
+| 12 | **get_performance_charts** | Get data for equity curve, drawdown, returns distribution | Performance Analysis |
+| 13 | **get_period_returns** | Monthly/weekly P&L breakdown | Performance Analysis |
+| 14 | **compare_backtest_to_actual** | Compare backtest vs actual trades with scaling | Trading Calendar |
+
+### Tool Count Analysis
+
+**Total: 14 tools** - Slightly above the 12-tool guideline, but justified because:
+- Each tool maps to a distinct UI feature users already understand
+- Tools are grouped into clear tiers (core vs advanced)
+- No overlap or redundancy between tools
+- Alternative: Could merge correlation + tail risk into "get_risk_metrics" to reduce count
+
+### Feature Coverage Matrix
+
+| UI Feature | Covered By | Notes |
+|------------|------------|-------|
+| Block Management | list_backtests, get_block_info | Read-only, no CRUD |
+| Block Statistics | get_statistics, get_strategy_comparison | Full stats coverage |
+| Performance Analysis | get_performance_charts, get_period_returns | Chart data, not images |
+| Walk-Forward Analysis | run_walk_forward | Full WFA execution |
+| Trading Calendar | compare_backtest_to_actual | Requires reportinglog.csv |
+| Position Sizing | get_position_sizing | Kelly calculations |
+| Risk Simulator | run_monte_carlo | Full Monte Carlo |
+| Tail Risk Analysis | get_tail_risk | Copula analysis |
+| Correlation Matrix | get_correlation_matrix | All three methods |
+| Static Datasets | (deferred to Phase 13) | External data integration |
+| Report Builder | (deferred to Phase 13) | Custom chart building |
+| AI Assistant | (not needed) | MCP IS the AI interface |
+
+### Deferred to Phase 13
+
+These features require more complex implementation or UI state that doesn't translate well to MCP:
+
+1. **Static Datasets** - Uploading and matching external CSV data
+2. **Report Builder** - Custom chart/filter configuration (too stateful)
+3. **Chart image generation** - Return data instead, let Claude visualize
+
+### Input Parameter Standards
+
+All tools accepting filters should use consistent parameters:
+
+```typescript
+// Common filter parameters
+interface CommonFilters {
+  blockId: string;                    // Required for all block-specific tools
+  strategy?: string | string[];       // Optional strategy filter (single or multi)
+  startDate?: string;                 // YYYY-MM-DD, Eastern time
+  endDate?: string;                   // YYYY-MM-DD, Eastern time
+  normalize?: 'raw' | 'margin' | '1lot'; // Return normalization
+}
+```
+
+### Output Format Standards
+
+All tools should return structured text that Claude can parse:
+
+```typescript
+// Structured output for statistics
+{
+  content: [{
+    type: "text",
+    text: `## Block: ${blockId}\n\n### Portfolio Statistics\n| Metric | Value |\n|--------|-------|\n| Total P/L | $${stats.totalPl} |\n...`
+  }]
+}
+```
 </tool_design>
+
+<feature_inventory>
+## Complete TradeBlocks Feature Inventory
+
+Comprehensive inventory of all TradeBlocks functionality discovered during codebase exploration:
+
+### App Routes & Features
+
+| Route | Feature | Key Calculations | MCP Coverage |
+|-------|---------|------------------|--------------|
+| `/blocks` | Block Management | N/A | `list_backtests`, `get_block_info` |
+| `/block-stats` | Portfolio Statistics | `PortfolioStatsCalculator` | `get_statistics`, `get_strategy_comparison` |
+| `/performance-blocks` | Performance Charts | `buildPerformanceSnapshot` | `get_performance_charts`, `get_period_returns` |
+| `/walk-forward` | Walk-Forward Analysis | `WalkForwardOptimizer`, `getWalkForwardVerdict` | `run_walk_forward` |
+| `/trading-calendar` | Backtest vs Actual | `scaleStrategyComparison` | `compare_backtest_to_actual` |
+| `/position-sizing` | Kelly Sizing | `calculateKellyFraction` | `get_position_sizing` |
+| `/risk-simulator` | Monte Carlo | `runMonteCarloSimulation` | `run_monte_carlo` |
+| `/tail-risk-analysis` | Tail Dependence | `calculateTailDependence` | `get_tail_risk` |
+| `/correlation-matrix` | Strategy Correlation | `calculateCorrelationMatrix` | `get_correlation_matrix` |
+| `/static-datasets` | External Data | `matchDatasetToTrades` | Phase 13 |
+| `/assistant` | GPT Export | Export helpers | N/A (MCP replaces this) |
+
+### Calculation Modules (lib/calculations/)
+
+| Module | Purpose | Key Functions |
+|--------|---------|---------------|
+| `portfolio-stats.ts` | Core statistics | `calculatePortfolioStats`, `calculateStrategyStats` |
+| `monte-carlo.ts` | Risk simulation | `runMonteCarloSimulation` (with worst-case testing) |
+| `kelly.ts` | Position sizing | `calculateKellyFraction`, portfolio Kelly |
+| `tail-risk.ts` | Tail dependence | `calculateTailDependence` (Gaussian copula) |
+| `correlation.ts` | Strategy correlation | `calculateCorrelationMatrix` (Kendall/Spearman/Pearson) |
+| `walk-forward-optimizer.ts` | WFA execution | Parameter optimization across periods |
+| `walk-forward-verdict.ts` | WFA interpretation | Robustness assessment and recommendations |
+| `margin-timeline.ts` | Margin analysis | Margin utilization over time |
+| `flexible-filter.ts` | Trade filtering | Custom criteria filtering |
+
+### Data Models (lib/models/)
+
+| Model | Purpose | Key Fields |
+|-------|---------|------------|
+| `Trade` | Individual trade | dateOpened, strategy, pl, legs, commissions |
+| `DailyLogEntry` | Daily portfolio value | date, netLiquidity, dailyPl, drawdownPct |
+| `ReportingTrade` | Actual/live trades | Similar to Trade, for calendar comparison |
+| `PortfolioStats` | Calculated statistics | sharpeRatio, sortinoRatio, maxDrawdown, kelly, etc. |
+| `StrategyStats` | Per-strategy stats | strategyName, tradeCount, totalPl, winRate |
+| `WalkForwardAnalysis` | WFA results | periods, robustnessMetrics, verdict |
+
+### Performance Chart Types (from performance-blocks)
+
+| Chart | Data Source | MCP Return Format |
+|-------|-------------|-------------------|
+| Equity Curve | Trade sequence | Array of {date, cumPl, cumPct} |
+| Drawdown | Equity curve | Array of {date, drawdownPct, duration} |
+| Monthly Returns | Grouped trades | Matrix of year x month values |
+| Return Distribution | Trade P/L | Histogram buckets with counts |
+| Day of Week | Grouped trades | Array of {day, avgPl, tradeCount} |
+| Win/Loss Streaks | Trade sequence | Array of {start, end, count, type} |
+| VIX Regime | Trades with VIX | Array of {regime, avgPl, tradeCount} |
+| ROM Timeline | Trades with margin | Array of {date, rom, margin} |
+| Margin Utilization | Trade margins | Array of {date, utilization, peak} |
+| Rolling Metrics | Windowed calcs | Array of {date, sharpe, sortino, ...} |
+
+### Optimization Targets (WFA)
+
+| Target | Description | Calculation |
+|--------|-------------|-------------|
+| Net Profit | Total P/L | Sum of trade P/L |
+| Sharpe Ratio | Risk-adjusted return | Mean / StdDev (annualized) |
+| Sortino Ratio | Downside risk | Mean / DownsideStdDev |
+| Calmar Ratio | Drawdown-adjusted | CAGR / MaxDrawdown |
+| Win Rate | Consistency | Winners / Total |
+| CAGR | Compound growth | Annualized geometric return |
+| Correlation | Diversification | IS/OOS correlation |
+| Tail Risk | Extreme events | Tail dependence measure |
+| Effective Factors | Robustness | Multi-factor score |
+
+### Common Filter Parameters
+
+These parameters appear across multiple features and should be standardized in MCP tools:
+
+| Parameter | Type | Used In |
+|-----------|------|---------|
+| blockId | string | All tools |
+| strategy | string[] | Statistics, charts, WFA |
+| startDate | YYYY-MM-DD | Date filtering |
+| endDate | YYYY-MM-DD | Date filtering |
+| normalize | 'raw'/'margin'/'1lot' | Charts, stats |
+| dateBasis | 'opened'/'closed' | Grouping |
+| riskFreeRate | number (%) | Sharpe, Sortino |
+
+### Key Architectural Constraints
+
+1. **Daily logs = full portfolio** - Cannot use for strategy-filtered stats
+2. **Timezone = US Eastern** - All dates parsed/displayed in America/New_York
+3. **Commission separation** - Gross P/L and commissions tracked separately
+4. **Leg combining** - Optional grouping of multi-leg trades by timestamp
+5. **Caching** - Performance snapshots and combined trades are cached
+
+</feature_inventory>
 
 <open_questions>
 ## Open Questions
