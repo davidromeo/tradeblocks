@@ -1124,6 +1124,10 @@ export function registerAnalysisTools(
           .number()
           .positive()
           .describe("Starting capital in dollars"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter to a specific strategy name (case-insensitive). If provided, only calculates Kelly for that strategy."),
         kellyFraction: z
           .enum(["full", "half", "quarter"])
           .default("half")
@@ -1142,30 +1146,81 @@ export function registerAnalysisTools(
           .describe(
             "Include strategies with negative Kelly in output (useful for identifying loss-reduction opportunities)"
           ),
+        useMarginReturns: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Prefer percentage returns based on margin requirement instead of absolute P&L. More appropriate for compounding strategies with variable position sizes."
+          ),
+        minTrades: z
+          .number()
+          .min(1)
+          .default(10)
+          .describe("Minimum trades required per strategy for valid Kelly calculation (default: 10)"),
+        sortBy: z
+          .enum(["name", "kelly", "winRate", "payoffRatio", "allocation"])
+          .default("kelly")
+          .describe("Sort strategies by: 'name', 'kelly' percentage, 'winRate', 'payoffRatio', or 'allocation' amount"),
+        sortOrder: z
+          .enum(["asc", "desc"])
+          .default("desc")
+          .describe("Sort direction: 'asc' (ascending) or 'desc' (descending)"),
       }),
     },
-    async ({ blockId, capitalBase, kellyFraction, maxAllocationPct, includeNegativeKelly }) => {
+    async ({
+      blockId,
+      capitalBase,
+      strategy,
+      kellyFraction,
+      maxAllocationPct,
+      includeNegativeKelly,
+      useMarginReturns,
+      minTrades,
+      sortBy,
+      sortOrder,
+    }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
-        const trades = block.trades;
+        let trades = block.trades;
+
+        // Apply strategy filter if provided
+        if (strategy) {
+          trades = filterByStrategy(trades, strategy);
+        }
 
         if (trades.length === 0) {
           return {
             content: [
               {
                 type: "text",
-                text: "No trades found in this block.",
+                text: strategy
+                  ? `No trades found for strategy "${strategy}" in this block.`
+                  : "No trades found in this block.",
               },
             ],
             isError: true,
           };
         }
 
-        // Calculate Kelly metrics for entire portfolio
+        // Calculate Kelly metrics for portfolio (filtered or full)
         const portfolioKelly = calculateKellyMetrics(trades, capitalBase);
 
         // Calculate per-strategy Kelly metrics
         const strategyKelly = calculateStrategyKellyMetrics(trades, capitalBase);
+
+        // Filter out strategies with insufficient trades
+        const filteredStrategyKelly = new Map<string, ReturnType<typeof calculateKellyMetrics>>();
+        const skippedStrategies: string[] = [];
+        for (const [strategyName, kelly] of strategyKelly.entries()) {
+          const strategyTrades = trades.filter(
+            (t) => t.strategy.toLowerCase() === strategyName.toLowerCase()
+          );
+          if (strategyTrades.length >= minTrades) {
+            filteredStrategyKelly.set(strategyName, kelly);
+          } else {
+            skippedStrategies.push(`${strategyName} (${strategyTrades.length} trades)`);
+          }
+        }
 
         // Calculate Kelly multiplier based on fraction choice
         const kellyMultiplier =
@@ -1176,6 +1231,13 @@ export function registerAnalysisTools(
         const lines: string[] = [
           `## Position Sizing: ${blockId}`,
           "",
+        ];
+
+        if (strategy) {
+          lines.push(`**Strategy Filter:** ${strategy}`, "");
+        }
+
+        lines.push(
           "### Configuration",
           "",
           `| Parameter | Value |`,
@@ -1184,7 +1246,12 @@ export function registerAnalysisTools(
           `| Kelly Fraction | ${kellyFraction} (${formatPercent(kellyMultiplier * 100)} multiplier) |`,
           `| Max Allocation | ${formatPercent(maxAllocationPct)} |`,
           `| Include Negative Kelly | ${includeNegativeKelly ? "Yes" : "No"} |`,
-          "",
+          `| Use Margin Returns | ${useMarginReturns ? "Yes" : "No"} |`,
+          `| Min Trades | ${minTrades} |`,
+          `| Sort By | ${sortBy} (${sortOrder}) |`,
+          ""
+        );
+        lines.push(
           "### Portfolio-Level Kelly",
           "",
           `| Metric | Value |`,
@@ -1194,29 +1261,59 @@ export function registerAnalysisTools(
           `| Avg Loss | ${formatCurrency(portfolioKelly.avgLoss)} |`,
           `| Payoff Ratio | ${formatRatio(portfolioKelly.payoffRatio)} |`,
           `| Kelly Fraction | ${portfolioKelly.hasValidKelly ? formatPercent(portfolioKelly.percent) : "N/A"} |`,
-          `| Recommended Allocation | ${portfolioKelly.hasValidKelly ? formatCurrency(capitalBase * Math.max(0, portfolioKelly.fraction)) : "N/A"} |`,
-          "",
-        ];
+          `| Recommended Allocation | ${portfolioKelly.hasValidKelly ? formatCurrency(capitalBase * Math.max(0, portfolioKelly.fraction)) : "N/A"} |`
+        );
+
+        // Add margin-based returns info if available and requested
+        if (useMarginReturns && portfolioKelly.avgWinPct !== undefined) {
+          lines.push(
+            `| Avg Win (% of Margin) | ${formatPercent(portfolioKelly.avgWinPct)} |`,
+            `| Avg Loss (% of Margin) | ${formatPercent(portfolioKelly.avgLossPct ?? 0)} |`,
+            `| Normalized Kelly | ${portfolioKelly.normalizedKellyPct !== undefined ? formatPercent(portfolioKelly.normalizedKellyPct) : "N/A"} |`
+          );
+        }
+
+        if (portfolioKelly.hasUnrealisticValues) {
+          lines.push(
+            `| ⚠️ Unrealistic Values | Yes (likely from compounding backtest) |`
+          );
+        }
+
+        lines.push("");
 
         if (!portfolioKelly.hasValidKelly) {
           lines.push("*Kelly fraction cannot be calculated (insufficient wins/losses or zero avg loss).*", "");
         }
 
+        if (skippedStrategies.length > 0) {
+          lines.push(`*Skipped ${skippedStrategies.length} strategies with < ${minTrades} trades: ${skippedStrategies.join(", ")}*`, "");
+        }
+
         // Per-strategy Kelly
         lines.push("### Per-Strategy Kelly", "");
-        lines.push(
-          `| Strategy | Win Rate | Payoff | Kelly % | Allocation |`,
-          `|----------|----------|--------|---------|------------|`
-        );
+
+        // Add extra column for margin-based Kelly if requested
+        if (useMarginReturns) {
+          lines.push(
+            `| Strategy | Win Rate | Payoff | Kelly % | Norm Kelly | Allocation |`,
+            `|----------|----------|--------|---------|------------|------------|`
+          );
+        } else {
+          lines.push(
+            `| Strategy | Win Rate | Payoff | Kelly % | Allocation |`,
+            `|----------|----------|--------|---------|------------|`
+          );
+        }
 
         const strategyResults: Array<{
           name: string;
           kelly: ReturnType<typeof calculateKellyMetrics>;
           rawAllocation: number;
           adjustedAllocation: number;
+          tradeCount: number;
         }> = [];
 
-        for (const [strategyName, kelly] of strategyKelly.entries()) {
+        for (const [strategyName, kelly] of filteredStrategyKelly.entries()) {
           // Skip negative Kelly strategies if not included
           if (!includeNegativeKelly && kelly.hasValidKelly && kelly.fraction < 0) {
             continue;
@@ -1236,15 +1333,53 @@ export function registerAnalysisTools(
             ? capitalBase * Math.max(0, adjustedFraction)
             : 0;
 
+          const tradeCount = trades.filter(
+            (t) => t.strategy.toLowerCase() === strategyName.toLowerCase()
+          ).length;
+
           strategyResults.push({
             name: strategyName,
             kelly,
             rawAllocation,
             adjustedAllocation,
+            tradeCount,
           });
-          lines.push(
-            `| ${strategyName} | ${formatPercent(kelly.winRate * 100)} | ${formatRatio(kelly.payoffRatio)} | ${kelly.hasValidKelly ? formatPercent(kelly.percent) : "N/A"} | ${kelly.hasValidKelly ? formatCurrency(adjustedAllocation) : "N/A"} |`
-          );
+        }
+
+        // Sort strategy results
+        strategyResults.sort((a, b) => {
+          let comparison = 0;
+          switch (sortBy) {
+            case "name":
+              comparison = a.name.localeCompare(b.name);
+              break;
+            case "kelly":
+              comparison = (a.kelly.percent || 0) - (b.kelly.percent || 0);
+              break;
+            case "winRate":
+              comparison = a.kelly.winRate - b.kelly.winRate;
+              break;
+            case "payoffRatio":
+              comparison = a.kelly.payoffRatio - b.kelly.payoffRatio;
+              break;
+            case "allocation":
+              comparison = a.adjustedAllocation - b.adjustedAllocation;
+              break;
+          }
+          return sortOrder === "desc" ? -comparison : comparison;
+        });
+
+        // Output sorted results
+        for (const { name, kelly, adjustedAllocation } of strategyResults) {
+          if (useMarginReturns) {
+            lines.push(
+              `| ${name} | ${formatPercent(kelly.winRate * 100)} | ${formatRatio(kelly.payoffRatio)} | ${kelly.hasValidKelly ? formatPercent(kelly.percent) : "N/A"} | ${kelly.normalizedKellyPct !== undefined ? formatPercent(kelly.normalizedKellyPct) : "N/A"} | ${kelly.hasValidKelly ? formatCurrency(adjustedAllocation) : "N/A"} |`
+            );
+          } else {
+            lines.push(
+              `| ${name} | ${formatPercent(kelly.winRate * 100)} | ${formatRatio(kelly.payoffRatio)} | ${kelly.hasValidKelly ? formatPercent(kelly.percent) : "N/A"} | ${kelly.hasValidKelly ? formatCurrency(adjustedAllocation) : "N/A"} |`
+            );
+          }
         }
 
         lines.push("");
@@ -1304,11 +1439,16 @@ export function registerAnalysisTools(
           blockId,
           options: {
             capitalBase,
+            strategy: strategy ?? null,
             kellyFraction,
             kellyMultiplier,
             maxAllocationPct,
             maxAllocationFraction,
             includeNegativeKelly,
+            useMarginReturns,
+            minTrades,
+            sortBy,
+            sortOrder,
           },
           portfolio: {
             winRate: portfolioKelly.winRate,
@@ -1334,9 +1474,16 @@ export function registerAnalysisTools(
             quarterKelly: portfolioKelly.hasValidKelly
               ? Math.min(portfolioKelly.fraction / 4, maxAllocationFraction)
               : null,
+            // Margin-based metrics
+            avgWinPct: portfolioKelly.avgWinPct ?? null,
+            avgLossPct: portfolioKelly.avgLossPct ?? null,
+            normalizedKellyPct: portfolioKelly.normalizedKellyPct ?? null,
+            calculationMethod: portfolioKelly.calculationMethod ?? null,
+            hasUnrealisticValues: portfolioKelly.hasUnrealisticValues ?? false,
           },
-          strategies: strategyResults.map(({ name, kelly, rawAllocation, adjustedAllocation }) => ({
+          strategies: strategyResults.map(({ name, kelly, rawAllocation, adjustedAllocation, tradeCount }) => ({
             name,
+            tradeCount,
             winRate: kelly.winRate,
             avgWin: kelly.avgWin,
             avgLoss: kelly.avgLoss,
@@ -1346,7 +1493,14 @@ export function registerAnalysisTools(
             hasValidKelly: kelly.hasValidKelly,
             rawAllocation,
             adjustedAllocation,
+            // Margin-based metrics
+            avgWinPct: kelly.avgWinPct ?? null,
+            avgLossPct: kelly.avgLossPct ?? null,
+            normalizedKellyPct: kelly.normalizedKellyPct ?? null,
+            calculationMethod: kelly.calculationMethod ?? null,
+            hasUnrealisticValues: kelly.hasUnrealisticValues ?? false,
           })),
+          skippedStrategies,
           warnings,
         };
 
