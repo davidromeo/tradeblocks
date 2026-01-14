@@ -1,0 +1,456 @@
+/**
+ * Block Data Loader
+ *
+ * Utilities for loading and managing block data from folder-based structure.
+ * Blocks are directories containing tradelog.csv (required) and optional dailylog.csv.
+ */
+
+import * as fs from "fs/promises";
+import * as path from "path";
+import type { Trade } from "@lib/models/trade";
+import type { DailyLogEntry } from "@lib/models/daily-log";
+
+/**
+ * Block metadata stored in .block.json
+ */
+export interface BlockMetadata {
+  blockId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  tradeCount: number;
+  dailyLogCount: number;
+  dateRange: {
+    start: string | null;
+    end: string | null;
+  };
+  strategies: string[];
+  cachedStats?: {
+    totalPl: number;
+    netPl: number;
+    winRate: number;
+    sharpeRatio?: number;
+    maxDrawdown: number;
+    calculatedAt: string;
+  };
+}
+
+/**
+ * Block info summary for listing
+ */
+export interface BlockInfo {
+  blockId: string;
+  name: string;
+  tradeCount: number;
+  hasDailyLog: boolean;
+  dateRange: {
+    start: Date | null;
+    end: Date | null;
+  };
+  strategies: string[];
+  totalPl: number;
+  netPl: number;
+}
+
+/**
+ * Loaded block data
+ */
+export interface LoadedBlock {
+  blockId: string;
+  trades: Trade[];
+  dailyLogs?: DailyLogEntry[];
+  metadata?: BlockMetadata;
+}
+
+/**
+ * Parse a YYYY-MM-DD date string preserving the calendar date.
+ * Same approach as lib/processing for consistency.
+ */
+function parseDatePreservingCalendarDay(dateStr: string): Date {
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+  return new Date(dateStr);
+}
+
+/**
+ * Parse numeric value from CSV string
+ */
+function parseNumber(
+  value: string | undefined,
+  defaultValue?: number
+): number {
+  if (!value || value.trim() === "" || value.toLowerCase() === "nan") {
+    if (defaultValue !== undefined) return defaultValue;
+    return 0;
+  }
+  const cleaned = value.replace(/[$,%]/g, "").trim();
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? defaultValue ?? 0 : parsed;
+}
+
+/**
+ * Parse CSV content into array of record objects
+ */
+function parseCSV(content: string): Record<string, string>[] {
+  const lines = content.trim().split("\n");
+  if (lines.length < 2) return [];
+
+  const headers = parseCSVLine(lines[0]);
+  const records: Record<string, string>[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    if (values.length === 0) continue;
+
+    const record: Record<string, string> = {};
+    headers.forEach((header, idx) => {
+      record[header] = values[idx] || "";
+    });
+    records.push(record);
+  }
+
+  return records;
+}
+
+/**
+ * Parse a single CSV line handling quoted fields
+ */
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current.trim());
+  return result;
+}
+
+/**
+ * Convert raw CSV record to Trade object
+ */
+function convertToTrade(raw: Record<string, string>): Trade | null {
+  try {
+    const dateOpened = parseDatePreservingCalendarDay(raw["Date Opened"]);
+    if (isNaN(dateOpened.getTime())) return null;
+
+    const dateClosed = raw["Date Closed"]
+      ? parseDatePreservingCalendarDay(raw["Date Closed"])
+      : undefined;
+
+    const strategy = (raw["Strategy"] || "").trim() || "Unknown";
+
+    const rawPremium = (raw["Premium"] || "").replace(/[$,]/g, "").trim();
+    const premiumPrecision: Trade["premiumPrecision"] =
+      rawPremium && !rawPremium.includes(".") ? "cents" : "dollars";
+
+    return {
+      dateOpened,
+      timeOpened: raw["Time Opened"] || "00:00:00",
+      openingPrice: parseNumber(raw["Opening Price"]),
+      legs: raw["Legs"] || "",
+      premium: parseNumber(raw["Premium"]),
+      premiumPrecision,
+      closingPrice: raw["Closing Price"]
+        ? parseNumber(raw["Closing Price"])
+        : undefined,
+      dateClosed,
+      timeClosed: raw["Time Closed"] || undefined,
+      avgClosingCost: raw["Avg. Closing Cost"]
+        ? parseNumber(raw["Avg. Closing Cost"])
+        : undefined,
+      reasonForClose: raw["Reason For Close"] || undefined,
+      pl: parseNumber(raw["P/L"]),
+      numContracts: Math.round(parseNumber(raw["No. of Contracts"], 1)),
+      fundsAtClose: parseNumber(raw["Funds at Close"]),
+      marginReq: parseNumber(raw["Margin Req."]),
+      strategy,
+      openingCommissionsFees: parseNumber(
+        raw["Opening Commissions + Fees"] || raw["Opening comms & fees"],
+        0
+      ),
+      closingCommissionsFees: parseNumber(
+        raw["Closing Commissions + Fees"] || raw["Closing comms & fees"],
+        0
+      ),
+      openingShortLongRatio: parseNumber(raw["Opening Short/Long Ratio"], 0),
+      closingShortLongRatio: raw["Closing Short/Long Ratio"]
+        ? parseNumber(raw["Closing Short/Long Ratio"])
+        : undefined,
+      openingVix: raw["Opening VIX"]
+        ? parseNumber(raw["Opening VIX"])
+        : undefined,
+      closingVix: raw["Closing VIX"]
+        ? parseNumber(raw["Closing VIX"])
+        : undefined,
+      gap: raw["Gap"] ? parseNumber(raw["Gap"]) : undefined,
+      movement: raw["Movement"] ? parseNumber(raw["Movement"]) : undefined,
+      maxProfit: raw["Max Profit"]
+        ? parseNumber(raw["Max Profit"])
+        : undefined,
+      maxLoss: raw["Max Loss"] ? parseNumber(raw["Max Loss"]) : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Convert raw CSV record to DailyLogEntry object
+ */
+function convertToDailyLogEntry(
+  raw: Record<string, string>,
+  blockId?: string
+): DailyLogEntry | null {
+  try {
+    const date = parseDatePreservingCalendarDay(raw["Date"]);
+    if (isNaN(date.getTime())) return null;
+
+    return {
+      date,
+      netLiquidity: parseNumber(raw["Net Liquidity"]),
+      currentFunds: parseNumber(raw["Current Funds"]),
+      withdrawn: parseNumber(raw["Withdrawn"], 0),
+      tradingFunds: parseNumber(raw["Trading Funds"]),
+      dailyPl: parseNumber(raw["P/L"]),
+      dailyPlPct: parseNumber(raw["P/L %"]),
+      drawdownPct: parseNumber(raw["Drawdown %"]),
+      blockId,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load trades from tradelog.csv
+ */
+async function loadTrades(blockPath: string): Promise<Trade[]> {
+  const tradelogPath = path.join(blockPath, "tradelog.csv");
+  const content = await fs.readFile(tradelogPath, "utf-8");
+  const records = parseCSV(content);
+
+  const trades: Trade[] = [];
+  for (const record of records) {
+    const trade = convertToTrade(record);
+    if (trade) {
+      trades.push(trade);
+    }
+  }
+
+  // Sort by date and time
+  trades.sort((a, b) => {
+    const dateCompare =
+      new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime();
+    if (dateCompare !== 0) return dateCompare;
+    return a.timeOpened.localeCompare(b.timeOpened);
+  });
+
+  return trades;
+}
+
+/**
+ * Load daily logs from dailylog.csv (optional)
+ */
+async function loadDailyLogs(
+  blockPath: string,
+  blockId: string
+): Promise<DailyLogEntry[] | undefined> {
+  const dailylogPath = path.join(blockPath, "dailylog.csv");
+
+  try {
+    await fs.access(dailylogPath);
+    const content = await fs.readFile(dailylogPath, "utf-8");
+    const records = parseCSV(content);
+
+    const entries: DailyLogEntry[] = [];
+    for (const record of records) {
+      const entry = convertToDailyLogEntry(record, blockId);
+      if (entry) {
+        entries.push(entry);
+      }
+    }
+
+    // Sort by date
+    entries.sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    return entries.length > 0 ? entries : undefined;
+  } catch {
+    // Daily log doesn't exist - that's fine
+    return undefined;
+  }
+}
+
+/**
+ * Load block metadata from .block.json
+ */
+export async function loadMetadata(
+  blockPath: string
+): Promise<BlockMetadata | undefined> {
+  const metadataPath = path.join(blockPath, ".block.json");
+
+  try {
+    const content = await fs.readFile(metadataPath, "utf-8");
+    return JSON.parse(content) as BlockMetadata;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Save block metadata to .block.json
+ */
+export async function saveMetadata(
+  blockPath: string,
+  metadata: BlockMetadata
+): Promise<void> {
+  const metadataPath = path.join(blockPath, ".block.json");
+  await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), "utf-8");
+}
+
+/**
+ * Load a complete block (trades + optional daily logs)
+ */
+export async function loadBlock(
+  baseDir: string,
+  blockId: string
+): Promise<LoadedBlock> {
+  const blockPath = path.join(baseDir, blockId);
+
+  // Verify block exists and has tradelog.csv
+  const tradelogPath = path.join(blockPath, "tradelog.csv");
+  try {
+    await fs.access(tradelogPath);
+  } catch {
+    throw new Error(`Block not found or missing tradelog.csv: ${blockId}`);
+  }
+
+  const trades = await loadTrades(blockPath);
+  const dailyLogs = await loadDailyLogs(blockPath, blockId);
+  const metadata = await loadMetadata(blockPath);
+
+  return {
+    blockId,
+    trades,
+    dailyLogs,
+    metadata,
+  };
+}
+
+/**
+ * List all valid blocks in the base directory
+ */
+export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
+  const blocks: BlockInfo[] = [];
+
+  try {
+    const entries = await fs.readdir(baseDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith(".")) continue; // Skip hidden folders
+
+      const blockPath = path.join(baseDir, entry.name);
+      const tradelogPath = path.join(blockPath, "tradelog.csv");
+      const dailylogPath = path.join(blockPath, "dailylog.csv");
+
+      // Check if tradelog.csv exists (required)
+      try {
+        await fs.access(tradelogPath);
+      } catch {
+        continue; // Not a valid block folder
+      }
+
+      // Check if dailylog.csv exists (optional)
+      let hasDailyLog = false;
+      try {
+        await fs.access(dailylogPath);
+        hasDailyLog = true;
+      } catch {
+        // No daily log - that's fine
+      }
+
+      // Try to load metadata first for cached info
+      const metadata = await loadMetadata(blockPath);
+
+      if (metadata) {
+        blocks.push({
+          blockId: entry.name,
+          name: metadata.name || entry.name,
+          tradeCount: metadata.tradeCount,
+          hasDailyLog,
+          dateRange: {
+            start: metadata.dateRange.start
+              ? new Date(metadata.dateRange.start)
+              : null,
+            end: metadata.dateRange.end
+              ? new Date(metadata.dateRange.end)
+              : null,
+          },
+          strategies: metadata.strategies,
+          totalPl: metadata.cachedStats?.totalPl ?? 0,
+          netPl: metadata.cachedStats?.netPl ?? 0,
+        });
+      } else {
+        // Load trades to get basic info
+        try {
+          const trades = await loadTrades(blockPath);
+          const strategies = Array.from(
+            new Set(trades.map((t) => t.strategy))
+          ).sort();
+          const dates = trades.map((t) => new Date(t.dateOpened).getTime());
+          const totalPl = trades.reduce((sum, t) => sum + t.pl, 0);
+          const totalCommissions = trades.reduce(
+            (sum, t) =>
+              sum + t.openingCommissionsFees + t.closingCommissionsFees,
+            0
+          );
+
+          blocks.push({
+            blockId: entry.name,
+            name: entry.name,
+            tradeCount: trades.length,
+            hasDailyLog,
+            dateRange: {
+              start: dates.length > 0 ? new Date(Math.min(...dates)) : null,
+              end: dates.length > 0 ? new Date(Math.max(...dates)) : null,
+            },
+            strategies,
+            totalPl,
+            netPl: totalPl - totalCommissions,
+          });
+        } catch (error) {
+          console.error(`Error loading block ${entry.name}:`, error);
+        }
+      }
+    }
+
+    // Sort by name
+    blocks.sort((a, b) => a.name.localeCompare(b.name));
+
+    return blocks;
+  } catch (error) {
+    throw new Error(`Failed to list blocks: ${(error as Error).message}`);
+  }
+}
