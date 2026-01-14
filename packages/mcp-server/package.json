@@ -1,0 +1,36 @@
+{
+  "name": "tradeblocks-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for options trade analysis - works with Claude Desktop/Cowork",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "tradeblocks-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "echo 'Tests pending'",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": ["dist"],
+  "keywords": ["mcp", "claude", "options", "trading", "backtest"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidromeo/tradeblocks",
+    "directory": "packages/mcp-server"
+  }
+}
