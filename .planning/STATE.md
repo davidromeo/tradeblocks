@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 ## Current Position
 
 Phase: 12 of 14 (Core Integration Layer) — IN PROGRESS
-Plan: 1 of 3 complete
-Status: Plan 01 complete, ready for Plan 02
-Last activity: 2026-01-14 — Block loading and core tools implemented
+Plan: 2 of 3 complete
+Status: Plan 02 complete, ready for Plan 03 or next milestone
+Last activity: 2026-01-14 — Advanced analysis tools and dual output pattern implemented
 
-Progress: ███░░░░░░░ 25%
+Progress: █████░░░░░ 50%
 
 ## v2.0 Goal
 
@@ -45,6 +45,13 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Automatic metadata caching in .block.json for faster listing
 - ESM imports require .js extension in TypeScript
 
+**v2.0 Phase 12-02:**
+- Dual output pattern: All tools return markdown + JSON resource for Claude reasoning
+- Walk-forward uses dynamic window sizing based on trade date range
+- Monte Carlo defaults to trades resample method with 5% worst-case pool injection
+- Correlation defaults to Kendall's tau (robust to outliers)
+- Kelly warnings for portfolio > 25% or strategy > 50%
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -65,5 +72,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Phase 12 Plan 01 complete
+Stopped at: Phase 12 Plan 02 complete
 Resume file: None
