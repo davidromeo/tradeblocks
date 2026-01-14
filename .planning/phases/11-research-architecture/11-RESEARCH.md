@@ -26,7 +26,14 @@ This is ideal for users who want Claude to analyze backtest results without runn
 
 For users already using TradeBlocks web app with IndexedDB data, use Chrome DevTools MCP + Claude Skills to query the running application.
 
-**Primary recommendation:** Build a **standalone MCP server** (`@tradeblocks/mcp-server` or `tradeblocks-analyzer`) that extracts the calculation logic from TradeBlocks into a dedicated npm package. This provides the cleanest user experience and broadest compatibility.
+**Primary recommendation:** Build a **standalone MCP server** (`tradeblocks-mcp`) as a workspace package in the TradeBlocks monorepo. Bundle with **skills** that teach Claude sophisticated analysis methodology - optimization, risk assessment, and portfolio construction.
+
+### Vision: Intelligent Analysis Partner
+
+Users drop backtests and have natural conversations:
+- *"Help me optimize this strategy"* → Pattern analysis, filter suggestions
+- *"What's the biggest risk?"* → Monte Carlo, streak analysis, tail risk
+- *"What if I add this to my portfolio?"* → Correlation, combined simulation
 
 </research_summary>
 
@@ -670,10 +677,10 @@ cp my-strategy-backtest.csv ~/backtests/
    - Options: `tradeblocks-mcp`, `@tradeblocks/mcp-server`, `backtest-analyzer-mcp`
    - Recommendation: Simple name like `tradeblocks-mcp` for easy npx usage
 
-2. **Scope of tools**
-   - What we know: Need portfolio-stats, strategy-breakdown, compare at minimum
-   - What's unclear: Whether to include walk-forward analysis, Monte Carlo, etc.
-   - Recommendation: Start with core stats tools, add advanced analysis based on demand
+2. **MVP tool scope**
+   - Decided: Core stats, strategy breakdown, time analysis, regime analysis
+   - Defer: Monte Carlo, portfolio construction, Kelly (Phase 14+)
+   - Recommendation: Ship useful MVP, iterate based on feedback
 
 3. **CSV format flexibility**
    - What we know: TradeBlocks expects specific column names
@@ -685,12 +692,233 @@ cp my-strategy-backtest.csv ~/backtests/
    - What's unclear: Whether standalone use case needs this complexity
    - Recommendation: Make daily logs optional, core stats work with trade log only
 
-5. **Workspace tooling**
+5. **Skill distribution**
+   - Decided: Bundle skills with MCP server package
+   - Open: Auto-install to `~/.claude/skills/` or require manual copy?
+   - Open: How to handle skill updates when package updates?
+
+6. **MCP prompts**
+   - What we know: MCP supports server-provided prompts for guided analysis
+   - What's unclear: How well Claude Desktop/Cowork support prompts currently
+   - Recommendation: Research prompt support, add if well-supported
+
+7. **Workspace tooling**
    - Decision made: Monorepo with pnpm workspaces
    - Open: Use pnpm vs npm workspaces (pnpm preferred for better monorepo support)
    - Open: tsup vs esbuild vs tsc for bundling (tsup recommended for simplicity)
 
 </open_questions>
+
+<skills_and_automation>
+## Skills & Automated Analysis Vision
+
+### User Experience Vision
+
+Users drop files in a folder and have natural conversations:
+
+**Strategy Optimization:**
+> "Help me optimize this strategy"
+> "What should I try next in Option Omega to reduce the drawdown?"
+> "Why did this strategy underperform in Q3?"
+
+**Portfolio Risk Analysis:**
+> "What's the biggest risk in this portfolio?"
+> "How many consecutive losses can I take on the iron condor strategy before the portfolio blows up?"
+> "What's my worst-case scenario if VIX spikes?"
+
+**Portfolio Construction:**
+> "What's the impact of adding this new strategy to my portfolio?"
+> "Which of my strategies are most correlated?"
+> "How should I allocate capital across these strategies?"
+
+### Skills Architecture
+
+Skills ship with the MCP server package and teach Claude how to analyze effectively:
+
+```
+packages/mcp-server/
+├── src/                       # MCP server code
+├── skills/
+│   └── tradeblocks-analyst/
+│       ├── SKILL.md           # Main skill - analysis methodology
+│       └── references/
+│           ├── optimization-playbook.md   # How to optimize strategies
+│           ├── risk-analysis.md           # Risk assessment framework
+│           ├── portfolio-construction.md  # Adding strategies, correlation
+│           ├── common-questions.md        # FAQ with example analyses
+│           └── csv-format.md              # Expected file format
+└── package.json
+```
+
+**Installation copies skills:**
+```bash
+npx tradeblocks-mcp install-skills  # Copies to ~/.claude/skills/
+```
+
+### Skill Content: Analysis Methodology
+
+```markdown
+# SKILL.md
+---
+name: tradeblocks-analyst
+description: Expert options trading analysis - optimization, risk, portfolio construction
+---
+
+## When to Use
+- User asks about backtest performance, optimization, or risk
+- User drops CSV files and asks for analysis
+- User wants to compare strategies or build portfolios
+
+## Analysis Framework
+
+### 1. Initial Assessment (always do first)
+- Load the backtest(s) with `list_backtests` and `analyze_backtest`
+- Identify: total trades, date range, strategies present
+- Get baseline stats: win rate, profit factor, Sharpe, max drawdown
+
+### 2. Deep Dive Based on Question
+
+**For "Help me optimize" / "Reduce drawdown":**
+→ See references/optimization-playbook.md
+- Analyze by time (day of week, hour, month)
+- Analyze by regime (VIX levels, market conditions)
+- Identify losing patterns vs winning patterns
+- Suggest specific filters or parameter changes
+
+**For "What's the risk" / "How many losses until blowup":**
+→ See references/risk-analysis.md
+- Run Monte Carlo simulation
+- Calculate Kelly criterion
+- Analyze streak patterns (max consecutive losses)
+- Compute tail risk (VaR, CVaR)
+
+**For "Impact of adding strategy" / "Portfolio construction":**
+→ See references/portfolio-construction.md
+- Analyze correlation between strategies
+- Simulate combined equity curve
+- Calculate diversification benefit
+- Suggest capital allocation
+
+### 3. Deliver Actionable Insights
+- Lead with the answer to their question
+- Support with specific data
+- Suggest concrete next steps
+```
+
+### MCP Tools for Automated Analysis
+
+Beyond basic stats, expose advanced analysis tools:
+
+| Tool | Purpose | Use Case |
+|------|---------|----------|
+| `analyze_backtest` | Basic portfolio stats | Initial assessment |
+| `get_strategy_breakdown` | Per-strategy stats | Compare strategies |
+| `analyze_by_time` | Day/hour/month patterns | "When do I lose money?" |
+| `analyze_by_regime` | VIX regime performance | "How do I do in high vol?" |
+| `run_monte_carlo` | Simulate equity paths | "What's my ruin probability?" |
+| `calculate_risk_metrics` | VaR, CVaR, Kelly | "How much can I lose?" |
+| `analyze_streaks` | Win/loss streak patterns | "How bad can losing streaks get?" |
+| `compare_strategies` | Correlation, combined stats | "Should I add this strategy?" |
+| `simulate_portfolio` | Combined equity curve | "What if I ran both?" |
+| `suggest_optimizations` | Pattern-based suggestions | "How do I improve?" |
+
+### MCP Prompts (Pre-built Analysis Templates)
+
+MCP supports **prompts** - server-provided templates that guide analysis:
+
+```typescript
+// Register prompts in MCP server
+server.setRequestHandler(ListPromptsRequestSchema, () => ({
+  prompts: [
+    {
+      name: "full_analysis",
+      description: "Comprehensive backtest analysis with optimization suggestions",
+      arguments: [
+        { name: "filename", description: "CSV file to analyze", required: true }
+      ]
+    },
+    {
+      name: "risk_assessment",
+      description: "Deep dive on portfolio risk and worst-case scenarios",
+      arguments: [
+        { name: "filename", required: true },
+        { name: "confidence_level", description: "VaR confidence (default 95%)" }
+      ]
+    },
+    {
+      name: "portfolio_impact",
+      description: "Analyze impact of adding a strategy to existing portfolio",
+      arguments: [
+        { name: "new_strategy", required: true },
+        { name: "existing_portfolio", required: true }
+      ]
+    }
+  ]
+}));
+```
+
+User invokes: "Run the full analysis on my iron-condor.csv"
+Claude gets a structured template guiding the analysis.
+
+### Automated Analysis Flow Example
+
+**User:** "I just dropped my latest backtest. Help me optimize it."
+
+**Claude (using skill + tools):**
+
+1. **Discovery** → `list_backtests` → Finds `iron-condor-2024.csv`
+
+2. **Initial Assessment** → `analyze_backtest`
+   > "Your iron condor strategy has 847 trades over 2 years.
+   > Win rate: 78%, but profit factor is only 1.2.
+   > Max drawdown: 34% - that's concerning."
+
+3. **Deep Dive** → `analyze_by_time` + `analyze_by_regime`
+   > "I see a pattern: You're losing money on Fridays (-$12k)
+   > and during VIX spikes above 25 (-$28k).
+   > Your Monday-Thursday trades have a 1.8 profit factor."
+
+4. **Suggestions** → Based on skill methodology
+   > "Three optimization ideas:
+   > 1. **Skip Friday entries** - saves $12k in losses
+   > 2. **Reduce size when VIX > 25** - your 5x normal losses suggest sizing down
+   > 3. **Tighten stops in high VIX** - your MAE is 3x worse in these conditions
+   >
+   > Want me to simulate what your equity curve would look like with these filters?"
+
+### Existing TradeBlocks Calculations to Expose
+
+These already exist in `lib/calculations/` and should be exposed via MCP:
+
+| Calculation | File | Tool Name |
+|-------------|------|-----------|
+| Portfolio stats | `portfolio-stats.ts` | `analyze_backtest` |
+| Strategy breakdown | `portfolio-stats.ts` | `get_strategy_breakdown` |
+| Trade enrichment | `enrich-trades.ts` | Used internally |
+| Monte Carlo | `monte-carlo.ts` | `run_monte_carlo` |
+| Streak analysis | `streak-analysis.ts` | `analyze_streaks` |
+| Tail risk (VaR/CVaR) | `tail-risk-analysis.ts` | `calculate_risk_metrics` |
+| Correlation | `correlation.ts` | `compare_strategies` |
+| Kelly criterion | `kelly.ts` | `calculate_risk_metrics` |
+| Regime analysis | `regime-filter.ts` | `analyze_by_regime` |
+| Time analysis | (via enriched trades) | `analyze_by_time` |
+
+### MVP vs Future Scope
+
+**MVP (Phase 12-13):**
+- Core tools: list, analyze, compare, strategy breakdown
+- Basic skill with analysis methodology
+- Time-based analysis (day of week, month)
+- Regime analysis (VIX levels)
+
+**Future (Phase 14+):**
+- Monte Carlo simulation tool
+- Portfolio construction tools (correlation, combined simulation)
+- MCP prompts for guided analysis
+- Optimization suggestion engine
+- Daily log support for enhanced drawdown
+
+</skills_and_automation>
 
 <alternative_browser_approach>
 ## Alternative: Browser Integration (for existing TradeBlocks users)
