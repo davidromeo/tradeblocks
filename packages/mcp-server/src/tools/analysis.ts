@@ -1071,9 +1071,27 @@ export function registerAnalysisTools(
           .number()
           .positive()
           .describe("Starting capital in dollars"),
+        kellyFraction: z
+          .enum(["full", "half", "quarter"])
+          .default("half")
+          .describe(
+            "Kelly fraction to use: 'full' (100%), 'half' (50%, recommended), 'quarter' (25%, conservative)"
+          ),
+        maxAllocationPct: z
+          .number()
+          .min(1)
+          .max(100)
+          .default(25)
+          .describe("Maximum allocation per strategy as percentage (default: 25%)"),
+        includeNegativeKelly: z
+          .boolean()
+          .default(true)
+          .describe(
+            "Include strategies with negative Kelly in output (useful for identifying loss-reduction opportunities)"
+          ),
       }),
     },
-    async ({ blockId, capitalBase }) => {
+    async ({ blockId, capitalBase, kellyFraction, maxAllocationPct, includeNegativeKelly }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
@@ -1096,11 +1114,23 @@ export function registerAnalysisTools(
         // Calculate per-strategy Kelly metrics
         const strategyKelly = calculateStrategyKellyMetrics(trades, capitalBase);
 
+        // Calculate Kelly multiplier based on fraction choice
+        const kellyMultiplier =
+          kellyFraction === "full" ? 1.0 : kellyFraction === "half" ? 0.5 : 0.25;
+        const maxAllocationFraction = maxAllocationPct / 100;
+
         // Build markdown output
         const lines: string[] = [
           `## Position Sizing: ${blockId}`,
           "",
-          `**Capital Base:** ${formatCurrency(capitalBase)}`,
+          "### Configuration",
+          "",
+          `| Parameter | Value |`,
+          `|-----------|-------|`,
+          `| Capital Base | ${formatCurrency(capitalBase)} |`,
+          `| Kelly Fraction | ${kellyFraction} (${formatPercent(kellyMultiplier * 100)} multiplier) |`,
+          `| Max Allocation | ${formatPercent(maxAllocationPct)} |`,
+          `| Include Negative Kelly | ${includeNegativeKelly ? "Yes" : "No"} |`,
           "",
           "### Portfolio-Level Kelly",
           "",
@@ -1129,20 +1159,38 @@ export function registerAnalysisTools(
         const strategyResults: Array<{
           name: string;
           kelly: ReturnType<typeof calculateKellyMetrics>;
-          allocation: number;
+          rawAllocation: number;
+          adjustedAllocation: number;
         }> = [];
 
         for (const [strategyName, kelly] of strategyKelly.entries()) {
-          const allocation = kelly.hasValidKelly
+          // Skip negative Kelly strategies if not included
+          if (!includeNegativeKelly && kelly.hasValidKelly && kelly.fraction < 0) {
+            continue;
+          }
+
+          // Calculate raw allocation (full Kelly)
+          const rawAllocation = kelly.hasValidKelly
             ? capitalBase * Math.max(0, kelly.fraction)
             : 0;
+
+          // Apply Kelly multiplier and cap
+          const adjustedFraction = Math.min(
+            kelly.fraction * kellyMultiplier,
+            maxAllocationFraction
+          );
+          const adjustedAllocation = kelly.hasValidKelly
+            ? capitalBase * Math.max(0, adjustedFraction)
+            : 0;
+
           strategyResults.push({
             name: strategyName,
             kelly,
-            allocation,
+            rawAllocation,
+            adjustedAllocation,
           });
           lines.push(
-            `| ${strategyName} | ${formatPercent(kelly.winRate * 100)} | ${formatRatio(kelly.payoffRatio)} | ${kelly.hasValidKelly ? formatPercent(kelly.percent) : "N/A"} | ${kelly.hasValidKelly ? formatCurrency(allocation) : "N/A"} |`
+            `| ${strategyName} | ${formatPercent(kelly.winRate * 100)} | ${formatRatio(kelly.payoffRatio)} | ${kelly.hasValidKelly ? formatPercent(kelly.percent) : "N/A"} | ${kelly.hasValidKelly ? formatCurrency(adjustedAllocation) : "N/A"} |`
           );
         }
 
@@ -1174,11 +1222,21 @@ export function registerAnalysisTools(
         // Add recommendations
         lines.push("### Recommendations", "");
         if (portfolioKelly.hasValidKelly && portfolioKelly.fraction > 0) {
-          const halfKelly = portfolioKelly.fraction / 2;
-          const quarterKelly = portfolioKelly.fraction / 4;
-          lines.push(`- **Full Kelly:** ${formatPercent(portfolioKelly.percent)} (${formatCurrency(capitalBase * portfolioKelly.fraction)})`);
-          lines.push(`- **Half Kelly:** ${formatPercent(halfKelly * 100)} (${formatCurrency(capitalBase * halfKelly)}) - recommended for most traders`);
-          lines.push(`- **Quarter Kelly:** ${formatPercent(quarterKelly * 100)} (${formatCurrency(capitalBase * quarterKelly)}) - conservative approach`);
+          const fullKellyAlloc = Math.min(portfolioKelly.fraction, maxAllocationFraction);
+          const halfKellyAlloc = Math.min(portfolioKelly.fraction / 2, maxAllocationFraction);
+          const quarterKellyAlloc = Math.min(portfolioKelly.fraction / 4, maxAllocationFraction);
+
+          const selectedLabel = kellyFraction === "full" ? " (selected)" : "";
+          const halfLabel = kellyFraction === "half" ? " (selected)" : "";
+          const quarterLabel = kellyFraction === "quarter" ? " (selected)" : "";
+
+          lines.push(`- **Full Kelly:** ${formatPercent(fullKellyAlloc * 100)} (${formatCurrency(capitalBase * fullKellyAlloc)})${selectedLabel}`);
+          lines.push(`- **Half Kelly:** ${formatPercent(halfKellyAlloc * 100)} (${formatCurrency(capitalBase * halfKellyAlloc)}) - recommended for most traders${halfLabel}`);
+          lines.push(`- **Quarter Kelly:** ${formatPercent(quarterKellyAlloc * 100)} (${formatCurrency(capitalBase * quarterKellyAlloc)}) - conservative approach${quarterLabel}`);
+
+          if (portfolioKelly.fraction > maxAllocationFraction) {
+            lines.push(`\n*Note: Full Kelly (${formatPercent(portfolioKelly.percent)}) exceeds max allocation cap (${formatPercent(maxAllocationPct)})*`);
+          }
         } else {
           lines.push("- Strategy does not have a positive edge based on historical data.");
           lines.push("- Consider paper trading or further optimization before allocating capital.");
@@ -1191,35 +1249,50 @@ export function registerAnalysisTools(
         // Build structured data for Claude reasoning
         const structuredData = {
           blockId,
-          capitalBase,
+          options: {
+            capitalBase,
+            kellyFraction,
+            kellyMultiplier,
+            maxAllocationPct,
+            maxAllocationFraction,
+            includeNegativeKelly,
+          },
           portfolio: {
             winRate: portfolioKelly.winRate,
             avgWin: portfolioKelly.avgWin,
             avgLoss: portfolioKelly.avgLoss,
             payoffRatio: portfolioKelly.payoffRatio,
-            kellyFraction: portfolioKelly.fraction,
-            kellyPercent: portfolioKelly.percent,
+            rawKellyFraction: portfolioKelly.fraction,
+            rawKellyPercent: portfolioKelly.percent,
             hasValidKelly: portfolioKelly.hasValidKelly,
+            adjustedKellyFraction: portfolioKelly.hasValidKelly
+              ? Math.min(portfolioKelly.fraction * kellyMultiplier, maxAllocationFraction)
+              : null,
             recommendedAllocation: portfolioKelly.hasValidKelly
-              ? capitalBase * Math.max(0, portfolioKelly.fraction)
+              ? capitalBase *
+                Math.max(0, Math.min(portfolioKelly.fraction * kellyMultiplier, maxAllocationFraction))
+              : null,
+            fullKelly: portfolioKelly.hasValidKelly
+              ? Math.min(portfolioKelly.fraction, maxAllocationFraction)
               : null,
             halfKelly: portfolioKelly.hasValidKelly
-              ? portfolioKelly.fraction / 2
+              ? Math.min(portfolioKelly.fraction / 2, maxAllocationFraction)
               : null,
             quarterKelly: portfolioKelly.hasValidKelly
-              ? portfolioKelly.fraction / 4
+              ? Math.min(portfolioKelly.fraction / 4, maxAllocationFraction)
               : null,
           },
-          strategies: strategyResults.map(({ name, kelly, allocation }) => ({
+          strategies: strategyResults.map(({ name, kelly, rawAllocation, adjustedAllocation }) => ({
             name,
             winRate: kelly.winRate,
             avgWin: kelly.avgWin,
             avgLoss: kelly.avgLoss,
             payoffRatio: kelly.payoffRatio,
-            kellyFraction: kelly.fraction,
-            kellyPercent: kelly.percent,
+            rawKellyFraction: kelly.fraction,
+            rawKellyPercent: kelly.percent,
             hasValidKelly: kelly.hasValidKelly,
-            allocation,
+            rawAllocation,
+            adjustedAllocation,
           })),
           warnings,
         };
