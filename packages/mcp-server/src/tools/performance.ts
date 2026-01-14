@@ -16,6 +16,199 @@ import type { Trade } from "@lib/models/trade";
 import type { ReportingTrade } from "@lib/models/reporting-trade";
 
 /**
+ * MFE/MAE data point for a single trade's excursion metrics
+ * (Inline implementation to avoid dependency issues)
+ */
+interface MFEMAEDataPoint {
+  tradeNumber: number;
+  date: Date;
+  strategy: string;
+  mfe: number;
+  mae: number;
+  pl: number;
+  mfePercent?: number;
+  maePercent?: number;
+  profitCapturePercent?: number;
+  excursionRatio?: number;
+  basis: "premium" | "margin" | "maxProfit" | "unknown";
+  isWinner: boolean;
+}
+
+/**
+ * Distribution bucket for MFE/MAE histogram
+ */
+interface MFEMAEDistributionBucket {
+  bucket: string;
+  mfeCount: number;
+  maeCount: number;
+  range: [number, number];
+}
+
+/**
+ * Calculate total max profit from trade (handles multi-leg spreads)
+ */
+function computeTotalMaxProfit(trade: Trade): number {
+  if (typeof trade.maxProfit === "number" && isFinite(trade.maxProfit)) {
+    return Math.abs(trade.maxProfit);
+  }
+  return 0;
+}
+
+/**
+ * Calculate total max loss from trade (handles multi-leg spreads)
+ */
+function computeTotalMaxLoss(trade: Trade): number {
+  if (typeof trade.maxLoss === "number" && isFinite(trade.maxLoss)) {
+    return Math.abs(trade.maxLoss);
+  }
+  return 0;
+}
+
+/**
+ * Calculate total premium from trade
+ */
+function computeTotalPremium(trade: Trade): number {
+  if (typeof trade.premium === "number" && isFinite(trade.premium)) {
+    return Math.abs(trade.premium);
+  }
+  return 0;
+}
+
+/**
+ * Calculate MFE/MAE metrics for a single trade
+ */
+function calculateTradeExcursionMetrics(
+  trade: Trade,
+  tradeNumber: number
+): MFEMAEDataPoint | null {
+  const totalMFE = computeTotalMaxProfit(trade);
+  const totalMAE = computeTotalMaxLoss(trade);
+
+  // Skip trades without excursion data
+  if (!totalMFE && !totalMAE) {
+    return null;
+  }
+
+  // Determine denominator for percentage calculations
+  const totalPremium = computeTotalPremium(trade);
+  const margin =
+    typeof trade.marginReq === "number" &&
+    isFinite(trade.marginReq) &&
+    trade.marginReq !== 0
+      ? Math.abs(trade.marginReq)
+      : undefined;
+
+  let denominator: number | undefined;
+  let basis: MFEMAEDataPoint["basis"] = "unknown";
+
+  if (totalPremium && totalPremium > 0) {
+    denominator = totalPremium;
+    basis = "premium";
+  } else if (margin && margin > 0) {
+    denominator = margin;
+    basis = "margin";
+  } else if (totalMFE && totalMFE > 0) {
+    denominator = totalMFE;
+    basis = "maxProfit";
+  }
+
+  const dataPoint: MFEMAEDataPoint = {
+    tradeNumber,
+    date: trade.dateOpened,
+    strategy: trade.strategy || "Unknown",
+    mfe: totalMFE || 0,
+    mae: totalMAE || 0,
+    pl: trade.pl,
+    isWinner: trade.pl > 0,
+    basis,
+  };
+
+  // Calculate percentages if we have a denominator
+  if (denominator && denominator > 0) {
+    if (totalMFE) {
+      dataPoint.mfePercent = (totalMFE / denominator) * 100;
+    }
+    if (totalMAE) {
+      dataPoint.maePercent = (totalMAE / denominator) * 100;
+    }
+  }
+
+  // Profit capture: what % of max profit was actually captured
+  if (totalMFE && totalMFE > 0) {
+    dataPoint.profitCapturePercent = (trade.pl / totalMFE) * 100;
+  }
+
+  // Excursion ratio: reward/risk
+  if (totalMFE && totalMAE && totalMAE > 0) {
+    dataPoint.excursionRatio = totalMFE / totalMAE;
+  }
+
+  return dataPoint;
+}
+
+/**
+ * Calculate MFE/MAE data for all trades
+ */
+function calculateMFEMAEData(trades: Trade[]): MFEMAEDataPoint[] {
+  const dataPoints: MFEMAEDataPoint[] = [];
+
+  trades.forEach((trade, index) => {
+    const point = calculateTradeExcursionMetrics(trade, index + 1);
+    if (point) {
+      dataPoints.push(point);
+    }
+  });
+
+  return dataPoints;
+}
+
+/**
+ * Create distribution buckets for MFE/MAE histogram visualization
+ */
+function createExcursionDistribution(
+  dataPoints: MFEMAEDataPoint[],
+  bucketSize: number = 10
+): MFEMAEDistributionBucket[] {
+  const mfeValues = dataPoints
+    .filter((d) => d.mfePercent !== undefined)
+    .map((d) => d.mfePercent!);
+  const maeValues = dataPoints
+    .filter((d) => d.maePercent !== undefined)
+    .map((d) => d.maePercent!);
+
+  if (mfeValues.length === 0 && maeValues.length === 0) {
+    return [];
+  }
+
+  const allValues = [...mfeValues, ...maeValues];
+  const maxValue = Math.max(...allValues);
+  const numBuckets = Math.max(1, Math.ceil(maxValue / bucketSize));
+
+  const buckets: MFEMAEDistributionBucket[] = [];
+
+  for (let i = 0; i < numBuckets; i++) {
+    const rangeStart = i * bucketSize;
+    const rangeEnd = (i + 1) * bucketSize;
+    const isLastBucket = i === numBuckets - 1;
+
+    const inBucket = (value: number) =>
+      value >= rangeStart && (isLastBucket ? value <= rangeEnd : value < rangeEnd);
+
+    const mfeCount = mfeValues.filter(inBucket).length;
+    const maeCount = maeValues.filter(inBucket).length;
+
+    buckets.push({
+      bucket: `${rangeStart}-${rangeEnd}%`,
+      mfeCount,
+      maeCount,
+      range: [rangeStart, rangeEnd],
+    });
+  }
+
+  return buckets;
+}
+
+/**
  * Filter trades by strategy
  */
 function filterByStrategy(trades: Trade[], strategy?: string): Trade[] {
@@ -955,11 +1148,12 @@ export function registerPerformanceTools(
               "premium_efficiency",
               "margin_utilization",
               "volatility_regimes",
+              "mfe_mae",
             ])
           )
           .default(["equity_curve", "drawdown", "monthly_returns"])
           .describe(
-            "Which charts to include. Options: equity_curve, drawdown, monthly_returns, monthly_returns_percent, return_distribution, day_of_week, streak_data (win/loss streaks + runs test), trade_sequence (P&L by trade #), rom_timeline (Return on Margin over time), rolling_metrics (30-trade rolling sharpe/win rate), exit_reason_breakdown, holding_periods, premium_efficiency, margin_utilization, volatility_regimes (VIX-correlated)"
+            "Which charts to include. Options: equity_curve, drawdown, monthly_returns, monthly_returns_percent, return_distribution, day_of_week, streak_data (win/loss streaks + runs test), trade_sequence (P&L by trade #), rom_timeline (Return on Margin over time), rolling_metrics (30-trade rolling sharpe/win rate), exit_reason_breakdown, holding_periods, premium_efficiency, margin_utilization, volatility_regimes (VIX-correlated), mfe_mae (Maximum Favorable/Adverse Excursion for stop loss/take profit optimization)"
           ),
         dateRange: z
           .object({
@@ -1002,6 +1196,14 @@ export function registerPerformanceTools(
           .describe(
             "Window size for rolling_metrics calculation (default: 30 trades)"
           ),
+        mfeMaeBucketSize: z
+          .number()
+          .min(1)
+          .max(50)
+          .default(10)
+          .describe(
+            "Bucket size (in %) for MFE/MAE distribution histogram (default: 10%)"
+          ),
       }),
     },
     async ({
@@ -1013,6 +1215,7 @@ export function registerPerformanceTools(
       normalizeTo1Lot,
       bucketCount,
       rollingWindowSize,
+      mfeMaeBucketSize,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -1159,6 +1362,73 @@ export function registerPerformanceTools(
           dataPoints += (chartData.volatilityRegimes as unknown[]).length;
         }
 
+        if (charts.includes("mfe_mae")) {
+          // Use the original (non-normalized) trades for MFE/MAE since it uses
+          // internal trade fields (maxProfit, maxLoss) that aren't normalized
+          const mfeData = calculateMFEMAEData(block.trades);
+          const distribution = createExcursionDistribution(mfeData, mfeMaeBucketSize);
+
+          // Calculate aggregate statistics
+          const dataWithMfe = mfeData.filter((d) => d.mfe > 0);
+          const dataWithMae = mfeData.filter((d) => d.mae > 0);
+
+          const avgMfePercent =
+            dataWithMfe.length > 0
+              ? dataWithMfe.reduce((sum, d) => sum + (d.mfePercent || 0), 0) /
+                dataWithMfe.length
+              : 0;
+          const avgMaePercent =
+            dataWithMae.length > 0
+              ? dataWithMae.reduce((sum, d) => sum + (d.maePercent || 0), 0) /
+                dataWithMae.length
+              : 0;
+          const avgProfitCapture =
+            mfeData.filter((d) => d.profitCapturePercent !== undefined).length > 0
+              ? mfeData
+                  .filter((d) => d.profitCapturePercent !== undefined)
+                  .reduce((sum, d) => sum + d.profitCapturePercent!, 0) /
+                mfeData.filter((d) => d.profitCapturePercent !== undefined).length
+              : 0;
+          const avgExcursionRatio =
+            mfeData.filter((d) => d.excursionRatio !== undefined).length > 0
+              ? mfeData
+                  .filter((d) => d.excursionRatio !== undefined)
+                  .reduce((sum, d) => sum + d.excursionRatio!, 0) /
+                mfeData.filter((d) => d.excursionRatio !== undefined).length
+              : 0;
+
+          // Simplify data points for JSON output (exclude verbose trade details)
+          const simplifiedData = mfeData.map((d) => ({
+            tradeNumber: d.tradeNumber,
+            date: formatDateKey(d.date),
+            strategy: d.strategy,
+            mfe: d.mfe,
+            mae: d.mae,
+            pl: d.pl,
+            mfePercent: d.mfePercent,
+            maePercent: d.maePercent,
+            profitCapturePercent: d.profitCapturePercent,
+            excursionRatio: d.excursionRatio,
+            basis: d.basis,
+            isWinner: d.isWinner,
+          }));
+
+          chartData.mfeMae = {
+            dataPoints: simplifiedData,
+            distribution,
+            statistics: {
+              totalTrades: mfeData.length,
+              tradesWithMfe: dataWithMfe.length,
+              tradesWithMae: dataWithMae.length,
+              avgMfePercent,
+              avgMaePercent,
+              avgProfitCapture,
+              avgExcursionRatio,
+            },
+          };
+          dataPoints += simplifiedData.length + distribution.length;
+        }
+
         // Brief summary for user display
         const filters: string[] = [];
         if (strategy) filters.push(`strategy=${strategy}`);
@@ -1181,6 +1451,7 @@ export function registerPerformanceTools(
           riskFreeRate,
           bucketCount,
           rollingWindowSize,
+          mfeMaeBucketSize,
           tradesAnalyzed: trades.length,
           chartsIncluded: charts,
           ...chartData,
