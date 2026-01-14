@@ -585,10 +585,32 @@ export function registerAnalysisTools(
         method: z
           .enum(["kendall", "spearman", "pearson"])
           .default("kendall")
-          .describe("Correlation method (default: kendall)"),
+          .describe(
+            "Correlation method: 'kendall' (robust, rank-based), 'spearman' (rank), 'pearson' (linear)"
+          ),
+        alignment: z
+          .enum(["shared", "zero-pad"])
+          .default("shared")
+          .describe(
+            "How to handle missing dates: 'shared' uses only days both strategies traded, 'zero-pad' fills missing days with 0"
+          ),
+        normalization: z
+          .enum(["raw", "margin", "notional"])
+          .default("raw")
+          .describe(
+            "How to normalize returns: 'raw' absolute P&L, 'margin' P&L/margin, 'notional' P&L/notional"
+          ),
+        dateBasis: z
+          .enum(["opened", "closed"])
+          .default("opened")
+          .describe("Which trade date to use for grouping: 'opened' or 'closed'"),
+        timePeriod: z
+          .enum(["daily", "weekly", "monthly"])
+          .default("daily")
+          .describe("Time period for return aggregation before correlation calculation"),
       }),
     },
-    async ({ blockId, method }) => {
+    async ({ blockId, method, alignment, normalization, dateBasis, timePeriod }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
@@ -610,15 +632,29 @@ export function registerAnalysisTools(
           };
         }
 
-        // Calculate correlation matrix
-        const matrix = calculateCorrelationMatrix(trades, { method });
+        // Calculate correlation matrix with all options
+        const matrix = calculateCorrelationMatrix(trades, {
+          method,
+          alignment,
+          normalization,
+          dateBasis,
+          timePeriod,
+        });
         const analytics = calculateCorrelationAnalytics(matrix);
 
         // Build markdown output
         const lines: string[] = [
           `## Correlation Matrix: ${blockId}`,
           "",
-          `**Method:** ${method.charAt(0).toUpperCase() + method.slice(1)}`,
+          "### Configuration",
+          "",
+          `| Parameter | Value |`,
+          `|-----------|-------|`,
+          `| Method | ${method.charAt(0).toUpperCase() + method.slice(1)} |`,
+          `| Alignment | ${alignment} |`,
+          `| Normalization | ${normalization} |`,
+          `| Date Basis | ${dateBasis} |`,
+          `| Time Period | ${timePeriod} |`,
           "",
           "### Matrix",
           "",
@@ -682,7 +718,13 @@ export function registerAnalysisTools(
         // Build structured data for Claude reasoning
         const structuredData = {
           blockId,
-          method,
+          options: {
+            method,
+            alignment,
+            normalization,
+            dateBasis,
+            timePeriod,
+          },
           strategies: matrix.strategies,
           correlationMatrix: matrix.correlationData,
           sampleSizes: matrix.sampleSizes,
