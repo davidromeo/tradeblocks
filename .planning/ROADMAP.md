@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
-- 🚧 **v2.0 Claude Integration** - Phases 11-14 (in progress)
+- 🚧 **v2.0 Claude Integration** - Phases 11-15 (in progress)
 
 ## Completed Milestones
 
@@ -76,15 +76,31 @@ Plans:
 - 18 MCP tools total (6 core + 5 analysis + 3 performance + 4 report)
 - Full filtering and aggregation capabilities for Claude exploration
 
-### Phase 14: Polish & Documentation
+### Phase 14: Multi-Platform Agent Skills
+
+**Goal**: Create skills/tools for Claude Code, OpenAI Agents, and Gemini Agents to interact with TradeBlocks MCP server
+**Depends on**: Phase 13
+**Research**: Likely needed to understand each platform's agent/skill format
+**Plans**: TBD
+
+Potential scope:
+- Claude Code skill (`.claude/commands/`) wrapping MCP tools with natural language interface
+- OpenAI function calling / Assistants API adapter
+- Gemini function declaration adapter
+- Shared prompt templates for trading analysis workflows
+
+Plans:
+- [ ] 14-01: TBD (research each platform's requirements)
+
+### Phase 15: Polish & Documentation
 
 **Goal**: Error handling, usage examples, integration testing, documentation
-**Depends on**: Phase 13
+**Depends on**: Phase 14
 **Research**: Unlikely (internal work)
 **Plans**: TBD
 
 Plans:
-- [ ] 14-01: TBD
+- [ ] 15-01: TBD
 
 ## Progress
 
@@ -102,7 +118,8 @@ Plans:
 | 11. Research & Architecture | v2.0 | 2/2 | Complete | 2026-01-14 |
 | 12. Core Integration Layer | v2.0 | 3/3 | Complete | 2026-01-14 |
 | 13. Analysis Capabilities | v2.0 | 1/1 | Complete | 2026-01-14 |
-| 14. Polish & Documentation | v2.0 | 0/? | Not started | - |
+| 14. Multi-Platform Agent Skills | v2.0 | 0/? | Not started | - |
+| 15. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
 ## Audit Notes
 

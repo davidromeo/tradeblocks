@@ -9,7 +9,7 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 
 ## Current Position
 
-Phase: 13 of 14 (Analysis Capabilities) — COMPLETE
+Phase: 13 of 15 (Analysis Capabilities) — COMPLETE
 Plan: 1 of 1 complete
 Status: Phase 13 complete, ready for Phase 14
 Last activity: 2026-01-14 — 18 MCP tools complete, Report Builder integration done
@@ -84,8 +84,10 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 
 ### Roadmap Evolution
 
-- Milestone v2.0 created: Claude Integration, 4 phases (Phase 11-14)
+- Milestone v2.0 created: Claude Integration, 5 phases (Phase 11-15)
 - Phase 11 complete: Research & Architecture
+- Phase 14 added: Multi-Platform Agent Skills (Claude, OpenAI, Gemini)
+- Phase 15: Polish & Documentation (moved from Phase 14)
 
 ## Session Continuity
 
