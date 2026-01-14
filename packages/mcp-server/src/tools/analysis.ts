@@ -135,6 +135,72 @@ export function registerAnalysisTools(
           .array(z.string())
           .optional()
           .describe("Filter to specific strategies only (default: all strategies)"),
+        // Additional filters
+        tickerFilter: z
+          .string()
+          .optional()
+          .describe("Filter trades by underlying ticker symbol (e.g., 'SPY', 'AAPL')"),
+        dateRangeFrom: z
+          .string()
+          .optional()
+          .describe("Start date for analysis (ISO format: YYYY-MM-DD). Only include trades on or after this date."),
+        dateRangeTo: z
+          .string()
+          .optional()
+          .describe("End date for analysis (ISO format: YYYY-MM-DD). Only include trades on or before this date."),
+        // Performance floor constraints (reject parameter combinations that don't meet minimums)
+        minSharpeRatio: z
+          .number()
+          .optional()
+          .describe("Minimum Sharpe ratio required during in-sample optimization. Combinations below this are rejected."),
+        minProfitFactor: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Minimum profit factor required during in-sample optimization. Combinations below this are rejected."),
+        requirePositiveNetPl: z
+          .boolean()
+          .default(false)
+          .describe("Require positive net P&L during in-sample optimization. Reject combinations with losses."),
+        // Diversification constraints
+        enableCorrelationConstraint: z
+          .boolean()
+          .default(false)
+          .describe("Enable correlation constraint to reject highly correlated strategy combinations during optimization."),
+        maxCorrelationThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.7)
+          .describe("Maximum allowed correlation between any strategy pair (default: 0.7). Only used if enableCorrelationConstraint is true."),
+        correlationMethod: z
+          .enum(["kendall", "spearman", "pearson"])
+          .default("kendall")
+          .describe("Correlation method for diversification constraint (default: kendall)."),
+        enableTailRiskConstraint: z
+          .boolean()
+          .default(false)
+          .describe("Enable tail risk constraint to reject combinations with high joint tail dependence."),
+        maxTailDependenceThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.5)
+          .describe("Maximum allowed tail dependence between any strategy pair (default: 0.5). Only used if enableTailRiskConstraint is true."),
+        tailThreshold: z
+          .number()
+          .min(0.01)
+          .max(0.5)
+          .default(0.1)
+          .describe("Percentile threshold for tail definition (default: 0.1 = worst 10%). Only used if enableTailRiskConstraint is true."),
+        diversificationNormalization: z
+          .enum(["raw", "margin", "notional"])
+          .default("raw")
+          .describe("How to normalize returns for diversification calculations (default: raw)."),
+        diversificationDateBasis: z
+          .enum(["opened", "closed"])
+          .default("opened")
+          .describe("Which trade date to use for diversification calculations (default: opened)."),
       }),
     },
     async ({
@@ -150,6 +216,20 @@ export function registerAnalysisTools(
       minOutOfSampleTrades,
       normalizeTo1Lot,
       selectedStrategies,
+      tickerFilter,
+      dateRangeFrom,
+      dateRangeTo,
+      minSharpeRatio,
+      minProfitFactor,
+      requirePositiveNetPl,
+      enableCorrelationConstraint,
+      maxCorrelationThreshold,
+      correlationMethod,
+      enableTailRiskConstraint,
+      maxTailDependenceThreshold,
+      tailThreshold,
+      diversificationNormalization,
+      diversificationDateBasis,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -158,16 +238,22 @@ export function registerAnalysisTools(
         // Apply strategy filter
         trades = filterByStrategy(trades, strategy);
 
-        if (trades.length < 20) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Insufficient trades for walk-forward analysis. Found ${trades.length} trades, need at least 20.`,
-              },
-            ],
-            isError: true,
-          };
+        // Apply ticker filter
+        if (tickerFilter) {
+          const tickerLower = tickerFilter.toLowerCase();
+          trades = trades.filter(
+            (t) => t.ticker?.toLowerCase() === tickerLower
+          );
+        }
+
+        // Apply date range filter
+        if (dateRangeFrom) {
+          const fromDate = new Date(dateRangeFrom);
+          trades = trades.filter((t) => new Date(t.dateOpened) >= fromDate);
+        }
+        if (dateRangeTo) {
+          const toDate = new Date(dateRangeTo);
+          trades = trades.filter((t) => new Date(t.dateOpened) <= toDate);
         }
 
         // Apply selectedStrategies filter if provided (in addition to single strategy filter)
@@ -178,6 +264,18 @@ export function registerAnalysisTools(
           trades = trades.filter((t) =>
             strategySet.has(t.strategy.toLowerCase())
           );
+        }
+
+        if (trades.length < 20) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Insufficient trades for walk-forward analysis. Found ${trades.length} trades after filtering, need at least 20.`,
+              },
+            ],
+            isError: true,
+          };
         }
 
         // Calculate date range and window sizes
@@ -212,6 +310,33 @@ export function registerAnalysisTools(
           stepSizeDays = explicitStepSizeDays ?? daysPerWindow;
         }
 
+        // Build performance floor config if any constraints are set
+        const hasPerformanceFloor = minSharpeRatio !== undefined || minProfitFactor !== undefined || requirePositiveNetPl;
+        const performanceFloor = hasPerformanceFloor
+          ? {
+              enableMinSharpe: minSharpeRatio !== undefined,
+              minSharpeRatio: minSharpeRatio ?? 0,
+              enableMinProfitFactor: minProfitFactor !== undefined,
+              minProfitFactor: minProfitFactor ?? 0,
+              enablePositiveNetPl: requirePositiveNetPl,
+            }
+          : undefined;
+
+        // Build diversification config if any constraints are enabled
+        const hasDiversificationConstraints = enableCorrelationConstraint || enableTailRiskConstraint;
+        const diversificationConfig = hasDiversificationConstraints
+          ? {
+              enableCorrelationConstraint,
+              maxCorrelationThreshold,
+              correlationMethod,
+              enableTailRiskConstraint,
+              maxTailDependenceThreshold,
+              tailThreshold,
+              normalization: diversificationNormalization,
+              dateBasis: diversificationDateBasis,
+            }
+          : undefined;
+
         // Run walk-forward analysis
         const analyzer = new WalkForwardAnalyzer();
         const computation = await analyzer.analyze({
@@ -226,6 +351,8 @@ export function registerAnalysisTools(
             minOutOfSampleTrades,
             normalizeTo1Lot,
             selectedStrategies,
+            performanceFloor,
+            diversificationConfig,
           },
         });
 
@@ -239,8 +366,16 @@ export function registerAnalysisTools(
           "",
         ];
 
-        if (strategy) {
-          lines.push(`**Strategy Filter:** ${strategy}`, "");
+        // Show active filters
+        const activeFilters: string[] = [];
+        if (strategy) activeFilters.push(`Strategy: ${strategy}`);
+        if (selectedStrategies?.length) activeFilters.push(`Strategies: ${selectedStrategies.join(", ")}`);
+        if (tickerFilter) activeFilters.push(`Ticker: ${tickerFilter}`);
+        if (dateRangeFrom || dateRangeTo) {
+          activeFilters.push(`Date Range: ${dateRangeFrom ?? "start"} to ${dateRangeTo ?? "end"}`);
+        }
+        if (activeFilters.length > 0) {
+          lines.push(`**Filters:** ${activeFilters.join(" | ")}`, "");
         }
 
         lines.push(
@@ -254,7 +389,33 @@ export function registerAnalysisTools(
           `| Optimization Target | ${optimizationTarget} |`,
           `| Min IS Trades | ${minInSampleTrades} |`,
           `| Min OOS Trades | ${minOutOfSampleTrades} |`,
-          `| Normalize to 1-Lot | ${normalizeTo1Lot ? "Yes" : "No"} |`,
+          `| Normalize to 1-Lot | ${normalizeTo1Lot ? "Yes" : "No"} |`
+        );
+
+        // Add performance floor constraints if set
+        if (hasPerformanceFloor) {
+          if (minSharpeRatio !== undefined) {
+            lines.push(`| Min Sharpe Ratio | ${formatRatio(minSharpeRatio)} |`);
+          }
+          if (minProfitFactor !== undefined) {
+            lines.push(`| Min Profit Factor | ${formatRatio(minProfitFactor)} |`);
+          }
+          if (requirePositiveNetPl) {
+            lines.push(`| Require Positive Net P&L | Yes |`);
+          }
+        }
+
+        // Add diversification constraints if enabled
+        if (hasDiversificationConstraints) {
+          if (enableCorrelationConstraint) {
+            lines.push(`| Max Correlation | ${formatRatio(maxCorrelationThreshold)} (${correlationMethod}) |`);
+          }
+          if (enableTailRiskConstraint) {
+            lines.push(`| Max Tail Dependence | ${formatRatio(maxTailDependenceThreshold)} (${formatPercent(tailThreshold * 100)} tail) |`);
+          }
+        }
+
+        lines.push(
           "",
           "### Summary",
           "",
@@ -311,7 +472,13 @@ export function registerAnalysisTools(
         // Build structured data for Claude reasoning
         const structuredData = {
           blockId,
-          strategy: strategy ?? null,
+          filters: {
+            strategy: strategy ?? null,
+            selectedStrategies: selectedStrategies ?? null,
+            tickerFilter: tickerFilter ?? null,
+            dateRangeFrom: dateRangeFrom ?? null,
+            dateRangeTo: dateRangeTo ?? null,
+          },
           config: {
             inSampleDays,
             outOfSampleDays,
@@ -322,8 +489,26 @@ export function registerAnalysisTools(
             minInSampleTrades,
             minOutOfSampleTrades,
             normalizeTo1Lot,
-            selectedStrategies: selectedStrategies ?? null,
           },
+          performanceFloor: hasPerformanceFloor
+            ? {
+                minSharpeRatio: minSharpeRatio ?? null,
+                minProfitFactor: minProfitFactor ?? null,
+                requirePositiveNetPl,
+              }
+            : null,
+          diversificationConstraints: hasDiversificationConstraints
+            ? {
+                enableCorrelationConstraint,
+                maxCorrelationThreshold,
+                correlationMethod,
+                enableTailRiskConstraint,
+                maxTailDependenceThreshold,
+                tailThreshold,
+                normalization: diversificationNormalization,
+                dateBasis: diversificationDateBasis,
+              }
+            : null,
           summary: {
             avgInSamplePerformance: results.summary.avgInSamplePerformance,
             avgOutOfSamplePerformance:
@@ -331,6 +516,10 @@ export function registerAnalysisTools(
             degradationFactor: results.summary.degradationFactor,
             parameterStability: results.summary.parameterStability,
             robustnessScore: results.summary.robustnessScore,
+            // Include diversification summary if available
+            avgCorrelationAcrossPeriods: results.summary.avgCorrelationAcrossPeriods ?? null,
+            avgTailDependenceAcrossPeriods: results.summary.avgTailDependenceAcrossPeriods ?? null,
+            avgEffectiveFactors: results.summary.avgEffectiveFactors ?? null,
           },
           stats: {
             totalPeriods: results.stats.totalPeriods,
@@ -355,6 +544,7 @@ export function registerAnalysisTools(
             outOfSampleEnd: p.outOfSampleEnd.toISOString(),
             targetMetricInSample: p.targetMetricInSample,
             targetMetricOutOfSample: p.targetMetricOutOfSample,
+            diversificationMetrics: p.diversificationMetrics ?? null,
           })),
         };
 
