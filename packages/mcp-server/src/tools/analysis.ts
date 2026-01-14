@@ -769,9 +769,52 @@ export function registerAnalysisTools(
         "Calculate Gaussian copula tail dependence to identify extreme co-movement risk",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
+        tailThreshold: z
+          .number()
+          .min(0.01)
+          .max(0.5)
+          .default(0.1)
+          .describe(
+            "Percentile threshold for tail events (0.1 = worst 10% of days). Lower = more extreme events only."
+          ),
+        minTradingDays: z
+          .number()
+          .min(10)
+          .default(30)
+          .describe("Minimum shared trading days required for valid analysis"),
+        normalization: z
+          .enum(["raw", "margin", "notional"])
+          .default("raw")
+          .describe(
+            "How to normalize returns: 'raw' absolute P&L, 'margin' P&L/margin, 'notional' P&L/notional"
+          ),
+        dateBasis: z
+          .enum(["opened", "closed"])
+          .default("opened")
+          .describe("Which trade date to use for grouping"),
+        strategyFilter: z
+          .array(z.string())
+          .optional()
+          .describe("Filter to specific strategies only (default: all strategies)"),
+        varianceThreshold: z
+          .number()
+          .min(0.5)
+          .max(0.99)
+          .default(0.8)
+          .describe(
+            "Variance threshold for determining effective factors (0.8 = 80% variance explained)"
+          ),
       }),
     },
-    async ({ blockId }) => {
+    async ({
+      blockId,
+      tailThreshold,
+      minTradingDays,
+      normalization,
+      dateBasis,
+      strategyFilter,
+      varianceThreshold,
+    }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
@@ -793,8 +836,15 @@ export function registerAnalysisTools(
           };
         }
 
-        // Perform tail risk analysis
-        const result = performTailRiskAnalysis(trades);
+        // Perform tail risk analysis with all options
+        const result = performTailRiskAnalysis(trades, {
+          tailThreshold,
+          minTradingDays,
+          normalization,
+          dateBasis,
+          strategyFilter,
+          varianceThreshold,
+        });
 
         // Build markdown output
         const lines: string[] = [
@@ -806,7 +856,11 @@ export function registerAnalysisTools(
           `|-----------|-------|`,
           `| Strategies | ${result.strategies.length} |`,
           `| Trading Days | ${result.tradingDaysUsed} |`,
-          `| Tail Threshold | ${formatPercent(result.tailThreshold * 100)} |`,
+          `| Tail Threshold | ${formatPercent(result.tailThreshold * 100)} (worst ${formatPercent(result.tailThreshold * 100)}) |`,
+          `| Min Trading Days | ${minTradingDays} |`,
+          `| Normalization | ${normalization} |`,
+          `| Date Basis | ${dateBasis} |`,
+          `| Strategy Filter | ${strategyFilter?.length ? strategyFilter.join(", ") : "All strategies"} |`,
           `| Variance Threshold | ${formatPercent(result.varianceThreshold * 100)} |`,
           "",
           "### Analytics",
@@ -860,6 +914,14 @@ export function registerAnalysisTools(
         // Build structured data for Claude reasoning
         const structuredData = {
           blockId,
+          options: {
+            tailThreshold,
+            minTradingDays,
+            normalization,
+            dateBasis,
+            strategyFilter: strategyFilter ?? null,
+            varianceThreshold,
+          },
           strategies: result.strategies,
           tradingDaysUsed: result.tradingDaysUsed,
           dateRange: {
