@@ -24,6 +24,23 @@
 
 **Git range:** `7e8178d` → `3c9adb9`
 
-**What's next:** TBD (next milestone planning)
+**What's next:** v2.0 Claude Integration
+
+---
+
+## v2.0 Claude Integration (In Progress)
+
+**Goal:** Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP server or skill, providing full API access to data queries, analysis execution, and automated exploration.
+
+**Phases:** 11-14 (4 phases total)
+
+| Phase | Name | Goal | Research |
+|-------|------|------|----------|
+| 11 | Research & Architecture | MCP vs skill investigation, design | Likely |
+| 12 | Core Integration Layer | Build integration foundation | Likely |
+| 13 | Analysis Capabilities | WFA execution, automated exploration | Unlikely |
+| 14 | Polish & Documentation | Error handling, examples, docs | Unlikely |
+
+**Started:** 2026-01-14
 
 ---

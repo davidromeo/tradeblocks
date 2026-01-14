@@ -1,8 +1,9 @@
-# Roadmap: Walk-Forward Analysis Enhancement
+# Roadmap: TradeBlocks
 
 ## Milestones
 
-- [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
+- ✅ [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
+- 🚧 **v2.0 Claude Integration** - Phases 11-14 (in progress)
 
 ## Completed Milestones
 
@@ -27,6 +28,52 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
+## 🚧 v2.0 Claude Integration (In Progress)
+
+**Milestone Goal:** Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP server or skill, providing full API access to data queries, analysis execution, and automated exploration.
+
+### Phase 11: Research & Architecture
+
+**Goal**: Investigate MCP vs skill approach, understand TradeBlocks data access patterns, design integration architecture
+**Depends on**: v1.0 complete
+**Research**: Likely (MCP server patterns, Claude skill patterns, API design)
+**Research topics**: MCP server implementation in Next.js, Claude skill best practices, exposing IndexedDB data via API, authentication/security considerations
+**Plans**: TBD
+
+Plans:
+- [ ] 11-01: TBD (run /gsd:plan-phase 11 to break down)
+
+### Phase 12: Core Integration Layer
+
+**Goal**: Build the chosen integration (MCP server or skill), expose data queries and basic statistics
+**Depends on**: Phase 11
+**Research**: Likely (implementation depends on Phase 11 architecture decision)
+**Research topics**: Chosen approach implementation patterns
+**Plans**: TBD
+
+Plans:
+- [ ] 12-01: TBD
+
+### Phase 13: Analysis Capabilities
+
+**Goal**: Add WFA execution, report generation, automated exploration modes
+**Depends on**: Phase 12
+**Research**: Unlikely (internal patterns established from Phase 12)
+**Plans**: TBD
+
+Plans:
+- [ ] 13-01: TBD
+
+### Phase 14: Polish & Documentation
+
+**Goal**: Error handling, usage examples, integration testing, documentation
+**Depends on**: Phase 13
+**Research**: Unlikely (internal work)
+**Plans**: TBD
+
+Plans:
+- [ ] 14-01: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -40,6 +87,10 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | 8. Interpretation Guidance | v1.0 | 3/3 | Complete | 2026-01-11 |
 | 9. Calculation Robustness | v1.0 | 1/1 | Complete | 2026-01-11 |
 | 10. Integration & Polish | v1.0 | 3/3 | Complete | 2026-01-11 |
+| 11. Research & Architecture | v2.0 | 0/? | Not started | - |
+| 12. Core Integration Layer | v2.0 | 0/? | Not started | - |
+| 13. Analysis Capabilities | v2.0 | 0/? | Not started | - |
+| 14. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
 ## Audit Notes
 

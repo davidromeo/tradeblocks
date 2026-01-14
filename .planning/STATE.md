@@ -5,47 +5,41 @@
 See: .planning/PROJECT.md (updated 2026-01-11)
 
 **Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v1.0 Shipped — ready for next milestone planning
+**Current focus:** v2.0 Claude Integration — Research & Architecture phase
 
 ## Current Position
 
-Phase: v1.0 complete
-Plan: N/A
-Status: **v1.0 Shipped**
-Last activity: 2026-01-11 — v1.0 WFA Enhancement milestone archived
+Phase: 11 of 14 (Research & Architecture)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-01-14 — Milestone v2.0 created
 
-Progress: █████████████████ 100% (17/17 plans complete)
+Progress: ░░░░░░░░░░ 0%
 
-## v1.0 Summary
+## v2.0 Goal
 
-- Phases: 10 (9 numbered, Phase 4 merged into Phase 2)
-- Plans: 17 total executed
-- Duration: ~2.8 hours total execution time
-- Files modified: 62
-- Lines changed: +8,961 / -797
-
-See `.planning/milestones/v1.0-wfa-enhancement.md` for full archive.
+Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP server or skill, providing full API access to data queries, analysis execution, and automated exploration.
 
 ## Accumulated Context
 
 ### Decisions
 
-All key decisions documented in PROJECT.md and archived in milestone file.
+All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
 
-All issues resolved. See `.planning/ISSUES.md` for closed issues with resolution notes.
+All v1.0 issues resolved. See `.planning/ISSUES.md` for closed issues with resolution notes.
 
 ### Blockers/Concerns
 
-None — milestone complete.
+None — starting fresh milestone.
 
-### Audit Reference
+### Roadmap Evolution
 
-Full audit findings documented in `.planning/AUDIT-FINDINGS.md`
+- Milestone v2.0 created: Claude Integration, 4 phases (Phase 11-14)
 
 ## Session Continuity
 
-Last session: 2026-01-11
-Status: **v1.0 Shipped**
+Last session: 2026-01-14
+Stopped at: Milestone v2.0 initialization
 Resume file: None
