@@ -32,17 +32,16 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 **Milestone Goal:** Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP server or skill, providing full API access to data queries, analysis execution, and automated exploration.
 
-### Phase 11: Research & Architecture
+### Phase 11: Research & Architecture ✓
 
 **Goal**: Investigate MCP vs skill approach, understand TradeBlocks data access patterns, design integration architecture
 **Depends on**: v1.0 complete
-**Research**: Likely (MCP server patterns, Claude skill patterns, API design)
-**Research topics**: MCP server implementation in Next.js, Claude skill best practices, exposing IndexedDB data via API, authentication/security considerations
-**Plans**: TBD
+**Status**: Complete
+**Completed**: 2026-01-14
 
 Plans:
 - [x] 11-01: Monorepo Foundation (pnpm workspace + MCP server scaffold) - completed 2026-01-14
-- [ ] 11-02: TBD (MCP server core implementation)
+- [x] 11-02: MCP Server Scaffold (stdio transport, list_backtests tool) - completed 2026-01-14
 
 ### Phase 12: Core Integration Layer
 
@@ -88,7 +87,7 @@ Plans:
 | 8. Interpretation Guidance | v1.0 | 3/3 | Complete | 2026-01-11 |
 | 9. Calculation Robustness | v1.0 | 1/1 | Complete | 2026-01-11 |
 | 10. Integration & Polish | v1.0 | 3/3 | Complete | 2026-01-11 |
-| 11. Research & Architecture | v2.0 | 1/? | In Progress | - |
+| 11. Research & Architecture | v2.0 | 2/2 | Complete | 2026-01-14 |
 | 12. Core Integration Layer | v2.0 | 0/? | Not started | - |
 | 13. Analysis Capabilities | v2.0 | 0/? | Not started | - |
 | 14. Polish & Documentation | v2.0 | 0/? | Not started | - |
