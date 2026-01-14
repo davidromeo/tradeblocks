@@ -42,15 +42,17 @@ For users already using TradeBlocks web app with IndexedDB data, use Chrome DevT
 | `csv-parse` | 5.x | CSV parsing | Same library TradeBlocks uses |
 | `mathjs` | 12.x | Statistical calculations | Same library TradeBlocks uses |
 
-**Extracted from TradeBlocks:**
+**Shared from TradeBlocks (imported directly via monorepo):**
 
 | Module | Purpose | Notes |
 |--------|---------|-------|
-| `lib/processing/csv-parser.ts` | Parse trade log CSVs | Extract and adapt |
-| `lib/processing/trade-processor.ts` | Process raw trades | Extract and adapt |
-| `lib/calculations/portfolio-stats.ts` | Core statistics | Extract as-is |
-| `lib/calculations/enrich-trades.ts` | Derived metrics | Extract as-is |
-| `lib/models/*.ts` | Type definitions | Extract as-is |
+| `lib/processing/csv-parser.ts` | Parse trade log CSVs | Import directly |
+| `lib/processing/trade-processor.ts` | Process raw trades | Import directly |
+| `lib/calculations/portfolio-stats.ts` | Core statistics | Import directly |
+| `lib/calculations/enrich-trades.ts` | Derived metrics | Import directly |
+| `lib/models/*.ts` | Type definitions | Import directly |
+
+**Sync strategy:** Single source of truth in `lib/`. Changes to calculation logic automatically available to both web app and MCP server. Bundler (tsup) creates standalone dist for npm.
 
 ### Approach B: Browser Integration
 
@@ -59,31 +61,46 @@ For users already using TradeBlocks web app with IndexedDB data, use Chrome DevT
 | Chrome DevTools MCP | latest | Browser automation | Already in Claude Code |
 | Claude Skills | - | Workflow definition | Native Claude feature |
 
-### Package Structure for Standalone MCP
+### Package Structure: Monorepo with Workspaces
+
+The MCP server lives **inside** the TradeBlocks repo as a workspace package, importing shared logic directly:
 
 ```
-tradeblocks-mcp/
-├── src/
-│   ├── index.ts              # MCP server entry (shebang + stdio)
-│   ├── server.ts             # Server setup and tool registration
-│   ├── tools/
-│   │   ├── list-trades.ts    # List CSV files in folder
-│   │   ├── analyze-file.ts   # Analyze single CSV
-│   │   ├── portfolio-stats.ts # Get portfolio statistics
-│   │   ├── strategy-stats.ts  # Strategy breakdown
-│   │   └── compare-files.ts   # Compare multiple backtests
-│   ├── processing/
-│   │   ├── csv-parser.ts     # From TradeBlocks
-│   │   └── trade-processor.ts # From TradeBlocks
-│   ├── calculations/
-│   │   ├── portfolio-stats.ts # From TradeBlocks
-│   │   └── enrich-trades.ts   # From TradeBlocks
-│   └── models/
-│       └── trade.ts          # From TradeBlocks
-├── package.json
-├── tsconfig.json
-└── README.md
+tradeblocks/                    # Main repo
+├── app/                        # Next.js app (existing)
+├── components/                 # React components (existing)
+├── lib/                        # Shared logic (existing - SINGLE SOURCE OF TRUTH)
+│   ├── calculations/           # Portfolio stats, enrichment, etc.
+│   ├── processing/             # CSV parsing, trade processing
+│   ├── models/                 # Type definitions
+│   └── ...
+├── packages/
+│   └── mcp-server/             # NEW: MCP server workspace package
+│       ├── src/
+│       │   ├── index.ts        # Entry point (shebang + stdio)
+│       │   ├── server.ts       # Tool registration
+│       │   └── tools/
+│       │       ├── list-backtests.ts
+│       │       ├── analyze-backtest.ts
+│       │       ├── get-strategy-stats.ts
+│       │       └── compare-backtests.ts
+│       ├── package.json        # Published to npm as "tradeblocks-mcp"
+│       ├── tsconfig.json
+│       └── tsup.config.ts      # Bundler config
+├── package.json                # Workspace root
+├── pnpm-workspace.yaml         # Workspace definition
+└── tsconfig.json               # Base TypeScript config
 ```
+
+**Key insight:** MCP server imports directly from `lib/`:
+```typescript
+// packages/mcp-server/src/tools/analyze-backtest.ts
+import { PortfolioStatsCalculator } from '../../../lib/calculations/portfolio-stats';
+import { parseTradeCsv } from '../../../lib/processing/csv-parser';
+import { processTrades } from '../../../lib/processing/trade-processor';
+```
+
+**Bundler (tsup) creates standalone dist** that includes all dependencies for npm publishing.
 
 **Installation for users:**
 ```bash
@@ -257,39 +274,87 @@ export function registerTools(server: Server, allowedDir: string) {
 }
 ```
 
-### Pattern 4: package.json for npm Publishing
+### Pattern 4: Monorepo Workspace Configuration
 
-**What:** Configure package for npx execution
-**Example:**
+**What:** Configure TradeBlocks as a monorepo with MCP server as workspace package
+
+**Root package.json:**
+```json
+{
+  "name": "tradeblocks-monorepo",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build:mcp": "pnpm --filter tradeblocks-mcp build",
+    "publish:mcp": "pnpm --filter tradeblocks-mcp publish"
+  }
+}
+```
+
+**pnpm-workspace.yaml:**
+```yaml
+packages:
+  - 'packages/*'
+```
+
+**packages/mcp-server/package.json:**
 ```json
 {
   "name": "tradeblocks-mcp",
   "version": "1.0.0",
-  "description": "MCP server for options trade analysis",
+  "description": "MCP server for options trade analysis - works with Claude Desktop/Cowork",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "tradeblocks-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
+    "build": "tsup src/index.ts --format esm --target node18 --clean",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
-    "zod": "^3.25.0",
-    "csv-parse": "^5.5.0",
-    "mathjs": "^12.0.0"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
+    "tsup": "^8.0.0",
     "typescript": "^5.3.0",
     "@types/node": "^20.0.0"
   },
   "engines": {
     "node": ">=18"
+  },
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidromeo/tradeblocks",
+    "directory": "packages/mcp-server"
   }
 }
 ```
+
+**packages/mcp-server/tsup.config.ts:**
+```typescript
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: ['src/index.ts'],
+  format: ['esm'],
+  target: 'node18',
+  clean: true,
+  // Bundle dependencies from lib/ into dist
+  noExternal: [/^\.\.\/.*lib/],
+  banner: {
+    js: '#!/usr/bin/env node'
+  }
+});
+```
+
+**Key points:**
+- `tsup` bundles the MCP server + all imports from `lib/` into a single distributable
+- `noExternal` ensures lib/ code is included in the bundle
+- `banner` adds shebang for npx execution
+- Only MCP SDK and zod are runtime dependencies (csv-parse, mathjs bundled from lib/)
 
 ### Anti-Patterns to Avoid
 
@@ -312,7 +377,7 @@ export function registerTools(server: Server, allowedDir: string) {
 | Input validation | Manual checks | `zod` | Required by SDK, integrates naturally |
 | File path security | Manual string checks | Path validation patterns | Prevent directory traversal |
 
-**Key insight:** The calculation logic already exists in TradeBlocks. Extract `lib/calculations/`, `lib/processing/`, and `lib/models/` into the standalone package. Don't rewrite - copy and adapt.
+**Key insight:** The calculation logic already exists in TradeBlocks. Import directly from `lib/` via monorepo - no copying, no syncing issues. The bundler creates a standalone package for npm.
 
 </dont_hand_roll>
 
@@ -366,11 +431,11 @@ export function registerTools(server: Server, allowedDir: string) {
 <code_examples>
 ## Code Examples
 
-### Complete MCP Server Entry Point
+### Complete MCP Server Entry Point (Monorepo)
 
 ```typescript
 #!/usr/bin/env node
-// src/index.ts
+// packages/mcp-server/src/index.ts
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -379,8 +444,11 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { PortfolioStatsCalculator } from "./calculations/portfolio-stats.js";
-import { parseTradeCsv } from "./processing/csv-parser.js";
+
+// Import directly from shared lib/ - bundler will include these
+import { PortfolioStatsCalculator } from "../../../lib/calculations/portfolio-stats";
+import { parseTradeCsv } from "../../../lib/processing/csv-parser";
+import type { Trade } from "../../../lib/models/trade";
 
 // Get backtest folder from command line
 const backtestDir = process.argv[2];
@@ -602,10 +670,10 @@ cp my-strategy-backtest.csv ~/backtests/
    - Options: `tradeblocks-mcp`, `@tradeblocks/mcp-server`, `backtest-analyzer-mcp`
    - Recommendation: Simple name like `tradeblocks-mcp` for easy npx usage
 
-2. **Scope of extraction**
-   - What we know: Need csv-parser, trade-processor, portfolio-stats at minimum
-   - What's unclear: Whether to include daily log processing, walk-forward analysis
-   - Recommendation: Start minimal (portfolio stats), add features based on demand
+2. **Scope of tools**
+   - What we know: Need portfolio-stats, strategy-breakdown, compare at minimum
+   - What's unclear: Whether to include walk-forward analysis, Monte Carlo, etc.
+   - Recommendation: Start with core stats tools, add advanced analysis based on demand
 
 3. **CSV format flexibility**
    - What we know: TradeBlocks expects specific column names
@@ -617,9 +685,10 @@ cp my-strategy-backtest.csv ~/backtests/
    - What's unclear: Whether standalone use case needs this complexity
    - Recommendation: Make daily logs optional, core stats work with trade log only
 
-5. **Monorepo vs separate repo**
-   - Options: Add to TradeBlocks repo as workspace package, or new repo
-   - Recommendation: New repo for clean separation and independent releases
+5. **Workspace tooling**
+   - Decision made: Monorepo with pnpm workspaces
+   - Open: Use pnpm vs npm workspaces (pnpm preferred for better monorepo support)
+   - Open: tsup vs esbuild vs tsc for bundling (tsup recommended for simplicity)
 
 </open_questions>
 
@@ -686,10 +755,16 @@ description: Query TradeBlocks application running in browser
 
 ### Tertiary (TradeBlocks Internal)
 
-- `lib/calculations/portfolio-stats.ts` - Core statistics (extract this)
-- `lib/processing/csv-parser.ts` - CSV parsing (extract this)
-- `lib/processing/trade-processor.ts` - Trade processing (extract this)
-- `lib/models/trade.ts` - Type definitions (extract this)
+- `lib/calculations/portfolio-stats.ts` - Core statistics (import directly)
+- `lib/processing/csv-parser.ts` - CSV parsing (import directly)
+- `lib/processing/trade-processor.ts` - Trade processing (import directly)
+- `lib/models/trade.ts` - Type definitions (import directly)
+
+### Tooling
+
+- [pnpm Workspaces](https://pnpm.io/workspaces) - Monorepo package management
+- [tsup](https://tsup.egoist.dev/) - TypeScript bundler for npm packages
+- [npm workspaces](https://docs.npmjs.com/cli/using-npm/workspaces) - Alternative to pnpm
 
 </sources>
 
@@ -700,13 +775,20 @@ description: Query TradeBlocks application running in browser
 - Core technology: MCP stdio servers, npm publishing, file-based tools
 - Ecosystem: @modelcontextprotocol/sdk, Claude Desktop, Claude Cowork
 - Patterns: Tool registration, path security, npx distribution
-- Extraction: TradeBlocks calculation code → standalone package
+- Architecture: Monorepo with pnpm workspaces, tsup bundling
 
 **Confidence breakdown:**
 - Standard stack: HIGH - Official tools, verified patterns
 - Architecture: HIGH - Well-documented MCP server patterns
-- Code extraction: HIGH - TradeBlocks code is clean, modular
+- Monorepo approach: HIGH - pnpm workspaces are battle-tested
+- Code sharing: HIGH - Direct imports, bundler handles distribution
 - Distribution: HIGH - npm/npx is standard MCP distribution method
+
+**Key architectural decision:** Monorepo with workspace package
+- MCP server lives at `packages/mcp-server/`
+- Imports directly from `lib/` (single source of truth)
+- tsup bundles everything for npm publishing
+- No code duplication, no sync issues
 
 **Research date:** 2026-01-14
 **Valid until:** 2026-02-14 (30 days)
