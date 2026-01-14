@@ -459,6 +459,19 @@ export function registerAnalysisTools(
           .describe(
             "Worst-case sizing: 'absolute' uses historical dollar amounts, 'relative' scales to account capital ratio"
           ),
+        worstCaseBasedOn: z
+          .enum(["simulation", "historical"])
+          .default("simulation")
+          .describe(
+            "What to base worst-case percentage on: 'simulation' (simulation length) or 'historical' (historical data size)"
+          ),
+        historicalInitialCapital: z
+          .number()
+          .positive()
+          .optional()
+          .describe(
+            "Historical initial capital for percentage return calculation. Only needed when filtering strategies from multi-strategy portfolios where fundsAtClose reflects combined portfolio."
+          ),
       }),
     },
     async ({
@@ -476,6 +489,8 @@ export function registerAnalysisTools(
       worstCasePercentage,
       worstCaseMode,
       worstCaseSizing,
+      worstCaseBasedOn,
+      historicalInitialCapital,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -528,6 +543,7 @@ export function registerAnalysisTools(
           resampleWindow,
           resampleMethod,
           initialCapital,
+          historicalInitialCapital,
           tradesPerYear,
           strategy,
           randomSeed,
@@ -535,6 +551,7 @@ export function registerAnalysisTools(
           worstCaseEnabled: includeWorstCase,
           worstCasePercentage: includeWorstCase ? worstCasePercentage : 0,
           worstCaseMode,
+          worstCaseBasedOn,
           worstCaseSizing,
         };
 
@@ -569,8 +586,12 @@ export function registerAnalysisTools(
             ? [
                 `| Worst-Case Percentage | ${worstCasePercentage}% |`,
                 `| Worst-Case Mode | ${worstCaseMode} |`,
+                `| Worst-Case Based On | ${worstCaseBasedOn} |`,
                 `| Worst-Case Sizing | ${worstCaseSizing} |`,
               ]
+            : []),
+          ...(historicalInitialCapital
+            ? [`| Historical Initial Capital | ${formatCurrency(historicalInitialCapital)} |`]
             : []),
           "",
           "### Return Statistics",
@@ -622,12 +643,14 @@ export function registerAnalysisTools(
             resampleWindow: params.resampleWindow ?? null,
             resampleMethod: params.resampleMethod,
             initialCapital: params.initialCapital,
+            historicalInitialCapital: params.historicalInitialCapital ?? null,
             tradesPerYear: params.tradesPerYear,
             randomSeed: params.randomSeed ?? null,
             normalizeTo1Lot: params.normalizeTo1Lot ?? false,
             worstCaseEnabled: includeWorstCase,
             worstCasePercentage: params.worstCasePercentage ?? 0,
             worstCaseMode: params.worstCaseMode ?? "pool",
+            worstCaseBasedOn: params.worstCaseBasedOn ?? "simulation",
             worstCaseSizing: params.worstCaseSizing ?? "relative",
           },
           statistics: {
