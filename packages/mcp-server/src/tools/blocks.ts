@@ -80,11 +80,44 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .enum(["asc", "desc"])
           .default("asc")
           .describe("Sort direction (default: asc)"),
+        containsStrategy: z
+          .string()
+          .optional()
+          .describe("Filter to blocks containing this strategy name (case-insensitive)"),
+        minTrades: z
+          .number()
+          .min(1)
+          .optional()
+          .describe("Filter to blocks with at least this many trades"),
+        hasDailyLog: z
+          .boolean()
+          .optional()
+          .describe("Filter to blocks with (true) or without (false) daily log data"),
+        limit: z
+          .number()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Limit number of results returned (default: all)"),
       }),
     },
-    async ({ sortBy, sortOrder }) => {
+    async ({ sortBy, sortOrder, containsStrategy, minTrades, hasDailyLog, limit }) => {
       try {
         let blocks = await listBlocks(baseDir);
+
+        // Apply filters
+        if (containsStrategy) {
+          const strategyLower = containsStrategy.toLowerCase();
+          blocks = blocks.filter((b) =>
+            b.strategies.some((s) => s.toLowerCase().includes(strategyLower))
+          );
+        }
+        if (minTrades !== undefined) {
+          blocks = blocks.filter((b) => b.tradeCount >= minTrades);
+        }
+        if (hasDailyLog !== undefined) {
+          blocks = blocks.filter((b) => b.hasDailyLog === hasDailyLog);
+        }
 
         // Sort blocks based on parameters
         const multiplier = sortOrder === "asc" ? 1 : -1;
@@ -105,6 +138,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           }
         });
 
+        // Apply limit
+        const totalBeforeLimit = blocks.length;
+        if (limit !== undefined && limit < blocks.length) {
+          blocks = blocks.slice(0, limit);
+        }
+
         const output = formatBlockList(blocks);
 
         // Build structured data for Claude reasoning
@@ -112,7 +151,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           options: {
             sortBy,
             sortOrder,
+            containsStrategy: containsStrategy ?? null,
+            minTrades: minTrades ?? null,
+            hasDailyLog: hasDailyLog ?? null,
+            limit: limit ?? null,
           },
+          totalMatching: totalBeforeLimit,
           blocks: blocks.map((b) => ({
             id: b.blockId,
             name: b.name,
@@ -209,13 +253,17 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     "get_statistics",
     {
       description:
-        "Get full portfolio statistics with optional strategy and date filters",
+        "Get full portfolio statistics with optional strategy, ticker, and date filters",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
           .string()
           .optional()
           .describe("Filter by strategy name (case-insensitive)"),
+        tickerFilter: z
+          .string()
+          .optional()
+          .describe("Filter trades by underlying ticker symbol (e.g., 'SPY', 'AAPL')"),
         startDate: z
           .string()
           .optional()
@@ -226,16 +274,24 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .describe("End date filter (YYYY-MM-DD)"),
       }),
     },
-    async ({ blockId, strategy, startDate, endDate }) => {
+    async ({ blockId, strategy, tickerFilter, startDate, endDate }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
         const dailyLogs = block.dailyLogs;
 
         // Apply filters
-        const isFiltered = !!(strategy || startDate || endDate);
+        const isFiltered = !!(strategy || tickerFilter || startDate || endDate);
         trades = filterByStrategy(trades, strategy);
         trades = filterByDateRange(trades, startDate, endDate);
+
+        // Apply ticker filter
+        if (tickerFilter) {
+          const tickerLower = tickerFilter.toLowerCase();
+          trades = trades.filter(
+            (t) => t.ticker?.toLowerCase() === tickerLower
+          );
+        }
 
         if (trades.length === 0) {
           return {
@@ -260,6 +316,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         // Build header showing applied filters
         const filterInfo: string[] = [];
         if (strategy) filterInfo.push(`Strategy: ${strategy}`);
+        if (tickerFilter) filterInfo.push(`Ticker: ${tickerFilter}`);
         if (startDate) filterInfo.push(`From: ${startDate}`);
         if (endDate) filterInfo.push(`To: ${endDate}`);
 
@@ -316,6 +373,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           blockId,
           filters: {
             strategy: strategy ?? null,
+            tickerFilter: tickerFilter ?? null,
             startDate: startDate ?? null,
             endDate: endDate ?? null,
           },
@@ -370,19 +428,60 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     "get_strategy_comparison",
     {
       description:
-        "Compare all strategies within a block (sorted by total P&L)",
+        "Compare all strategies within a block with optional filtering and sorting",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
+        startDate: z
+          .string()
+          .optional()
+          .describe("Start date filter (YYYY-MM-DD)"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("End date filter (YYYY-MM-DD)"),
+        tickerFilter: z
+          .string()
+          .optional()
+          .describe("Filter trades by underlying ticker symbol"),
+        minTrades: z
+          .number()
+          .min(1)
+          .optional()
+          .describe("Minimum trades per strategy to include in comparison"),
+        sortBy: z
+          .enum(["pl", "winRate", "trades", "profitFactor", "name"])
+          .default("pl")
+          .describe("Sort strategies by metric (default: pl for total P&L)"),
+        sortOrder: z
+          .enum(["asc", "desc"])
+          .default("desc")
+          .describe("Sort direction (default: desc for highest first)"),
+        limit: z
+          .number()
+          .min(1)
+          .optional()
+          .describe("Limit number of strategies shown"),
       }),
     },
-    async ({ blockId }) => {
+    async ({ blockId, startDate, endDate, tickerFilter, minTrades, sortBy, sortOrder, limit }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
-        const trades = block.trades;
+        let trades = block.trades;
+
+        // Apply date filter
+        trades = filterByDateRange(trades, startDate, endDate);
+
+        // Apply ticker filter
+        if (tickerFilter) {
+          const tickerLower = tickerFilter.toLowerCase();
+          trades = trades.filter(
+            (t) => t.ticker?.toLowerCase() === tickerLower
+          );
+        }
 
         if (trades.length === 0) {
           return {
-            content: [{ type: "text", text: "No trades found in this block." }],
+            content: [{ type: "text", text: "No trades found matching the filters." }],
           };
         }
 
@@ -390,13 +489,69 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         // because daily logs represent full portfolio
         const strategyStats = calculator.calculateStrategyStats(trades);
 
-        const header = `## Block: ${blockId}\n\n`;
-        const output = header + formatStrategyComparison(strategyStats);
+        // Convert to array for filtering and sorting
+        let strategies = Object.values(strategyStats);
+
+        // Apply minTrades filter
+        if (minTrades !== undefined) {
+          strategies = strategies.filter((s) => s.tradeCount >= minTrades);
+        }
+
+        // Apply sorting
+        const multiplier = sortOrder === "asc" ? 1 : -1;
+        strategies.sort((a, b) => {
+          switch (sortBy) {
+            case "winRate":
+              return (a.winRate - b.winRate) * multiplier;
+            case "trades":
+              return (a.tradeCount - b.tradeCount) * multiplier;
+            case "profitFactor":
+              return ((a.profitFactor ?? 0) - (b.profitFactor ?? 0)) * multiplier;
+            case "name":
+              return a.strategyName.localeCompare(b.strategyName) * multiplier;
+            case "pl":
+            default:
+              return (a.totalPl - b.totalPl) * multiplier;
+          }
+        });
+
+        // Apply limit
+        const totalBeforeLimit = strategies.length;
+        if (limit !== undefined && limit < strategies.length) {
+          strategies = strategies.slice(0, limit);
+        }
+
+        // Build header showing applied filters
+        const filterInfo: string[] = [];
+        if (startDate) filterInfo.push(`From: ${startDate}`);
+        if (endDate) filterInfo.push(`To: ${endDate}`);
+        if (tickerFilter) filterInfo.push(`Ticker: ${tickerFilter}`);
+        if (minTrades) filterInfo.push(`Min trades: ${minTrades}`);
+
+        const header = filterInfo.length > 0
+          ? `## Block: ${blockId}\n\n**Filters:** ${filterInfo.join(", ")}\n**Sort:** ${sortBy} (${sortOrder})\n\n`
+          : `## Block: ${blockId}\n\n**Sort:** ${sortBy} (${sortOrder})\n\n`;
+
+        // Rebuild stats object for formatter
+        const filteredStats: Record<string, typeof strategies[0]> = {};
+        for (const s of strategies) {
+          filteredStats[s.strategyName] = s;
+        }
+        const output = header + formatStrategyComparison(filteredStats);
 
         // Build structured data for Claude reasoning
-        const strategies = Object.values(strategyStats)
-          .sort((a, b) => b.totalPl - a.totalPl)
-          .map((s) => ({
+        const structuredData = {
+          blockId,
+          options: {
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+            tickerFilter: tickerFilter ?? null,
+            minTrades: minTrades ?? null,
+            sortBy,
+            sortOrder,
+            limit: limit ?? null,
+          },
+          strategies: structuredStrategies.map((s) => ({
             name: s.strategyName,
             trades: s.tradeCount,
             winRate: s.winRate,
@@ -404,12 +559,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             avgWin: s.avgWin,
             avgLoss: s.avgLoss,
             profitFactor: s.profitFactor,
-          }));
-
-        const structuredData = {
-          blockId,
-          strategies,
-          count: strategies.length,
+          })),
+          totalStrategies: totalBeforeLimit,
+          count: structuredStrategies.length,
         };
 
         return createDualOutput(output, structuredData);
@@ -455,9 +607,27 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .describe(
             "Specific metrics to include in comparison (default: all). Use to focus on key metrics."
           ),
+        sortBy: z
+          .enum([
+            "name",
+            "totalTrades",
+            "winRate",
+            "netPl",
+            "sharpeRatio",
+            "sortinoRatio",
+            "maxDrawdown",
+            "profitFactor",
+            "calmarRatio",
+          ])
+          .default("name")
+          .describe("Sort blocks by metric (default: name)"),
+        sortOrder: z
+          .enum(["asc", "desc"])
+          .default("asc")
+          .describe("Sort direction (default: asc)"),
       }),
     },
-    async ({ blockIds, metrics }) => {
+    async ({ blockIds, metrics, sortBy, sortOrder }) => {
       try {
         const blockStats: Array<{
           blockId: string;
@@ -490,6 +660,32 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           };
         }
 
+        // Sort blocks by specified metric
+        const multiplier = sortOrder === "asc" ? 1 : -1;
+        blockStats.sort((a, b) => {
+          switch (sortBy) {
+            case "totalTrades":
+              return (a.stats.totalTrades - b.stats.totalTrades) * multiplier;
+            case "winRate":
+              return ((a.stats.winRate ?? 0) - (b.stats.winRate ?? 0)) * multiplier;
+            case "netPl":
+              return ((a.stats.netPl ?? 0) - (b.stats.netPl ?? 0)) * multiplier;
+            case "sharpeRatio":
+              return ((a.stats.sharpeRatio ?? 0) - (b.stats.sharpeRatio ?? 0)) * multiplier;
+            case "sortinoRatio":
+              return ((a.stats.sortinoRatio ?? 0) - (b.stats.sortinoRatio ?? 0)) * multiplier;
+            case "maxDrawdown":
+              return ((a.stats.maxDrawdown ?? 0) - (b.stats.maxDrawdown ?? 0)) * multiplier;
+            case "profitFactor":
+              return ((a.stats.profitFactor ?? 0) - (b.stats.profitFactor ?? 0)) * multiplier;
+            case "calmarRatio":
+              return ((a.stats.calmarRatio ?? 0) - (b.stats.calmarRatio ?? 0)) * multiplier;
+            case "name":
+            default:
+              return a.blockId.localeCompare(b.blockId) * multiplier;
+          }
+        });
+
         const output = formatBlocksComparison(blockStats);
 
         // Add note about any failed blocks
@@ -519,6 +715,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const structuredData = {
           options: {
             metrics: metrics ?? null,
+            sortBy,
+            sortOrder,
           },
           comparisons: blockStats.map(({ blockId, stats }) => {
             const filteredStats: Record<string, number | null> = {};
@@ -565,6 +763,10 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .string()
           .optional()
           .describe("Filter by strategy name (case-insensitive)"),
+        tickerFilter: z
+          .string()
+          .optional()
+          .describe("Filter trades by underlying ticker symbol (e.g., 'SPY', 'AAPL')"),
         startDate: z
           .string()
           .optional()
@@ -581,8 +783,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .number()
           .optional()
           .describe("Filter trades with P&L <= this value"),
+        outcome: z
+          .enum(["all", "winners", "losers", "breakeven"])
+          .default("all")
+          .describe("Filter by trade outcome: 'all', 'winners' (P&L > 0), 'losers' (P&L < 0), 'breakeven' (P&L = 0)"),
         sortBy: z
-          .enum(["date", "pl", "strategy"])
+          .enum(["date", "pl", "strategy", "ticker"])
           .default("date")
           .describe("Sort trades by field (default: date)"),
         sortOrder: z
@@ -602,10 +808,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     async ({
       blockId,
       strategy,
+      tickerFilter,
       startDate,
       endDate,
       minPl,
       maxPl,
+      outcome,
       sortBy,
       sortOrder,
       page = 1,
@@ -619,12 +827,35 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         trades = filterByStrategy(trades, strategy);
         trades = filterByDateRange(trades, startDate, endDate);
 
+        // Apply ticker filter
+        if (tickerFilter) {
+          const tickerLower = tickerFilter.toLowerCase();
+          trades = trades.filter(
+            (t) => t.ticker?.toLowerCase() === tickerLower
+          );
+        }
+
         // Apply P&L filters
         if (minPl !== undefined) {
           trades = trades.filter((t) => t.pl >= minPl);
         }
         if (maxPl !== undefined) {
           trades = trades.filter((t) => t.pl <= maxPl);
+        }
+
+        // Apply outcome filter
+        if (outcome !== "all") {
+          switch (outcome) {
+            case "winners":
+              trades = trades.filter((t) => t.pl > 0);
+              break;
+            case "losers":
+              trades = trades.filter((t) => t.pl < 0);
+              break;
+            case "breakeven":
+              trades = trades.filter((t) => t.pl === 0);
+              break;
+          }
         }
 
         // Apply sorting
@@ -635,6 +866,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
               return (a.pl - b.pl) * multiplier;
             case "strategy":
               return a.strategy.localeCompare(b.strategy) * multiplier;
+            case "ticker":
+              return (a.ticker ?? "").localeCompare(b.ticker ?? "") * multiplier;
             case "date":
             default:
               return (
@@ -648,10 +881,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         // Build header showing applied filters
         const filterInfo: string[] = [];
         if (strategy) filterInfo.push(`Strategy: ${strategy}`);
+        if (tickerFilter) filterInfo.push(`Ticker: ${tickerFilter}`);
         if (startDate) filterInfo.push(`From: ${startDate}`);
         if (endDate) filterInfo.push(`To: ${endDate}`);
         if (minPl !== undefined) filterInfo.push(`Min P&L: $${minPl}`);
         if (maxPl !== undefined) filterInfo.push(`Max P&L: $${maxPl}`);
+        if (outcome !== "all") filterInfo.push(`Outcome: ${outcome}`);
 
         const header =
           filterInfo.length > 0
@@ -671,10 +906,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const structuredData = {
           options: {
             strategy: strategy ?? null,
+            tickerFilter: tickerFilter ?? null,
             startDate: startDate ?? null,
             endDate: endDate ?? null,
             minPl: minPl ?? null,
             maxPl: maxPl ?? null,
+            outcome,
             sortBy,
             sortOrder,
           },
