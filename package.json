@@ -15,7 +15,9 @@
     "clean:all": "rm -rf .next .turbo .swc node_modules",
     "rebuild": "npm run clean:all && npm install && npm run build",
     "prepare": "husky",
-    "gpt:context": "repomix --style markdown --compress --output gpt/codebase-context.md"
+    "gpt:context": "repomix --style markdown --compress --output gpt/codebase-context.md",
+    "build:mcp": "pnpm --filter tradeblocks-mcp build",
+    "test:mcp": "pnpm --filter tradeblocks-mcp test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
