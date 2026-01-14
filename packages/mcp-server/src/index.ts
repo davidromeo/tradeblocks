@@ -1,9 +1,5 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
 import * as fs from "fs/promises";
 import * as path from "path";
 
@@ -17,33 +13,20 @@ if (!backtestDir) {
 
 const resolvedDir = path.resolve(backtestDir);
 
-// Create server instance
-const server = new Server(
+// Create server instance using the new McpServer API
+const server = new McpServer(
   { name: "tradeblocks-mcp", version: "0.1.0" },
   { capabilities: { tools: {} } }
 );
 
-// Register tools
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "list_backtests",
-      description:
-        "List all CSV files available for analysis in the backtests folder",
-      inputSchema: {
-        type: "object" as const,
-        properties: {},
-        required: [],
-      },
-    },
-  ],
-}));
-
-// Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name } = request.params;
-
-  if (name === "list_backtests") {
+// Register list_backtests tool
+server.registerTool(
+  "list_backtests",
+  {
+    description:
+      "List all CSV files available for analysis in the backtests folder",
+  },
+  async () => {
     try {
       const files = await fs.readdir(resolvedDir);
       const csvFiles = files.filter((f) => f.toLowerCase().endsWith(".csv"));
@@ -79,12 +62,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
   }
-
-  return {
-    content: [{ type: "text", text: `Unknown tool: ${name}` }],
-    isError: true,
-  };
-});
+);
 
 async function main() {
   // Verify directory exists
