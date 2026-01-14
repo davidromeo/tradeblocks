@@ -4,7 +4,19 @@ Enhancements discovered during execution. Not critical - address in future phase
 
 ## Open Enhancements
 
-No open enhancements.
+### ISS-005: Plotly TypeScript type conflicts with pnpm
+
+- **Discovered:** Phase 11-01 (2026-01-14)
+- **Type:** Build
+- **Description:** After converting to pnpm workspace, TypeScript build fails with Plotly type errors. The issue is a conflict between types from `plotly.js` v3.1.2 and `@types/plotly.js` v3.0.7 (pulled via `@types/react-plotly.js`). The types in plotly.js have additional chart types (like "choroplethmap") that don't exist in @types/plotly.js, causing type incompatibility.
+- **Impact:** Medium (build fails, but app works at runtime)
+- **Effort:** Medium (needs proper type resolution strategy)
+- **Status:** Open
+- **Potential fixes:**
+  1. Pin @types/plotly.js to match plotly.js version
+  2. Create type declaration file to harmonize types
+  3. Update to newer @types/react-plotly.js when available
+  4. Cast Plotly data/layout props to `unknown` in components
 
 ## Closed Enhancements
 

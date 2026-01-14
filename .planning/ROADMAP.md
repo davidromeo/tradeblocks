@@ -41,7 +41,8 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 **Plans**: TBD
 
 Plans:
-- [ ] 11-01: TBD (run /gsd:plan-phase 11 to break down)
+- [x] 11-01: Monorepo Foundation (pnpm workspace + MCP server scaffold) - completed 2026-01-14
+- [ ] 11-02: TBD (MCP server core implementation)
 
 ### Phase 12: Core Integration Layer
 
@@ -87,7 +88,7 @@ Plans:
 | 8. Interpretation Guidance | v1.0 | 3/3 | Complete | 2026-01-11 |
 | 9. Calculation Robustness | v1.0 | 1/1 | Complete | 2026-01-11 |
 | 10. Integration & Polish | v1.0 | 3/3 | Complete | 2026-01-11 |
-| 11. Research & Architecture | v2.0 | 0/? | Not started | - |
+| 11. Research & Architecture | v2.0 | 1/? | In Progress | - |
 | 12. Core Integration Layer | v2.0 | 0/? | Not started | - |
 | 13. Analysis Capabilities | v2.0 | 0/? | Not started | - |
 | 14. Polish & Documentation | v2.0 | 0/? | Not started | - |

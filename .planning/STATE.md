@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 ## Current Position
 
 Phase: 11 of 14 (Research & Architecture)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-01-14 — Milestone v2.0 created
+Plan: 11-01 complete, 11-02 ready
+Status: Ready for next plan
+Last activity: 2026-01-14 — Monorepo foundation complete
 
-Progress: ░░░░░░░░░░ 0%
+Progress: █░░░░░░░░░ 10%
 
 ## v2.0 Goal
 
@@ -24,15 +24,23 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 
 ### Decisions
 
+**v2.0 Phase 11-01:**
+- Monorepo with pnpm workspaces (not npm workspaces)
+- MCP server at packages/mcp-server/ with ESM-only config
+- tsup bundles lib/ imports for standalone npm distribution
+- Path alias @lib/* for shared code imports
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
+
+ISS-005: Plotly TypeScript type conflicts with pnpm (pre-existing, exposed by package manager switch)
 
 All v1.0 issues resolved. See `.planning/ISSUES.md` for closed issues with resolution notes.
 
 ### Blockers/Concerns
 
-None — starting fresh milestone.
+None — ISS-005 is a build-time type issue only, runtime works correctly.
 
 ### Roadmap Evolution
 
