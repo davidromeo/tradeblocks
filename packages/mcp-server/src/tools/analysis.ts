@@ -292,13 +292,92 @@ export function registerAnalysisTools(
           .max(10000)
           .default(1000)
           .describe("Number of simulation paths (default: 1000, max: 10000)"),
+        simulationLength: z
+          .number()
+          .min(10)
+          .optional()
+          .describe(
+            "Number of trades/days to project forward. If not specified, uses the number of historical trades."
+          ),
+        resampleWindow: z
+          .number()
+          .min(5)
+          .optional()
+          .describe(
+            "Size of resample pool (how many recent trades/days to sample from). If not specified, uses all available data."
+          ),
+        resampleMethod: z
+          .enum(["trades", "daily", "percentage"])
+          .default("trades")
+          .describe(
+            "What to resample: 'trades' (individual trade P&L), 'daily' (daily aggregated returns), 'percentage' (percentage returns for compounding strategies)"
+          ),
+        initialCapital: z
+          .number()
+          .positive()
+          .optional()
+          .describe(
+            "Starting capital for simulations. If not specified, inferred from first trade."
+          ),
+        tradesPerYear: z
+          .number()
+          .min(1)
+          .optional()
+          .describe(
+            "Expected trades per year for annualization. If not specified, calculated from historical data."
+          ),
+        randomSeed: z
+          .number()
+          .optional()
+          .describe("Random seed for reproducibility. Enables deterministic results across runs."),
+        normalizeTo1Lot: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Normalize trades to 1-lot by dividing P&L by contract count. Useful for comparing different position sizes."
+          ),
         includeWorstCase: z
           .boolean()
           .default(true)
-          .describe("Include worst-case scenario testing (default: true)"),
+          .describe("Enable worst-case scenario injection (default: true)"),
+        worstCasePercentage: z
+          .number()
+          .min(0)
+          .max(100)
+          .default(5)
+          .describe(
+            "Percentage of simulation length that should be max-loss scenarios (0-100, default: 5)"
+          ),
+        worstCaseMode: z
+          .enum(["pool", "guarantee"])
+          .default("pool")
+          .describe(
+            "How to inject worst-case: 'pool' adds synthetic losses to resample pool, 'guarantee' ensures worst-case appears in every simulation"
+          ),
+        worstCaseSizing: z
+          .enum(["absolute", "relative"])
+          .default("relative")
+          .describe(
+            "Worst-case sizing: 'absolute' uses historical dollar amounts, 'relative' scales to account capital ratio"
+          ),
       }),
     },
-    async ({ blockId, strategy, numSimulations, includeWorstCase }) => {
+    async ({
+      blockId,
+      strategy,
+      numSimulations,
+      simulationLength: simulationLengthParam,
+      resampleWindow,
+      resampleMethod,
+      initialCapital: initialCapitalParam,
+      tradesPerYear: tradesPerYearParam,
+      randomSeed,
+      normalizeTo1Lot,
+      includeWorstCase,
+      worstCasePercentage,
+      worstCaseMode,
+      worstCaseSizing,
+    }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -318,7 +397,7 @@ export function registerAnalysisTools(
           };
         }
 
-        // Calculate initial capital and trades per year
+        // Calculate initial capital and trades per year if not provided
         const sortedTrades = [...trades].sort(
           (a, b) =>
             new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
@@ -326,24 +405,38 @@ export function registerAnalysisTools(
         const firstTrade = sortedTrades[0];
         const lastTrade = sortedTrades[sortedTrades.length - 1];
 
-        const initialCapital = firstTrade.fundsAtClose - firstTrade.pl;
+        // Use provided initial capital or infer from first trade
+        const inferredCapital = firstTrade.fundsAtClose - firstTrade.pl;
+        const initialCapital =
+          initialCapitalParam ?? (inferredCapital > 0 ? inferredCapital : 100000);
+
+        // Use provided trades per year or calculate from data
         const daySpan =
           (new Date(lastTrade.dateOpened).getTime() -
             new Date(firstTrade.dateOpened).getTime()) /
           (24 * 60 * 60 * 1000);
-        const tradesPerYear =
+        const calculatedTradesPerYear =
           daySpan > 0 ? (trades.length / daySpan) * 365 : 252;
+        const tradesPerYear = tradesPerYearParam ?? calculatedTradesPerYear;
+
+        // Use provided simulation length or default to trade count
+        const simulationLength = simulationLengthParam ?? trades.length;
 
         // Configure Monte Carlo parameters
         const params: MonteCarloParams = {
           numSimulations,
-          simulationLength: trades.length,
-          resampleMethod: "trades",
-          initialCapital: initialCapital > 0 ? initialCapital : 100000,
+          simulationLength,
+          resampleWindow,
+          resampleMethod,
+          initialCapital,
           tradesPerYear,
+          strategy,
+          randomSeed,
+          normalizeTo1Lot,
           worstCaseEnabled: includeWorstCase,
-          worstCasePercentage: includeWorstCase ? 5 : 0,
-          worstCaseMode: "pool",
+          worstCasePercentage: includeWorstCase ? worstCasePercentage : 0,
+          worstCaseMode,
+          worstCaseSizing,
         };
 
         // Run simulation
@@ -367,8 +460,19 @@ export function registerAnalysisTools(
           `|-----------|-------|`,
           `| Simulations | ${numSimulations.toLocaleString()} |`,
           `| Simulation Length | ${params.simulationLength} trades |`,
+          `| Resample Method | ${params.resampleMethod} |`,
+          `| Resample Window | ${params.resampleWindow ? `${params.resampleWindow} items` : "All data"} |`,
           `| Initial Capital | ${formatCurrency(params.initialCapital)} |`,
+          `| Trades Per Year | ${Math.round(params.tradesPerYear)} |`,
+          `| Normalize to 1-Lot | ${params.normalizeTo1Lot ? "Yes" : "No"} |`,
           `| Worst-Case Testing | ${includeWorstCase ? "Enabled" : "Disabled"} |`,
+          ...(includeWorstCase
+            ? [
+                `| Worst-Case Percentage | ${worstCasePercentage}% |`,
+                `| Worst-Case Mode | ${worstCaseMode} |`,
+                `| Worst-Case Sizing | ${worstCaseSizing} |`,
+              ]
+            : []),
           "",
           "### Return Statistics",
           "",
@@ -416,9 +520,16 @@ export function registerAnalysisTools(
           parameters: {
             numSimulations,
             simulationLength: params.simulationLength,
+            resampleWindow: params.resampleWindow ?? null,
+            resampleMethod: params.resampleMethod,
             initialCapital: params.initialCapital,
-            tradesPerYear,
+            tradesPerYear: params.tradesPerYear,
+            randomSeed: params.randomSeed ?? null,
+            normalizeTo1Lot: params.normalizeTo1Lot ?? false,
             worstCaseEnabled: includeWorstCase,
+            worstCasePercentage: params.worstCasePercentage ?? 0,
+            worstCaseMode: params.worstCaseMode ?? "pool",
+            worstCaseSizing: params.worstCaseSizing ?? "relative",
           },
           statistics: {
             meanFinalValue: stats.meanFinalValue,
