@@ -1,17 +1,19 @@
 /**
  * Performance Tools
  *
- * Tier 3 performance MCP tools for chart data and period returns.
+ * Tier 3 performance MCP tools for chart data, period returns, and backtest vs actual comparison.
  */
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadBlock } from "../utils/block-loader.js";
+import { loadBlock, loadReportingLog } from "../utils/block-loader.js";
 import {
   createToolOutput,
+  formatPercent,
   formatCurrency,
 } from "../utils/output-formatter.js";
 import type { Trade } from "@lib/models/trade";
+import type { ReportingTrade } from "@lib/models/reporting-trade";
 
 /**
  * Filter trades by strategy
@@ -490,6 +492,295 @@ export function registerPerformanceTools(
             {
               type: "text",
               text: `Error getting period returns: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 3: compare_backtest_to_actual
+  server.registerTool(
+    "compare_backtest_to_actual",
+    {
+      description:
+        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        scaling: z
+          .enum(["raw", "perContract", "toReported"])
+          .default("raw")
+          .describe(
+            "Scaling mode: 'raw' (no scaling), 'perContract' (divide by contracts for per-lot comparison), 'toReported' (scale backtest to match actual contract count)"
+          ),
+      }),
+    },
+    async ({ blockId, scaling }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const backtestTrades = block.trades;
+
+        if (backtestTrades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No backtest trades found in tradelog.csv.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Load reporting log (actual trades)
+        let actualTrades: ReportingTrade[];
+        try {
+          actualTrades = await loadReportingLog(baseDir, blockId);
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No reportinglog.csv found in block "${blockId}". This tool requires both tradelog.csv (backtest) and reportinglog.csv (actual) to compare.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (actualTrades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No actual trades found in reportinglog.csv.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Group trades by date and strategy
+        const backtestByDateStrategy = new Map<
+          string,
+          { trades: Trade[]; totalPl: number; contracts: number }
+        >();
+        const actualByDateStrategy = new Map<
+          string,
+          { trades: ReportingTrade[]; totalPl: number; contracts: number }
+        >();
+
+        backtestTrades.forEach((trade) => {
+          const dateKey = formatDateKey(new Date(trade.dateOpened));
+          const key = `${dateKey}|${trade.strategy}`;
+          const existing = backtestByDateStrategy.get(key) || {
+            trades: [],
+            totalPl: 0,
+            contracts: 0,
+          };
+          existing.trades.push(trade);
+          existing.totalPl += trade.pl;
+          existing.contracts = existing.trades[0].numContracts; // Unit size from first trade
+          backtestByDateStrategy.set(key, existing);
+        });
+
+        actualTrades.forEach((trade) => {
+          const dateKey = formatDateKey(new Date(trade.dateOpened));
+          const key = `${dateKey}|${trade.strategy}`;
+          const existing = actualByDateStrategy.get(key) || {
+            trades: [],
+            totalPl: 0,
+            contracts: 0,
+          };
+          existing.trades.push(trade);
+          existing.totalPl += trade.pl;
+          existing.contracts = existing.trades[0].numContracts; // Unit size from first trade
+          actualByDateStrategy.set(key, existing);
+        });
+
+        // Match and compare
+        const comparisons: Array<{
+          date: string;
+          strategy: string;
+          backtestPl: number;
+          actualPl: number;
+          scaledBacktestPl: number;
+          scaledActualPl: number;
+          slippage: number;
+          slippagePercent: number | null;
+          backtestContracts: number;
+          actualContracts: number;
+          matched: boolean;
+        }> = [];
+
+        const processedActual = new Set<string>();
+
+        for (const [key, btData] of backtestByDateStrategy) {
+          const [dateKey, strategy] = key.split("|");
+          const actualData = actualByDateStrategy.get(key);
+
+          if (actualData) {
+            processedActual.add(key);
+
+            // Apply scaling
+            let scaledBtPl = btData.totalPl;
+            let scaledActualPl = actualData.totalPl;
+
+            if (scaling === "perContract") {
+              scaledBtPl =
+                btData.contracts > 0 ? btData.totalPl / btData.contracts : 0;
+              scaledActualPl =
+                actualData.contracts > 0
+                  ? actualData.totalPl / actualData.contracts
+                  : 0;
+            } else if (scaling === "toReported") {
+              // Scale backtest DOWN to match actual contract count
+              if (btData.contracts > 0 && actualData.contracts > 0) {
+                const scaleFactor = actualData.contracts / btData.contracts;
+                scaledBtPl = btData.totalPl * scaleFactor;
+              }
+              // Actual stays as-is
+            }
+
+            const slippage = scaledActualPl - scaledBtPl;
+            const slippagePercent =
+              scaledBtPl !== 0
+                ? (slippage / Math.abs(scaledBtPl)) * 100
+                : null;
+
+            comparisons.push({
+              date: dateKey,
+              strategy,
+              backtestPl: btData.totalPl,
+              actualPl: actualData.totalPl,
+              scaledBacktestPl: scaledBtPl,
+              scaledActualPl: scaledActualPl,
+              slippage,
+              slippagePercent,
+              backtestContracts: btData.contracts,
+              actualContracts: actualData.contracts,
+              matched: true,
+            });
+          } else {
+            // Unmatched backtest (no corresponding actual)
+            comparisons.push({
+              date: dateKey,
+              strategy,
+              backtestPl: btData.totalPl,
+              actualPl: 0,
+              scaledBacktestPl:
+                scaling === "perContract" && btData.contracts > 0
+                  ? btData.totalPl / btData.contracts
+                  : btData.totalPl,
+              scaledActualPl: 0,
+              slippage: 0,
+              slippagePercent: null,
+              backtestContracts: btData.contracts,
+              actualContracts: 0,
+              matched: false,
+            });
+          }
+        }
+
+        // Add unmatched actual trades
+        for (const [key, actualData] of actualByDateStrategy) {
+          if (processedActual.has(key)) continue;
+
+          const [dateKey, strategy] = key.split("|");
+          comparisons.push({
+            date: dateKey,
+            strategy,
+            backtestPl: 0,
+            actualPl: actualData.totalPl,
+            scaledBacktestPl: 0,
+            scaledActualPl:
+              scaling === "perContract" && actualData.contracts > 0
+                ? actualData.totalPl / actualData.contracts
+                : actualData.totalPl,
+            slippage: 0,
+            slippagePercent: null,
+            backtestContracts: 0,
+            actualContracts: actualData.contracts,
+            matched: false,
+          });
+        }
+
+        // Sort by date then strategy
+        comparisons.sort((a, b) => {
+          const dateCompare = a.date.localeCompare(b.date);
+          if (dateCompare !== 0) return dateCompare;
+          return a.strategy.localeCompare(b.strategy);
+        });
+
+        // Calculate summary statistics
+        const matchedComparisons = comparisons.filter((c) => c.matched);
+        const totalBacktestPl = matchedComparisons.reduce(
+          (sum, c) => sum + c.scaledBacktestPl,
+          0
+        );
+        const totalActualPl = matchedComparisons.reduce(
+          (sum, c) => sum + c.scaledActualPl,
+          0
+        );
+        const totalSlippage = totalActualPl - totalBacktestPl;
+        const avgSlippage =
+          matchedComparisons.length > 0
+            ? totalSlippage / matchedComparisons.length
+            : 0;
+        const avgSlippagePercent =
+          totalBacktestPl !== 0
+            ? (totalSlippage / Math.abs(totalBacktestPl)) * 100
+            : null;
+
+        // Get unique strategies
+        const backtestStrategies = Array.from(
+          new Set(backtestTrades.map((t) => t.strategy))
+        ).sort();
+        const actualStrategies = Array.from(
+          new Set(actualTrades.map((t) => t.strategy))
+        ).sort();
+
+        // Brief summary for user display
+        const slippageDisplay =
+          avgSlippagePercent !== null
+            ? `${formatPercent(avgSlippagePercent)} slippage`
+            : "N/A slippage";
+        const summary = `Comparison: ${blockId} | ${scaling} scaling | ${matchedComparisons.length}/${comparisons.length} matched | ${slippageDisplay}`;
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          scalingMode: scaling,
+          backtestTradeCount: backtestTrades.length,
+          actualTradeCount: actualTrades.length,
+          backtestStrategies,
+          actualStrategies,
+          summary: {
+            totalComparisons: comparisons.length,
+            matchedComparisons: matchedComparisons.length,
+            unmatchedBacktest: comparisons.filter(
+              (c) => !c.matched && c.backtestPl !== 0
+            ).length,
+            unmatchedActual: comparisons.filter(
+              (c) => !c.matched && c.actualPl !== 0
+            ).length,
+            totalBacktestPl,
+            totalActualPl,
+            totalSlippage,
+            avgSlippage,
+            avgSlippagePercent,
+          },
+          comparisons,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error comparing backtest to actual: ${(error as Error).message}`,
             },
           ],
           isError: true,

@@ -9,6 +9,8 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import type { Trade } from "@lib/models/trade";
 import type { DailyLogEntry } from "@lib/models/daily-log";
+import type { ReportingTrade } from "@lib/models/reporting-trade";
+import { REPORTING_TRADE_COLUMN_ALIASES } from "@lib/models/reporting-trade";
 
 /**
  * Block metadata stored in .block.json
@@ -453,4 +455,102 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
   } catch (error) {
     throw new Error(`Failed to list blocks: ${(error as Error).message}`);
   }
+}
+
+/**
+ * Normalize header names using column aliases
+ */
+function normalizeRecordHeaders(
+  raw: Record<string, string>
+): Record<string, string> {
+  const normalized: Record<string, string> = { ...raw };
+  Object.entries(REPORTING_TRADE_COLUMN_ALIASES).forEach(
+    ([alias, canonical]) => {
+      if (normalized[alias] !== undefined) {
+        normalized[canonical] = normalized[alias];
+        delete normalized[alias];
+      }
+    }
+  );
+  return normalized;
+}
+
+/**
+ * Convert raw CSV record to ReportingTrade object
+ */
+function convertToReportingTrade(
+  raw: Record<string, string>
+): ReportingTrade | null {
+  try {
+    const normalized = normalizeRecordHeaders(raw);
+
+    const dateOpened = parseDatePreservingCalendarDay(normalized["Date Opened"]);
+    if (isNaN(dateOpened.getTime())) return null;
+
+    const dateClosed = normalized["Date Closed"]
+      ? parseDatePreservingCalendarDay(normalized["Date Closed"])
+      : undefined;
+
+    const strategy = (normalized["Strategy"] || "").trim() || "Unknown";
+
+    return {
+      strategy,
+      dateOpened,
+      timeOpened: normalized["Time Opened"] || undefined,
+      openingPrice: parseNumber(normalized["Opening Price"]),
+      legs: normalized["Legs"] || "",
+      initialPremium: parseNumber(normalized["Initial Premium"]),
+      numContracts: parseNumber(normalized["No. of Contracts"], 1),
+      pl: parseNumber(normalized["P/L"]),
+      closingPrice: normalized["Closing Price"]
+        ? parseNumber(normalized["Closing Price"])
+        : undefined,
+      dateClosed,
+      timeClosed: normalized["Time Closed"] || undefined,
+      avgClosingCost: normalized["Avg. Closing Cost"]
+        ? parseNumber(normalized["Avg. Closing Cost"])
+        : undefined,
+      reasonForClose: normalized["Reason For Close"] || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load reporting log (actual trades) from reportinglog.csv
+ * @throws Error if reportinglog.csv does not exist
+ */
+export async function loadReportingLog(
+  baseDir: string,
+  blockId: string
+): Promise<ReportingTrade[]> {
+  const blockPath = path.join(baseDir, blockId);
+  const reportingLogPath = path.join(blockPath, "reportinglog.csv");
+
+  // Check if file exists - throw if not
+  try {
+    await fs.access(reportingLogPath);
+  } catch {
+    throw new Error(`reportinglog.csv not found in block: ${blockId}`);
+  }
+
+  const content = await fs.readFile(reportingLogPath, "utf-8");
+  const records = parseCSV(content);
+
+  const trades: ReportingTrade[] = [];
+  for (const record of records) {
+    const trade = convertToReportingTrade(record);
+    if (trade) {
+      trades.push(trade);
+    }
+  }
+
+  // Sort by date
+  trades.sort(
+    (a, b) =>
+      new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+  );
+
+  return trades;
 }
