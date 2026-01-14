@@ -730,14 +730,78 @@ export function registerAnalysisTools(
           .enum(["daily", "weekly", "monthly"])
           .default("daily")
           .describe("Time period for return aggregation before correlation calculation"),
+        minSamples: z
+          .number()
+          .min(2)
+          .default(10)
+          .describe("Minimum shared trading periods required for valid correlation (default: 10)"),
+        strategyFilter: z
+          .array(z.string())
+          .optional()
+          .describe("Filter to specific strategies only (default: all strategies)"),
+        tickerFilter: z
+          .string()
+          .optional()
+          .describe("Filter trades by underlying ticker symbol (e.g., 'SPY', 'AAPL')"),
+        dateRangeFrom: z
+          .string()
+          .optional()
+          .describe("Start date for analysis (ISO format: YYYY-MM-DD). Only include trades on or after this date."),
+        dateRangeTo: z
+          .string()
+          .optional()
+          .describe("End date for analysis (ISO format: YYYY-MM-DD). Only include trades on or before this date."),
+        highlightThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.7)
+          .describe("Threshold for highlighting highly correlated pairs (default: 0.7 = |r| > 0.7)"),
       }),
     },
-    async ({ blockId, method, alignment, normalization, dateBasis, timePeriod }) => {
+    async ({
+      blockId,
+      method,
+      alignment,
+      normalization,
+      dateBasis,
+      timePeriod,
+      minSamples,
+      strategyFilter,
+      tickerFilter,
+      dateRangeFrom,
+      dateRangeTo,
+      highlightThreshold,
+    }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
-        const trades = block.trades;
+        let trades = block.trades;
 
-        // Get unique strategies
+        // Apply ticker filter
+        if (tickerFilter) {
+          const tickerLower = tickerFilter.toLowerCase();
+          trades = trades.filter(
+            (t) => t.ticker?.toLowerCase() === tickerLower
+          );
+        }
+
+        // Apply date range filter
+        if (dateRangeFrom) {
+          const fromDate = new Date(dateRangeFrom);
+          trades = trades.filter((t) => new Date(t.dateOpened) >= fromDate);
+        }
+        if (dateRangeTo) {
+          const toDate = new Date(dateRangeTo);
+          trades = trades.filter((t) => new Date(t.dateOpened) <= toDate);
+        }
+
+        // Apply strategy filter
+        if (strategyFilter && strategyFilter.length > 0) {
+          const strategySet = new Set(strategyFilter.map((s) => s.toLowerCase()));
+          trades = trades.filter((t) => strategySet.has(t.strategy.toLowerCase()));
+        }
+
+        // Get unique strategies after filtering
         const strategies = Array.from(
           new Set(trades.map((t) => t.strategy))
         ).filter(Boolean);
@@ -747,7 +811,7 @@ export function registerAnalysisTools(
             content: [
               {
                 type: "text",
-                text: `Correlation analysis requires at least 2 strategies. Found ${strategies.length} strategy.`,
+                text: `Correlation analysis requires at least 2 strategies. Found ${strategies.length} strategy after filtering.`,
               },
             ],
             isError: true,
@@ -762,12 +826,26 @@ export function registerAnalysisTools(
           dateBasis,
           timePeriod,
         });
-        const analytics = calculateCorrelationAnalytics(matrix);
+        const analytics = calculateCorrelationAnalytics(matrix, minSamples);
 
         // Build markdown output
         const lines: string[] = [
           `## Correlation Matrix: ${blockId}`,
           "",
+        ];
+
+        // Show active filters
+        const activeFilters: string[] = [];
+        if (strategyFilter?.length) activeFilters.push(`Strategies: ${strategyFilter.join(", ")}`);
+        if (tickerFilter) activeFilters.push(`Ticker: ${tickerFilter}`);
+        if (dateRangeFrom || dateRangeTo) {
+          activeFilters.push(`Date Range: ${dateRangeFrom ?? "start"} to ${dateRangeTo ?? "end"}`);
+        }
+        if (activeFilters.length > 0) {
+          lines.push(`**Filters:** ${activeFilters.join(" | ")}`, "");
+        }
+
+        lines.push(
           "### Configuration",
           "",
           `| Parameter | Value |`,
@@ -777,10 +855,12 @@ export function registerAnalysisTools(
           `| Normalization | ${normalization} |`,
           `| Date Basis | ${dateBasis} |`,
           `| Time Period | ${timePeriod} |`,
+          `| Min Samples | ${minSamples} |`,
+          `| Highlight Threshold | |r| > ${highlightThreshold} |`,
           "",
           "### Matrix",
-          "",
-        ];
+          ""
+        );
 
         // Build table header
         const header = ["| Strategy |", ...matrix.strategies.map((s) => ` ${s} |`)].join("");
@@ -812,15 +892,17 @@ export function registerAnalysisTools(
 
         lines.push("");
 
-        // Add warnings for highly correlated pairs
-        const highlyCorrelated: Array<{ pair: [string, string]; value: number }> = [];
+        // Add warnings for highly correlated pairs (using configurable threshold)
+        const highlyCorrelated: Array<{ pair: [string, string]; value: number; sampleSize: number }> = [];
         for (let i = 0; i < matrix.strategies.length; i++) {
           for (let j = i + 1; j < matrix.strategies.length; j++) {
             const val = matrix.correlationData[i][j];
-            if (!Number.isNaN(val) && Math.abs(val) > 0.7) {
+            const sampleSize = matrix.sampleSizes[i][j];
+            if (!Number.isNaN(val) && Math.abs(val) > highlightThreshold && sampleSize >= minSamples) {
               highlyCorrelated.push({
                 pair: [matrix.strategies[i], matrix.strategies[j]],
                 value: val,
+                sampleSize,
               });
             }
           }
@@ -828,9 +910,9 @@ export function registerAnalysisTools(
 
         if (highlyCorrelated.length > 0) {
           lines.push("### Warnings", "");
-          lines.push("**Highly correlated pairs (|r| > 0.7):**", "");
-          for (const { pair, value } of highlyCorrelated) {
-            lines.push(`- ${pair[0]} / ${pair[1]}: ${formatRatio(value)}`);
+          lines.push(`**Highly correlated pairs (|r| > ${highlightThreshold}):**`, "");
+          for (const { pair, value, sampleSize } of highlyCorrelated) {
+            lines.push(`- ${pair[0]} / ${pair[1]}: ${formatRatio(value)} (n=${sampleSize})`);
           }
           lines.push("");
         }
@@ -846,7 +928,14 @@ export function registerAnalysisTools(
             normalization,
             dateBasis,
             timePeriod,
+            minSamples,
+            highlightThreshold,
+            strategyFilter: strategyFilter ?? null,
+            tickerFilter: tickerFilter ?? null,
+            dateRangeFrom: dateRangeFrom ?? null,
+            dateRangeTo: dateRangeTo ?? null,
           },
+          tradesAnalyzed: trades.length,
           strategies: matrix.strategies,
           correlationMatrix: matrix.correlationData,
           sampleSizes: matrix.sampleSizes,
