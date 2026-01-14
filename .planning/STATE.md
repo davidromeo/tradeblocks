@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-11)
 
 **Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v2.0 Claude Integration — Phase 12 complete, ready for Phase 13
+**Current focus:** v2.0 Claude Integration — Phase 13 complete, ready for Phase 14
 
 ## Current Position
 
-Phase: 12 of 14 (Core Integration Layer) — COMPLETE
-Plan: 3 of 3 complete
-Status: Phase 12 complete, ready for Phase 13
-Last activity: 2026-01-14 — 14 MCP tools complete, MFE/MAE chart type added
+Phase: 13 of 14 (Analysis Capabilities) — COMPLETE
+Plan: 1 of 1 complete
+Status: Phase 13 complete, ready for Phase 14
+Last activity: 2026-01-14 — 18 MCP tools complete, Report Builder integration done
 
-Progress: ████████░░ 100% (Phase 12)
+Progress: █████████░ 100% (Phase 13)
 
 ## v2.0 Goal
 
@@ -63,6 +63,13 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - All performance tools expose full parameters (dateRange, normalizeTo1Lot, etc.)
 - Report Builder documented for Phase 13 consideration (custom filtered reports via MCP)
 
+**v2.0 Phase 13-01:**
+- 4 Report Builder MCP tools: list_available_fields, run_filtered_query, get_field_statistics, aggregate_by_field
+- Inline trade enrichment required (browser deps prevent importing enrichTrades)
+- Filter logic implemented inline with all 7 operators (eq, neq, gt, gte, lt, lte, between)
+- MFE/MAE approximated from maxProfit/maxLoss when full calculation unavailable
+- Total MCP tools: 18 (6 core + 5 analysis + 3 performance + 4 report)
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -83,5 +90,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Phase 12 complete, ready for Phase 13
+Stopped at: Phase 13 complete, ready for Phase 14
 Resume file: None

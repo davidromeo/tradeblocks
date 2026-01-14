@@ -61,22 +61,20 @@ Plans:
 - JSON-first output pattern for Claude reasoning
 - Full parameter exposure for all calculation modules
 
-### Phase 13: Analysis Capabilities
+### Phase 13: Analysis Capabilities ✓
 
 **Goal**: Add Report Builder integration, custom report generation, automated exploration modes
 **Depends on**: Phase 12
-**Research**: May need research for Report Builder MCP design
-**Plans**: TBD
-
-**Consideration: Report Builder MCP Integration**
-The Report Builder (`lib/models/report-config.ts`) is a powerful feature that could be exposed via MCP:
-- `ReportConfig` - Filter conditions, chart types, axis configuration
-- `FilterConfig` - Multiple conditions with AND/OR logic
-- Potential tools: `list_preset_reports`, `run_report`, `create_custom_report`
-- Would allow Claude to create custom filtered views without hardcoding queries
+**Status**: Complete
+**Completed**: 2026-01-14
+**Plans**: 1
 
 Plans:
-- [ ] 13-01: TBD (may include Report Builder integration)
+- [x] 13-01: Report Builder MCP Tools (4 new tools: list_available_fields, run_filtered_query, get_field_statistics, aggregate_by_field) - completed 2026-01-14
+
+**Deliverables:**
+- 18 MCP tools total (6 core + 5 analysis + 3 performance + 4 report)
+- Full filtering and aggregation capabilities for Claude exploration
 
 ### Phase 14: Polish & Documentation
 
@@ -103,7 +101,7 @@ Plans:
 | 10. Integration & Polish | v1.0 | 3/3 | Complete | 2026-01-11 |
 | 11. Research & Architecture | v2.0 | 2/2 | Complete | 2026-01-14 |
 | 12. Core Integration Layer | v2.0 | 3/3 | Complete | 2026-01-14 |
-| 13. Analysis Capabilities | v2.0 | 0/? | Not started | - |
+| 13. Analysis Capabilities | v2.0 | 1/1 | Complete | 2026-01-14 |
 | 14. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
 ## Audit Notes
