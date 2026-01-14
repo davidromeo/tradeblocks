@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 
 Phase: 12 of 14 (Core Integration Layer) — IN PROGRESS
 Plan: 2 of 3 complete
-Status: Plan 02 complete, ready for Plan 03 or next milestone
-Last activity: 2026-01-14 — Advanced analysis tools and dual output pattern implemented
+Status: Plan 02 complete + FIX complete, ready for Plan 03
+Last activity: 2026-01-14 — JSON-first output pattern, expanded tool schemas
 
-Progress: █████░░░░░ 50%
+Progress: ██████░░░░ 67%
 
 ## v2.0 Goal
 
@@ -46,11 +46,15 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - ESM imports require .js extension in TypeScript
 
 **v2.0 Phase 12-02:**
-- Dual output pattern: All tools return markdown + JSON resource for Claude reasoning
+- JSON-first output pattern: All tools return brief text summary + structured JSON resource
+  - JSON is authoritative source for Claude reasoning (machine-readable)
+  - Text summary for user visibility only (1-3 lines)
+  - Removed verbose markdown tables to reduce context bloat
 - Walk-forward uses dynamic window sizing based on trade date range
 - Monte Carlo defaults to trades resample method with 5% worst-case pool injection
 - Correlation defaults to Kendall's tau (robust to outliers)
 - Kelly warnings for portfolio > 25% or strategy > 50%
+- UAT-001 Fix: Expanded all tool schemas to expose underlying calculation module parameters
 
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
@@ -72,5 +76,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Phase 12 Plan 02 complete
+Stopped at: Phase 12 Plan 02 + FIX complete, ready for Plan 03
 Resume file: None

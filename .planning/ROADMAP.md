@@ -52,7 +52,7 @@ Plans:
 
 Plans:
 - [x] 12-01: Block Loading and Core Tools (block-loader, output-formatter, 6 Tier 1 tools) - completed 2026-01-14
-- [ ] 12-02: Analysis Tools (WFA, Monte Carlo, correlation, tail risk, position sizing)
+- [x] 12-02: Analysis Tools (WFA, Monte Carlo, correlation, tail risk, position sizing) - completed 2026-01-14
 - [ ] 12-03: Performance Tools (chart data, period returns, backtest vs actual)
 
 ### Phase 13: Analysis Capabilities
@@ -89,7 +89,7 @@ Plans:
 | 9. Calculation Robustness | v1.0 | 1/1 | Complete | 2026-01-11 |
 | 10. Integration & Polish | v1.0 | 3/3 | Complete | 2026-01-11 |
 | 11. Research & Architecture | v2.0 | 2/2 | Complete | 2026-01-14 |
-| 12. Core Integration Layer | v2.0 | 1/3 | In progress | - |
+| 12. Core Integration Layer | v2.0 | 2/3 | In progress | - |
 | 13. Analysis Capabilities | v2.0 | 0/? | Not started | - |
 | 14. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
