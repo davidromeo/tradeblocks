@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as fs from "fs/promises";
 import * as path from "path";
 import { registerBlockTools } from "./tools/blocks.js";
+import { registerAnalysisTools } from "./tools/analysis.js";
 
 // Parse command line for backtest directory
 const backtestDir = process.argv[2];
@@ -32,8 +33,9 @@ const server = new McpServer(
   { capabilities: { tools: {} } }
 );
 
-// Register all block tools
+// Register all tools
 registerBlockTools(server, resolvedDir);
+registerAnalysisTools(server, resolvedDir);
 
 async function main() {
   // Verify directory exists
