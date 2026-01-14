@@ -71,14 +71,48 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     {
       description:
         "List all available backtest blocks with summary stats (trade count, date range, P&L)",
+      inputSchema: z.object({
+        sortBy: z
+          .enum(["name", "tradeCount", "netPl", "dateRange"])
+          .default("name")
+          .describe("Sort results by field (default: name)"),
+        sortOrder: z
+          .enum(["asc", "desc"])
+          .default("asc")
+          .describe("Sort direction (default: asc)"),
+      }),
     },
-    async () => {
+    async ({ sortBy, sortOrder }) => {
       try {
-        const blocks = await listBlocks(baseDir);
+        let blocks = await listBlocks(baseDir);
+
+        // Sort blocks based on parameters
+        const multiplier = sortOrder === "asc" ? 1 : -1;
+        blocks = [...blocks].sort((a, b) => {
+          switch (sortBy) {
+            case "tradeCount":
+              return (a.tradeCount - b.tradeCount) * multiplier;
+            case "netPl":
+              return ((a.netPl ?? 0) - (b.netPl ?? 0)) * multiplier;
+            case "dateRange": {
+              const aTime = a.dateRange.end?.getTime() ?? 0;
+              const bTime = b.dateRange.end?.getTime() ?? 0;
+              return (aTime - bTime) * multiplier;
+            }
+            case "name":
+            default:
+              return a.name.localeCompare(b.name) * multiplier;
+          }
+        });
+
         const output = formatBlockList(blocks);
 
         // Build structured data for Claude reasoning
         const structuredData = {
+          options: {
+            sortBy,
+            sortOrder,
+          },
           blocks: blocks.map((b) => ({
             id: b.blockId,
             name: b.name,
@@ -404,9 +438,26 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .min(1)
           .max(5)
           .describe("Array of block folder names to compare (max 5)"),
+        metrics: z
+          .array(
+            z.enum([
+              "totalTrades",
+              "winRate",
+              "netPl",
+              "sharpeRatio",
+              "sortinoRatio",
+              "maxDrawdown",
+              "profitFactor",
+              "calmarRatio",
+            ])
+          )
+          .optional()
+          .describe(
+            "Specific metrics to include in comparison (default: all). Use to focus on key metrics."
+          ),
       }),
     },
-    async ({ blockIds }) => {
+    async ({ blockIds, metrics }) => {
       try {
         const blockStats: Array<{
           blockId: string;
@@ -450,20 +501,40 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             : "";
 
         // Build structured data for Claude reasoning
+        // If specific metrics requested, filter to those only
+        const allMetrics = {
+          totalTrades: true,
+          winRate: true,
+          netPl: true,
+          sharpeRatio: true,
+          sortinoRatio: true,
+          maxDrawdown: true,
+          profitFactor: true,
+          calmarRatio: true,
+        };
+        const requestedMetrics = metrics
+          ? Object.fromEntries(metrics.map((m) => [m, true]))
+          : allMetrics;
+
         const structuredData = {
-          comparisons: blockStats.map(({ blockId, stats }) => ({
-            blockId,
-            stats: {
-              totalTrades: stats.totalTrades,
-              winRate: stats.winRate,
-              netPl: stats.netPl,
-              sharpeRatio: stats.sharpeRatio,
-              sortinoRatio: stats.sortinoRatio,
-              maxDrawdown: stats.maxDrawdown,
-              profitFactor: stats.profitFactor,
-              calmarRatio: stats.calmarRatio,
-            },
-          })),
+          options: {
+            metrics: metrics ?? null,
+          },
+          comparisons: blockStats.map(({ blockId, stats }) => {
+            const filteredStats: Record<string, number | null> = {};
+            if (requestedMetrics.totalTrades) filteredStats.totalTrades = stats.totalTrades;
+            if (requestedMetrics.winRate) filteredStats.winRate = stats.winRate;
+            if (requestedMetrics.netPl) filteredStats.netPl = stats.netPl;
+            if (requestedMetrics.sharpeRatio) filteredStats.sharpeRatio = stats.sharpeRatio;
+            if (requestedMetrics.sortinoRatio) filteredStats.sortinoRatio = stats.sortinoRatio;
+            if (requestedMetrics.maxDrawdown) filteredStats.maxDrawdown = stats.maxDrawdown;
+            if (requestedMetrics.profitFactor) filteredStats.profitFactor = stats.profitFactor;
+            if (requestedMetrics.calmarRatio) filteredStats.calmarRatio = stats.calmarRatio;
+            return {
+              blockId,
+              stats: filteredStats,
+            };
+          }),
           failedBlocks: failedIds,
         };
 
@@ -487,7 +558,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     "get_trades",
     {
       description:
-        "Get trades with optional filtering and pagination (default 50 per page, max 100)",
+        "Get trades with optional filtering, sorting, and pagination (default 50 per page, max 100)",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
@@ -502,6 +573,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .string()
           .optional()
           .describe("End date filter (YYYY-MM-DD)"),
+        minPl: z
+          .number()
+          .optional()
+          .describe("Filter trades with P&L >= this value"),
+        maxPl: z
+          .number()
+          .optional()
+          .describe("Filter trades with P&L <= this value"),
+        sortBy: z
+          .enum(["date", "pl", "strategy"])
+          .default("date")
+          .describe("Sort trades by field (default: date)"),
+        sortOrder: z
+          .enum(["asc", "desc"])
+          .default("desc")
+          .describe("Sort direction (default: desc for most recent first)"),
         page: z.number().int().positive().optional().describe("Page number (default: 1)"),
         pageSize: z
           .number()
@@ -512,7 +599,18 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .describe("Trades per page (default: 50, max: 100)"),
       }),
     },
-    async ({ blockId, strategy, startDate, endDate, page = 1, pageSize = 50 }) => {
+    async ({
+      blockId,
+      strategy,
+      startDate,
+      endDate,
+      minPl,
+      maxPl,
+      sortBy,
+      sortOrder,
+      page = 1,
+      pageSize = 50,
+    }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -521,16 +619,44 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         trades = filterByStrategy(trades, strategy);
         trades = filterByDateRange(trades, startDate, endDate);
 
+        // Apply P&L filters
+        if (minPl !== undefined) {
+          trades = trades.filter((t) => t.pl >= minPl);
+        }
+        if (maxPl !== undefined) {
+          trades = trades.filter((t) => t.pl <= maxPl);
+        }
+
+        // Apply sorting
+        const multiplier = sortOrder === "asc" ? 1 : -1;
+        trades = [...trades].sort((a, b) => {
+          switch (sortBy) {
+            case "pl":
+              return (a.pl - b.pl) * multiplier;
+            case "strategy":
+              return a.strategy.localeCompare(b.strategy) * multiplier;
+            case "date":
+            default:
+              return (
+                (new Date(a.dateOpened).getTime() -
+                  new Date(b.dateOpened).getTime()) *
+                multiplier
+              );
+          }
+        });
+
         // Build header showing applied filters
         const filterInfo: string[] = [];
         if (strategy) filterInfo.push(`Strategy: ${strategy}`);
         if (startDate) filterInfo.push(`From: ${startDate}`);
         if (endDate) filterInfo.push(`To: ${endDate}`);
+        if (minPl !== undefined) filterInfo.push(`Min P&L: $${minPl}`);
+        if (maxPl !== undefined) filterInfo.push(`Max P&L: $${maxPl}`);
 
         const header =
           filterInfo.length > 0
-            ? `## Block: ${blockId}\n\n**Filters:** ${filterInfo.join(", ")}\n\n`
-            : `## Block: ${blockId}\n\n`;
+            ? `## Block: ${blockId}\n\n**Filters:** ${filterInfo.join(", ")}\n**Sort:** ${sortBy} (${sortOrder})\n\n`
+            : `## Block: ${blockId}\n\n**Sort:** ${sortBy} (${sortOrder})\n\n`;
 
         const output = header + formatTradesTable(trades, page, pageSize);
 
@@ -543,6 +669,15 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
 
         // Build structured data for Claude reasoning
         const structuredData = {
+          options: {
+            strategy: strategy ?? null,
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+            minPl: minPl ?? null,
+            maxPl: maxPl ?? null,
+            sortBy,
+            sortOrder,
+          },
           trades: pageTrades.map((t) => ({
             dateOpened: t.dateOpened.toISOString(),
             timeOpened: t.timeOpened,
