@@ -3,11 +3,65 @@
  *
  * Utilities for formatting MCP tool output as structured markdown.
  * All output is designed for Claude parsing and user display.
+ *
+ * Dual Output Pattern:
+ * All tools return BOTH markdown (for display) AND structured JSON (for Claude reasoning).
+ * This enables Claude to parse numerical values without regex extraction from markdown tables.
  */
 
 import type { Trade } from "@lib/models/trade";
 import type { PortfolioStats, StrategyStats } from "@lib/models/portfolio-stats";
-import type { BlockInfo } from "./block-loader";
+import type { BlockInfo } from "./block-loader.js";
+
+/**
+ * MCP content item types
+ */
+export interface McpTextContent {
+  type: "text";
+  text: string;
+}
+
+export interface McpResourceContent {
+  type: "resource";
+  resource: {
+    uri: string;
+    mimeType: string;
+    text: string;
+  };
+}
+
+export type McpContent = McpTextContent | McpResourceContent;
+
+export interface DualOutput {
+  content: McpContent[];
+}
+
+/**
+ * Create dual output for MCP tools - both markdown display and structured JSON for reasoning.
+ *
+ * This pattern enables Claude to:
+ * 1. Display formatted markdown tables to users
+ * 2. Parse structured numerical values for calculations and comparisons
+ *
+ * @param markdown - Formatted markdown string for display
+ * @param data - Structured data object for Claude reasoning
+ * @returns MCP-compatible response with both text and resource content
+ */
+export function createDualOutput(markdown: string, data: object): DualOutput {
+  return {
+    content: [
+      { type: "text", text: markdown },
+      {
+        type: "resource",
+        resource: {
+          uri: "data:application/json",
+          mimeType: "application/json",
+          text: JSON.stringify(data),
+        },
+      },
+    ],
+  };
+}
 
 /**
  * Format a number as currency ($1,234.56)

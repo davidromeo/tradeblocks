@@ -15,6 +15,7 @@ import {
   formatStrategyComparison,
   formatBlocksComparison,
   formatTradesTable,
+  createDualOutput,
 } from "../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@lib/calculations/portfolio-stats";
 import type { Trade } from "@lib/models/trade";
@@ -76,9 +77,25 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const blocks = await listBlocks(baseDir);
         const output = formatBlockList(blocks);
 
-        return {
-          content: [{ type: "text", text: output }],
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blocks: blocks.map((b) => ({
+            id: b.blockId,
+            name: b.name,
+            tradeCount: b.tradeCount,
+            dateRange: {
+              start: b.dateRange.start?.toISOString() ?? null,
+              end: b.dateRange.end?.toISOString() ?? null,
+            },
+            strategies: b.strategies,
+            totalPl: b.totalPl,
+            netPl: b.netPl,
+            hasDailyLog: b.hasDailyLog,
+          })),
+          count: blocks.length,
         };
+
+        return createDualOutput(output, structuredData);
       } catch (error) {
         return {
           content: [
@@ -126,9 +143,19 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           strategies
         );
 
-        return {
-          content: [{ type: "text", text: output }],
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          tradeCount: trades.length,
+          dailyLogCount: dailyLogs?.length ?? 0,
+          strategies,
+          dateRange: {
+            start: dateRange.start?.toISOString() ?? null,
+            end: dateRange.end?.toISOString() ?? null,
+          },
         };
+
+        return createDualOutput(output, structuredData);
       } catch (error) {
         return {
           content: [
@@ -250,9 +277,46 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           );
         }
 
-        return {
-          content: [{ type: "text", text: output }],
+        // Build structured data for Claude reasoning - include full PortfolioStats
+        const structuredData = {
+          blockId,
+          filters: {
+            strategy: strategy ?? null,
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+          },
+          stats: {
+            totalTrades: stats.totalTrades,
+            winningTrades: stats.winningTrades,
+            losingTrades: stats.losingTrades,
+            breakEvenTrades: stats.breakEvenTrades,
+            winRate: stats.winRate,
+            totalPl: stats.totalPl,
+            netPl: stats.netPl,
+            totalCommissions: stats.totalCommissions,
+            avgWin: stats.avgWin,
+            avgLoss: stats.avgLoss,
+            maxWin: stats.maxWin,
+            maxLoss: stats.maxLoss,
+            profitFactor: stats.profitFactor,
+            sharpeRatio: stats.sharpeRatio,
+            sortinoRatio: stats.sortinoRatio,
+            calmarRatio: stats.calmarRatio,
+            maxDrawdown: stats.maxDrawdown,
+            timeInDrawdown: stats.timeInDrawdown,
+            kellyPercentage: stats.kellyPercentage,
+            cagr: stats.cagr,
+            initialCapital: stats.initialCapital,
+            avgDailyPl: stats.avgDailyPl,
+            maxWinStreak: stats.maxWinStreak,
+            maxLossStreak: stats.maxLossStreak,
+            currentStreak: stats.currentStreak,
+            monthlyWinRate: stats.monthlyWinRate,
+            weeklyWinRate: stats.weeklyWinRate,
+          },
         };
+
+        return createDualOutput(output, structuredData);
       } catch (error) {
         return {
           content: [
@@ -295,9 +359,26 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const header = `## Block: ${blockId}\n\n`;
         const output = header + formatStrategyComparison(strategyStats);
 
-        return {
-          content: [{ type: "text", text: output }],
+        // Build structured data for Claude reasoning
+        const strategies = Object.values(strategyStats)
+          .sort((a, b) => b.totalPl - a.totalPl)
+          .map((s) => ({
+            name: s.strategyName,
+            trades: s.tradeCount,
+            winRate: s.winRate,
+            pl: s.totalPl,
+            avgWin: s.avgWin,
+            avgLoss: s.avgLoss,
+            profitFactor: s.profitFactor,
+          }));
+
+        const structuredData = {
+          blockId,
+          strategies,
+          count: strategies.length,
         };
+
+        return createDualOutput(output, structuredData);
       } catch (error) {
         return {
           content: [
@@ -368,9 +449,25 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             ? `\n\n*Note: Failed to load: ${failedIds.join(", ")}*`
             : "";
 
-        return {
-          content: [{ type: "text", text: output + footer }],
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          comparisons: blockStats.map(({ blockId, stats }) => ({
+            blockId,
+            stats: {
+              totalTrades: stats.totalTrades,
+              winRate: stats.winRate,
+              netPl: stats.netPl,
+              sharpeRatio: stats.sharpeRatio,
+              sortinoRatio: stats.sortinoRatio,
+              maxDrawdown: stats.maxDrawdown,
+              profitFactor: stats.profitFactor,
+              calmarRatio: stats.calmarRatio,
+            },
+          })),
+          failedBlocks: failedIds,
         };
+
+        return createDualOutput(output + footer, structuredData);
       } catch (error) {
         return {
           content: [
@@ -437,9 +534,33 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
 
         const output = header + formatTradesTable(trades, page, pageSize);
 
-        return {
-          content: [{ type: "text", text: output }],
+        // Calculate pagination info
+        const totalTrades = trades.length;
+        const totalPages = Math.ceil(totalTrades / pageSize);
+        const startIdx = (page - 1) * pageSize;
+        const endIdx = Math.min(startIdx + pageSize, totalTrades);
+        const pageTrades = trades.slice(startIdx, endIdx);
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          trades: pageTrades.map((t) => ({
+            dateOpened: t.dateOpened.toISOString(),
+            timeOpened: t.timeOpened,
+            strategy: t.strategy,
+            legs: t.legs,
+            pl: t.pl,
+            numContracts: t.numContracts,
+            commissions: t.openingCommissionsFees + t.closingCommissionsFees,
+          })),
+          pagination: {
+            page,
+            pageSize,
+            totalPages,
+            totalTrades,
+          },
         };
+
+        return createDualOutput(output, structuredData);
       } catch (error) {
         return {
           content: [
