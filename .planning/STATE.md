@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-11)
 
 **Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v2.0 Claude Integration — Phase 13 complete, ready for Phase 14
+**Current focus:** v2.0 Claude Integration — Phase 13.1 (Import CSV Tool)
 
 ## Current Position
 
-Phase: 13 of 15 (Analysis Capabilities) — COMPLETE
+Phase: 13.1 of 15 (Import CSV Tool) — COMPLETE
 Plan: 1 of 1 complete
-Status: Phase 13 complete, ready for Phase 14
-Last activity: 2026-01-14 — 18 MCP tools complete, Report Builder integration done
+Status: Phase complete, ready for Phase 14
+Last activity: 2026-01-15 — Completed 13.1-01-PLAN.md
 
-Progress: █████████░ 100% (Phase 13)
+Progress: ██████████ 100% (Phase 13.1)
 
 ## v2.0 Goal
 
@@ -25,7 +25,7 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 ### Decisions
 
 **v2.0 Phase 11-01:**
-- Monorepo with pnpm workspaces (not npm workspaces)
+- Monorepo with npm workspaces (migrated from pnpm 2026-01-15)
 - MCP server at packages/mcp-server/ with ESM-only config
 - tsup bundles lib/ imports for standalone npm distribution
 - Path alias @lib/* for shared code imports
@@ -70,6 +70,12 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - MFE/MAE approximated from maxProfit/maxLoss when full calculation unavailable
 - Total MCP tools: 18 (6 core + 5 analysis + 3 performance + 4 report)
 
+**v2.0 Phase 13.1-01:**
+- import_csv MCP tool for ad-hoc CSV analysis without pre-configured blocks
+- CSV validation for tradelog (17 columns), dailylog (5 columns), reportinglog formats
+- Copy-on-import pattern: copies CSV to blocks directory with .block.json metadata
+- Total MCP tools: 19 (6 core + 5 analysis + 3 performance + 4 report + 1 import)
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -88,9 +94,10 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 - Phase 11 complete: Research & Architecture
 - Phase 14 added: Multi-Platform Agent Skills (Claude, OpenAI, Gemini)
 - Phase 15: Polish & Documentation (moved from Phase 14)
+- Phase 13.1 inserted after Phase 13: Import CSV Tool (URGENT) — enables ad-hoc CSV analysis without pre-configured blocks
 
 ## Session Continuity
 
-Last session: 2026-01-14
-Stopped at: Phase 13 complete, ready for Phase 14
+Last session: 2026-01-15
+Stopped at: Completed 13.1-01-PLAN.md
 Resume file: None

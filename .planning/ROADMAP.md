@@ -76,10 +76,28 @@ Plans:
 - 18 MCP tools total (6 core + 5 analysis + 3 performance + 4 report)
 - Full filtering and aggregation capabilities for Claude exploration
 
+### Phase 13.1: Import CSV Tool (INSERTED) ✓
+
+**Goal**: Add `import_csv` MCP tool to accept arbitrary CSV paths and create persistent blocks
+**Depends on**: Phase 13
+**Status**: Complete
+**Completed**: 2026-01-15
+**Plans**: 1
+
+Scope:
+- `import_csv` tool accepting CSV path + optional block name
+- Validates CSV structure (trade log format)
+- Copies to configured blocks directory
+- Creates `.block.json` metadata
+- Returns block ID for immediate use
+
+Plans:
+- [x] 13.1-01: Implement import_csv MCP tool - completed 2026-01-15
+
 ### Phase 14: Multi-Platform Agent Skills
 
 **Goal**: Create skills/tools for Claude Code, OpenAI Agents, and Gemini Agents to interact with TradeBlocks MCP server
-**Depends on**: Phase 13
+**Depends on**: Phase 13.1
 **Research**: Likely needed to understand each platform's agent/skill format
 **Plans**: TBD
 
@@ -118,6 +136,7 @@ Plans:
 | 11. Research & Architecture | v2.0 | 2/2 | Complete | 2026-01-14 |
 | 12. Core Integration Layer | v2.0 | 3/3 | Complete | 2026-01-14 |
 | 13. Analysis Capabilities | v2.0 | 1/1 | Complete | 2026-01-14 |
+| 13.1 Import CSV Tool | v2.0 | 1/1 | Complete | 2026-01-15 |
 | 14. Multi-Platform Agent Skills | v2.0 | 0/? | Not started | - |
 | 15. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
