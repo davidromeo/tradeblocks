@@ -574,12 +574,10 @@ export interface ImportCsvResult {
  * Import CSV options
  */
 export interface ImportCsvOptions {
-  /** Absolute path to the CSV file (for local filesystem access) */
-  csvPath?: string;
-  /** CSV content as a string (for sandboxed environments) */
-  csvContent?: string;
-  /** Custom name for the block */
-  blockName?: string;
+  /** Absolute path to the CSV file */
+  csvPath: string;
+  /** Name for the block */
+  blockName: string;
   /** Type of CSV data */
   csvType?: "tradelog" | "dailylog" | "reportinglog";
 }
@@ -662,47 +660,28 @@ function validateCsvColumns(
 /**
  * Import a CSV file into the blocks directory
  *
- * Supports two modes:
- * - csvPath: Read from local filesystem (for Claude Desktop, Claude Code)
- * - csvContent: Accept CSV string directly (for sandboxed environments like Claude.ai, Cowork)
+ * Requires local filesystem access. The MCP server must be running locally
+ * (via npx tradeblocks-mcp or mcpb desktop extension) to access files.
  *
  * @param baseDir - Base directory for blocks
- * @param options - Import options including csvPath OR csvContent, blockName, csvType
+ * @param options - Import options: csvPath, blockName, csvType
  * @returns Import result with block info
  */
 export async function importCsv(
   baseDir: string,
-  options: ImportCsvOptions = {}
+  options: ImportCsvOptions
 ): Promise<ImportCsvResult> {
-  const { csvPath, csvContent, blockName, csvType = "tradelog" } = options;
+  const { csvPath, blockName, csvType = "tradelog" } = options;
 
-  // Validate that either csvPath or csvContent is provided
-  if (!csvPath && !csvContent) {
-    throw new Error(
-      "Either csvPath or csvContent is required. Use csvContent when working in sandboxed environments."
-    );
+  // Validate source file exists
+  try {
+    await fs.access(csvPath);
+  } catch {
+    throw new Error(`CSV file not found: ${csvPath}`);
   }
 
-  // Get CSV content - either from file or directly provided
-  let content: string;
-  let derivedFilename: string;
-
-  if (csvPath) {
-    // Mode 1: Read from filesystem
-    try {
-      await fs.access(csvPath);
-    } catch {
-      throw new Error(`CSV file not found: ${csvPath}`);
-    }
-    content = await fs.readFile(csvPath, "utf-8");
-    derivedFilename = path.basename(csvPath, path.extname(csvPath));
-  } else {
-    // Mode 2: Content provided directly
-    content = csvContent!;
-    derivedFilename = ""; // Will require blockName
-  }
-
-  // Parse the CSV content
+  // Read and parse the CSV
+  const content = await fs.readFile(csvPath, "utf-8");
   const records = parseCSV(content);
 
   // Validate CSV has required columns
@@ -711,13 +690,8 @@ export async function importCsv(
     throw new Error(validation.error);
   }
 
-  // Derive blockId from blockName or filename
-  const name = blockName || derivedFilename;
-  if (!name) {
-    throw new Error(
-      "blockName is required when using csvContent (no filename to derive name from)"
-    );
-  }
+  // Convert blockName to kebab-case for blockId
+  const name = blockName;
   const blockId = toKebabCase(name);
 
   if (!blockId) {
@@ -751,13 +725,9 @@ export async function importCsv(
         ? "dailylog.csv"
         : "reportinglog.csv";
 
-  // Write CSV to block directory (either copy file or write content)
+  // Copy CSV to block directory
   const targetPath = path.join(blockPath, targetFilename);
-  if (csvPath) {
-    await fs.copyFile(csvPath, targetPath);
-  } else {
-    await fs.writeFile(targetPath, content, "utf-8");
-  }
+  await fs.copyFile(csvPath, targetPath);
 
   // Extract metadata based on CSV type
   let dateRange: { start: string | null; end: string | null } = {
