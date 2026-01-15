@@ -14,6 +14,7 @@ import { registerBlockTools } from "./tools/blocks.js";
 import { registerAnalysisTools } from "./tools/analysis.js";
 import { registerPerformanceTools } from "./tools/performance.js";
 import { registerReportTools } from "./tools/reports.js";
+import { registerImportTools } from "./tools/imports.js";
 
 // Parse command line for backtest directory
 const backtestDir = process.argv[2];
@@ -35,11 +36,12 @@ const server = new McpServer(
   { capabilities: { tools: {} } }
 );
 
-// Register all tools (18 total)
+// Register all tools (19 total)
 registerBlockTools(server, resolvedDir);
 registerAnalysisTools(server, resolvedDir);
 registerPerformanceTools(server, resolvedDir);
 registerReportTools(server, resolvedDir);
+registerImportTools(server, resolvedDir);
 
 async function main() {
   // Verify directory exists
