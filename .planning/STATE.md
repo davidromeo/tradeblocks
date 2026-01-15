@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 ## Current Position
 
 Phase: 14 of 15 (Multi-Platform Agent Skills)
-Plan: 1 of ? in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-01-15 — Completed 14-01-PLAN.md
+Last activity: 2026-01-15 — Completed 14-02-PLAN.md
 
-Progress: ███████░░░ 75% (v2.0 milestone)
+Progress: ████████░░ 80% (v2.0 milestone)
 
 ## v2.0 Goal
 
@@ -83,6 +83,12 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Conversational workflow pattern: gather context → analyze → interpret → recommend
 - Skills installable at .claude/skills/, .codex/skills/, .gemini/skills/
 
+**v2.0 Phase 14-02:**
+- 3 additional skills: tradeblocks-compare, tradeblocks-portfolio, tradeblocks-optimize
+- Compare skill handles 3 comparison types with scaling mode explanations
+- Portfolio skill uses ADD/CONSIDER/SKIP recommendation framework
+- Optimize skill uses Report Builder tools with overfitting warnings
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -106,5 +112,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-15
-Stopped at: Completed 14-01-PLAN.md
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
