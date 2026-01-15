@@ -1,22 +1,20 @@
 ---
 name: tradeblocks-wfa
-description: Walk-forward analysis for trading strategies. Validates optimization robustness by testing parameters on out-of-sample data. Use when checking if optimized parameters will work in the future, detecting overfitting, or validating a backtest.
+description: Walk-forward analysis for trading strategies. Tests whether optimized parameters hold up on out-of-sample data. Use when checking parameter robustness, detecting potential overfitting, or validating a backtest.
 ---
 
 # Walk-Forward Analysis
 
-Validate that strategy parameters haven't been overfit to historical data.
+Test whether strategy parameters hold up when applied to data the optimizer never saw.
 
 ## What is Walk-Forward Analysis?
 
-Walk-forward analysis (WFA) tests whether optimized parameters work on unseen data:
+Walk-forward analysis (WFA) tests parameter robustness by:
 
-1. **Divide history into segments**
-2. **In-Sample (IS):** Optimize parameters on this portion
-3. **Out-of-Sample (OOS):** Test those parameters on data the optimizer never saw
-4. **Roll forward:** Repeat across the entire history
-
-If OOS performance matches IS performance, the strategy is robust. If OOS significantly underperforms, the parameters are likely overfit.
+1. **Dividing history into segments**
+2. **In-Sample (IS):** The data used to find "optimal" parameters
+3. **Out-of-Sample (OOS):** Data the optimizer never saw, used to test those parameters
+4. **Rolling forward:** Repeat across the entire history
 
 ```
 |------ IS Period 1 ------|-- OOS 1 --|
@@ -24,11 +22,12 @@ If OOS performance matches IS performance, the strategy is robust. If OOS signif
                             |------ IS Period 3 ------|-- OOS 3 --|
 ```
 
+If OOS performance is close to IS performance, the parameters may be capturing real patterns. If OOS significantly underperforms, the parameters may be fitting to noise.
+
 ## Prerequisites
 
 - TradeBlocks MCP server running
-- Block with sufficient trade history (50+ trades recommended)
-- Strategy should have been optimized on historical data
+- Block with sufficient trade history (50+ trades for meaningful analysis)
 
 ## Process
 
@@ -37,7 +36,7 @@ If OOS performance matches IS performance, the strategy is robust. If OOS signif
 Use `list_backtests` to show available blocks.
 
 Ask:
-- "Which backtest contains the strategy you want to validate?"
+- "Which backtest contains the strategy you want to analyze?"
 - "Do you want to test a specific strategy or the full portfolio?"
 
 Note the block ID and optional strategy filter for subsequent steps.
@@ -46,12 +45,12 @@ Note the block ID and optional strategy filter for subsequent steps.
 
 Walk-forward analysis answers different questions:
 
-| Goal | What to Check |
-|------|---------------|
-| Validate existing parameters | Overall WF efficiency, OOS vs IS performance |
-| Detect overfitting | Degradation factor, consistency across windows |
-| Find optimal windows | Try different IS/OOS ratios |
-| Check for regime changes | Look at individual period performance |
+| Goal | What to Look For |
+|------|------------------|
+| Test if parameters are robust | Overall WF efficiency, OOS vs IS degradation |
+| Check for potential overfitting | High IS but low OOS performance |
+| Evaluate consistency | How many OOS periods were profitable |
+| Understand parameter sensitivity | Parameter stability across windows |
 
 Ask: "What are you trying to understand about this strategy?"
 
@@ -59,83 +58,96 @@ Ask: "What are you trying to understand about this strategy?"
 
 Call `run_walk_forward` with the selected block.
 
-**Default parameters (usually appropriate):**
-- 5 in-sample windows, 1 out-of-sample window
-- Optimize for Sharpe ratio
-- Minimum 10 IS trades, 3 OOS trades
+**Key parameters:**
+- `isWindowCount`: Number of in-sample windows (default: 5)
+- `oosWindowCount`: Number of out-of-sample windows (default: 1)
+- `optimizationTarget`: Metric to optimize (default: sharpeRatio)
+- `minInSampleTrades`: Minimum trades in IS period (default: 10)
+- `minOutOfSampleTrades`: Minimum trades in OOS period (default: 3)
 
-**For short histories (< 100 trades):**
-- Reduce to 3 IS windows
+**For shorter histories (< 100 trades):**
+- Consider reducing `isWindowCount` to 3
 - Lower minimum trade counts
 
-**For long histories (> 500 trades):**
-- Increase to 7+ IS windows
-- Consider explicit day parameters for more control
+**For longer histories (> 500 trades):**
+- Consider `isWindowCount` of 7+
+- Can use explicit `inSampleDays` and `outOfSampleDays` for more control
 
 ### Step 4: Interpret Results
 
-Key metrics from the analysis:
+The tool returns a verdict with three components, each rated as "good", "moderate", or "concerning":
 
-**Walk-Forward Efficiency (WFE):**
+**Walk-Forward Efficiency (degradationFactor):**
 - Measures how well IS performance transfers to OOS
-- WFE = OOS Performance / IS Performance
+- Calculated as: OOS Performance / IS Performance
 
-| WFE | Rating | Interpretation |
-|-----|--------|----------------|
-| > 75% | Excellent | Parameters transfer well to unseen data |
-| 50-75% | Good | Reasonable robustness |
-| 25-50% | Marginal | Some overfitting; use with caution |
-| < 25% | Poor | Likely overfit; don't trade these parameters |
+| Efficiency | Rating | What It Suggests |
+|------------|--------|------------------|
+| >= 80% | Good | OOS retained most of IS performance |
+| 60-79% | Moderate | Some degradation, but meaningful signal may remain |
+| < 60% | Concerning | Significant gap between IS and OOS |
+
+*Thresholds based on Pardo's work, adjusted upward because TradeBlocks uses ratio metrics (Sharpe, profit factor) which should degrade less than raw returns.*
 
 **Parameter Stability:**
-- Do optimal parameters stay consistent across periods?
-- High variance = parameters are sensitive to data window
+- Coefficient of variation < 30% = "good" (stable parameters)
+- 30-50% variation = "moderate"
+- > 50% variation = "concerning" (parameters sensitive to data window)
 
 **Consistency Score:**
-- How often does OOS beat a random baseline?
-- >60% is good; <40% suggests luck in backtesting
+- Percentage of OOS periods that were profitable
+- >= 70% = "good"
+- 50-70% = "moderate" (around random chance)
+- < 50% = "concerning"
 
-### Step 5: Provide Recommendations
+### Step 5: Present Findings
 
-Based on the analysis:
+Synthesize the analysis into what it reveals about the strategy:
 
-**If WFE > 50% and stable parameters:**
-- Strategy appears robust
-- Proceed with live trading (paper trade first)
-- Use half-Kelly position sizing
+**Walk-Forward Results:**
+- Efficiency: [value]% ([rating]) - OOS retained [value]% of IS performance
+- Stability: [rating] - Parameters [were consistent / showed variation] across windows
+- Consistency: [value]% of OOS periods profitable ([rating])
+- Overall verdict: [good/moderate/concerning]
 
-**If WFE 25-50%:**
-- Marginal robustness
-- Consider averaging parameters across windows
-- Use quarter-Kelly or smaller position sizing
-- Monitor closely for degradation
+**What this suggests:**
+- [If efficiency is high]: OOS performance tracked IS reasonably well
+- [If efficiency is low]: Significant gap between optimized and real-world performance
+- [If stability is low]: Optimal parameters varied significantly between windows
+- [If consistency is low]: Many OOS periods were unprofitable
 
-**If WFE < 25%:**
-- Strong evidence of overfitting
-- Do NOT trade with current parameters
-- Consider re-optimizing with fewer parameters
-- Or use a simpler strategy variant
+**Individual period breakdown** (if relevant):
+- Show IS vs OOS performance for each window
+- Highlight any windows with unusual behavior
+
+Present these as insights about what the historical data shows, not as trading advice.
 
 ## Interpretation Reference
 
 For detailed walk-forward concepts, see [references/wfa-guide.md](references/wfa-guide.md).
 
-## Next Steps
+## Related Skills
 
 After walk-forward analysis:
-- `/tradeblocks-health-check` - Full health assessment if WFA passes
-- `/tradeblocks-risk` - Position sizing recommendations
+- `/tradeblocks-health-check` - Full metrics review
+- `/tradeblocks-risk` - Position sizing analysis
 
 ## Common Issues
 
 **"Insufficient trades for walk-forward analysis"**
 - Need at least 20 trades total
-- Reduce window count or use larger date range
+- Reduce window count or expand date range
 
-**Low consistency but good WFE:**
-- Small sample size may cause noise
-- Run with more windows if data permits
+**Low consistency but decent efficiency:**
+- Small sample size causing noise
+- Consider running with more windows if data permits
 
-**Individual periods show huge variance:**
-- Market regime changes during history
-- Consider regime-aware parameter selection
+**Individual periods show high variance:**
+- May indicate regime changes during the historical period
+- The tool's `periods` array shows per-window breakdown
+
+## Notes
+
+- WFA tests parameter robustness, not profitability
+- Strong WFA results don't guarantee future performance
+- Weak WFA results suggest the optimization may be fitting to noise

@@ -1,31 +1,31 @@
 ---
 name: tradeblocks-risk
-description: Risk assessment for trading strategies including Kelly criterion position sizing, tail risk analysis, and Monte Carlo worst-case scenarios. Use when determining position size, evaluating capital allocation, or assessing worst-case outcomes.
+description: Risk analysis for trading strategies including Kelly criterion calculations, tail risk metrics, and Monte Carlo projections. Use when exploring position sizing, capital allocation, or understanding worst-case characteristics.
 ---
 
-# Risk Assessment
+# Risk Analysis
 
-Evaluate risk and determine appropriate position sizing for trading strategies.
+Explore risk characteristics and position sizing metrics for trading strategies.
 
 ## Prerequisites
 
 - TradeBlocks MCP server running
-- Block with trade data (10+ trades minimum for reliable metrics)
+- Block with trade data (10+ trades minimum for meaningful metrics)
 
 ## Process
 
 ### Step 1: Understand User Goals
 
-Risk assessment serves different purposes. Ask what the user wants to understand:
+Risk analysis serves different purposes. Ask what the user wants to understand:
 
-| Goal | Primary Analysis | Supplemental |
-|------|------------------|--------------|
-| "How much capital to allocate?" | Position sizing (Kelly) | Monte Carlo |
-| "What's the worst that could happen?" | Monte Carlo worst-case | Tail risk |
-| "Is this strategy too risky?" | Tail risk, Kelly | Drawdown analysis |
-| "How should I size across strategies?" | Per-strategy Kelly | Correlation |
+| Goal | Primary Analysis | Also Consider |
+|------|------------------|---------------|
+| "What does Kelly suggest?" | Position sizing | Monte Carlo for drawdown context |
+| "What are worst-case scenarios?" | Monte Carlo with worst-case | Tail risk metrics |
+| "How correlated are my strategies?" | Tail risk, correlation | Position sizing per strategy |
+| "How much drawdown might I see?" | Monte Carlo | Historical max drawdown from stats |
 
-Ask: "What would you like to understand about risk?"
+Ask: "What aspect of risk would you like to explore?"
 
 Then use `list_backtests` to identify the target block.
 
@@ -33,71 +33,92 @@ Then use `list_backtests` to identify the target block.
 
 Based on the user's goal:
 
-**For Position Sizing:**
+**For Position Sizing (Kelly Criterion):**
 
 Call `get_position_sizing` with the user's capital base.
 
-Present results with context:
-- Full Kelly: Theoretical maximum (too aggressive for most)
-- Half Kelly: 50% of full Kelly (recommended)
-- Quarter Kelly: 25% of full Kelly (conservative)
+Key parameters:
+- `capitalBase`: Starting capital (required)
+- `kellyFraction`: "full", "half" (default), or "quarter"
+- `maxAllocationPct`: Cap per strategy (default: 25%)
+- `minTrades`: Minimum trades for valid calculation (default: 10)
 
-**Key metrics to highlight:**
-- Win rate and payoff ratio (inputs to Kelly)
-- Recommended allocation as dollar amount
-- Warnings if Kelly is negative or very high
+The tool returns:
+- Win rate and payoff ratio (inputs to Kelly formula)
+- Raw Kelly percentage (what the formula suggests)
+- Adjusted allocations at full/half/quarter Kelly
+- Per-strategy breakdown if multiple strategies exist
+- Warnings (e.g., "Portfolio Kelly exceeds 25%", "negative Kelly")
 
-**For Worst-Case Scenarios:**
+**Important context for Kelly:**
+- Full Kelly is mathematically optimal but assumes perfect knowledge of edge
+- Half Kelly is commonly used to account for estimation uncertainty
+- Negative Kelly indicates historical losses exceeded wins (Kelly formula doesn't apply)
 
-Call `run_monte_carlo` with worst-case injection enabled:
-- `includeWorstCase: true`
-- `worstCasePercentage: 5` (default)
-- `worstCaseMode: "pool"` or `"guarantee"` for stress testing
+**For Worst-Case Projections:**
+
+Call `run_monte_carlo` with worst-case injection:
+- `includeWorstCase: true` (default)
+- `worstCasePercentage: 5` (default - 5% of simulation is worst-case)
+- `worstCaseMode: "pool"` (adds synthetic losses) or `"guarantee"` (ensures worst appears)
 
 Focus on:
-- 5th percentile outcome (worst 1-in-20 scenario)
+- 5th percentile outcome (valueAtRisk.p5)
 - Probability of profit
-- Mean max drawdown
+- Mean and median max drawdown
 
-**For Tail Risk:**
+**For Tail Risk (Multi-Strategy):**
 
-Call `get_tail_risk` (requires multiple strategies in block).
+Call `get_tail_risk` (requires 2+ strategies).
 
-Examine:
-- Joint tail risk between strategies
-- Effective factors (diversification)
-- Kurtosis and skewness indicators
+Key parameters:
+- `tailThreshold`: Percentile for "tail" events (default: 0.1 = worst 10%)
+- `varianceThreshold`: For effective factors calculation (default: 0.8)
 
-### Step 3: Complementary Checks
+The tool returns:
+- Joint tail risk matrix (do strategies fail together?)
+- Effective factors (how many independent risk sources exist)
+- Risk level: LOW (<0.3), MODERATE (0.3-0.5), HIGH (>0.5)
+- Copula correlation (statistical dependency structure)
 
-Risk assessment benefits from multiple perspectives:
+### Step 3: Cross-Reference
+
+Risk analysis benefits from multiple perspectives:
 
 | Primary Analysis | Also Run |
 |------------------|----------|
-| Position sizing | Monte Carlo to validate drawdown tolerance |
-| Monte Carlo | Position sizing to right-size the allocation |
-| Tail risk | Position sizing to see Kelly per strategy |
+| Position sizing | Monte Carlo to see drawdown projections |
+| Monte Carlo | Position sizing to see Kelly metrics |
+| Tail risk | Position sizing for per-strategy Kelly |
 
-This cross-validation catches issues a single analysis might miss.
+This surfaces different facets of the same underlying data.
 
-### Step 4: Provide Recommendations
+### Step 4: Present Findings
 
-Synthesize findings into actionable guidance:
+Synthesize findings into what the data reveals:
 
-**Position Size Recommendation:**
-- State the recommended allocation (half-Kelly)
-- Provide dollar amount and percentage of capital
-- Note any warnings (negative Kelly, high risk)
+**Position Sizing Metrics:**
+- Win rate: [value]% | Payoff ratio: [value]
+- Kelly formula suggests: [value]% (based on historical data)
+- At half Kelly: [dollar amount] of [capital base]
+- [Any warnings from the tool]
 
-**Risk Warnings (if applicable):**
-- Fat tails detected: "Reduce position size by 25-50%"
-- High correlation: "Strategies may fail together"
-- Negative Kelly: "Do not trade this strategy"
+**Monte Carlo Projections (if run):**
+- 5th percentile return: [value]
+- Probability of profit: [value]%
+- Mean max drawdown: [value]%
 
-**Comparison to Guidelines:**
-- Conservative: Risk 1-2% per trade
-- Moderate: Risk 2-5% per trade
-- Aggressive: Risk 5-10% per trade (not recommended)
+**Tail Risk (if applicable):**
+- Average joint tail risk: [value] ([LOW/MODERATE/HIGH])
+- Effective factors: [value] of [strategy count]
+- [Note any high-risk pairs]
+
+**What stands out:**
+- [Highlight notable findings]
+- [Surface any warnings from the tools]
+- [Note relationships between metrics]
+
+Present these as insights from the historical data, letting the user decide what fits their situation.
 
 ## Interpretation References
 
@@ -106,35 +127,36 @@ Synthesize findings into actionable guidance:
 
 ## Common Scenarios
 
-### "I have $100,000 to allocate"
+### "I have $100,000 - what does Kelly suggest?"
 
-1. Run position sizing with capitalBase: 100000
-2. Review per-strategy Kelly recommendations
-3. Apply half-Kelly for recommended position
-4. Cross-check with Monte Carlo 5th percentile
+1. Run position sizing with `capitalBase: 100000`
+2. Review the Kelly percentages and warnings
+3. Surface both raw Kelly and half-Kelly figures
+4. Note that Kelly assumes independent trades and known edge
 
-### "Should I add this strategy to my portfolio?"
+### "Do my strategies fail together?"
 
-1. Check if strategy has positive Kelly
-2. Run correlation against existing strategies
-3. Check tail risk (do strategies fail together?)
-4. If low correlation and positive Kelly, likely additive
+1. Run tail risk analysis
+2. Look at joint tail risk matrix for high values
+3. Check effective factors (closer to 1 = more correlated risk)
+4. High correlation means drawdowns may compound
 
-### "This strategy has high drawdowns"
+### "What's the worst realistic outcome?"
 
-1. Run Monte Carlo worst-case analysis
-2. Check tail risk metrics
-3. If drawdowns are isolated events: may be tolerable
-4. If drawdowns correlate with market stress: reduce size
+1. Run Monte Carlo with worst-case injection
+2. Focus on 5th percentile (1 in 20 scenario based on resampled history)
+3. Look at max drawdown distribution
+4. Note this resamples historical data - unknown risks aren't captured
 
-## Next Steps
+## Related Skills
 
-After risk assessment:
-- `/tradeblocks-health-check` - Full strategy evaluation
-- `/tradeblocks-wfa` - Validate parameters aren't overfit
+After risk analysis:
+- `/tradeblocks-health-check` - Full metrics overview
+- `/tradeblocks-wfa` - Test parameter robustness
 
 ## Notes
 
-- Kelly assumes independent bets; real trades may be correlated
+- Kelly assumes independent trades; real trades may be correlated
 - Historical volatility may underestimate future extremes
-- Always paper trade before risking real capital
+- Monte Carlo resamples history - it can't predict unknown risks
+- Negative Kelly means the formula doesn't apply (no positive edge in historical data)
