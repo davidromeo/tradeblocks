@@ -94,21 +94,22 @@ Scope:
 Plans:
 - [x] 13.1-01: Implement import_csv MCP tool - completed 2026-01-15
 
-### Phase 14: Multi-Platform Agent Skills
+### Phase 14: Multi-Platform Agent Skills (In Progress)
 
 **Goal**: Create skills/tools for Claude Code, OpenAI Agents, and Gemini Agents to interact with TradeBlocks MCP server
 **Depends on**: Phase 13.1
-**Research**: Likely needed to understand each platform's agent/skill format
-**Plans**: TBD
+**Status**: In progress
+**Plans**: 1/? complete
 
-Potential scope:
-- Claude Code skill (`.claude/commands/`) wrapping MCP tools with natural language interface
-- OpenAI function calling / Assistants API adapter
-- Gemini function declaration adapter
-- Shared prompt templates for trading analysis workflows
+Scope:
+- Agent Skills standard (agentskills.io) for cross-platform compatibility
+- Core analysis skills: health-check, wfa, risk
+- Comparison and portfolio skills (next)
+- Installation scripts for each platform
 
 Plans:
-- [ ] 14-01: TBD (research each platform's requirements)
+- [x] 14-01: Core Analysis Skills (health-check, wfa, risk) - completed 2026-01-15
+- [ ] 14-02: TBD (comparison and portfolio skills)
 
 ### Phase 15: Polish & Documentation
 
@@ -137,7 +138,7 @@ Plans:
 | 12. Core Integration Layer | v2.0 | 3/3 | Complete | 2026-01-14 |
 | 13. Analysis Capabilities | v2.0 | 1/1 | Complete | 2026-01-14 |
 | 13.1 Import CSV Tool | v2.0 | 1/1 | Complete | 2026-01-15 |
-| 14. Multi-Platform Agent Skills | v2.0 | 0/? | Not started | - |
+| 14. Multi-Platform Agent Skills | v2.0 | 1/? | In progress | - |
 | 15. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
 ## Audit Notes

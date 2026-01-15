@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-11)
 
 **Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v2.0 Claude Integration — Phase 13.1 (Import CSV Tool)
+**Current focus:** v2.0 Claude Integration — Phase 14 (Multi-Platform Agent Skills)
 
 ## Current Position
 
-Phase: 13.1 of 15 (Import CSV Tool) — COMPLETE
-Plan: 1 of 1 complete
-Status: Phase complete, ready for Phase 14
-Last activity: 2026-01-15 — Completed 13.1-01-PLAN.md
+Phase: 14 of 15 (Multi-Platform Agent Skills)
+Plan: 1 of ? in current phase
+Status: In progress
+Last activity: 2026-01-15 — Completed 14-01-PLAN.md
 
-Progress: ██████████ 100% (Phase 13.1)
+Progress: ███████░░░ 75% (v2.0 milestone)
 
 ## v2.0 Goal
 
@@ -76,6 +76,13 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Copy-on-import pattern: copies CSV to blocks directory with .block.json metadata
 - Total MCP tools: 19 (6 core + 5 analysis + 3 performance + 4 report + 1 import)
 
+**v2.0 Phase 14-01:**
+- Agent Skills standard (agentskills.io) for cross-platform compatibility
+- Progressive disclosure: SKILL.md (~120-140 lines) + references/ for detailed education
+- 3 core skills created: tradeblocks-health-check, tradeblocks-wfa, tradeblocks-risk
+- Conversational workflow pattern: gather context → analyze → interpret → recommend
+- Skills installable at .claude/skills/, .codex/skills/, .gemini/skills/
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -99,5 +106,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-15
-Stopped at: Completed 13.1-01-PLAN.md
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None
