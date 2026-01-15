@@ -260,8 +260,8 @@ export const REPORT_FIELDS: FieldInfo[] = [
   { field: 'totalFees', label: 'Total Fees', category: 'trade', unit: '$', description: 'All commissions and fees paid', formula: 'Opening Fees + Closing Fees' },
   { field: 'openingCommissionsFees', label: 'Opening Fees', category: 'trade', unit: '$', description: 'Commissions and fees paid when opening' },
   { field: 'closingCommissionsFees', label: 'Closing Fees', category: 'trade', unit: '$', description: 'Commissions and fees paid when closing' },
-  { field: 'maxProfit', label: 'Max Profit', category: 'trade', unit: '$', description: 'Maximum potential profit if held to expiration' },
-  { field: 'maxLoss', label: 'Max Loss', category: 'trade', unit: '$', description: 'Maximum potential loss if held to expiration' },
+  { field: 'maxProfit', label: 'Max Profit', category: 'trade', unit: '%', description: 'Maximum unrealized profit as % of premium during the trade' },
+  { field: 'maxLoss', label: 'Max Loss', category: 'trade', unit: '%', description: 'Maximum unrealized loss as % of premium during the trade' },
 
   // Timing
   { field: 'tradeNumber', label: 'Trade #', category: 'timing', description: 'Sequential trade number (1 = first trade)' },
