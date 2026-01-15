@@ -18,16 +18,27 @@ export function registerImportTools(server: McpServer, baseDir: string): void {
     "import_csv",
     {
       description:
-        "Import a CSV file into the blocks directory. Creates a new block from any CSV path. Use for ad-hoc analysis without pre-configured block directories.",
+        "Import a CSV file into the blocks directory. Creates a new block from CSV data. " +
+        "Use csvContent when working in sandboxed environments (Claude.ai, Cowork) where file paths are not accessible. " +
+        "Use csvPath when running locally (Claude Desktop, Claude Code) with direct filesystem access.",
       inputSchema: z.object({
         csvPath: z
           .string()
-          .describe("Absolute path to the CSV file to import"),
+          .optional()
+          .describe(
+            "Absolute path to the CSV file (for local filesystem access). Either csvPath or csvContent is required."
+          ),
+        csvContent: z
+          .string()
+          .optional()
+          .describe(
+            "CSV content as a string (for sandboxed environments like Claude.ai/Cowork). Either csvPath or csvContent is required."
+          ),
         blockName: z
           .string()
           .optional()
           .describe(
-            "Custom name for the block (defaults to filename without extension). Will be converted to kebab-case."
+            "Custom name for the block. Required when using csvContent. Defaults to filename when using csvPath. Will be converted to kebab-case."
           ),
         csvType: z
           .enum(["tradelog", "dailylog", "reportinglog"])
@@ -37,22 +48,40 @@ export function registerImportTools(server: McpServer, baseDir: string): void {
           ),
       }),
     },
-    async ({ csvPath, blockName, csvType }) => {
+    async ({ csvPath, csvContent, blockName, csvType }) => {
       try {
-        const result = await importCsv(baseDir, csvPath, {
+        // Validate that either csvPath or csvContent is provided
+        if (!csvPath && !csvContent) {
+          throw new Error(
+            "Either csvPath or csvContent is required. Use csvContent when working in sandboxed environments."
+          );
+        }
+
+        // When using csvContent, blockName is required
+        if (csvContent && !blockName) {
+          throw new Error(
+            "blockName is required when using csvContent (no filename to derive name from)"
+          );
+        }
+
+        const result = await importCsv(baseDir, {
+          csvPath,
+          csvContent,
           blockName,
           csvType,
         });
 
         // Brief summary for user display
-        const summary = `Imported ${result.recordCount} records to block "${result.blockId}" (${csvType})`;
+        const source = csvPath ? `path: ${csvPath}` : "content";
+        const summary = `Imported ${result.recordCount} records to block "${result.blockId}" (${csvType}) from ${source}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
           blockId: result.blockId,
           name: result.name,
           csvType,
-          sourcePath: csvPath,
+          source: csvPath ? "path" : "content",
+          sourcePath: csvPath || null,
           recordCount: result.recordCount,
           dateRange: result.dateRange,
           strategies: result.strategies,
