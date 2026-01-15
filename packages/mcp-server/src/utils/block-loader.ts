@@ -554,3 +554,254 @@ export async function loadReportingLog(
 
   return trades;
 }
+
+/**
+ * Import CSV result
+ */
+export interface ImportCsvResult {
+  blockId: string;
+  name: string;
+  recordCount: number;
+  dateRange: {
+    start: string | null;
+    end: string | null;
+  };
+  strategies: string[];
+  blockPath: string;
+}
+
+/**
+ * Import CSV options
+ */
+export interface ImportCsvOptions {
+  blockName?: string;
+  csvType?: "tradelog" | "dailylog" | "reportinglog";
+}
+
+/**
+ * Convert a string to kebab-case for blockId
+ */
+function toKebabCase(str: string): string {
+  return str
+    .replace(/([a-z])([A-Z])/g, "$1-$2") // camelCase to kebab-case
+    .replace(/[\s_]+/g, "-") // spaces and underscores to hyphens
+    .replace(/[^a-zA-Z0-9-]/g, "") // remove special characters
+    .toLowerCase()
+    .replace(/-+/g, "-") // collapse multiple hyphens
+    .replace(/^-|-$/g, ""); // trim leading/trailing hyphens
+}
+
+/**
+ * Validate CSV has required columns for the specified type
+ */
+function validateCsvColumns(
+  records: Record<string, string>[],
+  csvType: "tradelog" | "dailylog" | "reportinglog"
+): { valid: boolean; error?: string } {
+  if (records.length === 0) {
+    return { valid: false, error: "CSV file is empty or has no data rows" };
+  }
+
+  const headers = Object.keys(records[0]);
+
+  switch (csvType) {
+    case "tradelog": {
+      // Required columns for trade log
+      const required = ["Date Opened", "P/L"];
+      const missing = required.filter((col) => !headers.includes(col));
+      if (missing.length > 0) {
+        return {
+          valid: false,
+          error: `Missing required columns for tradelog: ${missing.join(", ")}. Expected columns include: Date Opened, P/L, Strategy, Legs, etc.`,
+        };
+      }
+      break;
+    }
+    case "dailylog": {
+      // Required columns for daily log
+      const required = ["Date", "Net Liquidity"];
+      const missing = required.filter((col) => !headers.includes(col));
+      if (missing.length > 0) {
+        return {
+          valid: false,
+          error: `Missing required columns for dailylog: ${missing.join(", ")}. Expected columns include: Date, Net Liquidity, P/L, etc.`,
+        };
+      }
+      break;
+    }
+    case "reportinglog": {
+      // Required columns for reporting log (with aliases)
+      const dateOpenedAliases = ["Date Opened", "date_opened"];
+      const plAliases = ["P/L", "pl"];
+      const hasDateOpened = dateOpenedAliases.some((col) =>
+        headers.includes(col)
+      );
+      const hasPl = plAliases.some((col) => headers.includes(col));
+      const missing: string[] = [];
+      if (!hasDateOpened) missing.push("Date Opened");
+      if (!hasPl) missing.push("P/L");
+      if (missing.length > 0) {
+        return {
+          valid: false,
+          error: `Missing required columns for reportinglog: ${missing.join(", ")}. Expected columns include: Date Opened (or date_opened), P/L (or pl), Strategy, etc.`,
+        };
+      }
+      break;
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Import a CSV file into the blocks directory
+ *
+ * @param baseDir - Base directory for blocks
+ * @param csvPath - Absolute path to the CSV file to import
+ * @param options - Import options (blockName, csvType)
+ * @returns Import result with block info
+ */
+export async function importCsv(
+  baseDir: string,
+  csvPath: string,
+  options: ImportCsvOptions = {}
+): Promise<ImportCsvResult> {
+  const { blockName, csvType = "tradelog" } = options;
+
+  // Validate source file exists
+  try {
+    await fs.access(csvPath);
+  } catch {
+    throw new Error(`CSV file not found: ${csvPath}`);
+  }
+
+  // Read and parse the CSV
+  const content = await fs.readFile(csvPath, "utf-8");
+  const records = parseCSV(content);
+
+  // Validate CSV has required columns
+  const validation = validateCsvColumns(records, csvType);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  // Derive blockId from blockName or filename
+  const filename = path.basename(csvPath, path.extname(csvPath));
+  const name = blockName || filename;
+  const blockId = toKebabCase(name);
+
+  if (!blockId) {
+    throw new Error(
+      "Could not derive a valid block ID from the filename or provided name"
+    );
+  }
+
+  // Check if block already exists
+  const blockPath = path.join(baseDir, blockId);
+  try {
+    await fs.access(blockPath);
+    throw new Error(
+      `Block "${blockId}" already exists. Use a different blockName or delete the existing block first.`
+    );
+  } catch (error) {
+    // Directory doesn't exist - good, we can create it
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error; // Re-throw if it's not a "not found" error
+    }
+  }
+
+  // Create block directory
+  await fs.mkdir(blockPath, { recursive: true });
+
+  // Determine target filename
+  const targetFilename =
+    csvType === "tradelog"
+      ? "tradelog.csv"
+      : csvType === "dailylog"
+        ? "dailylog.csv"
+        : "reportinglog.csv";
+
+  // Copy CSV to block directory
+  const targetPath = path.join(blockPath, targetFilename);
+  await fs.copyFile(csvPath, targetPath);
+
+  // Extract metadata based on CSV type
+  let dateRange: { start: string | null; end: string | null } = {
+    start: null,
+    end: null,
+  };
+  let strategies: string[] = [];
+
+  if (csvType === "tradelog") {
+    // Parse trades to extract metadata
+    const trades: Trade[] = [];
+    for (const record of records) {
+      const trade = convertToTrade(record);
+      if (trade) trades.push(trade);
+    }
+
+    if (trades.length > 0) {
+      const dates = trades.map((t) => new Date(t.dateOpened).getTime());
+      dateRange = {
+        start: new Date(Math.min(...dates)).toISOString(),
+        end: new Date(Math.max(...dates)).toISOString(),
+      };
+      strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+      // Create and save .block.json metadata
+      const metadata: BlockMetadata = {
+        blockId,
+        name,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        tradeCount: trades.length,
+        dailyLogCount: 0,
+        dateRange,
+        strategies,
+      };
+      await saveMetadata(blockPath, metadata);
+    }
+  } else if (csvType === "dailylog") {
+    // Parse daily logs to extract date range
+    const entries: DailyLogEntry[] = [];
+    for (const record of records) {
+      const entry = convertToDailyLogEntry(record, blockId);
+      if (entry) entries.push(entry);
+    }
+
+    if (entries.length > 0) {
+      const dates = entries.map((e) => new Date(e.date).getTime());
+      dateRange = {
+        start: new Date(Math.min(...dates)).toISOString(),
+        end: new Date(Math.max(...dates)).toISOString(),
+      };
+    }
+    // Note: dailylog-only blocks won't have a .block.json created here
+    // They would typically be added to an existing tradelog block
+  } else if (csvType === "reportinglog") {
+    // Parse reporting trades to extract metadata
+    const trades: ReportingTrade[] = [];
+    for (const record of records) {
+      const trade = convertToReportingTrade(record);
+      if (trade) trades.push(trade);
+    }
+
+    if (trades.length > 0) {
+      const dates = trades.map((t) => new Date(t.dateOpened).getTime());
+      dateRange = {
+        start: new Date(Math.min(...dates)).toISOString(),
+        end: new Date(Math.max(...dates)).toISOString(),
+      };
+      strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+    }
+  }
+
+  return {
+    blockId,
+    name,
+    recordCount: records.length,
+    dateRange,
+    strategies,
+    blockPath,
+  };
+}
