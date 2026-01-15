@@ -1,207 +1,208 @@
 ---
 name: tradeblocks-optimize
-description: Parameter optimization for trading backtests. Explores trade data to find patterns and optimal parameters like time of day, DTE, delta ranges, and market conditions. Use when analyzing which parameters performed best or exploring ways to improve a strategy.
+description: Parameter exploration for trading backtests. Analyzes trade data to find patterns across parameters like time of day, DTE, delta ranges, and market conditions. Use when exploring which parameters performed differently or understanding strategy behavior across conditions.
 ---
 
-# Backtest Optimization
+# Parameter Exploration
 
-Explore trade data to find patterns and identify optimal parameters.
+Explore trade data to understand how performance varies across different parameters.
 
 ## What This Skill Does
 
 Uses the Report Builder tools to analyze trade data and answer questions like:
-- "What time of day works best?"
-- "Which DTE range performs best?"
-- "What delta sweet spot should I target?"
-- "Does market volatility (VIX) affect results?"
+- "How does performance vary by time of day?"
+- "What do the numbers look like across DTE ranges?"
+- "Is there a delta range that stands out?"
+- "How does VIX level correlate with results?"
 
-**Important:** This skill helps you find patterns in historical data. It does NOT guarantee those patterns will persist. See [references/optimization.md](references/optimization.md) for overfitting warnings.
+**Important:** This skill helps surface patterns in historical data. Past patterns may not persist. See [references/optimization.md](references/optimization.md) for overfitting context.
 
 ## Prerequisites
 
 - TradeBlocks MCP server running
 - Block with enriched trade data (includes fields like hourOfDay, dte, delta, etc.)
-- Sufficient trade count for meaningful analysis (50+ trades recommended)
+- Sufficient trade count for meaningful analysis (50+ trades for better signal)
 
 ## Process
 
-### Step 1: Identify Optimization Goal
+### Step 1: Identify Exploration Goal
 
-Ask what the user wants to optimize:
+Ask what the user wants to explore:
 
 | Goal | Fields to Analyze |
 |------|-------------------|
-| Best entry time | hourOfDay, dayOfWeek |
-| Optimal DTE | dte (days to expiration) |
-| Delta sweet spot | delta |
+| Entry timing | hourOfDay, dayOfWeek |
+| DTE patterns | dte (days to expiration) |
+| Delta behavior | delta |
 | Market conditions | vix, spyLevel |
-| Entry price filtering | entryCredit, entryDebit |
+| Entry pricing | entryCredit, entryDebit |
 
-Ask: "What aspect of your strategy would you like to analyze?"
+Ask: "What aspect of your strategy would you like to explore?"
 
 Use `list_backtests` to identify the target block.
 
 ### Step 2: Explore Available Fields
 
-Use `list_available_fields` to show what data is available for analysis.
+Use `list_available_fields` to show what data exists for analysis.
 
-Present the available fields grouped by category:
+**Key parameters:**
+- `blockId`: Block folder name
+- `strategy`: Optional filter to specific strategy
+
+**Tool returns:**
+- Available fields grouped by category
+- Field types (numeric, string, date)
+- Sample values and coverage
+
+Present available fields:
 - **Timing:** hourOfDay, dayOfWeek, dateOpened
 - **Position:** dte, delta, strike, underlying
 - **Price:** entryCredit, entryDebit
 - **Market:** vix, spyLevel (if available)
 - **Outcome:** pl, plPct, result
 
-Note which fields are relevant to the user's goal.
-
 ### Step 3: Understand Distribution
 
-Use `get_field_statistics` on the target field.
+Use `get_field_statistics` on the target field to understand the data shape.
+
+**Key parameters:**
+- `blockId`: Block folder name
+- `field`: Field name to analyze
+- `strategy`: Optional filter
+
+**Tool returns:**
+- Range (min/max values)
+- Distribution statistics (mean, median, std dev)
+- Value counts or histogram buckets
+- Missing value count
 
 This reveals:
-- **Range:** Min/max values in the data
-- **Distribution:** How trades spread across values
-- **Outliers:** Unusual values that may skew analysis
-
-Example output for hourOfDay:
-```
-Min: 9, Max: 15
-Mean: 11.5
-Count by value: {9: 45, 10: 120, 11: 95, ...}
-```
-
-This tells you where to look for patterns.
+- Where the data concentrates
+- Whether there are outliers
+- How trades spread across values
 
 ### Step 4: Aggregate Analysis
 
-Use `aggregate_by_field` to bucket trades by the parameter.
+Use `aggregate_by_field` to bucket trades and compare performance across parameter values.
+
+**Key parameters:**
+- `blockId`: Block folder name
+- `field`: Field to group by
+- `strategy`: Optional filter
+- `buckets`: For continuous fields, define ranges (e.g., `[0, 7, 14, 21, 30]` for DTE)
+- `metrics`: Which statistics to calculate
 
 **For continuous fields (DTE, delta):**
-- Define meaningful buckets
-- Example: dte buckets [0-7, 7-14, 14-21, 21-30, 30+]
+- Define meaningful buckets based on the distribution
+- Example DTE buckets: [0-7, 7-14, 14-21, 21-30, 30+]
 
 **For discrete fields (hourOfDay, dayOfWeek):**
-- Each value becomes a bucket
+- Each unique value becomes a bucket automatically
 
-Key metrics to request:
+**Tool returns per bucket:**
 - `count`: Number of trades (sample size)
 - `winRate`: Percentage of winners
 - `avgPl`: Average P&L per trade
 - `totalPl`: Sum of P&L
 - `profitFactor`: Gross wins / gross losses
 
-Present results as a table:
+Present results:
 
-| Bucket | Count | Win Rate | Avg P&L | Total P&L |
-|--------|-------|----------|---------|-----------|
-| ... | ... | ... | ... | ... |
+| Bucket | Count | Win Rate | Avg P&L | Total P&L | Profit Factor |
+|--------|-------|----------|---------|-----------|---------------|
+| ... | ... | ... | ... | ... | ... |
 
-Highlight the best-performing bucket(s).
+### Step 5: Consider Sample Size
 
-### Step 5: Validate Findings
+**Critical context for any pattern:**
 
-**CRITICAL:** Before recommending parameter changes, validate:
+| Trades per Bucket | Interpretation |
+|-------------------|----------------|
+| < 10 | Very high variance - likely noise |
+| 10-30 | Wide confidence intervals |
+| 30-50 | Moderate reliability |
+| 50+ | More meaningful comparison |
 
-#### Sample Size Check
-
-| Trades per Bucket | Reliability |
-|-------------------|-------------|
-| < 10 | Unreliable (noise) |
-| 10-30 | Suggestive only |
-| 30-50 | Moderate confidence |
-| 50+ | More reliable |
-
-**If sample size is small:** "The best bucket has only 12 trades. This could be random chance rather than a real pattern."
-
-#### Statistical Significance
-
-Large differences with small samples are likely noise:
-- 80% win rate from 10 trades = unreliable
-- 55% win rate from 100 trades = meaningful
-
-#### Multiple Testing Warning
-
-When you test many parameters, some will look good by chance.
-
-**Example:** Testing 10 hourly buckets at 5% significance level = 50% chance of one false positive.
-
-See [references/optimization.md](references/optimization.md) for details.
+**Multiple testing note:** When exploring many parameters, some will appear significant by chance. Testing 10 buckets at 5% significance = ~40% chance of one false positive. See [references/optimization.md](references/optimization.md).
 
 ### Step 6: Present Findings
 
-Synthesize the analysis with appropriate caveats:
+Synthesize what the data shows:
 
-**Optimization Results:**
+**Exploration Results:**
 - Field analyzed: [field name]
-- Best bucket: [value range]
-- Performance: [key metrics]
-- Sample size: [count] trades
+- Total trades: [count]
+- Buckets examined: [number]
+
+**Distribution Overview:**
+- [How trades spread across buckets]
+- [Any concentration or gaps]
+
+**Performance by Bucket:**
+| Best performing | [bucket] | [key metrics] | [sample size] |
+| Worst performing | [bucket] | [key metrics] | [sample size] |
+
+**Sample Size Context:**
+- [Note which buckets have sufficient data]
+- [Flag any with <30 trades]
 
 **What the data shows:**
-- [Observation about best-performing range]
-- [Observation about worst-performing range]
-- [Notable patterns]
+- [Observable pattern 1]
+- [Observable pattern 2]
+- [Any caveats about the data]
 
-**Confidence assessment:**
-- Sample size: [adequate / limited]
-- Effect size: [large / moderate / small]
-- Multiple testing concern: [yes / no]
+**For further validation:**
+- Run walk-forward analysis to test if pattern persists on unseen data
+- Collect more trades to increase sample sizes
+- Check if pattern aligns with strategy thesis
 
-**Recommendation:**
-- If high confidence: "The data suggests [X] may be worth exploring"
-- If low confidence: "Interesting pattern but sample size is too small to rely on"
-- If unclear: "No clear pattern emerges; parameters may not matter"
-
-**Next step suggestion:**
-- Run walk-forward analysis to test if finding holds on unseen data
-- Collect more trades to increase sample size
-- Test on different time period to check persistence
+Present these as patterns in the historical data. The user can decide what weight to give these observations.
 
 ## Interpretation Reference
 
-For detailed guidance on avoiding overfitting, see [references/optimization.md](references/optimization.md).
+For detailed guidance on interpreting optimization results and avoiding overfitting, see [references/optimization.md](references/optimization.md).
 
 ## Related Skills
 
-After optimization analysis:
-- `/tradeblocks-wfa` - Test if optimized parameters hold on out-of-sample data
+After parameter exploration:
+- `/tradeblocks-wfa` - Test if patterns hold on out-of-sample data
 - `/tradeblocks-health-check` - Full metrics review
-- `/tradeblocks-compare` - Compare optimized vs original
+- `/tradeblocks-compare` - Compare different parameter settings
 
 ## Common Scenarios
 
-### "What's the best time to enter?"
+### "How does performance vary by entry time?"
 
-1. Check hourOfDay distribution
-2. Aggregate P&L by hour
+1. Check hourOfDay distribution with `get_field_statistics`
+2. Aggregate P&L by hour with `aggregate_by_field`
 3. Note sample size per hour
-4. If one hour stands out with 50+ trades, it may be meaningful
+4. Present hours with notably different metrics
 
-### "Which DTE should I target?"
+### "What do DTE ranges look like?"
 
-1. Get DTE statistics to see range
-2. Create buckets (e.g., 0-14, 14-30, 30-45, 45+)
+1. Get DTE statistics to see range and distribution
+2. Create meaningful buckets (e.g., 0-14, 14-30, 30-45, 45+)
 3. Aggregate by bucket
-4. Check if pattern is consistent with strategy thesis
+4. Note any bucket with few trades
 
-### "Is there a delta sweet spot?"
+### "Is there a delta pattern?"
 
 1. Check delta distribution
 2. Create buckets (e.g., 10-15, 15-20, 20-25, etc.)
 3. Aggregate by bucket
-4. Consider whether "best" delta aligns with risk goals
+4. Consider whether differences exceed noise
 
-## Warnings
+## Data Quality Notes
 
-- **Historical patterns may not persist** - markets change
-- **Overfitting is the biggest risk** - see references
-- **Small sample sizes lie** - require 30+ trades per bucket
-- **Multiple testing inflates false positives** - be skeptical of "best" findings
-- **Always validate with walk-forward** - use `/tradeblocks-wfa`
+- **Historical patterns may not persist** - markets and conditions change
+- **Small sample sizes are noisy** - 30+ trades per bucket for meaningful comparison
+- **Multiple testing inflates apparent significance** - be skeptical of "best" findings
+- **Validate with walk-forward** - use `/tradeblocks-wfa` for out-of-sample testing
+- **Consider why** - patterns with logical explanations are more likely to persist
 
 ## Notes
 
-- Optimization should enhance understanding, not define the strategy
-- The "best" parameter from backtest often underperforms live
-- Consider WHY a pattern might exist before relying on it
-- Robustness across parameters is better than optimization to one value
+- Exploration surfaces patterns; it doesn't prove causation
+- The "best" parameter from historical data often regresses toward average
+- Robustness across parameters often matters more than optimization to one value
+- Consider the trading thesis - does the pattern make sense?

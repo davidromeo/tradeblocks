@@ -1,26 +1,23 @@
 ---
 name: tradeblocks-portfolio
-description: Portfolio addition decision helper. Analyzes whether adding a new strategy would improve or degrade portfolio performance. Use when evaluating a candidate strategy for inclusion, assessing diversification benefits, or deciding which strategies to combine.
+description: Portfolio analysis for trading strategies. Explores correlation, diversification, and combined performance characteristics. Use when understanding how strategies relate, exploring diversification effects, or analyzing portfolio composition.
 ---
 
-# Portfolio Addition Decision
+# Portfolio Analysis
 
-Evaluate whether adding a candidate strategy improves or degrades your portfolio.
+Explore how strategies relate and what combining them might mean for portfolio characteristics.
 
 ## What This Skill Does
 
-Helps answer the question: "Should I add this strategy to my portfolio?"
-
-The analysis considers:
-- **Correlation**: Does it move differently from existing strategies?
-- **Standalone merit**: Is it profitable on its own?
-- **Combined impact**: Does it improve the overall portfolio?
+Surfaces data to help understand portfolio dynamics:
+- **Correlation**: How do strategies move relative to each other?
+- **Standalone metrics**: What are each strategy's individual characteristics?
+- **Diversification context**: What do the numbers suggest about combining them?
 
 ## Prerequisites
 
 - TradeBlocks MCP server running
-- Existing portfolio block(s) loaded
-- Candidate strategy block loaded
+- Multiple strategy blocks or a multi-strategy block loaded
 
 ## Process
 
@@ -29,138 +26,145 @@ The analysis considers:
 Understand the current situation:
 
 Ask:
-- "Which strategy are you considering adding?"
-- "What strategies are currently in your portfolio?"
+- "Which strategies would you like to analyze together?"
+- "What aspect of portfolio composition interests you?"
 
 Use `list_backtests` to show available blocks.
 
-Clarify:
-- Which block is the candidate?
-- Which blocks represent the current portfolio?
-
 ### Step 2: Correlation Analysis
 
-Use `calculate_correlation` to assess how the candidate moves relative to existing strategies.
+Use `get_correlation_matrix` to understand how strategies move relative to each other.
+
+**Key parameters:**
+- `blockId`: Block folder name
+- `method`: "kendall" (robust, rank-based, default), "spearman" (rank), "pearson" (linear)
+- `alignment`: "shared" (only days both traded) or "zero-pad" (fill missing with 0)
+- `timePeriod`: "daily", "weekly", or "monthly" aggregation
+- `normalization`: "raw" (absolute P&L), "margin" (P&L/margin), "notional" (P&L/notional)
+- `minSamples`: Minimum shared periods for valid calculation (default: 10)
+
+**Tool returns:**
+- Correlation matrix between all strategies
+- Sample sizes for each pair
+- Analytics (average correlation, strongest/weakest pairs)
+- Highly correlated pairs above threshold
 
 **Interpreting correlation values:**
 
-| Correlation | Meaning | Diversification |
-|-------------|---------|-----------------|
-| < 0.2 | Very low | Excellent diversification potential |
-| 0.2 - 0.4 | Low | Good diversification |
-| 0.4 - 0.6 | Moderate | Some shared behavior |
-| 0.6 - 0.8 | High | Limited diversification |
-| > 0.8 | Very high | Essentially the same strategy |
+| Correlation | What It Indicates |
+|-------------|-------------------|
+| < 0.2 | Very low - strategies move independently |
+| 0.2 - 0.4 | Low - mostly independent movement |
+| 0.4 - 0.6 | Moderate - some shared behavior |
+| 0.6 - 0.8 | High - significant shared movement |
+| > 0.8 | Very high - strategies behave similarly |
 
-**Key insight:** The tool uses Kendall's tau correlation, which is more robust for trading returns than Pearson correlation. See [references/correlation.md](references/correlation.md) for details.
+See [references/correlation.md](references/correlation.md) for why Kendall's tau is often more informative than Pearson for trading returns.
 
-Present correlation of candidate vs each existing strategy.
+### Step 3: Standalone Strategy Metrics
 
-### Step 3: Assess Candidate Standalone
+Use `get_statistics` on each strategy to understand individual characteristics.
 
-Use `get_statistics` on the candidate strategy.
+**Key metrics to surface:**
+- Sharpe Ratio (risk-adjusted return)
+- Profit Factor (gross wins / gross losses)
+- Max Drawdown (worst peak-to-trough decline)
+- Win Rate (percentage of profitable trades)
+- Trade count (sample size for confidence)
 
-Key metrics to evaluate:
+Present each strategy's profile:
 
-| Metric | Minimum for ADD | Ideal |
-|--------|-----------------|-------|
-| Sharpe Ratio | > 0.5 | > 1.0 |
-| Profit Factor | > 1.2 | > 1.5 |
-| Max Drawdown | < 40% | < 25% |
+| Metric | Strategy A | Strategy B | Strategy C |
+|--------|------------|------------|------------|
+| Sharpe Ratio | | | |
+| Profit Factor | | | |
+| Max Drawdown | | | |
+| Win Rate | | | |
+| Trade Count | | | |
 
-**Important:** A strategy doesn't need to be excellent standalone if it provides strong diversification. A mediocre strategy with -0.2 correlation to the portfolio may improve overall Sharpe more than an excellent strategy with +0.8 correlation.
+### Step 4: Tail Risk Analysis (Optional)
 
-### Step 4: Combined Impact Assessment
+For deeper understanding, use `get_tail_risk` to explore extreme co-movement.
 
-Synthesize the analysis:
+**Key parameters:**
+- `tailThreshold`: What defines "extreme" (0.1 = worst 10% of days)
+- `varianceThreshold`: For effective factors calculation (0.8 = 80% variance explained)
 
-**Diversification benefit:**
-- Would adding this reduce portfolio max drawdown?
-- Low correlation = drawdowns may not align
-- High correlation = drawdowns compound
+**Tool returns:**
+- Joint tail risk matrix (do strategies fail together in extremes?)
+- Effective factors (how many independent risk sources exist)
+- Copula correlation (statistical dependency structure)
 
-**Risk-adjusted return impact:**
-- Calculate implied portfolio Sharpe improvement
-- A low-correlation strategy can improve Sharpe even with lower standalone metrics
+**Risk level context:**
+- Average joint tail risk <0.3: Lower shared extreme risk
+- Average joint tail risk 0.3-0.5: Moderate shared extreme risk
+- Average joint tail risk >0.5: Higher shared extreme risk
 
-**Red flags:**
-- High correlation to existing strategies (>0.7)
-- Negative Sharpe on its own
-- Max drawdown > 50%
-- Same underlying exposure as existing strategy
+See [references/diversification.md](references/diversification.md) for why tail correlation often exceeds normal correlation.
 
-### Step 5: Recommendation
+### Step 5: Present Findings
 
-Based on the analysis, provide a clear recommendation:
+Synthesize the data into what the numbers reveal:
 
-#### ADD
+**Correlation Findings:**
+- Average correlation across pairs: [value]
+- Highest correlation pair: [pair] at [value]
+- Lowest correlation pair: [pair] at [value]
+- Sample sizes: [range or note any insufficient data]
 
-Recommend adding when:
-- Correlation to existing strategies < 0.4
-- Standalone Sharpe > 0.5 or strong diversification benefit
-- Max drawdown acceptable
-- No duplicate exposure
+**Strategy Profiles:**
+- [Strategy A]: [key characteristic - e.g., "highest Sharpe but also highest drawdown"]
+- [Strategy B]: [key characteristic]
+- [Note any strategies with limited trade counts]
 
-**Example recommendation:**
-> **ADD** - Low correlation (0.15) to existing portfolio with solid standalone metrics (Sharpe 0.9). Adding this should improve portfolio diversification without adding correlated risk.
+**Tail Risk (if analyzed):**
+- Average joint tail risk: [value] ([context])
+- Effective factors: [X] of [Y] strategies
+- [Note any pairs with high extreme co-movement]
 
-#### CONSIDER
+**What stands out:**
+- [Notable pattern 1]
+- [Notable pattern 2]
+- [Any data quality considerations]
 
-Mixed signals warrant further analysis:
-- Moderate correlation (0.4-0.6) but strong standalone metrics
-- Low correlation but marginal standalone performance
-- Some overlap with existing strategies
-
-**Example recommendation:**
-> **CONSIDER** - Strong standalone metrics (Sharpe 1.4) but moderate correlation (0.52) to Strategy A. Diversification benefit exists but is limited. Consider allocation size carefully.
-
-#### SKIP
-
-Recommend skipping when:
-- High correlation to existing strategies (>0.7)
-- Poor standalone metrics (negative Sharpe, PF < 1.0)
-- Excessive max drawdown
-- Duplicates existing exposure
-
-**Example recommendation:**
-> **SKIP** - High correlation (0.82) to existing Strategy B indicates these are essentially the same trade. Adding would increase concentration risk without diversification benefit.
+Present these as insights from the historical data. The user can decide what fits their risk tolerance and portfolio goals.
 
 ## Interpretation References
 
-- [references/correlation.md](references/correlation.md) - Understanding correlation types
-- [references/diversification.md](references/diversification.md) - Why diversification matters
+- [references/correlation.md](references/correlation.md) - Understanding correlation methods
+- [references/diversification.md](references/diversification.md) - Diversification concepts and tail risks
 
 ## Related Skills
 
 After portfolio analysis:
-- `/tradeblocks-compare` - Deep comparison of specific strategies
-- `/tradeblocks-risk` - Tail risk analysis for the combined portfolio
+- `/tradeblocks-compare` - Deep comparison of specific strategy pairs
+- `/tradeblocks-risk` - Position sizing and Kelly analysis
 - `/tradeblocks-health-check` - Full metrics on any strategy
 
 ## Common Scenarios
 
-### "I have two similar strategies - which one?"
+### "How do my strategies relate to each other?"
 
-1. Run correlation between them
-2. If correlation > 0.7, pick the better performer
-3. If correlation < 0.5, consider keeping both
+1. Run `get_correlation_matrix` to see pairwise relationships
+2. Note the average correlation and any high-correlation pairs
+3. Consider sample sizes - low overlap means less reliable correlation
 
-### "Should I add a losing strategy for diversification?"
+### "What would happen if these strategies draw down together?"
 
-Generally no. Diversification doesn't overcome negative expected value. Look for strategies that are:
-- At least marginally profitable (PF > 1.0)
-- Uncorrelated to current holdings
+1. Run `get_tail_risk` to explore extreme co-movement
+2. Check joint tail risk matrix for pairs that fail together
+3. Effective factors < strategy count suggests shared risk sources
 
-### "My new strategy has better metrics - replace or add?"
+### "I'm comparing two similar strategies"
 
-1. Check correlation
-2. If correlated (>0.6): Consider replacing
-3. If uncorrelated (<0.4): Consider adding both
-4. If moderate: Depends on capital constraints
+1. Check correlation - if >0.7, they behave similarly
+2. Compare standalone metrics to see performance differences
+3. High correlation means drawdowns likely compound, not diversify
 
 ## Notes
 
-- Correlation is measured on daily returns, not trade-by-trade
-- Past correlation may not hold in future market conditions
-- Tail correlation (crisis behavior) often higher than normal correlation
-- Consider position sizing implications when adding strategies
+- Correlation is measured on aggregated returns, not trade-by-trade
+- Past correlation patterns may not persist in future market conditions
+- Tail correlation (crisis behavior) is often higher than normal correlation
+- Low correlation doesn't guarantee protection - both can lose for different reasons
+- Sample size matters - 10 shared data points is minimum, more is better
