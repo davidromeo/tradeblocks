@@ -1,0 +1,38 @@
+{
+  "mcpb_version": "0.1.0",
+  "name": "tradeblocks",
+  "version": "0.1.0",
+  "description": "Options trading analysis - backtest stats, walk-forward analysis, Monte Carlo, risk metrics",
+  "author": "David Romeo",
+  "homepage": "https://github.com/davidromeo/tradeblocks",
+  "repository": "https://github.com/davidromeo/tradeblocks",
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry": "dist/index.js"
+  },
+  "user_config": {
+    "blocks_directory": {
+      "type": "path",
+      "description": "Directory containing your trading data blocks",
+      "required": true
+    }
+  },
+  "tools": [
+    { "name": "list_backtests", "description": "List available trading backtests" },
+    { "name": "get_statistics", "description": "Get performance statistics for a backtest" },
+    { "name": "run_walk_forward", "description": "Run walk-forward analysis" },
+    { "name": "run_monte_carlo", "description": "Monte Carlo simulation" },
+    { "name": "calculate_correlation", "description": "Calculate strategy correlations" },
+    { "name": "get_tail_risk", "description": "Analyze tail risk metrics" },
+    { "name": "calculate_position_sizing", "description": "Kelly criterion position sizing" },
+    { "name": "get_performance_charts", "description": "Get chart data for visualization" },
+    { "name": "get_period_returns", "description": "Returns by time period" },
+    { "name": "compare_backtest_vs_actual", "description": "Compare backtest to live results" },
+    { "name": "list_available_fields", "description": "List filterable trade fields" },
+    { "name": "run_filtered_query", "description": "Query trades with filters" },
+    { "name": "get_field_statistics", "description": "Statistics for a trade field" },
+    { "name": "aggregate_by_field", "description": "Aggregate trades by field values" },
+    { "name": "import_csv", "description": "Import CSV file as new block" }
+  ]
+}

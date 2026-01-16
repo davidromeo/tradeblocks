@@ -11,6 +11,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "echo 'Tests pending'",
+    "pack": "mcpb pack",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
