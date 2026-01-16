@@ -8,7 +8,8 @@
     "tradeblocks-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && npm run copy-skills",
+    "copy-skills": "node -e \"const fs=require('fs');fs.cpSync('../agent-skills','./agent-skills',{recursive:true,filter:(s)=>!s.includes('.git')})\"",
     "dev": "tsup --watch",
     "test": "echo 'Tests pending'",
     "pack": "mcpb pack",
@@ -26,7 +27,10 @@
   "engines": {
     "node": ">=18"
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "agent-skills"
+  ],
   "keywords": ["mcp", "claude", "options", "trading", "backtest"],
   "license": "MIT",
   "repository": {
