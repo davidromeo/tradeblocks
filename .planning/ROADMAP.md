@@ -94,24 +94,31 @@ Scope:
 Plans:
 - [x] 13.1-01: Implement import_csv MCP tool - completed 2026-01-15
 
-### Phase 14: Multi-Platform Agent Skills (In Progress)
+### Phase 14: Multi-Platform Agent Skills ✓
 
 **Goal**: Create skills/tools for Claude Code, OpenAI Agents, and Gemini Agents to interact with TradeBlocks MCP server
 **Depends on**: Phase 13.1
-**Status**: In progress
-**Plans**: 3/4 complete
+**Status**: Complete
+**Completed**: 2026-01-16
+**Plans**: 4/4
 
 Scope:
 - Agent Skills standard (agentskills.io) for cross-platform compatibility
 - Core analysis skills: health-check, wfa, risk
 - Comparison and portfolio skills: compare, portfolio, optimize
-- Documentation and installation scripts
+- Documentation, installation scripts, and npm packaging preparation
 
 Plans:
 - [x] 14-01: Core Analysis Skills (health-check, wfa, risk) - completed 2026-01-15
 - [x] 14-02: Comparison & Portfolio Skills (compare, portfolio, optimize) - completed 2026-01-15
 - [x] 14-03: Documentation & Installation Guide - completed 2026-01-16
-- [ ] 14-04: TBD
+- [x] 14-04: npm Packaging Preparation (manifest, bundling, installer module) - completed 2026-01-16
+
+**Deliverables:**
+- 6 agent skills with SKILL.md + references/
+- Skills documentation (README.md, INSTALL.md, install.sh, install.ps1)
+- Desktop Extension manifest (manifest.json for MCPB)
+- Skill manifest (index.json) and installer module for Phase 15 CLI
 
 ### Phase 15: Polish & Documentation
 
@@ -140,7 +147,7 @@ Plans:
 | 12. Core Integration Layer | v2.0 | 3/3 | Complete | 2026-01-14 |
 | 13. Analysis Capabilities | v2.0 | 1/1 | Complete | 2026-01-14 |
 | 13.1 Import CSV Tool | v2.0 | 1/1 | Complete | 2026-01-15 |
-| 14. Multi-Platform Agent Skills | v2.0 | 3/4 | In progress | - |
+| 14. Multi-Platform Agent Skills | v2.0 | 4/4 | Complete | 2026-01-16 |
 | 15. Polish & Documentation | v2.0 | 0/? | Not started | - |
 
 ## Audit Notes

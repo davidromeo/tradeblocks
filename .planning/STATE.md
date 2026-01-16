@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 
 Phase: 14 of 15 (Multi-Platform Agent Skills)
 Plan: 4 of 4 in current phase
-Status: Phase 14 complete
-Last activity: 2026-01-16 — Completed 14-03-PLAN.md (Documentation & Installation)
+Status: Phase 14 complete (all 4 plans)
+Last activity: 2026-01-16 — Completed 14-04-PLAN.md (npm Packaging Preparation)
 
 Progress: █████████░ 90% (v2.0 milestone)
 
@@ -94,7 +94,13 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Skills documentation: README.md, INSTALL.md, install.sh helper script
 - Desktop Extension: manifest.json for MCPB packaging (.mcpb bundle)
 - MCP server README.md with Claude Desktop installation instructions
-- Phase 14 complete: 6 skills with full documentation for both distribution methods
+
+**v2.0 Phase 14-04:**
+- Skill manifest (index.json) for programmatic skill listing
+- Copy-on-build pattern for npm package portability (symlinks not supported)
+- Multi-entry tsup: index.ts (executable) + skill-installer.ts (library)
+- Skill installer API: install/uninstall/check functions for Phase 15 CLI
+- Phase 14 complete: 6 skills with documentation, packaging, and installer module
 
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
@@ -119,5 +125,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-16
-Stopped at: Completed 14-03-PLAN.md (Phase 14 complete)
+Stopped at: Completed 14-04-PLAN.md (Phase 14 fully complete)
 Resume file: None
