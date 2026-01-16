@@ -177,7 +177,14 @@ ln -s /absolute/path/to/tradeblocks/packages/agent-skills/tradeblocks-health-che
 
 ### Windows Installation
 
-Windows doesn't support Unix symlinks. Copy the skill folders instead:
+Windows doesn't support Unix symlinks. Use the PowerShell install script instead:
+
+```powershell
+cd C:\path\to\tradeblocks\packages\agent-skills
+.\install.ps1 claude
+```
+
+Or copy manually:
 
 ```powershell
 # Create skills directory
@@ -187,7 +194,7 @@ mkdir $env:USERPROFILE\.claude\skills
 Copy-Item -Recurse C:\path\to\tradeblocks\packages\agent-skills\tradeblocks-* $env:USERPROFILE\.claude\skills\
 ```
 
-**Note:** When updating skills on Windows, you'll need to re-copy the folders (unlike macOS/Linux where symlinks auto-update).
+**Note:** When updating skills on Windows, re-run `.\install.ps1 claude` (unlike macOS/Linux where symlinks auto-update).
 
 ### Permission Denied
 
