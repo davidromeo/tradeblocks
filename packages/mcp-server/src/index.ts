@@ -15,11 +15,14 @@ import { registerAnalysisTools } from "./tools/analysis.js";
 import { registerPerformanceTools } from "./tools/performance.js";
 import { registerReportTools } from "./tools/reports.js";
 import { registerImportTools } from "./tools/imports.js";
+import { registerResources } from "./resources/index.js";
 
-// Parse command line for backtest directory
-const backtestDir = process.argv[2];
+// Get backtest directory from environment variable (MCPB) or command line
+const backtestDir = process.env.BLOCKS_DIRECTORY || process.argv[2];
 if (!backtestDir) {
   console.error("Usage: tradeblocks-mcp <backtests-folder>");
+  console.error("   or: BLOCKS_DIRECTORY=/path/to/blocks tradeblocks-mcp");
+  console.error("");
   console.error("Example: tradeblocks-mcp ~/backtests");
   console.error("");
   console.error("The backtests folder should contain block folders, each with:");
@@ -33,15 +36,16 @@ const resolvedDir = path.resolve(backtestDir);
 // Create server instance
 const server = new McpServer(
   { name: "tradeblocks-mcp", version: "0.1.0" },
-  { capabilities: { tools: {} } }
+  { capabilities: { tools: {}, resources: {} } }
 );
 
-// Register all tools (19 total)
+// Register all tools and resources
 registerBlockTools(server, resolvedDir);
 registerAnalysisTools(server, resolvedDir);
 registerPerformanceTools(server, resolvedDir);
 registerReportTools(server, resolvedDir);
 registerImportTools(server, resolvedDir);
+registerResources(server);
 
 async function main() {
   // Verify directory exists

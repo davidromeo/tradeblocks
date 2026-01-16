@@ -396,7 +396,8 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
       // Try to load metadata first for cached info
       const metadata = await loadMetadata(blockPath);
 
-      if (metadata) {
+      // Only use metadata if it has cached stats, otherwise calculate from trades
+      if (metadata?.cachedStats) {
         blocks.push({
           blockId: entry.name,
           name: metadata.name || entry.name,
@@ -411,8 +412,8 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
               : null,
           },
           strategies: metadata.strategies,
-          totalPl: metadata.cachedStats?.totalPl ?? 0,
-          netPl: metadata.cachedStats?.netPl ?? 0,
+          totalPl: metadata.cachedStats.totalPl,
+          netPl: metadata.cachedStats.netPl,
         });
       } else {
         // Load trades to get basic info

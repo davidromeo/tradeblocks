@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "description": "MCP server for options trade analysis - works with Claude Desktop/Cowork",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/skill-installer.js",
   "bin": {
-    "tradeblocks-mcp": "dist/index.js"
+    "tradeblocks-mcp": "server/index.js"
   },
   "scripts": {
     "build": "tsup && npm run copy-skills",
     "copy-skills": "node -e \"const fs=require('fs');fs.cpSync('../agent-skills','./agent-skills',{recursive:true,filter:(s)=>!s.includes('.git')})\"",
     "dev": "tsup --watch",
     "test": "echo 'Tests pending'",
-    "pack": "mcpb pack",
+    "mcpb:pack": "npm run build && node scripts/pack-mcpb.js",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "archiver": "^7.0.1",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
     "@types/node": "^22.0.0"
@@ -28,8 +29,10 @@
     "node": ">=18"
   },
   "files": [
+    "server",
     "dist",
-    "agent-skills"
+    "agent-skills",
+    "manifest.json"
   ],
   "keywords": ["mcp", "claude", "options", "trading", "backtest"],
   "license": "MIT",
