@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 ## Current Position
 
 Phase: 14 of 15 (Multi-Platform Agent Skills)
-Plan: 2 of 4 in current phase
-Status: In progress
-Last activity: 2026-01-15 — Completed 14-02-PLAN.md
+Plan: 4 of 4 in current phase
+Status: Phase 14 complete
+Last activity: 2026-01-16 — Completed 14-03-PLAN.md (Documentation & Installation)
 
-Progress: ████████░░ 80% (v2.0 milestone)
+Progress: █████████░ 90% (v2.0 milestone)
 
 ## v2.0 Goal
 
@@ -89,6 +89,13 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Portfolio skill uses ADD/CONSIDER/SKIP recommendation framework
 - Optimize skill uses Report Builder tools with overfitting warnings
 
+**v2.0 Phase 14-03:**
+- Two distribution paths: Skills (CLI) and Desktop Extension (Claude Desktop)
+- Skills documentation: README.md, INSTALL.md, install.sh helper script
+- Desktop Extension: manifest.json for MCPB packaging (.mcpb bundle)
+- MCP server README.md with Claude Desktop installation instructions
+- Phase 14 complete: 6 skills with full documentation for both distribution methods
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
@@ -111,6 +118,6 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 
 ## Session Continuity
 
-Last session: 2026-01-15
-Stopped at: Completed 14-02-PLAN.md
+Last session: 2026-01-16
+Stopped at: Completed 14-03-PLAN.md (Phase 14 complete)
 Resume file: None
