@@ -39,7 +39,13 @@ mcpb pack
 
 ### Option 2: Manual Configuration
 
-Add to Claude Desktop settings (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Add to your Claude Desktop config file:
+
+| Platform | Config Location |
+|----------|-----------------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
 
 ```json
 {
@@ -55,11 +61,34 @@ Add to Claude Desktop settings (`~/Library/Application Support/Claude/claude_des
 }
 ```
 
-Replace `/path/to/tradeblocks` and `/path/to/your/blocks` with your actual paths.
+**Windows paths example:**
+```json
+{
+  "mcpServers": {
+    "tradeblocks": {
+      "command": "node",
+      "args": ["C:\\Users\\YourName\\tradeblocks\\packages\\mcp-server\\dist\\index.js"],
+      "env": {
+        "TRADEBLOCKS_BLOCKS_DIR": "C:\\Users\\YourName\\blocks"
+      }
+    }
+  }
+}
+```
 
-## Claude Code / CLI Installation
+## Claude Code (CLI) Installation
 
-For Claude Code and other CLI-based agents, configure the MCP server in your settings and use the [Agent Skills](../agent-skills/README.md) for guided workflows.
+Claude Code uses the same MCP server but configured via `claude mcp add`:
+
+```bash
+# Add the MCP server to Claude Code
+claude mcp add tradeblocks -- node /path/to/tradeblocks/packages/mcp-server/dist/index.js
+
+# Set the blocks directory (in your shell profile)
+export TRADEBLOCKS_BLOCKS_DIR=/path/to/your/blocks
+```
+
+For guided workflows, install the [Agent Skills](../agent-skills/README.md).
 
 ## Configuration
 

@@ -163,7 +163,7 @@ The skill invokes MCP tools but the server isn't available:
 - Use spaces, not tabs
 - Ensure closing `---` is present
 
-### Symlink Issues
+### Symlink Issues (macOS/Linux)
 
 If symlinks aren't working:
 
@@ -174,6 +174,20 @@ rm ~/.claude/skills/tradeblocks-health-check
 # Recreate with absolute path
 ln -s /absolute/path/to/tradeblocks/packages/agent-skills/tradeblocks-health-check ~/.claude/skills/
 ```
+
+### Windows Installation
+
+Windows doesn't support Unix symlinks. Copy the skill folders instead:
+
+```powershell
+# Create skills directory
+mkdir $env:USERPROFILE\.claude\skills
+
+# Copy all TradeBlocks skills
+Copy-Item -Recurse C:\path\to\tradeblocks\packages\agent-skills\tradeblocks-* $env:USERPROFILE\.claude\skills\
+```
+
+**Note:** When updating skills on Windows, you'll need to re-copy the folders (unlike macOS/Linux where symlinks auto-update).
 
 ### Permission Denied
 
