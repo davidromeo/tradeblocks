@@ -4,3 +4,6 @@ node_modules/
 agent-skills/
 *.mcpb
 *.tgz
+
+# Test-generated cache files
+tests/fixtures/**/.block.json
