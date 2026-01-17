@@ -202,8 +202,10 @@ async function detectCsvType(filePath: string): Promise<CsvType> {
     ];
 
     const hasPl = plColumnAliases.some((alias) => headers.includes(alias));
+    // Match trade columns - require header to contain the full column pattern
+    // This prevents "date" from matching "date opened" (col.includes(h) would be true)
     const matchedTradeColumns = tradeOptionalColumns.filter((col) =>
-      headers.some((h) => h.includes(col) || col.includes(h))
+      headers.some((h) => h.includes(col))
     );
 
     if (hasPl && matchedTradeColumns.length >= 2) {
@@ -211,9 +213,10 @@ async function detectCsvType(filePath: string): Promise<CsvType> {
     }
 
     // Daily log detection:
-    // Required: "Date", and ("Portfolio Value" or "Value" or "Equity" or "Net Liquidity")
-    const hasDate = headers.some(
-      (h) => h === "date" || h.includes("date") && !h.includes("opened") && !h.includes("closed")
+    // Required: "Date" (but not "Date Opened"/"Date Closed"), and value column
+    // Key distinction: dailylogs have portfolio value columns but lack trade-specific columns
+    const hasSimpleDate = headers.some(
+      (h) => h === "date" || (h.includes("date") && !h.includes("opened") && !h.includes("closed"))
     );
     const valueColumnAliases = [
       "portfolio value",
@@ -226,12 +229,10 @@ async function detectCsvType(filePath: string): Promise<CsvType> {
       headers.some((h) => h.includes(alias) || alias.includes(h))
     );
 
-    if (hasDate && hasValue && !hasPl) {
-      // Daily log has date + value but typically no P/L column (or if it has P/L, it's daily P/L)
-      // To distinguish, check if it lacks trade-specific columns
-      if (matchedTradeColumns.length < 2) {
-        return "dailylog";
-      }
+    // Dailylog: has date + value columns but lacks trade-specific columns
+    // This catches dailylogs that also have P/L columns (like Option Omega exports)
+    if (hasSimpleDate && hasValue && matchedTradeColumns.length < 2) {
+      return "dailylog";
     }
 
     // Reporting log detection:
