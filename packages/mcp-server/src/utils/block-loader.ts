@@ -38,6 +38,12 @@ export interface BlockMetadata {
   strategies: string[];
   /** CSV filename mappings when files don't have standard names */
   csvMappings?: CsvMappings;
+  /** File modification times for cache invalidation */
+  csvFileMtimes?: {
+    tradelog?: number;
+    dailylog?: number;
+    reportinglog?: number;
+  };
   cachedStats?: {
     totalPl: number;
     netPl: number;
@@ -327,6 +333,77 @@ async function discoverCsvFiles(
 }
 
 /**
+ * Get modification times for CSV files in a block folder.
+ * Used for cache invalidation - if mtimes change, cached stats are stale.
+ */
+export async function getCsvFileMtimes(
+  blockPath: string,
+  mappings: CsvMappings
+): Promise<BlockMetadata["csvFileMtimes"]> {
+  const mtimes: BlockMetadata["csvFileMtimes"] = {};
+
+  for (const [type, filename] of Object.entries(mappings)) {
+    if (!filename) continue;
+    try {
+      const filePath = path.join(blockPath, filename);
+      const stat = await fs.stat(filePath);
+      mtimes[type as keyof CsvMappings] = stat.mtimeMs;
+    } catch {
+      // File doesn't exist or can't be read
+    }
+  }
+
+  return Object.keys(mtimes).length > 0 ? mtimes : undefined;
+}
+
+/**
+ * Check if cached metadata is still valid by comparing file mtimes.
+ * Returns true if cache is valid (files unchanged), false if stale.
+ */
+async function isCacheValid(
+  blockPath: string,
+  metadata: BlockMetadata
+): Promise<boolean> {
+  // No cached mtimes means old metadata format - invalidate
+  if (!metadata.csvFileMtimes) {
+    return false;
+  }
+
+  // Determine which files to check
+  const mappings: CsvMappings = metadata.csvMappings || { tradelog: "tradelog.csv" };
+
+  // Check tradelog mtime (required)
+  const tradelogFilename = mappings.tradelog || "tradelog.csv";
+  try {
+    const tradelogPath = path.join(blockPath, tradelogFilename);
+    const stat = await fs.stat(tradelogPath);
+    if (stat.mtimeMs !== metadata.csvFileMtimes.tradelog) {
+      return false;
+    }
+  } catch {
+    // File missing - cache invalid
+    return false;
+  }
+
+  // Check dailylog mtime if it was cached
+  if (metadata.csvFileMtimes.dailylog) {
+    const dailylogFilename = mappings.dailylog || "dailylog.csv";
+    try {
+      const dailylogPath = path.join(blockPath, dailylogFilename);
+      const stat = await fs.stat(dailylogPath);
+      if (stat.mtimeMs !== metadata.csvFileMtimes.dailylog) {
+        return false;
+      }
+    } catch {
+      // Dailylog was cached but now missing - cache invalid
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Log warning when folder has CSVs but none match expected patterns
  */
 function logCsvDiscoveryWarning(
@@ -532,6 +609,62 @@ export async function saveMetadata(
 }
 
 /**
+ * Options for building block metadata
+ */
+export interface BuildMetadataOptions {
+  blockId: string;
+  blockPath: string;
+  trades: Trade[];
+  dailyLogs?: DailyLogEntry[];
+  existingMetadata?: BlockMetadata;
+  csvMappings: CsvMappings;
+  cachedStats?: BlockMetadata["cachedStats"];
+}
+
+/**
+ * Build a complete BlockMetadata object with file mtimes for cache invalidation.
+ * Centralizes metadata construction to ensure consistency across all code paths.
+ */
+export async function buildBlockMetadata(
+  options: BuildMetadataOptions
+): Promise<BlockMetadata> {
+  const {
+    blockId,
+    blockPath,
+    trades,
+    dailyLogs,
+    existingMetadata,
+    csvMappings,
+    cachedStats,
+  } = options;
+
+  // Extract info from trades
+  const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+  const dates = trades.map((t) => new Date(t.dateOpened).getTime());
+
+  // Get file mtimes for cache invalidation
+  const csvFileMtimes = await getCsvFileMtimes(blockPath, csvMappings);
+
+  return {
+    blockId,
+    name: existingMetadata?.name || blockId,
+    createdAt: existingMetadata?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    tradeCount: trades.length,
+    dailyLogCount: dailyLogs?.length ?? 0,
+    dateRange: {
+      start:
+        dates.length > 0 ? new Date(Math.min(...dates)).toISOString() : null,
+      end: dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null,
+    },
+    strategies,
+    csvMappings,
+    csvFileMtimes,
+    cachedStats,
+  };
+}
+
+/**
  * Load a complete block (trades + optional daily logs)
  * Uses CSV mappings from metadata if available for flexible filename support.
  */
@@ -665,8 +798,14 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
 
       const hasDailyLog = !!dailylogFilename;
 
-      // Use cached stats from metadata if available
-      if (metadata?.cachedStats && !needsMetadataUpdate) {
+      // Check if cached stats are valid (files haven't changed)
+      const cacheValid =
+        metadata?.cachedStats &&
+        !needsMetadataUpdate &&
+        (await isCacheValid(blockPath, metadata));
+
+      // Use cached stats from metadata if available and valid
+      if (cacheValid && metadata?.cachedStats) {
         blocks.push({
           blockId: entry.name,
           name: metadata.name || entry.name,
@@ -688,10 +827,6 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
         // Load trades to get basic info
         try {
           const trades = await loadTrades(blockPath, tradelogFilename);
-          const strategies = Array.from(
-            new Set(trades.map((t) => t.strategy))
-          ).sort();
-          const dates = trades.map((t) => new Date(t.dateOpened).getTime());
           const totalPl = trades.reduce((sum, t) => sum + t.pl, 0);
           const totalCommissions = trades.reduce(
             (sum, t) =>
@@ -699,51 +834,41 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
             0
           );
 
+          // Build CSV mappings
+          const csvMappings: CsvMappings = { tradelog: tradelogFilename };
+          if (dailylogFilename) {
+            csvMappings.dailylog = dailylogFilename;
+          }
+
+          // Build and save metadata using the centralized helper
+          const updatedMetadata = await buildBlockMetadata({
+            blockId: entry.name,
+            blockPath,
+            trades,
+            existingMetadata: metadata,
+            csvMappings,
+          });
+
           blocks.push({
             blockId: entry.name,
-            name: entry.name,
+            name: updatedMetadata.name,
             tradeCount: trades.length,
             hasDailyLog,
             dateRange: {
-              start: dates.length > 0 ? new Date(Math.min(...dates)) : null,
-              end: dates.length > 0 ? new Date(Math.max(...dates)) : null,
+              start: updatedMetadata.dateRange.start
+                ? new Date(updatedMetadata.dateRange.start)
+                : null,
+              end: updatedMetadata.dateRange.end
+                ? new Date(updatedMetadata.dateRange.end)
+                : null,
             },
-            strategies,
+            strategies: updatedMetadata.strategies,
             totalPl,
             netPl: totalPl - totalCommissions,
           });
 
-          // Update metadata with discovered mappings for faster future loads
-          if (needsMetadataUpdate) {
-            const csvMappings: CsvMappings = { tradelog: tradelogFilename };
-            if (dailylogFilename) {
-              csvMappings.dailylog = dailylogFilename;
-            }
-
-            const updatedMetadata: BlockMetadata = {
-              blockId: entry.name,
-              name: entry.name,
-              createdAt: metadata?.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              tradeCount: trades.length,
-              dailyLogCount: 0, // Will be updated if daily logs loaded
-              dateRange: {
-                start:
-                  dates.length > 0
-                    ? new Date(Math.min(...dates)).toISOString()
-                    : null,
-                end:
-                  dates.length > 0
-                    ? new Date(Math.max(...dates)).toISOString()
-                    : null,
-              },
-              strategies,
-              csvMappings,
-            };
-
-            // Save updated metadata (cache the mappings)
-            await saveMetadata(blockPath, updatedMetadata);
-          }
+          // Save updated metadata (cache the mappings and mtimes)
+          await saveMetadata(blockPath, updatedMetadata);
         } catch (error) {
           console.error(`Error loading block ${entry.name}:`, error);
         }
@@ -1071,25 +1196,21 @@ export async function importCsv(
     }
 
     if (trades.length > 0) {
-      const dates = trades.map((t) => new Date(t.dateOpened).getTime());
-      dateRange = {
-        start: new Date(Math.min(...dates)).toISOString(),
-        end: new Date(Math.max(...dates)).toISOString(),
-      };
-      strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
-
-      // Create and save .block.json metadata
-      const metadata: BlockMetadata = {
+      // Build and save metadata using the centralized helper
+      const csvMappings: CsvMappings = { tradelog: targetFilename };
+      const metadata = await buildBlockMetadata({
         blockId,
-        name,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        tradeCount: trades.length,
-        dailyLogCount: 0,
-        dateRange,
-        strategies,
-      };
+        blockPath,
+        trades,
+        csvMappings,
+      });
+      // Override name since buildBlockMetadata defaults to blockId
+      metadata.name = name;
       await saveMetadata(blockPath, metadata);
+
+      // Extract for return value
+      dateRange = metadata.dateRange;
+      strategies = metadata.strategies;
     }
   } else if (csvType === "dailylog") {
     // Parse daily logs to extract date range
