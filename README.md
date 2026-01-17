@@ -1,81 +1,90 @@
 # TradeBlocks
 
-TradeBlocks is a Next.js 15 analytics workspace for evaluating options trading performance. Upload trade and daily portfolio CSV exports to calculate portfolio statistics, visualize equity curves, run Monte Carlo risk simulations, and compare strategies in one place.
+Options trading analytics platform with a web dashboard and AI-powered analysis via MCP (Model Context Protocol).
 
-## Highlights
-- **Block-based workflows:** Organize trade logs, optional daily logs, and derived statistics into named "blocks" you can activate, edit, and recalculate on demand.
-- **Performance dashboards:** Explore win rates, P&L breakdowns, and cumulative performance per block from the Block Stats and Performance Blocks views.
-- **Risk tooling:** Drive the Monte Carlo risk simulator, position sizing helpers, and correlation matrix with the same underlying block data for consistent insights.
-- **Client-side persistence:** All imported data is stored in the browser's IndexedDB so large CSVs stay fast and private. Metadata and derived metrics are cached for quick reloads.
+## Repository Structure
 
-## Getting Started
-1. **Prerequisites:** Node.js 20 LTS (18.18+ works) and npm.
+```
+tradeblocks/
+├── app/                      # Next.js web application
+├── components/               # React components (shadcn/ui + Plotly charts)
+├── lib/                      # Core business logic (calculations, processing, stores)
+├── tests/                    # Jest test suites
+├── docs/                     # Documentation
+│   └── development.md        # Architecture and local dev guide
+└── packages/
+    ├── mcp-server/           # MCP server (npm: tradeblocks-mcp)
+    └── agent-skills/         # AI agent skill definitions
+```
 
-   For debian: 
-   ```bash
-   sudo apt install nodejs npm
-   ```
+## Quick Start
 
-2. **Clone the repository and move to the tradeblocks directory:**
-   ```bash
-   git clone https://github.com/davidromeo/tradeblocks.git
-   cd tradeblocks
-   ```
-   
-3. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-4. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
-5. **Start tradeblocks:**
+### Development Setup
 
-   Open a browser of your choice and visit:
-   
-   ```bash
-   http://localhost:3000 
-   ```
-   Tips:
-   - Use http (not https).
-   - The root route redirects to `/blocks` where you can manage portfolios.
-   - To update your local tradeblocks:
-     ```bash
-         cd tradeblocks
-         git pull original master 
-     ```
+```bash
+git clone https://github.com/davidromeo/tradeblocks.git
+cd tradeblocks
+npm install
+npm run dev              # Web dashboard at http://localhost:3000
+```
 
-### Importing Data
-1. Navigate to **Block Management** (`/blocks`) and select **New Block**.
-2. Upload your trade log CSV (required) and optional daily log CSV. Expected headers follow the OptionOmega export format:
-   - Trade logs: `Date Opened`, `Time Opened`, `P/L`, `Strategy`, `Opening Commissions + Fees`, etc.
-   - Daily logs (optional): `Date`, `Net Liquidity`, `P/L`, `P/L %`, `Drawdown %`.
-3. Save the block and activate it to see statistics populate throughout the app.
+### MCP Server
 
-> Tip: Locally stored data lives in IndexedDB and can be reset by clearing the browser's application storage.
+```bash
+# Run directly with npx
+npx tradeblocks-mcp ~/Trading/backtests
 
-## Available Scripts
-- `npm run dev` – start the Turbopack-powered dev server.
-- `npm run build` / `npm start` – create and serve an optimized production build.
-- `npm run lint` – run ESLint across the project.
-- `npm test` – execute all Jest tests (uses `fake-indexeddb` to simulate browser storage).
-- `npm run test:watch`, `npm run test:coverage`, `npm run test:portfolio` – additional testing modes.
+# Or from source
+npm run build -w packages/mcp-server
+node packages/mcp-server/server/index.js ~/Trading/backtests
+```
 
-## Directory Overview
-- `app/` – App Router pages (`(platform)` contains the authenticated workspace experience).
-- `components/` – UI building blocks, including shadcn/ui wrappers and analytics widgets.
-- `lib/` – Core domain logic: CSV parsing, IndexedDB access, calculations, Zustand stores, and shared models.
-- `tests/` – Unit and integration tests with fixtures under `tests/data/`.
-- `legacy/` – Original Python/Dash reference implementation for parity checks.
+### Testing
 
-## Developer Documentation
-- `docs/development.md` – In-depth developer guide covering architecture, data flow, and local workflows.
+```bash
+npm test                 # All tests
+npm test -- path/to/file.test.ts    # Single file
+npm run test:coverage    # Coverage report
+```
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Development Guide](docs/development.md) | Architecture, local setup, testing |
+| [MCP Server README](packages/mcp-server/README.md) | Installation, platform configuration |
+| [MCP Usage Guide](packages/mcp-server/docs/USAGE.md) | Tool reference, example workflows |
+| [Agent Skills](packages/agent-skills/README.md) | Guided conversational analysis |
+
+## Data Format
+
+Both the web dashboard and MCP server accept CSV exports from platforms like [Option Omega](https://optionomega.com/). Each block contains:
+
+- `tradelog.csv` (required) - Trade history with P/L, dates, strategy name
+- `dailylog.csv` (optional) - Daily portfolio values for enhanced drawdown calculations
+- `reportinglog.csv` (optional) - Actual/reported trades for backtest vs live comparison
+
+Files are auto-detected by column headers, not filenames. See [USAGE.md](packages/mcp-server/docs/USAGE.md) for format details.
+
+## Features Overview
+
+### Web Dashboard
+- Performance dashboards with equity curves, drawdowns, monthly returns
+- Risk tooling: Monte Carlo simulator, position sizing, correlation analysis
+- Block-based organization for multiple strategies
+- Client-side storage (IndexedDB) - data stays on your machine
+
+### MCP Server
+- 19 analysis tools for statistics, simulations, walk-forward analysis
+- Works with Claude Desktop, Claude Code, Codex CLI, Gemini CLI
+- Agent skills for guided strategy health checks and portfolio recommendations
 
 ## Contributing
-1. Create a feature branch.
-2. Update or add tests when behaviour changes.
-3. Run `npm run lint` and `npm test` before opening a pull request.
 
-TradeBlocks is actively evolving—additions should maintain parity with the legacy analytics while leaning into the block-based architecture documented above.
+1. Create a feature branch
+2. Update or add tests when behavior changes
+3. Run `npm run lint` and `npm test` before opening a pull request
 
+## License
+
+MIT

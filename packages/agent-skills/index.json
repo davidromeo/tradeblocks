@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "skills": [
+    "tradeblocks-health-check",
+    "tradeblocks-wfa",
+    "tradeblocks-risk",
+    "tradeblocks-compare",
+    "tradeblocks-portfolio",
+    "tradeblocks-optimize"
+  ],
+  "platforms": {
+    "claude": ".claude/skills",
+    "codex": ".codex/skills",
+    "gemini": ".gemini/skills"
+  }
+}

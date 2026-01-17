@@ -1,0 +1,2020 @@
+/**
+ * Performance Tools
+ *
+ * Tier 3 performance MCP tools for chart data, period returns, and backtest vs actual comparison.
+ */
+
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { loadBlock, loadReportingLog } from "../utils/block-loader.js";
+import {
+  createToolOutput,
+  formatPercent,
+  formatCurrency,
+} from "../utils/output-formatter.js";
+import type { Trade } from "@lib/models/trade";
+import type { ReportingTrade } from "@lib/models/reporting-trade";
+
+/**
+ * MFE/MAE data point for a single trade's excursion metrics
+ * (Inline implementation to avoid dependency issues)
+ */
+interface MFEMAEDataPoint {
+  tradeNumber: number;
+  date: Date;
+  strategy: string;
+  mfe: number;
+  mae: number;
+  pl: number;
+  mfePercent?: number;
+  maePercent?: number;
+  profitCapturePercent?: number;
+  excursionRatio?: number;
+  basis: "premium" | "margin" | "maxProfit" | "unknown";
+  isWinner: boolean;
+}
+
+/**
+ * Distribution bucket for MFE/MAE histogram
+ */
+interface MFEMAEDistributionBucket {
+  bucket: string;
+  mfeCount: number;
+  maeCount: number;
+  range: [number, number];
+}
+
+/**
+ * Calculate total max profit from trade (handles multi-leg spreads)
+ */
+function computeTotalMaxProfit(trade: Trade): number {
+  if (typeof trade.maxProfit === "number" && isFinite(trade.maxProfit)) {
+    return Math.abs(trade.maxProfit);
+  }
+  return 0;
+}
+
+/**
+ * Calculate total max loss from trade (handles multi-leg spreads)
+ */
+function computeTotalMaxLoss(trade: Trade): number {
+  if (typeof trade.maxLoss === "number" && isFinite(trade.maxLoss)) {
+    return Math.abs(trade.maxLoss);
+  }
+  return 0;
+}
+
+/**
+ * Calculate total premium from trade
+ */
+function computeTotalPremium(trade: Trade): number {
+  if (typeof trade.premium === "number" && isFinite(trade.premium)) {
+    return Math.abs(trade.premium);
+  }
+  return 0;
+}
+
+/**
+ * Calculate MFE/MAE metrics for a single trade
+ */
+function calculateTradeExcursionMetrics(
+  trade: Trade,
+  tradeNumber: number
+): MFEMAEDataPoint | null {
+  const totalMFE = computeTotalMaxProfit(trade);
+  const totalMAE = computeTotalMaxLoss(trade);
+
+  // Skip trades without excursion data
+  if (!totalMFE && !totalMAE) {
+    return null;
+  }
+
+  // Determine denominator for percentage calculations
+  const totalPremium = computeTotalPremium(trade);
+  const margin =
+    typeof trade.marginReq === "number" &&
+    isFinite(trade.marginReq) &&
+    trade.marginReq !== 0
+      ? Math.abs(trade.marginReq)
+      : undefined;
+
+  let denominator: number | undefined;
+  let basis: MFEMAEDataPoint["basis"] = "unknown";
+
+  if (totalPremium && totalPremium > 0) {
+    denominator = totalPremium;
+    basis = "premium";
+  } else if (margin && margin > 0) {
+    denominator = margin;
+    basis = "margin";
+  } else if (totalMFE && totalMFE > 0) {
+    denominator = totalMFE;
+    basis = "maxProfit";
+  }
+
+  const dataPoint: MFEMAEDataPoint = {
+    tradeNumber,
+    date: trade.dateOpened,
+    strategy: trade.strategy || "Unknown",
+    mfe: totalMFE || 0,
+    mae: totalMAE || 0,
+    pl: trade.pl,
+    isWinner: trade.pl > 0,
+    basis,
+  };
+
+  // Calculate percentages if we have a denominator
+  if (denominator && denominator > 0) {
+    if (totalMFE) {
+      dataPoint.mfePercent = (totalMFE / denominator) * 100;
+    }
+    if (totalMAE) {
+      dataPoint.maePercent = (totalMAE / denominator) * 100;
+    }
+  }
+
+  // Profit capture: what % of max profit was actually captured
+  if (totalMFE && totalMFE > 0) {
+    dataPoint.profitCapturePercent = (trade.pl / totalMFE) * 100;
+  }
+
+  // Excursion ratio: reward/risk
+  if (totalMFE && totalMAE && totalMAE > 0) {
+    dataPoint.excursionRatio = totalMFE / totalMAE;
+  }
+
+  return dataPoint;
+}
+
+/**
+ * Calculate MFE/MAE data for all trades
+ */
+function calculateMFEMAEData(trades: Trade[]): MFEMAEDataPoint[] {
+  const dataPoints: MFEMAEDataPoint[] = [];
+
+  trades.forEach((trade, index) => {
+    const point = calculateTradeExcursionMetrics(trade, index + 1);
+    if (point) {
+      dataPoints.push(point);
+    }
+  });
+
+  return dataPoints;
+}
+
+/**
+ * Create distribution buckets for MFE/MAE histogram visualization
+ */
+function createExcursionDistribution(
+  dataPoints: MFEMAEDataPoint[],
+  bucketSize: number = 10
+): MFEMAEDistributionBucket[] {
+  const mfeValues = dataPoints
+    .filter((d) => d.mfePercent !== undefined)
+    .map((d) => d.mfePercent!);
+  const maeValues = dataPoints
+    .filter((d) => d.maePercent !== undefined)
+    .map((d) => d.maePercent!);
+
+  if (mfeValues.length === 0 && maeValues.length === 0) {
+    return [];
+  }
+
+  const allValues = [...mfeValues, ...maeValues];
+  const maxValue = Math.max(...allValues);
+  const numBuckets = Math.max(1, Math.ceil(maxValue / bucketSize));
+
+  const buckets: MFEMAEDistributionBucket[] = [];
+
+  for (let i = 0; i < numBuckets; i++) {
+    const rangeStart = i * bucketSize;
+    const rangeEnd = (i + 1) * bucketSize;
+    const isLastBucket = i === numBuckets - 1;
+
+    const inBucket = (value: number) =>
+      value >= rangeStart && (isLastBucket ? value <= rangeEnd : value < rangeEnd);
+
+    const mfeCount = mfeValues.filter(inBucket).length;
+    const maeCount = maeValues.filter(inBucket).length;
+
+    buckets.push({
+      bucket: `${rangeStart}-${rangeEnd}%`,
+      mfeCount,
+      maeCount,
+      range: [rangeStart, rangeEnd],
+    });
+  }
+
+  return buckets;
+}
+
+/**
+ * Filter trades by strategy
+ */
+function filterByStrategy(trades: Trade[], strategy?: string): Trade[] {
+  if (!strategy) return trades;
+  return trades.filter(
+    (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
+  );
+}
+
+/**
+ * Format date key to YYYY-MM-DD
+ */
+function formatDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get the ISO week number
+ */
+function getISOWeekNumber(date: Date): number {
+  const d = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  );
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+/**
+ * Calculate equity curve from trades
+ */
+function buildEquityCurve(trades: Trade[]): Array<{
+  date: string;
+  equity: number;
+  highWaterMark: number;
+  tradeNumber: number;
+}> {
+  if (trades.length === 0) {
+    return [];
+  }
+
+  const sortedTrades = [...trades].sort(
+    (a, b) =>
+      new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+  );
+
+  // Calculate initial capital from first trade
+  const firstTrade = sortedTrades[0];
+  let initialCapital = firstTrade.fundsAtClose - firstTrade.pl;
+  if (!isFinite(initialCapital) || initialCapital <= 0) {
+    initialCapital = 100000;
+  }
+
+  let runningEquity = initialCapital;
+  let highWaterMark = runningEquity;
+
+  const curve: Array<{
+    date: string;
+    equity: number;
+    highWaterMark: number;
+    tradeNumber: number;
+  }> = [
+    {
+      date: formatDateKey(new Date(sortedTrades[0].dateOpened)),
+      equity: runningEquity,
+      highWaterMark,
+      tradeNumber: 0,
+    },
+  ];
+
+  sortedTrades.forEach((trade, index) => {
+    runningEquity += trade.pl;
+    highWaterMark = Math.max(highWaterMark, runningEquity);
+
+    curve.push({
+      date: formatDateKey(new Date(trade.dateOpened)),
+      equity: runningEquity,
+      highWaterMark,
+      tradeNumber: index + 1,
+    });
+  });
+
+  return curve;
+}
+
+/**
+ * Calculate drawdown series from equity curve
+ */
+function buildDrawdownSeries(
+  equityCurve: Array<{ date: string; equity: number; highWaterMark: number }>
+): Array<{ date: string; drawdownPct: number }> {
+  return equityCurve.map((point) => ({
+    date: point.date,
+    drawdownPct:
+      point.highWaterMark > 0
+        ? ((point.equity - point.highWaterMark) / point.highWaterMark) * 100
+        : 0,
+  }));
+}
+
+/**
+ * Calculate monthly returns matrix
+ */
+function buildMonthlyReturns(
+  trades: Trade[]
+): Record<number, Record<number, number>> {
+  const monthlyData: Record<string, number> = {};
+
+  trades.forEach((trade) => {
+    const date = new Date(trade.dateOpened);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+    monthlyData[monthKey] = (monthlyData[monthKey] || 0) + trade.pl;
+  });
+
+  const monthlyReturns: Record<number, Record<number, number>> = {};
+  const years = new Set<number>();
+
+  trades.forEach((trade) => {
+    years.add(new Date(trade.dateOpened).getFullYear());
+  });
+
+  Array.from(years)
+    .sort()
+    .forEach((year) => {
+      monthlyReturns[year] = {};
+      for (let month = 1; month <= 12; month++) {
+        const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+        monthlyReturns[year][month] = monthlyData[monthKey] || 0;
+      }
+    });
+
+  return monthlyReturns;
+}
+
+/**
+ * Calculate return distribution histogram
+ */
+function buildReturnDistribution(
+  trades: Trade[],
+  bucketCount: number = 20
+): Array<{ rangeStart: number; rangeEnd: number; count: number }> {
+  if (trades.length === 0) return [];
+
+  const returns = trades.map((t) => t.pl);
+  const minReturn = Math.min(...returns);
+  const maxReturn = Math.max(...returns);
+  const range = maxReturn - minReturn || 1;
+  const bucketSize = range / bucketCount;
+
+  const buckets: Array<{ rangeStart: number; rangeEnd: number; count: number }> =
+    [];
+
+  for (let i = 0; i < bucketCount; i++) {
+    const rangeStart = minReturn + i * bucketSize;
+    const rangeEnd = minReturn + (i + 1) * bucketSize;
+    const count = returns.filter((r) => {
+      if (i === bucketCount - 1) {
+        return r >= rangeStart && r <= rangeEnd;
+      }
+      return r >= rangeStart && r < rangeEnd;
+    }).length;
+    buckets.push({ rangeStart, rangeEnd, count });
+  }
+
+  return buckets;
+}
+
+/**
+ * Calculate day of week average P/L
+ */
+function buildDayOfWeekData(
+  trades: Trade[]
+): Array<{
+  day: string;
+  count: number;
+  avgPl: number;
+  totalPl: number;
+  avgPlPercent: number;
+}> {
+  const dayNames = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+  const dayData: Record<
+    string,
+    { count: number; totalPl: number; totalPlPercent: number; percentCount: number }
+  > = {};
+
+  trades.forEach((trade) => {
+    const date = new Date(trade.dateOpened);
+    const jsDay = date.getDay();
+    const pythonWeekday = jsDay === 0 ? 6 : jsDay - 1;
+    const day = dayNames[pythonWeekday];
+
+    if (!dayData[day]) {
+      dayData[day] = { count: 0, totalPl: 0, totalPlPercent: 0, percentCount: 0 };
+    }
+    dayData[day].count++;
+    dayData[day].totalPl += trade.pl;
+
+    // Calculate ROM if margin available
+    if (trade.marginReq && trade.marginReq > 0) {
+      dayData[day].totalPlPercent += (trade.pl / trade.marginReq) * 100;
+      dayData[day].percentCount++;
+    }
+  });
+
+  return dayNames.map((day) => ({
+    day,
+    count: dayData[day]?.count || 0,
+    avgPl:
+      dayData[day]?.count > 0 ? dayData[day].totalPl / dayData[day].count : 0,
+    totalPl: dayData[day]?.totalPl || 0,
+    avgPlPercent:
+      dayData[day]?.percentCount > 0
+        ? dayData[day].totalPlPercent / dayData[day].percentCount
+        : 0,
+  }));
+}
+
+/**
+ * Calculate streak data with win/loss distribution and runs test
+ */
+function buildStreakData(trades: Trade[]): {
+  winDistribution: Record<number, number>;
+  lossDistribution: Record<number, number>;
+  statistics: {
+    maxWinStreak: number;
+    maxLossStreak: number;
+    avgWinStreak: number;
+    avgLossStreak: number;
+  };
+  runsTest: {
+    numRuns: number;
+    expectedRuns: number;
+    zScore: number;
+    pValue: number;
+    isNonRandom: boolean;
+    patternType: "random" | "clustered" | "alternating";
+    interpretation: string;
+  } | null;
+} {
+  const sortedTrades = [...trades].sort(
+    (a, b) =>
+      new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+  );
+
+  const winStreaks: number[] = [];
+  const lossStreaks: number[] = [];
+  let currentStreak = 0;
+  let isWinStreak = false;
+
+  sortedTrades.forEach((trade) => {
+    const isWin = trade.pl > 0;
+
+    if (currentStreak === 0) {
+      currentStreak = 1;
+      isWinStreak = isWin;
+    } else if ((isWinStreak && isWin) || (!isWinStreak && !isWin)) {
+      currentStreak++;
+    } else {
+      if (isWinStreak) {
+        winStreaks.push(currentStreak);
+      } else {
+        lossStreaks.push(currentStreak);
+      }
+      currentStreak = 1;
+      isWinStreak = isWin;
+    }
+  });
+
+  if (currentStreak > 0) {
+    if (isWinStreak) {
+      winStreaks.push(currentStreak);
+    } else {
+      lossStreaks.push(currentStreak);
+    }
+  }
+
+  const winDistribution: Record<number, number> = {};
+  const lossDistribution: Record<number, number> = {};
+
+  winStreaks.forEach((streak) => {
+    winDistribution[streak] = (winDistribution[streak] || 0) + 1;
+  });
+
+  lossStreaks.forEach((streak) => {
+    lossDistribution[streak] = (lossDistribution[streak] || 0) + 1;
+  });
+
+  // Calculate runs test
+  const runsTest = calculateRunsTest(sortedTrades);
+
+  return {
+    winDistribution,
+    lossDistribution,
+    statistics: {
+      maxWinStreak: Math.max(...winStreaks, 0),
+      maxLossStreak: Math.max(...lossStreaks, 0),
+      avgWinStreak:
+        winStreaks.length > 0
+          ? winStreaks.reduce((a, b) => a + b) / winStreaks.length
+          : 0,
+      avgLossStreak:
+        lossStreaks.length > 0
+          ? lossStreaks.reduce((a, b) => a + b) / lossStreaks.length
+          : 0,
+    },
+    runsTest,
+  };
+}
+
+/**
+ * Calculate runs test for streakiness detection
+ */
+function calculateRunsTest(trades: Trade[]): {
+  numRuns: number;
+  expectedRuns: number;
+  zScore: number;
+  pValue: number;
+  isNonRandom: boolean;
+  patternType: "random" | "clustered" | "alternating";
+  interpretation: string;
+} | null {
+  if (trades.length < 20) return null;
+
+  const outcomes = trades.map((t) => (t.pl > 0 ? 1 : 0));
+  const n1 = outcomes.filter((o) => o === 1).length;
+  const n0 = outcomes.filter((o) => o === 0).length;
+
+  if (n1 === 0 || n0 === 0) return null;
+
+  // Count runs
+  let numRuns = 1;
+  for (let i = 1; i < outcomes.length; i++) {
+    if (outcomes[i] !== outcomes[i - 1]) {
+      numRuns++;
+    }
+  }
+
+  const n = n1 + n0;
+  const expectedRuns = (2 * n1 * n0) / n + 1;
+  const variance =
+    (2 * n1 * n0 * (2 * n1 * n0 - n)) / (n * n * (n - 1));
+  const stdDev = Math.sqrt(variance);
+
+  const zScore = stdDev > 0 ? (numRuns - expectedRuns) / stdDev : 0;
+
+  // Calculate two-tailed p-value using normal approximation
+  const pValue = 2 * (1 - normalCDF(Math.abs(zScore)));
+
+  const isNonRandom = pValue < 0.05;
+  let patternType: "random" | "clustered" | "alternating" = "random";
+  let interpretation = "Results appear random (no significant pattern detected)";
+
+  if (isNonRandom) {
+    if (zScore < 0) {
+      patternType = "clustered";
+      interpretation =
+        "Results show clustering (fewer runs than expected - wins/losses tend to group together)";
+    } else {
+      patternType = "alternating";
+      interpretation =
+        "Results show alternating pattern (more runs than expected - wins/losses tend to alternate)";
+    }
+  }
+
+  return {
+    numRuns,
+    expectedRuns,
+    zScore,
+    pValue,
+    isNonRandom,
+    patternType,
+    interpretation,
+  };
+}
+
+/**
+ * Normal CDF approximation
+ */
+function normalCDF(x: number): number {
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x) / Math.sqrt(2);
+
+  const t = 1.0 / (1.0 + p * x);
+  const y =
+    1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+
+  return 0.5 * (1.0 + sign * y);
+}
+
+/**
+ * Build trade sequence data (P&L by trade number with ROM)
+ */
+function buildTradeSequence(
+  trades: Trade[]
+): Array<{
+  tradeNumber: number;
+  pl: number;
+  rom: number | null;
+  date: string;
+  marginReq: number | null;
+  strategy: string;
+}> {
+  return trades.map((trade, index) => {
+    const marginReq =
+      typeof trade.marginReq === "number" && isFinite(trade.marginReq)
+        ? trade.marginReq
+        : null;
+    return {
+      tradeNumber: index + 1,
+      pl: trade.pl,
+      rom: marginReq && marginReq > 0 ? (trade.pl / marginReq) * 100 : null,
+      date: formatDateKey(new Date(trade.dateOpened)),
+      marginReq,
+      strategy: trade.strategy || "Unknown",
+    };
+  });
+}
+
+/**
+ * Build ROM timeline (Return on Margin over time)
+ */
+function buildRomTimeline(
+  trades: Trade[]
+): Array<{ date: string; rom: number; tradeNumber: number }> {
+  return trades
+    .map((trade, index) => {
+      if (!trade.marginReq || trade.marginReq <= 0) return null;
+      return {
+        date: formatDateKey(new Date(trade.dateOpened)),
+        rom: (trade.pl / trade.marginReq) * 100,
+        tradeNumber: index + 1,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+/**
+ * Build rolling metrics (30-trade rolling window)
+ */
+function buildRollingMetrics(
+  trades: Trade[],
+  windowSize: number = 30,
+  riskFreeRate: number = 2.0
+): Array<{
+  date: string;
+  tradeNumber: number;
+  winRate: number;
+  sharpeRatio: number;
+  profitFactor: number;
+  volatility: number;
+  avgPl: number;
+}> {
+  if (trades.length < windowSize) return [];
+
+  const metrics: Array<{
+    date: string;
+    tradeNumber: number;
+    winRate: number;
+    sharpeRatio: number;
+    profitFactor: number;
+    volatility: number;
+    avgPl: number;
+  }> = [];
+
+  const plValues = trades.map((t) => t.pl);
+
+  // Initialize window state
+  let windowSum = 0;
+  let windowWins = 0;
+  let windowPositiveSum = 0;
+  let windowNegativeSum = 0;
+
+  // Initialize first window
+  for (let i = 0; i < windowSize; i++) {
+    const pl = plValues[i];
+    windowSum += pl;
+    if (pl > 0) {
+      windowWins++;
+      windowPositiveSum += pl;
+    } else if (pl < 0) {
+      windowNegativeSum += Math.abs(pl);
+    }
+  }
+
+  // Process each position using sliding window
+  for (let i = windowSize - 1; i < trades.length; i++) {
+    const winRate = (windowWins / windowSize) * 100;
+    const avgReturn = windowSum / windowSize;
+
+    // Calculate variance
+    let varianceSum = 0;
+    for (let j = i - windowSize + 1; j <= i; j++) {
+      varianceSum += Math.pow(plValues[j] - avgReturn, 2);
+    }
+    const volatility = Math.sqrt(varianceSum / windowSize);
+
+    const profitFactor =
+      windowNegativeSum > 0
+        ? windowPositiveSum / windowNegativeSum
+        : windowPositiveSum > 0
+          ? 999
+          : 0;
+
+    // Sharpe uses daily risk-free rate approximation
+    const dailyRfr = riskFreeRate / 100 / 252;
+    const excessReturn = avgReturn - dailyRfr;
+    const sharpeRatio = volatility > 0 ? excessReturn / volatility : 0;
+
+    metrics.push({
+      date: formatDateKey(new Date(trades[i].dateOpened)),
+      tradeNumber: i + 1,
+      winRate,
+      sharpeRatio,
+      profitFactor,
+      volatility,
+      avgPl: avgReturn,
+    });
+
+    // Slide window
+    if (i < trades.length - 1) {
+      const oldPl = plValues[i - windowSize + 1];
+      const newPl = plValues[i + 1];
+
+      windowSum -= oldPl;
+      if (oldPl > 0) {
+        windowWins--;
+        windowPositiveSum -= oldPl;
+      } else if (oldPl < 0) {
+        windowNegativeSum -= Math.abs(oldPl);
+      }
+
+      windowSum += newPl;
+      if (newPl > 0) {
+        windowWins++;
+        windowPositiveSum += newPl;
+      } else if (newPl < 0) {
+        windowNegativeSum += Math.abs(newPl);
+      }
+    }
+  }
+
+  return metrics;
+}
+
+/**
+ * Build exit reason breakdown
+ */
+function buildExitReasonBreakdown(
+  trades: Trade[]
+): Array<{
+  reason: string;
+  count: number;
+  avgPl: number;
+  totalPl: number;
+  avgRom: number | null;
+}> {
+  const summaryMap = new Map<
+    string,
+    { count: number; totalPl: number; totalRom: number; romCount: number }
+  >();
+
+  trades.forEach((trade) => {
+    const reason =
+      trade.reasonForClose && trade.reasonForClose.trim()
+        ? trade.reasonForClose.trim()
+        : "Unknown";
+    const current = summaryMap.get(reason) || {
+      count: 0,
+      totalPl: 0,
+      totalRom: 0,
+      romCount: 0,
+    };
+    current.count += 1;
+    current.totalPl += trade.pl;
+
+    if (trade.marginReq && trade.marginReq > 0) {
+      current.totalRom += (trade.pl / trade.marginReq) * 100;
+      current.romCount++;
+    }
+
+    summaryMap.set(reason, current);
+  });
+
+  return Array.from(summaryMap.entries())
+    .map(([reason, { count, totalPl, totalRom, romCount }]) => ({
+      reason,
+      count,
+      totalPl,
+      avgPl: count > 0 ? totalPl / count : 0,
+      avgRom: romCount > 0 ? totalRom / romCount : null,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Build holding periods data
+ */
+function buildHoldingPeriods(
+  trades: Trade[]
+): Array<{
+  tradeNumber: number;
+  dateOpened: string;
+  dateClosed: string | null;
+  durationHours: number;
+  durationDays: number;
+  pl: number;
+  strategy: string;
+}> {
+  return trades.map((trade, index) => {
+    const openDate = new Date(trade.dateOpened);
+    const closeDate = trade.dateClosed ? new Date(trade.dateClosed) : null;
+
+    let durationHours = 0;
+    if (closeDate && !isNaN(closeDate.getTime())) {
+      durationHours = (closeDate.getTime() - openDate.getTime()) / (1000 * 60 * 60);
+    }
+
+    return {
+      tradeNumber: index + 1,
+      dateOpened: formatDateKey(openDate),
+      dateClosed: closeDate ? formatDateKey(closeDate) : null,
+      durationHours,
+      durationDays: durationHours / 24,
+      pl: trade.pl,
+      strategy: trade.strategy || "Unknown",
+    };
+  });
+}
+
+/**
+ * Build premium efficiency data
+ */
+function buildPremiumEfficiency(
+  trades: Trade[]
+): Array<{
+  tradeNumber: number;
+  date: string;
+  pl: number;
+  premium: number | null;
+  efficiencyPct: number | null;
+  strategy: string;
+}> {
+  return trades.map((trade, index) => {
+    const premium =
+      typeof trade.premium === "number" && isFinite(trade.premium)
+        ? trade.premium
+        : null;
+    let efficiencyPct: number | null = null;
+    if (premium !== null && premium !== 0) {
+      efficiencyPct = (trade.pl / Math.abs(premium)) * 100;
+    }
+
+    return {
+      tradeNumber: index + 1,
+      date: formatDateKey(new Date(trade.dateOpened)),
+      pl: trade.pl,
+      premium,
+      efficiencyPct,
+      strategy: trade.strategy || "Unknown",
+    };
+  });
+}
+
+/**
+ * Build margin utilization data
+ */
+function buildMarginUtilization(
+  trades: Trade[]
+): Array<{
+  tradeNumber: number;
+  date: string;
+  marginReq: number;
+  fundsAtClose: number;
+  utilizationPct: number | null;
+  numContracts: number;
+  pl: number;
+}> {
+  return trades
+    .map((trade, index) => {
+      const marginReq =
+        typeof trade.marginReq === "number" && isFinite(trade.marginReq)
+          ? trade.marginReq
+          : 0;
+      const fundsAtClose =
+        typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
+          ? trade.fundsAtClose
+          : 0;
+      const numContracts =
+        typeof trade.numContracts === "number" && isFinite(trade.numContracts)
+          ? trade.numContracts
+          : 0;
+
+      if (marginReq === 0 && fundsAtClose === 0) return null;
+
+      return {
+        tradeNumber: index + 1,
+        date: formatDateKey(new Date(trade.dateOpened)),
+        marginReq,
+        fundsAtClose,
+        utilizationPct: fundsAtClose > 0 ? (marginReq / fundsAtClose) * 100 : null,
+        numContracts,
+        pl: trade.pl,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+/**
+ * Build volatility regimes data (VIX-correlated)
+ */
+function buildVolatilityRegimes(
+  trades: Trade[]
+): Array<{
+  tradeNumber: number;
+  date: string;
+  openingVix: number | null;
+  closingVix: number | null;
+  pl: number;
+  rom: number | null;
+}> {
+  return trades
+    .map((trade, index) => {
+      const openingVix =
+        typeof trade.openingVix === "number" && isFinite(trade.openingVix)
+          ? trade.openingVix
+          : null;
+      const closingVix =
+        typeof trade.closingVix === "number" && isFinite(trade.closingVix)
+          ? trade.closingVix
+          : null;
+
+      if (openingVix === null && closingVix === null) return null;
+
+      return {
+        tradeNumber: index + 1,
+        date: formatDateKey(new Date(trade.dateOpened)),
+        openingVix,
+        closingVix,
+        pl: trade.pl,
+        rom:
+          trade.marginReq && trade.marginReq > 0
+            ? (trade.pl / trade.marginReq) * 100
+            : null,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+/**
+ * Build monthly returns percent (percentage-based)
+ * Note: Uses trade-based calculation (initial capital derived from first trade)
+ */
+function buildMonthlyReturnsPercent(
+  trades: Trade[]
+): Record<number, Record<number, number>> {
+  if (trades.length === 0) return {};
+
+  // Sort trades by date
+  const sortedTrades = [...trades].sort(
+    (a, b) =>
+      new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+  );
+
+  // Calculate initial capital from first trade
+  const firstTrade = sortedTrades[0];
+  let runningCapital = firstTrade.fundsAtClose - firstTrade.pl;
+  if (!isFinite(runningCapital) || runningCapital <= 0) {
+    runningCapital = 100000;
+  }
+
+  // Group trades by month
+  const monthlyData: Record<string, { pl: number; startingCapital: number }> = {};
+  const years = new Set<number>();
+
+  sortedTrades.forEach((trade) => {
+    const date = new Date(trade.dateOpened);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+
+    years.add(year);
+
+    if (!monthlyData[monthKey]) {
+      monthlyData[monthKey] = {
+        pl: 0,
+        startingCapital: runningCapital,
+      };
+    }
+
+    monthlyData[monthKey].pl += trade.pl;
+  });
+
+  // Calculate percentage returns
+  const monthlyReturnsPercent: Record<number, Record<number, number>> = {};
+  const sortedMonthKeys = Object.keys(monthlyData).sort();
+
+  sortedMonthKeys.forEach((monthKey) => {
+    const [yearStr, monthStr] = monthKey.split("-");
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+
+    if (!monthlyReturnsPercent[year]) {
+      monthlyReturnsPercent[year] = {};
+    }
+
+    const { pl, startingCapital } = monthlyData[monthKey];
+
+    if (startingCapital > 0) {
+      monthlyReturnsPercent[year][month] = (pl / startingCapital) * 100;
+    } else {
+      monthlyReturnsPercent[year][month] = 0;
+    }
+
+    // Update capital for next month (compounding)
+    runningCapital = startingCapital + pl;
+
+    const currentMonthIndex = sortedMonthKeys.indexOf(monthKey);
+    if (currentMonthIndex < sortedMonthKeys.length - 1) {
+      const nextMonthKey = sortedMonthKeys[currentMonthIndex + 1];
+      if (monthlyData[nextMonthKey]) {
+        monthlyData[nextMonthKey].startingCapital = runningCapital;
+      }
+    }
+  });
+
+  // Fill in zeros for months without data
+  Array.from(years)
+    .sort()
+    .forEach((year) => {
+      if (!monthlyReturnsPercent[year]) {
+        monthlyReturnsPercent[year] = {};
+      }
+      for (let month = 1; month <= 12; month++) {
+        if (monthlyReturnsPercent[year][month] === undefined) {
+          monthlyReturnsPercent[year][month] = 0;
+        }
+      }
+    });
+
+  return monthlyReturnsPercent;
+}
+
+/**
+ * Apply date range filter to trades
+ */
+function filterByDateRange(
+  trades: Trade[],
+  fromDate?: string,
+  toDate?: string
+): Trade[] {
+  if (!fromDate && !toDate) return trades;
+
+  return trades.filter((trade) => {
+    const tradeDate = formatDateKey(new Date(trade.dateOpened));
+    if (fromDate && tradeDate < fromDate) return false;
+    if (toDate && tradeDate > toDate) return false;
+    return true;
+  });
+}
+
+/**
+ * Normalize trades to 1 lot (divide P&L by contract count)
+ */
+function normalizeTradesToOneLot(trades: Trade[]): Trade[] {
+  return trades.map((trade) => {
+    if (!trade.numContracts || trade.numContracts <= 0) return trade;
+
+    const scaleFactor = 1 / trade.numContracts;
+    return {
+      ...trade,
+      pl: trade.pl * scaleFactor,
+      premium: trade.premium * scaleFactor,
+      marginReq: trade.marginReq ? trade.marginReq * scaleFactor : trade.marginReq,
+      fundsAtClose: trade.fundsAtClose
+        ? trade.fundsAtClose * scaleFactor
+        : trade.fundsAtClose,
+      numContracts: 1,
+    };
+  });
+}
+
+/**
+ * Register all performance MCP tools
+ */
+export function registerPerformanceTools(
+  server: McpServer,
+  baseDir: string
+): void {
+  // Tool 1: get_performance_charts
+  server.registerTool(
+    "get_performance_charts",
+    {
+      description:
+        "Get data for performance visualizations. Returns multiple chart datasets for equity analysis, return distributions, rolling metrics, and trade patterns.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter by strategy name (case-insensitive)"),
+        charts: z
+          .array(
+            z.enum([
+              "equity_curve",
+              "drawdown",
+              "monthly_returns",
+              "monthly_returns_percent",
+              "return_distribution",
+              "day_of_week",
+              "streak_data",
+              "trade_sequence",
+              "rom_timeline",
+              "rolling_metrics",
+              "exit_reason_breakdown",
+              "holding_periods",
+              "premium_efficiency",
+              "margin_utilization",
+              "volatility_regimes",
+              "mfe_mae",
+            ])
+          )
+          .default(["equity_curve", "drawdown", "monthly_returns"])
+          .describe(
+            "Which charts to include. Options: equity_curve, drawdown, monthly_returns, monthly_returns_percent, return_distribution, day_of_week, streak_data (win/loss streaks + runs test), trade_sequence (P&L by trade #), rom_timeline (Return on Margin over time), rolling_metrics (30-trade rolling sharpe/win rate), exit_reason_breakdown, holding_periods, premium_efficiency, margin_utilization, volatility_regimes (VIX-correlated), mfe_mae (Maximum Favorable/Adverse Excursion for stop loss/take profit optimization)"
+          ),
+        dateRange: z
+          .object({
+            from: z
+              .string()
+              .optional()
+              .describe("Start date YYYY-MM-DD (inclusive)"),
+            to: z
+              .string()
+              .optional()
+              .describe("End date YYYY-MM-DD (inclusive)"),
+          })
+          .optional()
+          .describe("Filter trades to date range"),
+        riskFreeRate: z
+          .number()
+          .default(2.0)
+          .describe(
+            "Annual risk-free rate % for Sharpe calculations in rolling_metrics (default: 2.0)"
+          ),
+        normalizeTo1Lot: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Normalize all trades to 1 contract for fair comparison across different position sizes"
+          ),
+        bucketCount: z
+          .number()
+          .min(5)
+          .max(100)
+          .default(20)
+          .describe(
+            "Number of histogram buckets for return_distribution (default: 20)"
+          ),
+        rollingWindowSize: z
+          .number()
+          .min(10)
+          .max(100)
+          .default(30)
+          .describe(
+            "Window size for rolling_metrics calculation (default: 30 trades)"
+          ),
+        mfeMaeBucketSize: z
+          .number()
+          .min(1)
+          .max(50)
+          .default(10)
+          .describe(
+            "Bucket size (in %) for MFE/MAE distribution histogram (default: 10%)"
+          ),
+      }),
+    },
+    async ({
+      blockId,
+      strategy,
+      charts,
+      dateRange,
+      riskFreeRate,
+      normalizeTo1Lot,
+      bucketCount,
+      rollingWindowSize,
+      mfeMaeBucketSize,
+    }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply strategy filter
+        trades = filterByStrategy(trades, strategy);
+
+        // Apply date range filter
+        if (dateRange) {
+          trades = filterByDateRange(trades, dateRange.from, dateRange.to);
+        }
+
+        // Apply normalization if requested
+        if (normalizeTo1Lot) {
+          trades = normalizeTradesToOneLot(trades);
+        }
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: strategy
+                  ? `No trades found for strategy "${strategy}" in this block.`
+                  : "No trades found in this block.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Build requested chart data
+        const chartData: Record<string, unknown> = {};
+        let dataPoints = 0;
+
+        if (charts.includes("equity_curve")) {
+          chartData.equityCurve = buildEquityCurve(trades);
+          dataPoints += (chartData.equityCurve as unknown[]).length;
+        }
+
+        if (charts.includes("drawdown")) {
+          const equityCurve =
+            (chartData.equityCurve as Array<{
+              date: string;
+              equity: number;
+              highWaterMark: number;
+            }>) || buildEquityCurve(trades);
+          chartData.drawdown = buildDrawdownSeries(equityCurve);
+          dataPoints += (chartData.drawdown as unknown[]).length;
+        }
+
+        if (charts.includes("monthly_returns")) {
+          chartData.monthlyReturns = buildMonthlyReturns(trades);
+          const mr = chartData.monthlyReturns as Record<
+            number,
+            Record<number, number>
+          >;
+          for (const year of Object.keys(mr)) {
+            for (const month of Object.keys(mr[Number(year)])) {
+              if (mr[Number(year)][Number(month)] !== 0) dataPoints++;
+            }
+          }
+        }
+
+        if (charts.includes("monthly_returns_percent")) {
+          chartData.monthlyReturnsPercent = buildMonthlyReturnsPercent(trades);
+          const mrp = chartData.monthlyReturnsPercent as Record<
+            number,
+            Record<number, number>
+          >;
+          for (const year of Object.keys(mrp)) {
+            for (const month of Object.keys(mrp[Number(year)])) {
+              if (mrp[Number(year)][Number(month)] !== 0) dataPoints++;
+            }
+          }
+        }
+
+        if (charts.includes("return_distribution")) {
+          chartData.returnDistribution = buildReturnDistribution(
+            trades,
+            bucketCount
+          );
+          dataPoints += (chartData.returnDistribution as unknown[]).length;
+        }
+
+        if (charts.includes("day_of_week")) {
+          chartData.dayOfWeek = buildDayOfWeekData(trades);
+          dataPoints += (chartData.dayOfWeek as unknown[]).length;
+        }
+
+        if (charts.includes("streak_data")) {
+          chartData.streakData = buildStreakData(trades);
+          // Count streak distribution entries
+          const sd = chartData.streakData as {
+            winDistribution: Record<number, number>;
+            lossDistribution: Record<number, number>;
+          };
+          dataPoints += Object.keys(sd.winDistribution).length;
+          dataPoints += Object.keys(sd.lossDistribution).length;
+        }
+
+        if (charts.includes("trade_sequence")) {
+          chartData.tradeSequence = buildTradeSequence(trades);
+          dataPoints += (chartData.tradeSequence as unknown[]).length;
+        }
+
+        if (charts.includes("rom_timeline")) {
+          chartData.romTimeline = buildRomTimeline(trades);
+          dataPoints += (chartData.romTimeline as unknown[]).length;
+        }
+
+        if (charts.includes("rolling_metrics")) {
+          chartData.rollingMetrics = buildRollingMetrics(
+            trades,
+            rollingWindowSize,
+            riskFreeRate
+          );
+          dataPoints += (chartData.rollingMetrics as unknown[]).length;
+        }
+
+        if (charts.includes("exit_reason_breakdown")) {
+          chartData.exitReasonBreakdown = buildExitReasonBreakdown(trades);
+          dataPoints += (chartData.exitReasonBreakdown as unknown[]).length;
+        }
+
+        if (charts.includes("holding_periods")) {
+          chartData.holdingPeriods = buildHoldingPeriods(trades);
+          dataPoints += (chartData.holdingPeriods as unknown[]).length;
+        }
+
+        if (charts.includes("premium_efficiency")) {
+          chartData.premiumEfficiency = buildPremiumEfficiency(trades);
+          dataPoints += (chartData.premiumEfficiency as unknown[]).length;
+        }
+
+        if (charts.includes("margin_utilization")) {
+          chartData.marginUtilization = buildMarginUtilization(trades);
+          dataPoints += (chartData.marginUtilization as unknown[]).length;
+        }
+
+        if (charts.includes("volatility_regimes")) {
+          chartData.volatilityRegimes = buildVolatilityRegimes(trades);
+          dataPoints += (chartData.volatilityRegimes as unknown[]).length;
+        }
+
+        if (charts.includes("mfe_mae")) {
+          // Use the original (non-normalized) trades for MFE/MAE since it uses
+          // internal trade fields (maxProfit, maxLoss) that aren't normalized
+          const mfeData = calculateMFEMAEData(block.trades);
+          const distribution = createExcursionDistribution(mfeData, mfeMaeBucketSize);
+
+          // Calculate aggregate statistics
+          const dataWithMfe = mfeData.filter((d) => d.mfe > 0);
+          const dataWithMae = mfeData.filter((d) => d.mae > 0);
+
+          const avgMfePercent =
+            dataWithMfe.length > 0
+              ? dataWithMfe.reduce((sum, d) => sum + (d.mfePercent || 0), 0) /
+                dataWithMfe.length
+              : 0;
+          const avgMaePercent =
+            dataWithMae.length > 0
+              ? dataWithMae.reduce((sum, d) => sum + (d.maePercent || 0), 0) /
+                dataWithMae.length
+              : 0;
+          const avgProfitCapture =
+            mfeData.filter((d) => d.profitCapturePercent !== undefined).length > 0
+              ? mfeData
+                  .filter((d) => d.profitCapturePercent !== undefined)
+                  .reduce((sum, d) => sum + d.profitCapturePercent!, 0) /
+                mfeData.filter((d) => d.profitCapturePercent !== undefined).length
+              : 0;
+          const avgExcursionRatio =
+            mfeData.filter((d) => d.excursionRatio !== undefined).length > 0
+              ? mfeData
+                  .filter((d) => d.excursionRatio !== undefined)
+                  .reduce((sum, d) => sum + d.excursionRatio!, 0) /
+                mfeData.filter((d) => d.excursionRatio !== undefined).length
+              : 0;
+
+          // Simplify data points for JSON output (exclude verbose trade details)
+          const simplifiedData = mfeData.map((d) => ({
+            tradeNumber: d.tradeNumber,
+            date: formatDateKey(d.date),
+            strategy: d.strategy,
+            mfe: d.mfe,
+            mae: d.mae,
+            pl: d.pl,
+            mfePercent: d.mfePercent,
+            maePercent: d.maePercent,
+            profitCapturePercent: d.profitCapturePercent,
+            excursionRatio: d.excursionRatio,
+            basis: d.basis,
+            isWinner: d.isWinner,
+          }));
+
+          chartData.mfeMae = {
+            dataPoints: simplifiedData,
+            distribution,
+            statistics: {
+              totalTrades: mfeData.length,
+              tradesWithMfe: dataWithMfe.length,
+              tradesWithMae: dataWithMae.length,
+              avgMfePercent,
+              avgMaePercent,
+              avgProfitCapture,
+              avgExcursionRatio,
+            },
+          };
+          dataPoints += simplifiedData.length + distribution.length;
+        }
+
+        // Brief summary for user display
+        const filters: string[] = [];
+        if (strategy) filters.push(`strategy=${strategy}`);
+        if (dateRange?.from || dateRange?.to) {
+          filters.push(
+            `date=${dateRange.from ?? "start"} to ${dateRange.to ?? "end"}`
+          );
+        }
+        if (normalizeTo1Lot) filters.push("normalized");
+
+        const filterStr = filters.length > 0 ? ` (${filters.join(", ")})` : "";
+        const summary = `Performance: ${blockId}${filterStr} | ${charts.length} charts | ${trades.length} trades | ${dataPoints} data points`;
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          strategy: strategy ?? null,
+          dateRange: dateRange ?? null,
+          normalizeTo1Lot,
+          riskFreeRate,
+          bucketCount,
+          rollingWindowSize,
+          mfeMaeBucketSize,
+          tradesAnalyzed: trades.length,
+          chartsIncluded: charts,
+          ...chartData,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error getting performance charts: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 2: get_period_returns
+  server.registerTool(
+    "get_period_returns",
+    {
+      description:
+        "Get P&L breakdown by period (monthly, weekly, or daily) with gross P/L, commissions, and net P/L",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter by strategy name (case-insensitive)"),
+        period: z
+          .enum(["monthly", "weekly", "daily"])
+          .default("monthly")
+          .describe("Time period for grouping (default: monthly)"),
+        year: z
+          .number()
+          .optional()
+          .describe("Filter to specific year (optional, alternative to dateRange)"),
+        dateRange: z
+          .object({
+            from: z
+              .string()
+              .optional()
+              .describe("Start date YYYY-MM-DD (inclusive)"),
+            to: z
+              .string()
+              .optional()
+              .describe("End date YYYY-MM-DD (inclusive)"),
+          })
+          .optional()
+          .describe("Filter trades to date range (takes precedence over year)"),
+        normalizeTo1Lot: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Normalize all trades to 1 contract for fair comparison"
+          ),
+      }),
+    },
+    async ({ blockId, strategy, period, year, dateRange, normalizeTo1Lot }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply strategy filter
+        trades = filterByStrategy(trades, strategy);
+
+        // Apply date range filter (takes precedence over year)
+        if (dateRange) {
+          trades = filterByDateRange(trades, dateRange.from, dateRange.to);
+        } else if (year !== undefined) {
+          trades = trades.filter(
+            (t) => new Date(t.dateOpened).getFullYear() === year
+          );
+        }
+
+        // Apply normalization if requested
+        if (normalizeTo1Lot) {
+          trades = normalizeTradesToOneLot(trades);
+        }
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  strategy || year || dateRange
+                    ? `No trades found matching filters (strategy: ${strategy ?? "all"}, year: ${year ?? "all"}, dateRange: ${dateRange ? `${dateRange.from ?? "start"} to ${dateRange.to ?? "end"}` : "all"}).`
+                    : "No trades found in this block.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Group trades by period
+        const periodData: Map<
+          string,
+          {
+            grossPl: number;
+            commissions: number;
+            netPl: number;
+            tradeCount: number;
+          }
+        > = new Map();
+
+        trades.forEach((trade) => {
+          const date = new Date(trade.dateOpened);
+          let periodKey: string;
+
+          if (period === "monthly") {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, "0");
+            periodKey = `${y}-${m}`;
+          } else if (period === "weekly") {
+            const y = date.getFullYear();
+            const w = String(getISOWeekNumber(date)).padStart(2, "0");
+            periodKey = `${y}-W${w}`;
+          } else {
+            // daily
+            periodKey = formatDateKey(date);
+          }
+
+          const existing = periodData.get(periodKey) || {
+            grossPl: 0,
+            commissions: 0,
+            netPl: 0,
+            tradeCount: 0,
+          };
+
+          const totalCommissions =
+            (trade.openingCommissionsFees ?? 0) +
+            (trade.closingCommissionsFees ?? 0);
+
+          existing.grossPl += trade.pl;
+          existing.commissions += totalCommissions;
+          existing.netPl += trade.pl - totalCommissions;
+          existing.tradeCount += 1;
+          periodData.set(periodKey, existing);
+        });
+
+        // Convert to sorted array
+        const periods = Array.from(periodData.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([periodKey, data]) => ({
+            period: periodKey,
+            ...data,
+          }));
+
+        // Calculate totals
+        const totals = {
+          grossPl: periods.reduce((sum, p) => sum + p.grossPl, 0),
+          commissions: periods.reduce((sum, p) => sum + p.commissions, 0),
+          netPl: periods.reduce((sum, p) => sum + p.netPl, 0),
+          tradeCount: periods.reduce((sum, p) => sum + p.tradeCount, 0),
+        };
+
+        // Brief summary for user display
+        const filters: string[] = [];
+        if (strategy) filters.push(`strategy=${strategy}`);
+        if (dateRange?.from || dateRange?.to) {
+          filters.push(
+            `date=${dateRange.from ?? "start"} to ${dateRange.to ?? "end"}`
+          );
+        } else if (year !== undefined) {
+          filters.push(`year=${year}`);
+        }
+        if (normalizeTo1Lot) filters.push("normalized");
+
+        const filterStr = filters.length > 0 ? ` (${filters.join(", ")})` : "";
+        const summary = `Period Returns: ${blockId}${filterStr} | ${period} | ${periods.length} periods | Net P/L: ${formatCurrency(totals.netPl)}`;
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          strategy: strategy ?? null,
+          periodType: period,
+          yearFilter: year ?? null,
+          dateRange: dateRange ?? null,
+          normalizeTo1Lot,
+          tradesAnalyzed: trades.length,
+          periodCount: periods.length,
+          periods,
+          totals,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error getting period returns: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 3: compare_backtest_to_actual
+  server.registerTool(
+    "compare_backtest_to_actual",
+    {
+      description:
+        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe(
+            "Filter to specific strategy name (matches both backtest and actual by strategy)"
+          ),
+        scaling: z
+          .enum(["raw", "perContract", "toReported"])
+          .default("raw")
+          .describe(
+            "Scaling mode: 'raw' (no scaling), 'perContract' (divide by contracts for per-lot comparison), 'toReported' (scale backtest DOWN to match actual contract count)"
+          ),
+        dateRange: z
+          .object({
+            from: z
+              .string()
+              .optional()
+              .describe("Start date YYYY-MM-DD (inclusive)"),
+            to: z
+              .string()
+              .optional()
+              .describe("End date YYYY-MM-DD (inclusive)"),
+          })
+          .optional()
+          .describe("Filter trades to date range"),
+        matchedOnly: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Only include trades where both backtest and actual exist on the same date (excludes unmatched trades from totals)"
+          ),
+      }),
+    },
+    async ({ blockId, strategy, scaling, dateRange, matchedOnly }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let backtestTrades = block.trades;
+
+        // Load reporting log (actual trades)
+        let actualTrades: ReportingTrade[];
+        try {
+          actualTrades = await loadReportingLog(baseDir, blockId);
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No reportinglog.csv found in block "${blockId}". This tool requires both tradelog.csv (backtest) and reportinglog.csv (actual) to compare.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Apply strategy filter to both
+        if (strategy) {
+          backtestTrades = backtestTrades.filter(
+            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
+          );
+          actualTrades = actualTrades.filter(
+            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
+          );
+        }
+
+        // Apply date range filter to both
+        if (dateRange) {
+          if (dateRange.from || dateRange.to) {
+            backtestTrades = backtestTrades.filter((t) => {
+              const tradeDate = formatDateKey(new Date(t.dateOpened));
+              if (dateRange.from && tradeDate < dateRange.from) return false;
+              if (dateRange.to && tradeDate > dateRange.to) return false;
+              return true;
+            });
+            actualTrades = actualTrades.filter((t) => {
+              const tradeDate = formatDateKey(new Date(t.dateOpened));
+              if (dateRange.from && tradeDate < dateRange.from) return false;
+              if (dateRange.to && tradeDate > dateRange.to) return false;
+              return true;
+            });
+          }
+        }
+
+        if (backtestTrades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No backtest trades found in tradelog.csv matching filters.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (actualTrades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No actual trades found in reportinglog.csv matching filters.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Group trades by date and strategy
+        const backtestByDateStrategy = new Map<
+          string,
+          { trades: Trade[]; totalPl: number; contracts: number }
+        >();
+        const actualByDateStrategy = new Map<
+          string,
+          { trades: ReportingTrade[]; totalPl: number; contracts: number }
+        >();
+
+        backtestTrades.forEach((trade) => {
+          const dateKey = formatDateKey(new Date(trade.dateOpened));
+          const key = `${dateKey}|${trade.strategy}`;
+          const existing = backtestByDateStrategy.get(key) || {
+            trades: [],
+            totalPl: 0,
+            contracts: 0,
+          };
+          existing.trades.push(trade);
+          existing.totalPl += trade.pl;
+          existing.contracts = existing.trades[0].numContracts; // Unit size from first trade
+          backtestByDateStrategy.set(key, existing);
+        });
+
+        actualTrades.forEach((trade) => {
+          const dateKey = formatDateKey(new Date(trade.dateOpened));
+          const key = `${dateKey}|${trade.strategy}`;
+          const existing = actualByDateStrategy.get(key) || {
+            trades: [],
+            totalPl: 0,
+            contracts: 0,
+          };
+          existing.trades.push(trade);
+          existing.totalPl += trade.pl;
+          existing.contracts = existing.trades[0].numContracts; // Unit size from first trade
+          actualByDateStrategy.set(key, existing);
+        });
+
+        // Match and compare
+        const comparisons: Array<{
+          date: string;
+          strategy: string;
+          backtestPl: number;
+          actualPl: number;
+          scaledBacktestPl: number;
+          scaledActualPl: number;
+          slippage: number;
+          slippagePercent: number | null;
+          backtestContracts: number;
+          actualContracts: number;
+          matched: boolean;
+        }> = [];
+
+        const processedActual = new Set<string>();
+
+        for (const [key, btData] of backtestByDateStrategy) {
+          const [dateKey, strategy] = key.split("|");
+          const actualData = actualByDateStrategy.get(key);
+
+          if (actualData) {
+            processedActual.add(key);
+
+            // Apply scaling
+            let scaledBtPl = btData.totalPl;
+            let scaledActualPl = actualData.totalPl;
+
+            if (scaling === "perContract") {
+              scaledBtPl =
+                btData.contracts > 0 ? btData.totalPl / btData.contracts : 0;
+              scaledActualPl =
+                actualData.contracts > 0
+                  ? actualData.totalPl / actualData.contracts
+                  : 0;
+            } else if (scaling === "toReported") {
+              // Scale backtest DOWN to match actual contract count
+              if (btData.contracts > 0 && actualData.contracts > 0) {
+                const scaleFactor = actualData.contracts / btData.contracts;
+                scaledBtPl = btData.totalPl * scaleFactor;
+              }
+              // Actual stays as-is
+            }
+
+            const slippage = scaledActualPl - scaledBtPl;
+            const slippagePercent =
+              scaledBtPl !== 0
+                ? (slippage / Math.abs(scaledBtPl)) * 100
+                : null;
+
+            comparisons.push({
+              date: dateKey,
+              strategy,
+              backtestPl: btData.totalPl,
+              actualPl: actualData.totalPl,
+              scaledBacktestPl: scaledBtPl,
+              scaledActualPl: scaledActualPl,
+              slippage,
+              slippagePercent,
+              backtestContracts: btData.contracts,
+              actualContracts: actualData.contracts,
+              matched: true,
+            });
+          } else {
+            // Unmatched backtest (no corresponding actual)
+            comparisons.push({
+              date: dateKey,
+              strategy,
+              backtestPl: btData.totalPl,
+              actualPl: 0,
+              scaledBacktestPl:
+                scaling === "perContract" && btData.contracts > 0
+                  ? btData.totalPl / btData.contracts
+                  : btData.totalPl,
+              scaledActualPl: 0,
+              slippage: 0,
+              slippagePercent: null,
+              backtestContracts: btData.contracts,
+              actualContracts: 0,
+              matched: false,
+            });
+          }
+        }
+
+        // Add unmatched actual trades
+        for (const [key, actualData] of actualByDateStrategy) {
+          if (processedActual.has(key)) continue;
+
+          const [dateKey, strategy] = key.split("|");
+          comparisons.push({
+            date: dateKey,
+            strategy,
+            backtestPl: 0,
+            actualPl: actualData.totalPl,
+            scaledBacktestPl: 0,
+            scaledActualPl:
+              scaling === "perContract" && actualData.contracts > 0
+                ? actualData.totalPl / actualData.contracts
+                : actualData.totalPl,
+            slippage: 0,
+            slippagePercent: null,
+            backtestContracts: 0,
+            actualContracts: actualData.contracts,
+            matched: false,
+          });
+        }
+
+        // Sort by date then strategy
+        comparisons.sort((a, b) => {
+          const dateCompare = a.date.localeCompare(b.date);
+          if (dateCompare !== 0) return dateCompare;
+          return a.strategy.localeCompare(b.strategy);
+        });
+
+        // Calculate summary statistics
+        const matchedComparisons = comparisons.filter((c) => c.matched);
+
+        // Use matchedOnly comparisons for totals if requested, otherwise all comparisons
+        const comparisonsForTotals = matchedOnly ? matchedComparisons : comparisons;
+        const totalBacktestPl = comparisonsForTotals.reduce(
+          (sum, c) => sum + c.scaledBacktestPl,
+          0
+        );
+        const totalActualPl = comparisonsForTotals.reduce(
+          (sum, c) => sum + c.scaledActualPl,
+          0
+        );
+        const totalSlippage = totalActualPl - totalBacktestPl;
+        const avgSlippage =
+          matchedComparisons.length > 0
+            ? (matchedComparisons.reduce((sum, c) => sum + c.slippage, 0)) /
+              matchedComparisons.length
+            : 0;
+        const avgSlippagePercent =
+          totalBacktestPl !== 0
+            ? (totalSlippage / Math.abs(totalBacktestPl)) * 100
+            : null;
+
+        // Get unique strategies
+        const backtestStrategies = Array.from(
+          new Set(backtestTrades.map((t) => t.strategy))
+        ).sort();
+        const actualStrategies = Array.from(
+          new Set(actualTrades.map((t) => t.strategy))
+        ).sort();
+
+        // Brief summary for user display
+        const filters: string[] = [];
+        if (strategy) filters.push(`strategy=${strategy}`);
+        if (dateRange?.from || dateRange?.to) {
+          filters.push(
+            `date=${dateRange.from ?? "start"} to ${dateRange.to ?? "end"}`
+          );
+        }
+        if (matchedOnly) filters.push("matched-only");
+
+        const filterStr = filters.length > 0 ? ` (${filters.join(", ")})` : "";
+        const slippageDisplay =
+          avgSlippagePercent !== null
+            ? `${formatPercent(avgSlippagePercent)} slippage`
+            : "N/A slippage";
+        const summary = `Comparison: ${blockId}${filterStr} | ${scaling} scaling | ${matchedComparisons.length}/${comparisons.length} matched | ${slippageDisplay}`;
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          strategy: strategy ?? null,
+          scalingMode: scaling,
+          dateRange: dateRange ?? null,
+          matchedOnly,
+          backtestTradeCount: backtestTrades.length,
+          actualTradeCount: actualTrades.length,
+          backtestStrategies,
+          actualStrategies,
+          summary: {
+            totalComparisons: comparisons.length,
+            matchedComparisons: matchedComparisons.length,
+            unmatchedBacktest: comparisons.filter(
+              (c) => !c.matched && c.backtestPl !== 0
+            ).length,
+            unmatchedActual: comparisons.filter(
+              (c) => !c.matched && c.actualPl !== 0
+            ).length,
+            totalBacktestPl,
+            totalActualPl,
+            totalSlippage,
+            avgSlippage,
+            avgSlippagePercent,
+            note: matchedOnly
+              ? "Totals include matched comparisons only"
+              : "Totals include all comparisons (matched and unmatched)",
+          },
+          comparisons,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error comparing backtest to actual: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}

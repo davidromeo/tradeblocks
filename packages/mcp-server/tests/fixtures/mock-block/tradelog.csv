@@ -1,0 +1,6 @@
+Date Opened,Time Opened,Date Closed,Time Closed,Opening Price,Closing Price,Legs,Premium,No. of Contracts,P/L,Strategy,Opening Commissions + Fees,Closing Commissions + Fees,Reason For Close,Funds at Close,Margin Req.
+2024-01-02,09:35:00,2024-01-02,15:30:00,2.50,0.50,SPX 4800P/4750P,250,1,200,Test Strategy,1.50,1.50,Target,10200,5000
+2024-01-03,09:35:00,2024-01-03,15:45:00,2.75,0.25,SPX 4820P/4770P,275,1,250,Test Strategy,1.50,1.50,Target,10450,5000
+2024-01-04,09:35:00,2024-01-05,10:15:00,3.00,4.50,SPX 4850P/4800P,300,1,-150,Test Strategy,1.50,1.50,Stop Loss,10300,5000
+2024-01-08,09:35:00,2024-01-08,14:00:00,2.25,0.10,SPX 4900P/4850P,225,2,430,Test Strategy,3.00,3.00,Target,10730,5000
+2024-01-09,09:35:00,2024-01-10,15:50:00,2.80,0.30,SPX 4875P/4825P,280,1,250,Test Strategy,1.50,1.50,Target,10980,5000

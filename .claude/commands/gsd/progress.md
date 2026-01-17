@@ -58,6 +58,7 @@ If missing STATE.md or ROADMAP.md: inform what's missing, suggest running `/gsd:
 - Note any blockers, concerns, or deferred issues
 - Check for CONTEXT.md: For phases without PLAN.md files, check if `{phase}-CONTEXT.md` exists in phase directory
 - Count pending todos: `ls .planning/todos/pending/*.md 2>/dev/null | wc -l`
+- Check for active debug sessions: `ls .planning/debug/*.md 2>/dev/null | grep -v resolved | wc -l`
   </step>
 
 <step name="report">
@@ -86,6 +87,10 @@ CONTEXT: [✓ if CONTEXT.md exists | - if not]
 
 ## Pending Todos
 - [count] pending — /gsd:check-todos to review
+
+## Active Debug Sessions
+- [count] active — /gsd:debug to continue
+(Only show this section if count > 0)
 
 ## What's Next
 [Next phase/plan objective from ROADMAP]

@@ -4,9 +4,31 @@ Enhancements discovered during execution. Not critical - address in future phase
 
 ## Open Enhancements
 
-No open enhancements.
+### ISS-005: Plotly TypeScript type conflicts with pnpm
+
+- **Discovered:** Phase 11-01 (2026-01-14)
+- **Type:** Build
+- **Description:** After converting to pnpm workspace, TypeScript build fails with Plotly type errors. The issue is a conflict between types from `plotly.js` v3.1.2 and `@types/plotly.js` v3.0.7 (pulled via `@types/react-plotly.js`). The types in plotly.js have additional chart types (like "choroplethmap") that don't exist in @types/plotly.js, causing type incompatibility.
+- **Impact:** Medium (build fails, but app works at runtime)
+- **Effort:** Medium (needs proper type resolution strategy)
+- **Status:** Open
+- **Potential fixes:**
+  1. Pin @types/plotly.js to match plotly.js version
+  2. Create type declaration file to harmonize types
+  3. Update to newer @types/react-plotly.js when available
+  4. Cast Plotly data/layout props to `unknown` in components
 
 ## Closed Enhancements
+
+### ISS-006: MCP block loader requires exact CSV filenames
+
+- **Discovered:** Phase 14 testing (2026-01-14)
+- **Type:** UX
+- **Description:** The MCP server block loader only recognizes blocks with exactly-named CSV files (`tradelog.csv`, `dailylog.csv`, `reportinglog.csv`). When users manually add a folder with differently-named CSVs (e.g., `trade-log - 2026-01-14T174154.042.csv`), the block isn't discovered and `list_backtests` doesn't show it. This causes confusion when Claude can't find the user's data.
+- **Impact:** High (blocks user workflow with MCP tools)
+- **Effort:** Medium
+- **Status:** **RESOLVED** in Phase 15-01
+- **Resolution:** Added flexible CSV discovery to block-loader.ts. The `listBlocks()` function now detects CSV types by analyzing column headers (not just filenames). Trade logs are identified by P/L column + trade-specific columns (Date Opened, Strategy, etc.). Daily logs are identified by Date + value columns. Discovered mappings are cached in `.block.json` under `csvMappings` for faster subsequent loads. Warning logged when folders have unrecognized CSVs. Backward compatible - standard filenames (`tradelog.csv`, etc.) still work.
 
 ### ISS-001: Hide empty result sections before analysis runs
 

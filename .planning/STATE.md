@@ -2,50 +2,54 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-11)
+See: .planning/PROJECT.md (updated 2026-01-17)
 
-**Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v1.0 Shipped — ready for next milestone planning
+**Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: v1.0 complete
-Plan: N/A
-Status: **v1.0 Shipped**
-Last activity: 2026-01-11 — v1.0 WFA Enhancement milestone archived
+Milestone: v2.0 Claude Integration — SHIPPED 2026-01-17
+Status: Complete
+Last activity: 2026-01-17 — Milestone archived
 
-Progress: █████████████████ 100% (17/17 plans complete)
+Progress: ██████████ 100%
 
-## v1.0 Summary
+## v2.0 Accomplishments
 
-- Phases: 10 (9 numbered, Phase 4 merged into Phase 2)
-- Plans: 17 total executed
-- Duration: ~2.8 hours total execution time
-- Files modified: 62
-- Lines changed: +8,961 / -797
+- MCP server (`tradeblocks-mcp`) with 19 tools at packages/mcp-server/
+- 6 agent skills at packages/agent-skills/ following agentskills.io standard
+- JSON-first output pattern optimized for AI reasoning
+- Flexible CSV discovery by column headers (ISS-006 fix)
+- GitHub Actions release pipeline with MCPB bundle distribution
+- 20 integration tests and comprehensive documentation
 
-See `.planning/milestones/v1.0-wfa-enhancement.md` for full archive.
+**Stats:**
+- 98 files created/modified
+- ~10,400 LOC in packages/ (MCP server + agent skills)
+- 7 phases (including 13.1), 15 plans
+- 4 days (2026-01-14 → 2026-01-17)
 
-## Accumulated Context
+## What's Next
 
-### Decisions
+To release v2.0:
+1. Merge feature/ai_analysis to master
+2. Create tag: `git tag v2.0.0 && git push --tags`
+3. GitHub Actions will build and release MCPB bundle
 
-All key decisions documented in PROJECT.md and archived in milestone file.
+For next milestone:
+- Run `/gsd:discuss-milestone` to explore ideas
+- Or `/gsd:new-milestone` to start planning
 
-### Deferred Issues
+## Historical Context
 
-All issues resolved. See `.planning/ISSUES.md` for closed issues with resolution notes.
-
-### Blockers/Concerns
-
-None — milestone complete.
-
-### Audit Reference
-
-Full audit findings documented in `.planning/AUDIT-FINDINGS.md`
+See [v2.0 archive](milestones/v2.0-claude-integration.md) for full phase details and decisions.
+See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement history.
 
 ## Session Continuity
 
-Last session: 2026-01-11
-Status: **v1.0 Shipped**
+Last session: 2026-01-17
+Stopped at: v2.0 milestone completed and archived
 Resume file: None
+
+Next: Merge to master and tag release, or plan next milestone

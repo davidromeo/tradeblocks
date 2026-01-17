@@ -1,0 +1,54 @@
+{
+  "name": "tradeblocks-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for options trade analysis - works with Claude Desktop/Cowork",
+  "author": "David Romeo <davidmromeo@gmail.com>",
+  "type": "module",
+  "main": "dist/skill-installer.js",
+  "bin": {
+    "tradeblocks-mcp": "server/index.js"
+  },
+  "scripts": {
+    "build": "tsup && npm run copy-skills",
+    "copy-skills": "node -e \"const fs=require('fs');fs.cpSync('../agent-skills','./agent-skills',{recursive:true,filter:(s)=>!s.includes('.git')})\"",
+    "dev": "tsup --watch",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "mcpb:pack": "npm run build && node scripts/pack-mcpb.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.0.0",
+    "archiver": "^7.0.1",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "server",
+    "dist",
+    "agent-skills",
+    "manifest.json"
+  ],
+  "keywords": [
+    "mcp",
+    "claude",
+    "options",
+    "trading",
+    "backtest"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidromeo/tradeblocks",
+    "directory": "packages/mcp-server"
+  }
+}
