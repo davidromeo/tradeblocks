@@ -221,7 +221,7 @@ backtests/
 ### Import Tools
 | Tool | Description |
 |------|-------------|
-| `import_csv` | Import a CSV file as a new block |
+| `import_csv` | Import a CSV file as a new block *(CLI only - not available in Claude Desktop)* |
 
 ## Development
 

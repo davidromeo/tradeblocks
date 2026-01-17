@@ -117,7 +117,9 @@ Your AI assistant will:
 ### Import Tools
 | Tool | Purpose |
 |------|---------|
-| `import_csv` | Import CSV and create new block |
+| `import_csv` | Import CSV and create new block *(CLI only)* |
+
+> **Note:** `import_csv` requires filesystem access and only works with CLI tools (Claude Code, Codex CLI, Gemini CLI). Claude Desktop is sandboxed and cannot access files outside the configured blocks directory. For Claude Desktop, manually copy your CSV files to your blocks directory.
 
 ---
 
