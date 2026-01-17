@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-17)
 
 Milestone: v2.1 Portfolio Comparison
 Phase: 17 of 23 (Block Diff Tool)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-01-17 — Milestone v2.1 created
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-01-17 — Completed 17-01-PLAN.md
 
-Progress: ░░░░░░░░░░ 0%
+Progress: █░░░░░░░░░ 14%
 
 ## v2.1 Portfolio Comparison Goal
 
@@ -40,7 +40,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: Milestone v2.1 initialization
+Stopped at: Completed 17-01-PLAN.md (Phase 17 complete)
 Resume file: None
 
-Next: `/gsd:plan-phase 17` to plan Block Diff tool
+Next: `/gsd:plan-phase 18` to plan Stress Test tool

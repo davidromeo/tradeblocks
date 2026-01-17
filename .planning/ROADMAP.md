@@ -10,14 +10,14 @@
 
 **Milestone Goal:** Add 7 new MCP tools to improve portfolio comparison and analysis capabilities, addressing gaps in "what changed and why" analysis identified from real user feedback.
 
-### Phase 17: Block Diff Tool
+### Phase 17: Block Diff Tool ✓
 **Goal:** Compare two blocks showing strategies shared vs unique, per-strategy P/L attribution, and side-by-side metrics
 **Depends on:** v2.0 complete
 **Research:** Unlikely (uses existing calculators)
-**Plans:** TBD
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 17-01: TBD
+- [x] 17-01: Implement block_diff tool with strategy overlap analysis
 
 ### Phase 18: Stress Test Tool
 **Goal:** Show portfolio performance during named historical scenarios (COVID crash, 2022 bear, Aug 2024 VIX spike)
@@ -119,7 +119,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
-| 17. Block Diff | v2.1 | 0/? | Not started | - |
+| 17. Block Diff | v2.1 | 1/1 | Complete | 2026-01-17 |
 | 18. Stress Test | v2.1 | 0/? | Not started | - |
 | 19. Drawdown Attribution | v2.1 | 0/? | Not started | - |
 | 20. Marginal Contribution | v2.1 | 0/? | Not started | - |
