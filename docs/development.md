@@ -100,6 +100,57 @@ This document explains how TradeBlocks is structured and how to work effectively
 
 For questions or larger architectural changes, start with an architecture sketch in `plans/` or open a discussion referencing the relevant modules above.
 
+## AI-Assisted Development
+
+This project uses Claude Code for AI-assisted development. Key files and workflows:
+
+### CLAUDE.md
+
+The `.claude/CLAUDE.md` file provides project context to Claude Code, including:
+- Architecture overview and data flow
+- Key implementation details (timezone handling, P&L calculations, etc.)
+- Testing patterns and conventions
+- Charting library specifics (Plotly, not Recharts)
+
+When working with Claude Code, this file is automatically loaded to provide codebase context.
+
+### GSD Workflow
+
+The project uses the "Get Shit Done" (GSD) workflow for structured development:
+
+```
+.planning/
+├── PROJECT.md      # Project goals and context
+├── ROADMAP.md      # Milestone and phase overview
+├── STATE.md        # Current position and accumulated decisions
+├── ISSUES.md       # Deferred issues and enhancements
+├── config.json     # Workflow mode (interactive/yolo)
+└── phases/         # Phase directories with PLAN.md and SUMMARY.md files
+```
+
+**Common GSD commands:**
+- `/gsd:progress` - Check current progress and next actions
+- `/gsd:plan-phase <N>` - Create detailed plan for a phase
+- `/gsd:execute-plan` - Execute a PLAN.md file
+- `/gsd:verify-work` - Manual acceptance testing
+
+The GSD workflow provides:
+- Structured planning with explicit success criteria
+- Atomic commits per task
+- Accumulated context across sessions (decisions, issues, blockers)
+- Subagent execution for parallel work
+
+### MCP Server Integration
+
+Claude Code can interact with TradeBlocks data via the MCP server:
+
+```bash
+# Add MCP server to Claude Code
+claude mcp add tradeblocks -- npx tradeblocks-mcp ~/Trading/backtests
+```
+
+This enables analysis queries directly in the development workflow.
+
 ## Monorepo Structure
 
 TradeBlocks uses npm workspaces to manage multiple packages:
