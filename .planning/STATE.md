@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-11)
 
 **Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v2.0 Claude Integration — Phase 15 (Polish & Documentation)
+**Current focus:** v2.0 Claude Integration — Phase 16 (Documentation Review)
 
 ## Current Position
 
-Phase: 15 of 15 (Polish & Documentation)
-Plan: 2 of 2 in current phase
+Phase: 16 of 16 (Documentation Review)
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-01-17 — Completed 15-02-PLAN.md
+Last activity: 2026-01-17 — Completed 16-01-PLAN.md
 
-Progress: ██████████ 100% (v2.0 milestone complete)
+Progress: ██████████ 100% (All phases complete)
 
 ## v2.0 Goal
 
@@ -120,7 +120,13 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
-**v2.0 MILESTONE COMPLETE** - All 15 phases executed, release pipeline ready.
+**v2.0 Phase 16-01:**
+- Documentation audit completed: fixed Recharts→Plotly reference, removed stale roadmap
+- Added monorepo structure documentation with npm workspace commands
+- README refocused as developer navigation hub
+- MCP tool tables verified and corrected (19 tools total)
+
+**v2.0 MILESTONE COMPLETE** - All 16 phases executed, release ready.
 
 ### Deferred Issues
 
@@ -139,11 +145,12 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 - Phase 14 added: Multi-Platform Agent Skills (Claude, OpenAI, Gemini)
 - Phase 15: Polish & Documentation (moved from Phase 14)
 - Phase 13.1 inserted after Phase 13: Import CSV Tool (URGENT) — enables ad-hoc CSV analysis without pre-configured blocks
+- Phase 16 added: Documentation Review — comprehensive docs review before v2.0 release
 
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: Completed 15-02-PLAN.md (Release pipeline & docs)
+Stopped at: Completed 16-01-PLAN.md (Documentation Review)
 Resume file: None
 
-🎉 v2.0 milestone complete - ready for /gsd:complete-milestone
+Next: /gsd:complete-milestone (all phases done)

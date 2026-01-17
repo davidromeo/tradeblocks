@@ -146,6 +146,30 @@ Plans:
 - 20 MCP server integration tests (Jest)
 - Comprehensive usage documentation (USAGE.md, README.md)
 
+### Phase 16: Documentation Review ✓
+
+**Goal**: Comprehensive review and update of all documentation before v2.0 release
+**Depends on**: Phase 15
+**Status**: Complete
+**Completed**: 2026-01-17
+**Plans**: 1
+
+Scope:
+- Review all README files for accuracy and completeness
+- Verify installation instructions work on all platforms
+- Ensure consistent messaging across docs
+- Update any stale references or outdated information
+- Cross-reference links between documentation files
+
+Plans:
+- [x] 16-01: Documentation Review (development.md, README.md, MCP docs) - completed 2026-01-17
+
+**Deliverables:**
+- Fixed Recharts→Plotly reference in development.md
+- Added monorepo structure documentation
+- README refocused as developer navigation hub
+- MCP tool tables verified and corrected (19 tools)
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -165,6 +189,7 @@ Plans:
 | 13.1 Import CSV Tool | v2.0 | 1/1 | Complete | 2026-01-15 |
 | 14. Multi-Platform Agent Skills | v2.0 | 4/4 | Complete | 2026-01-16 |
 | 15. Polish & Documentation | v2.0 | 2/2 | Complete | 2026-01-17 |
+| 16. Documentation Review | v2.0 | 1/1 | Complete | 2026-01-17 |
 
 ## Audit Notes
 
