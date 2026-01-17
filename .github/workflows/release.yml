@@ -51,6 +51,8 @@ jobs:
     name: Publish to npm
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     permissions:
       contents: read
       id-token: write
@@ -67,18 +69,37 @@ jobs:
       - name: Update npm for OIDC support
         run: npm install -g npm@latest
 
+      - name: Check if version exists on npm
+        id: check
+        run: |
+          VERSION=$(node -p "require('./packages/mcp-server/package.json').version")
+          if npm view tradeblocks-mcp@$VERSION version 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Version $VERSION already published, skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Version $VERSION not found, will publish"
+          fi
+
       - name: Install dependencies
+        if: steps.check.outputs.exists == 'false'
         run: npm ci
 
       - name: Build MCP Server
+        if: steps.check.outputs.exists == 'false'
         run: npm run build -w packages/mcp-server
 
       - name: Publish to npm
-        run: npm publish -w packages/mcp-server --access public --provenance
+        id: publish
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          npm publish -w packages/mcp-server --access public --provenance
+          echo "published=true" >> $GITHUB_OUTPUT
 
   release:
     name: Create GitHub Release
     needs: [build, publish-npm]
+    if: needs.publish-npm.outputs.published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
