@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 ## Current Position
 
 Phase: 15 of 15 (Polish & Documentation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-01-17 — Completed 15-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-01-17 — Completed 15-02-PLAN.md
 
-Progress: █████████▓ 95% (v2.0 milestone)
+Progress: ██████████ 100% (v2.0 milestone complete)
 
 ## v2.0 Goal
 
@@ -110,7 +110,17 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Discovered mappings cached in .block.json under csvMappings
 - Backward compatible: standard filenames still work
 
+**v2.0 Phase 15-02:**
+- GitHub Actions release workflow triggers on v* tags
+- MCPB bundle attached as release asset automatically
+- Jest integration tests for MCP server (20 tests)
+- Tests import from bundled output (test-exports.ts pattern)
+- Comprehensive USAGE.md with workflows, tool reference, CSV formats
+- README.md updated with all installation methods
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
+
+**v2.0 MILESTONE COMPLETE** - All 15 phases executed, release pipeline ready.
 
 ### Deferred Issues
 
@@ -133,5 +143,7 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: Completed 15-01-PLAN.md (CLI commands + ISS-006 fix)
+Stopped at: Completed 15-02-PLAN.md (Release pipeline & docs)
 Resume file: None
+
+🎉 v2.0 milestone complete - ready for /gsd:complete-milestone
