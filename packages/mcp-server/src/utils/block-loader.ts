@@ -336,7 +336,7 @@ async function discoverCsvFiles(
  * Get modification times for CSV files in a block folder.
  * Used for cache invalidation - if mtimes change, cached stats are stale.
  */
-async function getCsvFileMtimes(
+export async function getCsvFileMtimes(
   blockPath: string,
   mappings: CsvMappings
 ): Promise<BlockMetadata["csvFileMtimes"]> {

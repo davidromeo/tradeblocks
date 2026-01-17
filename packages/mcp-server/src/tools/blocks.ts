@@ -6,8 +6,8 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadBlock, listBlocks, saveMetadata } from "../utils/block-loader.js";
-import type { BlockMetadata } from "../utils/block-loader.js";
+import { loadBlock, listBlocks, saveMetadata, getCsvFileMtimes } from "../utils/block-loader.js";
+import type { BlockMetadata, CsvMappings } from "../utils/block-loader.js";
 import {
   createToolOutput,
   formatCurrency,
@@ -317,37 +317,49 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           const dates = block.trades.map((t) =>
             new Date(t.dateOpened).getTime()
           );
-          const metadata: BlockMetadata = {
-            blockId,
-            name: blockId,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            tradeCount: block.trades.length,
-            dailyLogCount: dailyLogs?.length ?? 0,
-            dateRange: {
-              start:
-                dates.length > 0
-                  ? new Date(Math.min(...dates)).toISOString()
-                  : null,
-              end:
-                dates.length > 0
-                  ? new Date(Math.max(...dates)).toISOString()
-                  : null,
-            },
-            strategies,
-            cachedStats: {
-              totalPl: stats.totalPl,
-              netPl: stats.netPl,
-              winRate: stats.winRate,
-              sharpeRatio: stats.sharpeRatio,
-              maxDrawdown: stats.maxDrawdown,
-              calculatedAt: new Date().toISOString(),
-            },
-          };
-          // Save metadata asynchronously (don't block response)
-          saveMetadata(`${baseDir}/${blockId}`, metadata).catch((err) =>
-            console.error("Failed to save metadata:", err)
-          );
+          const blockPath = `${baseDir}/${blockId}`;
+
+          // Build CSV mappings and get mtimes for cache invalidation
+          const csvMappings: CsvMappings = { tradelog: "tradelog.csv" };
+          if (dailyLogs && dailyLogs.length > 0) {
+            csvMappings.dailylog = "dailylog.csv";
+          }
+
+          // Get mtimes asynchronously with the metadata save
+          getCsvFileMtimes(blockPath, csvMappings)
+            .then((csvFileMtimes) => {
+              const metadata: BlockMetadata = {
+                blockId,
+                name: blockId,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                tradeCount: block.trades.length,
+                dailyLogCount: dailyLogs?.length ?? 0,
+                dateRange: {
+                  start:
+                    dates.length > 0
+                      ? new Date(Math.min(...dates)).toISOString()
+                      : null,
+                  end:
+                    dates.length > 0
+                      ? new Date(Math.max(...dates)).toISOString()
+                      : null,
+                },
+                strategies,
+                csvMappings,
+                csvFileMtimes,
+                cachedStats: {
+                  totalPl: stats.totalPl,
+                  netPl: stats.netPl,
+                  winRate: stats.winRate,
+                  sharpeRatio: stats.sharpeRatio,
+                  maxDrawdown: stats.maxDrawdown,
+                  calculatedAt: new Date().toISOString(),
+                },
+              };
+              return saveMetadata(blockPath, metadata);
+            })
+            .catch((err) => console.error("Failed to save metadata:", err));
         }
 
         // Build structured data for Claude reasoning - include full PortfolioStats
