@@ -1,87 +1,274 @@
-"use client"
+"use client";
 
-import React, { useMemo } from 'react'
-import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-import type { Layout, PlotData } from 'plotly.js'
+import { Input } from "@/components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { usePerformanceStore } from "@/lib/stores/performance-store";
+import type { Layout, PlotData } from "plotly.js";
+import { useMemo, useState } from "react";
+import { ChartWrapper } from "./chart-wrapper";
 
 interface RiskEvolutionChartProps {
-  className?: string
+  className?: string;
+}
+
+type ViewMode = "dollars" | "percent-margin" | "percent-portfolio";
+
+interface TradeData {
+  tradeNumber: number;
+  pl: number;
+  rom: number;
+  date: string;
+  marginReq?: number;
+}
+
+function calculateRollingVolatility(
+  trades: TradeData[],
+  windowSize: number,
+  viewMode: ViewMode,
+): Array<{ date: string; volatility: number }> {
+  if (trades.length < windowSize) {
+    return [];
+  }
+
+  const results: Array<{ date: string; volatility: number }> = [];
+
+  // For percent-portfolio mode, track cumulative equity
+  let runningEquity = 0;
+  const equityAtTrade: number[] = [];
+
+  if (viewMode === "percent-portfolio") {
+    // Calculate running equity for each trade
+    for (const trade of trades) {
+      runningEquity += trade.pl;
+      equityAtTrade.push(runningEquity);
+    }
+  }
+
+  // Calculate rolling volatility for each window
+  for (let i = windowSize - 1; i < trades.length; i++) {
+    const windowTrades = trades.slice(i - windowSize + 1, i + 1);
+
+    // Get values based on view mode
+    let values: number[];
+
+    if (viewMode === "dollars") {
+      values = windowTrades.map((t) => t.pl);
+    } else if (viewMode === "percent-margin") {
+      // P&L as percentage of margin requirement
+      values = windowTrades.map((t) => {
+        const margin = t.marginReq ?? 0;
+        if (margin <= 0) return 0;
+        return (t.pl / margin) * 100;
+      });
+    } else {
+      // percent-portfolio: P&L as percentage of portfolio value at that point
+      values = windowTrades.map((t, idx) => {
+        const tradeIndex = i - windowSize + 1 + idx;
+        // Use equity from previous trade as denominator, or skip if <= 0
+        const prevEquity = tradeIndex > 0 ? equityAtTrade[tradeIndex - 1] : 0;
+        if (prevEquity <= 0) return 0;
+        return (t.pl / prevEquity) * 100;
+      });
+    }
+
+    // Calculate mean
+    const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+
+    // Calculate variance and standard deviation
+    const variance =
+      values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+    const volatility = Math.sqrt(variance);
+
+    results.push({
+      date: windowTrades[windowTrades.length - 1].date,
+      volatility,
+    });
+  }
+
+  return results;
 }
 
 export function RiskEvolutionChart({ className }: RiskEvolutionChartProps) {
-  const { data } = usePerformanceStore()
+  const { data } = usePerformanceStore();
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>("dollars");
+
+  // Window size with two-state pattern for number input
+  const [windowSize, setWindowSize] = useState<number>(30);
+  const [windowInput, setWindowInput] = useState<string>("30");
+
+  const handleWindowBlur = () => {
+    const val = parseInt(windowInput, 10);
+    if (!isNaN(val) && val >= 5 && val <= 100) {
+      setWindowSize(val);
+      setWindowInput(String(val));
+    } else {
+      setWindowInput(String(windowSize));
+    }
+  };
 
   const { plotData, layout } = useMemo(() => {
-    if (!data?.rollingMetrics || data.rollingMetrics.length === 0) {
-      return { plotData: [], layout: {} }
+    if (!data?.tradeSequence || data.tradeSequence.length === 0) {
+      return { plotData: [], layout: {} };
     }
 
-    const { rollingMetrics } = data
+    const volatilityData = calculateRollingVolatility(
+      data.tradeSequence,
+      windowSize,
+      viewMode,
+    );
 
-    const dates = rollingMetrics.map(m => m.date)
-    const volatility = rollingMetrics.map(m => m.volatility)
+    if (volatilityData.length === 0) {
+      return { plotData: [], layout: {} };
+    }
+
+    const dates = volatilityData.map((m) => m.date);
+    const volatility = volatilityData.map((m) => m.volatility);
+
+    // Format based on view mode
+    const isPercent = viewMode !== "dollars";
+    const hoverFormat = isPercent
+      ? "<b>%{x}</b><br>Volatility: %{y:.2f}%<extra></extra>"
+      : "<b>%{x}</b><br>Volatility: $%{y:.2f}<extra></extra>";
+
+    const yAxisTitle =
+      viewMode === "dollars"
+        ? "Volatility ($)"
+        : viewMode === "percent-margin"
+          ? "Volatility (% of Margin)"
+          : "Volatility (% of Portfolio)";
 
     const trace: Partial<PlotData> = {
       x: dates,
       y: volatility,
-      type: 'scatter',
-      mode: 'lines+markers',
-      name: 'Volatility',
+      type: "scatter",
+      mode: "lines+markers",
+      name: "Volatility",
       line: {
-        color: '#3b82f6',
-        width: 2
+        color: "#3b82f6",
+        width: 2,
       },
       marker: {
-        size: 4
+        size: 4,
       },
-      hovertemplate: '<b>%{x}</b><br>Volatility: $%{y:.2f}<extra></extra>'
-    }
+      hovertemplate: hoverFormat,
+    };
 
     const chartLayout: Partial<Layout> = {
       xaxis: {
-        title: { text: 'Date' },
-        showgrid: true
+        title: { text: "Date" },
+        showgrid: true,
       },
       yaxis: {
-        title: { text: 'Volatility ($)' },
-        showgrid: true
+        title: { text: yAxisTitle },
+        showgrid: true,
       },
       showlegend: false,
-      hovermode: 'closest'
-    }
+      hovermode: "closest",
+    };
 
-    return { plotData: [trace], layout: chartLayout }
-  }, [data])
+    return { plotData: [trace], layout: chartLayout };
+  }, [data, windowSize, viewMode]);
 
   const tooltip = {
-    flavor: "Your construction style evolution - are you building bolder structures or laying more careful foundations over time?",
-    detailed: "Risk evolution tracks how your exposure to volatility and drawdowns changes over time. Increasing risk might indicate growing confidence, larger position sizes, or changing market conditions. Decreasing risk could show improved discipline or more conservative positioning. Both trends provide insights into your trading development."
-  }
+    flavor:
+      "Your construction style evolution - are you building bolder structures or laying more careful foundations over time?",
+    detailed:
+      "Risk evolution tracks how your exposure to volatility and drawdowns changes over time. Increasing risk might indicate growing confidence, larger position sizes, or changing market conditions. Decreasing risk could show improved discipline or more conservative positioning. Both trends provide insights into your trading development.",
+  };
 
-  if (!data || !data.rollingMetrics || data.rollingMetrics.length === 0) {
+  const headerControls = (
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Window:</span>
+        <Input
+          type="number"
+          min={5}
+          max={100}
+          value={windowInput}
+          onChange={(e) => setWindowInput(e.target.value)}
+          onBlur={handleWindowBlur}
+          onKeyDown={(e) => e.key === "Enter" && handleWindowBlur()}
+          className="w-16 h-8 text-center"
+        />
+        <span className="text-sm text-muted-foreground">trades</span>
+      </div>
+      <ToggleGroup
+        type="single"
+        value={viewMode}
+        onValueChange={(value) => {
+          if (value) setViewMode(value as ViewMode);
+        }}
+        variant="outline"
+        size="sm"
+      >
+        <ToggleGroupItem
+          value="dollars"
+          aria-label="View in dollars"
+          className="px-3"
+        >
+          Dollars
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="percent-margin"
+          aria-label="View as percent of margin"
+          className="px-3"
+        >
+          % Margin
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="percent-portfolio"
+          aria-label="View as percent of portfolio"
+          className="px-5"
+        >
+          % Portfolio
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+  );
+
+  const description = `Rolling volatility as a risk indicator (${windowSize}-trade window)`;
+
+  // Check if we have enough trades for the window
+  const hasEnoughTrades =
+    data?.tradeSequence && data.tradeSequence.length >= windowSize;
+
+  if (
+    !data ||
+    !data.tradeSequence ||
+    data.tradeSequence.length === 0 ||
+    !hasEnoughTrades
+  ) {
+    const emptyDescription =
+      !data?.tradeSequence || data.tradeSequence.length === 0
+        ? "Rolling volatility as a risk indicator"
+        : `Need at least ${windowSize} trades (have ${data.tradeSequence.length})`;
+
     return (
       <ChartWrapper
         title="⚠️ Risk Evolution"
-        description="Rolling volatility as a risk indicator (30-trade window)"
+        description={emptyDescription}
         className={className}
         data={[]}
         layout={{}}
-        style={{ height: '300px' }}
+        style={{ height: "300px" }}
         tooltip={tooltip}
+        actions={headerControls}
       />
-    )
+    );
   }
 
   return (
     <ChartWrapper
       title="⚠️ Risk Evolution"
-      description="Rolling volatility as a risk indicator over time (30-trade window)"
+      description={description}
       className={className}
       data={plotData}
       layout={layout}
-      style={{ height: '350px' }}
+      style={{ height: "350px" }}
       tooltip={tooltip}
+      actions={headerControls}
     />
-  )
+  );
 }
