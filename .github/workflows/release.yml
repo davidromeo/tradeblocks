@@ -48,6 +48,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC trusted publishing
     steps:
       - uses: actions/checkout@v4
 
@@ -64,10 +67,8 @@ jobs:
       - name: Build MCP Server
         run: npm run build -w packages/mcp-server
 
-      - name: Publish to npm
+      - name: Publish to npm (OIDC)
         run: npm publish -w packages/mcp-server --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   release:
     name: Create GitHub Release
