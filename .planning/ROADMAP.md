@@ -19,6 +19,15 @@
 Plans:
 - [x] 17-01: Implement block_diff tool with strategy overlap analysis
 
+### Phase 17.1: CLI Test Mode ✓
+**Goal:** Add --call flag to MCP server for direct tool invocation (enables subagent testing)
+**Depends on:** Phase 17
+**Research:** No
+**Plans:** 1/1 complete
+
+Plans:
+- [x] 17.1-01: Add --call CLI mode for direct tool invocation
+
 ### Phase 18: Stress Test Tool
 **Goal:** Show portfolio performance during named historical scenarios (COVID crash, 2022 bear, Aug 2024 VIX spike)
 **Depends on:** Phase 17
