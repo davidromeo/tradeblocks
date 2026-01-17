@@ -125,10 +125,19 @@ Plans:
 **Goal**: Error handling, usage examples, integration testing, documentation
 **Depends on**: Phase 14
 **Research**: Unlikely (internal work)
-**Plans**: TBD
+**Status**: Planned
+**Plans**: 2
+
+Scope:
+- CLI install-skills command for programmatic skill installation
+- ISS-006 fix: Flexible CSV discovery by content pattern
+- GitHub Actions release workflow for MCPB distribution
+- Integration tests for MCP tools
+- Usage examples documentation
 
 Plans:
-- [ ] 15-01: TBD
+- [ ] 15-01: CLI Command & ISS-006 Fix (install-skills command, flexible CSV discovery)
+- [ ] 15-02: Release Pipeline & Docs (GitHub Actions, integration tests, usage docs)
 
 ## Progress
 
@@ -148,7 +157,7 @@ Plans:
 | 13. Analysis Capabilities | v2.0 | 1/1 | Complete | 2026-01-14 |
 | 13.1 Import CSV Tool | v2.0 | 1/1 | Complete | 2026-01-15 |
 | 14. Multi-Platform Agent Skills | v2.0 | 4/4 | Complete | 2026-01-16 |
-| 15. Polish & Documentation | v2.0 | 0/? | Not started | - |
+| 15. Polish & Documentation | v2.0 | 0/2 | Planned | - |
 
 ## Audit Notes
 
