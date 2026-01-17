@@ -106,7 +106,7 @@ Your AI assistant will:
 |------|---------|
 | `get_performance_charts` | Chart data (equity, drawdown, P&L distribution, etc.) |
 | `get_period_returns` | Returns by time period |
-| `compare_backtest_vs_actual` | Backtest vs live comparison |
+| `compare_backtest_to_actual` | Backtest vs live comparison |
 
 ### Report Builder Tools
 | Tool | Purpose |
@@ -168,9 +168,24 @@ Date,Net Liquidity,P/L,Drawdown %
 2024-01-04,10300,-150,1.44
 ```
 
+### Reporting Log (reportinglog.csv)
+
+For backtest vs actual comparison. Required columns:
+- Date Opened
+- Strategy
+- P/L
+- No. of Contracts
+
+Example:
+```csv
+Date Opened,Time Opened,Strategy,Legs,No. of Contracts,P/L
+2024-01-02,09:35:00,Iron Condor,SPX 4800P/4750P,1,180
+2024-01-03,09:35:00,Iron Condor,SPX 4820P/4770P,1,225
+```
+
 ### Flexible CSV Detection
 
-As of v0.1.0 (ISS-006), the server can detect CSV types by column headers, not just filenames. This means:
+The server detects CSV types by column headers, not just filenames. This means:
 
 - `my-strategy-export.csv` will work if it has the expected columns
 - Files are auto-detected as tradelog, dailylog, or reportinglog
@@ -247,5 +262,4 @@ Skills provide structured prompts for common analysis tasks.
 ## Related Documentation
 
 - [README.md](../README.md) - Installation and setup
-- [Option Omega Guide](./option-omega-guide.md) - Exporting from Option Omega
 - [Agent Skills](../../agent-skills/README.md) - Conversational workflows

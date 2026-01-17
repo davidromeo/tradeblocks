@@ -210,7 +210,7 @@ backtests/
 |------|-------------|
 | `get_performance_charts` | 16 chart types (equity, drawdown, distribution) |
 | `get_period_returns` | Returns aggregated by time period |
-| `compare_backtest_vs_actual` | Backtest vs live performance comparison |
+| `compare_backtest_to_actual` | Backtest vs live performance comparison |
 
 ### Report Builder Tools
 | Tool | Description |
