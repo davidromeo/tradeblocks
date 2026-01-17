@@ -11,7 +11,7 @@
     "build": "tsup && npm run copy-skills",
     "copy-skills": "node -e \"const fs=require('fs');fs.cpSync('../agent-skills','./agent-skills',{recursive:true,filter:(s)=>!s.includes('.git')})\"",
     "dev": "tsup --watch",
-    "test": "echo 'Tests pending'",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "mcpb:pack": "npm run build && node scripts/pack-mcpb.js",
     "prepublishOnly": "npm run build"
   },
@@ -20,10 +20,13 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.0.0",
     "archiver": "^7.0.1",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "tsup": "^8.4.0",
-    "typescript": "^5.8.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.8.0"
   },
   "engines": {
     "node": ">=18"
@@ -34,7 +37,13 @@
     "agent-skills",
     "manifest.json"
   ],
-  "keywords": ["mcp", "claude", "options", "trading", "backtest"],
+  "keywords": [
+    "mcp",
+    "claude",
+    "options",
+    "trading",
+    "backtest"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

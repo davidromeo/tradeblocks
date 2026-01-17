@@ -25,5 +25,15 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     noExternal: [/^@lib\//]
+  },
+  // Test exports module - bundle utilities for testing
+  {
+    entry: ['src/test-exports.ts'],
+    outDir: 'dist',
+    format: ['esm'],
+    target: 'node18',
+    dts: false,  // Skip DTS for test exports
+    sourcemap: true,
+    noExternal: [/^@lib\//]
   }
 ]);
