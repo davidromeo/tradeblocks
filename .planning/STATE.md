@@ -5,51 +5,42 @@
 See: .planning/PROJECT.md (updated 2026-01-17)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Planning next milestone
+**Current focus:** v2.1 Portfolio Comparison - Phase 17
 
 ## Current Position
 
-Milestone: v2.0 Claude Integration — SHIPPED 2026-01-17
-Status: Complete
-Last activity: 2026-01-17 — Milestone archived
+Milestone: v2.1 Portfolio Comparison
+Phase: 17 of 23 (Block Diff Tool)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-01-17 — Milestone v2.1 created
 
-Progress: ██████████ 100%
+Progress: ░░░░░░░░░░ 0%
 
-## v2.0 Accomplishments
+## v2.1 Portfolio Comparison Goal
 
-- MCP server (`tradeblocks-mcp`) with 19 tools at packages/mcp-server/
-- 6 agent skills at packages/agent-skills/ following agentskills.io standard
-- JSON-first output pattern optimized for AI reasoning
-- Flexible CSV discovery by column headers (ISS-006 fix)
-- GitHub Actions release pipeline with MCPB bundle distribution
-- 20 integration tests and comprehensive documentation
-
-**Stats:**
-- 98 files created/modified
-- ~10,400 LOC in packages/ (MCP server + agent skills)
-- 7 phases (including 13.1), 15 plans
-- 4 days (2026-01-14 → 2026-01-17)
-
-## What's Next
-
-To release v2.0:
-1. Merge feature/ai_analysis to master
-2. Create tag: `git tag v2.0.0 && git push --tags`
-3. GitHub Actions will build and release MCPB bundle
-
-For next milestone:
-- Run `/gsd:discuss-milestone` to explore ideas
-- Or `/gsd:new-milestone` to start planning
+Add 7 new MCP tools to improve portfolio comparison and analysis capabilities:
+1. `block_diff` - Compare two blocks with strategy overlap and P/L attribution
+2. `stress_test` - Historical scenario analysis (COVID, 2022 bear, VIX spikes)
+3. `drawdown_attribution` - Identify which strategies drive drawdowns
+4. `marginal_contribution` - Calculate marginal Sharpe/Sortino of adding strategies
+5. `strategy_similarity` - Detect redundant strategies
+6. `what_if_scaling` - Project metrics at different position sizes
+7. `portfolio_health_check` - Unified health assessment in one call
 
 ## Historical Context
 
 See [v2.0 archive](milestones/v2.0-claude-integration.md) for full phase details and decisions.
 See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement history.
 
+## Roadmap Evolution
+
+- Milestone v2.1 created: Portfolio comparison tools, 7 phases (Phase 17-23)
+
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: v2.0 milestone completed and archived
+Stopped at: Milestone v2.1 initialization
 Resume file: None
 
-Next: Merge to master and tag release, or plan next milestone
+Next: `/gsd:plan-phase 17` to plan Block Diff tool

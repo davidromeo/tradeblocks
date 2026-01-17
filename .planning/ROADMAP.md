@@ -4,6 +4,74 @@
 
 - ✅ [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
 - ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
+- 🚧 **v2.1 Portfolio Comparison** — Phases 17-23 (in progress)
+
+## 🚧 v2.1 Portfolio Comparison (In Progress)
+
+**Milestone Goal:** Add 7 new MCP tools to improve portfolio comparison and analysis capabilities, addressing gaps in "what changed and why" analysis identified from real user feedback.
+
+### Phase 17: Block Diff Tool
+**Goal:** Compare two blocks showing strategies shared vs unique, per-strategy P/L attribution, and side-by-side metrics
+**Depends on:** v2.0 complete
+**Research:** Unlikely (uses existing calculators)
+**Plans:** TBD
+
+Plans:
+- [ ] 17-01: TBD
+
+### Phase 18: Stress Test Tool
+**Goal:** Show portfolio performance during named historical scenarios (COVID crash, 2022 bear, Aug 2024 VIX spike)
+**Depends on:** Phase 17
+**Research:** Unlikely (simple date filtering + scenario definitions)
+**Plans:** TBD
+
+Plans:
+- [ ] 18-01: TBD
+
+### Phase 19: Drawdown Attribution Tool
+**Goal:** During max drawdown periods, identify which strategies contributed most to losses
+**Depends on:** Phase 18
+**Research:** Unlikely (extends existing drawdown logic)
+**Plans:** TBD
+
+Plans:
+- [ ] 19-01: TBD
+
+### Phase 20: Marginal Contribution Tool
+**Goal:** Calculate marginal Sharpe/Sortino contribution of adding a strategy to a portfolio
+**Depends on:** Phase 19
+**Research:** Unlikely (new algorithm, uses existing ratio calculators)
+**Plans:** TBD
+
+Plans:
+- [ ] 20-01: TBD
+
+### Phase 21: Strategy Similarity Tool
+**Goal:** Flag strategies that may be redundant based on correlation, tail dependence, and overlap
+**Depends on:** Phase 20
+**Research:** Unlikely (leverages existing correlation/tail-risk)
+**Plans:** TBD
+
+Plans:
+- [ ] 21-01: TBD
+
+### Phase 22: What-If Scaling Tool
+**Goal:** Project portfolio metrics if strategies were run at different sizes
+**Depends on:** Phase 21
+**Research:** Unlikely (straightforward scaling logic)
+**Plans:** TBD
+
+Plans:
+- [ ] 22-01: TBD
+
+### Phase 23: Portfolio Health Check Tool
+**Goal:** Run correlation + tail risk + Monte Carlo in one call, return unified portfolio health assessment
+**Depends on:** Phase 22
+**Research:** Unlikely (orchestrates previous tools)
+**Plans:** TBD
+
+Plans:
+- [ ] 23-01: TBD
 
 ## Completed Milestones
 
@@ -47,11 +115,17 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
-## What's Next
+## Progress
 
-Planning next milestone. Ideas under consideration:
-- v2.1: Enhanced AI workflows and prompt optimization
-- v3.0: Additional analysis capabilities
+| Phase | Milestone | Plans | Status | Completed |
+|-------|-----------|-------|--------|-----------|
+| 17. Block Diff | v2.1 | 0/? | Not started | - |
+| 18. Stress Test | v2.1 | 0/? | Not started | - |
+| 19. Drawdown Attribution | v2.1 | 0/? | Not started | - |
+| 20. Marginal Contribution | v2.1 | 0/? | Not started | - |
+| 21. Strategy Similarity | v2.1 | 0/? | Not started | - |
+| 22. What-If Scaling | v2.1 | 0/? | Not started | - |
+| 23. Portfolio Health Check | v2.1 | 0/? | Not started | - |
 
 ## Audit Notes
 
