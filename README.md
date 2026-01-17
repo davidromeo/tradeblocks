@@ -58,7 +58,7 @@ npm run test:coverage    # Coverage report
 
 ## Data Format
 
-TradeBlocks uses CSV exports from trading platforms. Each strategy folder contains:
+Both the web dashboard and MCP server accept CSV exports from platforms like [Option Omega](https://optionomega.com/). Each block contains:
 
 - `tradelog.csv` (required) - Trade history with P/L, dates, strategy name
 - `dailylog.csv` (optional) - Daily portfolio values for enhanced drawdown calculations
