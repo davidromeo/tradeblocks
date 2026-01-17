@@ -22,7 +22,6 @@ cat .planning/STATE.md 2>/dev/null
 **If file exists:** Parse and internalize:
 - Current position (phase, plan, status)
 - Accumulated decisions (constraints on this execution)
-- Deferred issues (context for deviations)
 - Blockers/concerns (things to watch for)
 
 **If file missing but .planning/ exists:**
@@ -40,7 +39,9 @@ Options:
 Confirm phase exists and has plans:
 
 ```bash
-PHASE_DIR=$(ls -d .planning/phases/${PHASE_ARG}* 2>/dev/null | head -1)
+# Match both zero-padded (05-*) and unpadded (5-*) folders
+PADDED_PHASE=$(printf "%02d" ${PHASE_ARG} 2>/dev/null || echo "${PHASE_ARG}")
+PHASE_DIR=$(ls -d .planning/phases/${PADDED_PHASE}-* .planning/phases/${PHASE_ARG}-* 2>/dev/null | head -1)
 if [ -z "$PHASE_DIR" ]; then
   echo "ERROR: No phase directory matching '${PHASE_ARG}'"
   exit 1
@@ -70,15 +71,21 @@ ls -1 "$PHASE_DIR"/*-SUMMARY.md 2>/dev/null | sort
 For each plan, read frontmatter to extract:
 - `wave: N` - Execution wave (pre-computed)
 - `autonomous: true/false` - Whether plan has checkpoints
+- `gap_closure: true/false` - Whether plan closes gaps from verification/UAT
 
 Build plan inventory:
 - Plan path
 - Plan ID (e.g., "03-01")
 - Wave number
 - Autonomous flag
+- Gap closure flag
 - Completion status (SUMMARY exists = complete)
 
-Skip completed plans. If all complete, report "Phase already executed" and exit.
+**Filtering:**
+- Skip completed plans (have SUMMARY.md)
+- If `--gaps-only` flag: also skip plans where `gap_closure` is not `true`
+
+If all plans filtered out, report "No matching incomplete plans" and exit.
 </step>
 
 <step name="group_by_wave">
@@ -104,15 +111,21 @@ waves = {
 
 **No dependency analysis needed.** Wave numbers are pre-computed during `/gsd:plan-phase`.
 
-Report wave structure to user:
+Report wave structure with context:
 ```
-Execution Plan:
-  Wave 1 (parallel): 03-01, 03-02
-  Wave 2 (parallel): 03-03 [checkpoint], 03-04
-  Wave 3: 03-05
+## Execution Plan
 
-Total: 5 plans in 3 waves
+**Phase {X}: {Name}** — {total_plans} plans across {wave_count} waves
+
+| Wave | Plans | What it builds |
+|------|-------|----------------|
+| 1 | 01-01, 01-02 | {from plan objectives} |
+| 2 | 01-03 | {from plan objectives} |
+| 3 | 01-04 [checkpoint] | {from plan objectives} |
+
 ```
+
+The "What it builds" column comes from skimming plan names/objectives. Keep it brief (3-8 words).
 </step>
 
 <step name="execute_waves">
@@ -120,7 +133,32 @@ Execute each wave in sequence. Autonomous plans within a wave run in parallel.
 
 **For each wave:**
 
-1. **Spawn all autonomous agents in wave simultaneously:**
+1. **Describe what's being built (BEFORE spawning):**
+
+   Read each plan's `<objective>` section. Extract what's being built and why it matters.
+
+   **Output:**
+   ```
+   ---
+
+   ## Wave {N}
+
+   **{Plan ID}: {Plan Name}**
+   {2-3 sentences: what this builds, key technical approach, why it matters in context}
+
+   **{Plan ID}: {Plan Name}** (if parallel)
+   {same format}
+
+   Spawning {count} agent(s)...
+
+   ---
+   ```
+
+   **Examples:**
+   - Bad: "Executing terrain generation plan"
+   - Good: "Procedural terrain generator using Perlin noise — creates height maps, biome zones, and collision meshes. Required before vehicle physics can interact with ground."
+
+2. **Spawn all autonomous agents in wave simultaneously:**
 
    Use Task tool with multiple parallel calls. Each agent gets prompt from subagent-task-prompt template:
 
@@ -156,12 +194,34 @@ Execute each wave in sequence. Autonomous plans within a wave run in parallel.
 
    Task tool blocks until each agent finishes. All parallel agents return together.
 
-3. **Collect results from wave:**
+3. **Report completion and what was built:**
 
    For each completed agent:
    - Verify SUMMARY.md exists at expected path
-   - Note any issues reported
-   - Record completion
+   - Read SUMMARY.md to extract what was built
+   - Note any issues or deviations
+
+   **Output:**
+   ```
+   ---
+
+   ## Wave {N} Complete
+
+   **{Plan ID}: {Plan Name}**
+   {What was built — from SUMMARY.md deliverables}
+   {Notable deviations or discoveries, if any}
+
+   **{Plan ID}: {Plan Name}** (if parallel)
+   {same format}
+
+   {If more waves: brief note on what this enables for next wave}
+
+   ---
+   ```
+
+   **Examples:**
+   - Bad: "Wave 2 complete. Proceeding to Wave 3."
+   - Good: "Terrain system complete — 3 biome types, height-based texturing, physics collision meshes. Vehicle physics (Wave 3) can now reference ground surfaces."
 
 4. **Handle failures:**
 
@@ -289,6 +349,104 @@ After all waves complete, aggregate results:
 ```
 </step>
 
+<step name="verify_phase_goal">
+Verify phase achieved its GOAL, not just completed its TASKS.
+
+**Spawn verifier:**
+
+```
+Task(
+  prompt="Verify phase {phase_number} goal achievement.
+
+Phase directory: {phase_dir}
+Phase goal: {goal from ROADMAP.md}
+
+Check must_haves against actual codebase. Create VERIFICATION.md.
+Verify what actually exists in the code.",
+  subagent_type="gsd-verifier"
+)
+```
+
+**Read verification status:**
+
+```bash
+grep "^status:" "$PHASE_DIR"/*-VERIFICATION.md | cut -d: -f2 | tr -d ' '
+```
+
+**Route by status:**
+
+| Status | Action |
+|--------|--------|
+| `passed` | Continue to update_roadmap |
+| `human_needed` | Present items to user, get approval or feedback |
+| `gaps_found` | Present gap summary, offer `/gsd:plan-phase {phase} --gaps` |
+
+**If passed:**
+
+Phase goal verified. Proceed to update_roadmap.
+
+**If human_needed:**
+
+```markdown
+## ✓ Phase {X}: {Name} — Human Verification Required
+
+All automated checks passed. {N} items need human testing:
+
+### Human Verification Checklist
+
+{Extract from VERIFICATION.md human_verification section}
+
+---
+
+**After testing:**
+- "approved" → continue to update_roadmap
+- Report issues → will route to gap closure planning
+```
+
+If user approves → continue to update_roadmap.
+If user reports issues → treat as gaps_found.
+
+**If gaps_found:**
+
+Present gaps and offer next command:
+
+```markdown
+## ⚠ Phase {X}: {Name} — Gaps Found
+
+**Score:** {N}/{M} must-haves verified
+**Report:** {phase_dir}/{phase}-VERIFICATION.md
+
+### What's Missing
+
+{Extract gap summaries from VERIFICATION.md gaps section}
+
+---
+
+## ▶ Next Up
+
+**Plan gap closure** — create additional plans to complete the phase
+
+`/gsd:plan-phase {X} --gaps`
+
+<sub>`/clear` first → fresh context window</sub>
+
+---
+
+**Also available:**
+- `cat {phase_dir}/{phase}-VERIFICATION.md` — see full report
+- `/gsd:verify-work {X}` — manual testing before planning
+```
+
+User runs `/gsd:plan-phase {X} --gaps` which:
+1. Reads VERIFICATION.md gaps
+2. Creates additional plans (04, 05, etc.) with `gap_closure: true` to close gaps
+3. User then runs `/gsd:execute-phase {X} --gaps-only`
+4. Execute-phase runs only gap closure plans (04-05)
+5. Verifier runs again after new plans complete
+
+User stays in control at each decision point.
+</step>
+
 <step name="update_roadmap">
 Update ROADMAP.md to reflect phase completion:
 
@@ -298,9 +456,10 @@ Update ROADMAP.md to reflect phase completion:
 # Update status
 ```
 
-Commit roadmap update:
+Commit phase completion (roadmap, state, verification):
 ```bash
-git add .planning/ROADMAP.md
+git add .planning/ROADMAP.md .planning/STATE.md .planning/phases/{phase_dir}/*-VERIFICATION.md
+git add .planning/REQUIREMENTS.md  # if updated
 git commit -m "docs(phase-{X}): complete phase execution"
 ```
 </step>
