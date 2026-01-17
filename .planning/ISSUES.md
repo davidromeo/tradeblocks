@@ -4,21 +4,6 @@ Enhancements discovered during execution. Not critical - address in future phase
 
 ## Open Enhancements
 
-### ISS-006: MCP block loader requires exact CSV filenames
-
-- **Discovered:** Phase 14 testing (2026-01-14)
-- **Type:** UX
-- **Description:** The MCP server block loader only recognizes blocks with exactly-named CSV files (`tradelog.csv`, `dailylog.csv`, `reportinglog.csv`). When users manually add a folder with differently-named CSVs (e.g., `trade-log - 2026-01-14T174154.042.csv`), the block isn't discovered and `list_backtests` doesn't show it. This causes confusion when Claude can't find the user's data.
-- **Impact:** High (blocks user workflow with MCP tools)
-- **Effort:** Medium
-- **Status:** Open
-- **Potential fixes:**
-  1. Auto-discover CSVs by content pattern (look for trade-like columns: Symbol, P/L, Date Opened, etc.)
-  2. Accept flexible naming patterns (`*trade*.csv`, `*daily*.csv`, `*reporting*.csv`)
-  3. Provide clear error message when folder exists but no valid CSV found
-  4. Add a "reindex" or "discover" tool that scans folders and suggests renames
-- **Suggested phase:** Phase 15 (Polish & Documentation)
-
 ### ISS-005: Plotly TypeScript type conflicts with pnpm
 
 - **Discovered:** Phase 11-01 (2026-01-14)
@@ -34,6 +19,16 @@ Enhancements discovered during execution. Not critical - address in future phase
   4. Cast Plotly data/layout props to `unknown` in components
 
 ## Closed Enhancements
+
+### ISS-006: MCP block loader requires exact CSV filenames
+
+- **Discovered:** Phase 14 testing (2026-01-14)
+- **Type:** UX
+- **Description:** The MCP server block loader only recognizes blocks with exactly-named CSV files (`tradelog.csv`, `dailylog.csv`, `reportinglog.csv`). When users manually add a folder with differently-named CSVs (e.g., `trade-log - 2026-01-14T174154.042.csv`), the block isn't discovered and `list_backtests` doesn't show it. This causes confusion when Claude can't find the user's data.
+- **Impact:** High (blocks user workflow with MCP tools)
+- **Effort:** Medium
+- **Status:** **RESOLVED** in Phase 15-01
+- **Resolution:** Added flexible CSV discovery to block-loader.ts. The `listBlocks()` function now detects CSV types by analyzing column headers (not just filenames). Trade logs are identified by P/L column + trade-specific columns (Date Opened, Strategy, etc.). Daily logs are identified by Date + value columns. Discovered mappings are cached in `.block.json` under `csvMappings` for faster subsequent loads. Warning logged when folders have unrecognized CSVs. Backward compatible - standard filenames (`tradelog.csv`, etc.) still work.
 
 ### ISS-001: Hide empty result sections before analysis runs
 

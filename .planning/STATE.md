@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-11)
 ## Current Position
 
 Phase: 15 of 15 (Polish & Documentation)
-Plan: 0 of 2 in current phase
-Status: Phase 15 planned (2 plans ready)
-Last activity: 2026-01-17 — Created 15-01-PLAN.md and 15-02-PLAN.md
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-01-17 — Completed 15-01-PLAN.md
 
-Progress: █████████░ 90% (v2.0 milestone)
+Progress: █████████▓ 95% (v2.0 milestone)
 
 ## v2.0 Goal
 
@@ -102,13 +102,21 @@ Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP 
 - Skill installer API: install/uninstall/check functions for Phase 15 CLI
 - Phase 14 complete: 6 skills with documentation, packaging, and installer module
 
+**v2.0 Phase 15-01:**
+- CLI commands: install-skills, uninstall-skills, check-skills
+- Manual argv parsing (no external library)
+- Flexible CSV discovery by column header analysis (ISS-006 fix)
+- CSV type detection patterns: trade log needs P/L + 2 trade columns
+- Discovered mappings cached in .block.json under csvMappings
+- Backward compatible: standard filenames still work
+
 All v1.0 decisions documented in PROJECT.md and archived in milestone file.
 
 ### Deferred Issues
 
 ISS-005: Plotly TypeScript type conflicts with pnpm (pre-existing, exposed by package manager switch)
 
-All v1.0 issues resolved. See `.planning/ISSUES.md` for closed issues with resolution notes.
+All v1.0 issues resolved. ISS-006 resolved in 15-01. See `.planning/ISSUES.md` for closed issues with resolution notes.
 
 ### Blockers/Concerns
 
@@ -125,5 +133,5 @@ None — ISS-005 is a build-time type issue only, runtime works correctly.
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: Created Phase 15 plans (15-01 and 15-02)
+Stopped at: Completed 15-01-PLAN.md (CLI commands + ISS-006 fix)
 Resume file: None

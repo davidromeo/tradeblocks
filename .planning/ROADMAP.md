@@ -125,7 +125,7 @@ Plans:
 **Goal**: Error handling, usage examples, integration testing, documentation
 **Depends on**: Phase 14
 **Research**: Unlikely (internal work)
-**Status**: Planned
+**Status**: In progress
 **Plans**: 2
 
 Scope:
@@ -136,7 +136,7 @@ Scope:
 - Usage examples documentation
 
 Plans:
-- [ ] 15-01: CLI Command & ISS-006 Fix (install-skills command, flexible CSV discovery)
+- [x] 15-01: CLI Command & ISS-006 Fix (install-skills command, flexible CSV discovery) - completed 2026-01-17
 - [ ] 15-02: Release Pipeline & Docs (GitHub Actions, integration tests, usage docs)
 
 ## Progress
@@ -157,7 +157,7 @@ Plans:
 | 13. Analysis Capabilities | v2.0 | 1/1 | Complete | 2026-01-14 |
 | 13.1 Import CSV Tool | v2.0 | 1/1 | Complete | 2026-01-15 |
 | 14. Multi-Platform Agent Skills | v2.0 | 4/4 | Complete | 2026-01-16 |
-| 15. Polish & Documentation | v2.0 | 0/2 | Planned | - |
+| 15. Polish & Documentation | v2.0 | 1/2 | In progress | - |
 
 ## Audit Notes
 
