@@ -13,6 +13,15 @@ import type { ReportingTrade } from "@lib/models/reporting-trade";
 import { REPORTING_TRADE_COLUMN_ALIASES } from "@lib/models/reporting-trade";
 
 /**
+ * CSV file mappings for flexible discovery
+ */
+export interface CsvMappings {
+  tradelog?: string;
+  dailylog?: string;
+  reportinglog?: string;
+}
+
+/**
  * Block metadata stored in .block.json
  */
 export interface BlockMetadata {
@@ -27,6 +36,8 @@ export interface BlockMetadata {
     end: string | null;
   };
   strategies: string[];
+  /** CSV filename mappings when files don't have standard names */
+  csvMappings?: CsvMappings;
   cachedStats?: {
     totalPl: number;
     netPl: number;
@@ -148,6 +159,186 @@ function parseCSVLine(line: string): string[] {
 }
 
 /**
+ * CSV type detection result
+ */
+type CsvType = "tradelog" | "dailylog" | "reportinglog" | null;
+
+/**
+ * Read just the header line from a CSV file (for detection)
+ */
+async function readCsvHeaders(filePath: string): Promise<string[]> {
+  const content = await fs.readFile(filePath, "utf-8");
+  const firstLine = content.split("\n")[0] || "";
+  return parseCSVLine(firstLine).map((h) => h.toLowerCase().trim());
+}
+
+/**
+ * Detect CSV type by examining column headers.
+ * Returns the detected type or null if unrecognized.
+ */
+async function detectCsvType(filePath: string): Promise<CsvType> {
+  try {
+    const headers = await readCsvHeaders(filePath);
+
+    // Trade log detection:
+    // Required: "P/L" or "P&L" or "Profit/Loss"
+    // Plus at least 2 of: "Date Opened", "Date Closed", "Symbol", "Strategy", "Contracts", "Premium"
+    const plColumnAliases = ["p/l", "p&l", "profit/loss", "pl"];
+    const tradeOptionalColumns = [
+      "date opened",
+      "date closed",
+      "symbol",
+      "strategy",
+      "contracts",
+      "no. of contracts",
+      "premium",
+      "legs",
+    ];
+
+    const hasPl = plColumnAliases.some((alias) => headers.includes(alias));
+    const matchedTradeColumns = tradeOptionalColumns.filter((col) =>
+      headers.some((h) => h.includes(col) || col.includes(h))
+    );
+
+    if (hasPl && matchedTradeColumns.length >= 2) {
+      return "tradelog";
+    }
+
+    // Daily log detection:
+    // Required: "Date", and ("Portfolio Value" or "Value" or "Equity" or "Net Liquidity")
+    const hasDate = headers.some(
+      (h) => h === "date" || h.includes("date") && !h.includes("opened") && !h.includes("closed")
+    );
+    const valueColumnAliases = [
+      "portfolio value",
+      "value",
+      "equity",
+      "net liquidity",
+      "netliquidity",
+    ];
+    const hasValue = valueColumnAliases.some((alias) =>
+      headers.some((h) => h.includes(alias) || alias.includes(h))
+    );
+
+    if (hasDate && hasValue && !hasPl) {
+      // Daily log has date + value but typically no P/L column (or if it has P/L, it's daily P/L)
+      // To distinguish, check if it lacks trade-specific columns
+      if (matchedTradeColumns.length < 2) {
+        return "dailylog";
+      }
+    }
+
+    // Reporting log detection:
+    // Has "Actual P/L" or columns from REPORTING_TRADE_COLUMN_ALIASES
+    // Or has "Trade ID" + "Reported" style columns
+    const reportingAliases = Object.keys(REPORTING_TRADE_COLUMN_ALIASES).map(
+      (k) => k.toLowerCase()
+    );
+    const hasReportingColumns = reportingAliases.some((alias) =>
+      headers.includes(alias)
+    );
+    const hasActualPl = headers.some(
+      (h) => h.includes("actual") && h.includes("p")
+    );
+    const hasReportedStyle =
+      headers.includes("trade id") ||
+      headers.some((h) => h.includes("reported"));
+
+    if (hasActualPl || hasReportingColumns || hasReportedStyle) {
+      // Double-check it's not a regular tradelog
+      if (!hasPl || hasActualPl) {
+        return "reportinglog";
+      }
+    }
+
+    // If we have P/L and trade columns, fallback to tradelog
+    if (hasPl && matchedTradeColumns.length >= 1) {
+      return "tradelog";
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Discover CSV files in a folder and detect their types.
+ * Returns mapping of detected CSV types to filenames.
+ */
+async function discoverCsvFiles(
+  folderPath: string
+): Promise<{ mappings: CsvMappings; unrecognized: string[] }> {
+  const mappings: CsvMappings = {};
+  const unrecognized: string[] = [];
+
+  try {
+    const entries = await fs.readdir(folderPath, { withFileTypes: true });
+    const csvFiles = entries
+      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".csv"))
+      .map((e) => e.name);
+
+    // First, check for exact standard names
+    if (csvFiles.includes("tradelog.csv")) {
+      mappings.tradelog = "tradelog.csv";
+    }
+    if (csvFiles.includes("dailylog.csv")) {
+      mappings.dailylog = "dailylog.csv";
+    }
+    if (csvFiles.includes("reportinglog.csv")) {
+      mappings.reportinglog = "reportinglog.csv";
+    }
+
+    // For any remaining CSVs, detect by content
+    for (const csvFile of csvFiles) {
+      // Skip if already mapped via exact name
+      if (
+        csvFile === "tradelog.csv" ||
+        csvFile === "dailylog.csv" ||
+        csvFile === "reportinglog.csv"
+      ) {
+        continue;
+      }
+
+      const csvPath = path.join(folderPath, csvFile);
+      const detectedType = await detectCsvType(csvPath);
+
+      if (detectedType) {
+        // Only assign if we haven't found this type yet
+        if (detectedType === "tradelog" && !mappings.tradelog) {
+          mappings.tradelog = csvFile;
+        } else if (detectedType === "dailylog" && !mappings.dailylog) {
+          mappings.dailylog = csvFile;
+        } else if (detectedType === "reportinglog" && !mappings.reportinglog) {
+          mappings.reportinglog = csvFile;
+        } else {
+          // Type already found, this is an extra CSV
+          unrecognized.push(csvFile);
+        }
+      } else {
+        unrecognized.push(csvFile);
+      }
+    }
+  } catch {
+    // Folder read error - return empty
+  }
+
+  return { mappings, unrecognized };
+}
+
+/**
+ * Log warning when folder has CSVs but none match expected patterns
+ */
+function logCsvDiscoveryWarning(
+  folderName: string,
+  csvFiles: string[]
+): void {
+  console.error(`Warning: Folder '${folderName}' has CSV files but none match expected trade log format.`);
+  console.error(`  Found: ${csvFiles.join(", ")}`);
+  console.error(`  Expected columns: P/L, Date Opened, Date Closed, Symbol, Strategy`);
+}
+
+/**
  * Convert raw CSV record to Trade object
  */
 function convertToTrade(raw: Record<string, string>): Trade | null {
@@ -244,10 +435,15 @@ function convertToDailyLogEntry(
 }
 
 /**
- * Load trades from tradelog.csv
+ * Load trades from tradelog CSV file
+ * @param blockPath - Path to the block directory
+ * @param filename - CSV filename (default: "tradelog.csv")
  */
-async function loadTrades(blockPath: string): Promise<Trade[]> {
-  const tradelogPath = path.join(blockPath, "tradelog.csv");
+async function loadTrades(
+  blockPath: string,
+  filename: string = "tradelog.csv"
+): Promise<Trade[]> {
+  const tradelogPath = path.join(blockPath, filename);
   const content = await fs.readFile(tradelogPath, "utf-8");
   const records = parseCSV(content);
 
@@ -271,13 +467,17 @@ async function loadTrades(blockPath: string): Promise<Trade[]> {
 }
 
 /**
- * Load daily logs from dailylog.csv (optional)
+ * Load daily logs from dailylog CSV file (optional)
+ * @param blockPath - Path to the block directory
+ * @param blockId - Block identifier
+ * @param filename - CSV filename (default: "dailylog.csv")
  */
 async function loadDailyLogs(
   blockPath: string,
-  blockId: string
+  blockId: string,
+  filename: string = "dailylog.csv"
 ): Promise<DailyLogEntry[] | undefined> {
-  const dailylogPath = path.join(blockPath, "dailylog.csv");
+  const dailylogPath = path.join(blockPath, filename);
 
   try {
     await fs.access(dailylogPath);
@@ -333,6 +533,7 @@ export async function saveMetadata(
 
 /**
  * Load a complete block (trades + optional daily logs)
+ * Uses CSV mappings from metadata if available for flexible filename support.
  */
 export async function loadBlock(
   baseDir: string,
@@ -340,17 +541,38 @@ export async function loadBlock(
 ): Promise<LoadedBlock> {
   const blockPath = path.join(baseDir, blockId);
 
-  // Verify block exists and has tradelog.csv
-  const tradelogPath = path.join(blockPath, "tradelog.csv");
+  // Load metadata first to get CSV mappings
+  const metadata = await loadMetadata(blockPath);
+  const mappings = metadata?.csvMappings;
+
+  // Determine tradelog filename (from mappings or default)
+  const tradelogFilename = mappings?.tradelog || "tradelog.csv";
+  const tradelogPath = path.join(blockPath, tradelogFilename);
+
+  // Verify tradelog exists
   try {
     await fs.access(tradelogPath);
   } catch {
-    throw new Error(`Block not found or missing tradelog.csv: ${blockId}`);
+    // If using default name failed, try discovery
+    if (!mappings?.tradelog) {
+      const discovered = await discoverCsvFiles(blockPath);
+      if (discovered.mappings.tradelog) {
+        // Found a tradelog via discovery - use it
+        const trades = await loadTrades(blockPath, discovered.mappings.tradelog);
+        const dailyLogs = discovered.mappings.dailylog
+          ? await loadDailyLogs(blockPath, blockId, discovered.mappings.dailylog)
+          : undefined;
+        return { blockId, trades, dailyLogs, metadata };
+      }
+    }
+    throw new Error(`Block not found or missing tradelog: ${blockId}`);
   }
 
-  const trades = await loadTrades(blockPath);
-  const dailyLogs = await loadDailyLogs(blockPath, blockId);
-  const metadata = await loadMetadata(blockPath);
+  // Determine dailylog filename
+  const dailylogFilename = mappings?.dailylog || "dailylog.csv";
+
+  const trades = await loadTrades(blockPath, tradelogFilename);
+  const dailyLogs = await loadDailyLogs(blockPath, blockId, dailylogFilename);
 
   return {
     blockId,
@@ -361,7 +583,8 @@ export async function loadBlock(
 }
 
 /**
- * List all valid blocks in the base directory
+ * List all valid blocks in the base directory.
+ * Uses flexible CSV discovery to find blocks with non-standard CSV filenames.
  */
 export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
   const blocks: BlockInfo[] = [];
@@ -374,30 +597,76 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
       if (entry.name.startsWith(".")) continue; // Skip hidden folders
 
       const blockPath = path.join(baseDir, entry.name);
-      const tradelogPath = path.join(blockPath, "tradelog.csv");
-      const dailylogPath = path.join(blockPath, "dailylog.csv");
 
-      // Check if tradelog.csv exists (required)
-      try {
-        await fs.access(tradelogPath);
-      } catch {
-        continue; // Not a valid block folder
-      }
-
-      // Check if dailylog.csv exists (optional)
-      let hasDailyLog = false;
-      try {
-        await fs.access(dailylogPath);
-        hasDailyLog = true;
-      } catch {
-        // No daily log - that's fine
-      }
-
-      // Try to load metadata first for cached info
+      // Try to load existing metadata first
       const metadata = await loadMetadata(blockPath);
 
-      // Only use metadata if it has cached stats, otherwise calculate from trades
-      if (metadata?.cachedStats) {
+      // Determine CSV filenames - prefer metadata mappings, then exact names, then discovery
+      let tradelogFilename: string | undefined;
+      let dailylogFilename: string | undefined;
+      let needsMetadataUpdate = false;
+
+      if (metadata?.csvMappings?.tradelog) {
+        // Use cached mappings from metadata
+        tradelogFilename = metadata.csvMappings.tradelog;
+        dailylogFilename = metadata.csvMappings.dailylog;
+      } else {
+        // Check for exact standard names first
+        const standardTradelogPath = path.join(blockPath, "tradelog.csv");
+        const standardDailylogPath = path.join(blockPath, "dailylog.csv");
+
+        let hasStandardTradelog = false;
+
+        try {
+          await fs.access(standardTradelogPath);
+          hasStandardTradelog = true;
+          tradelogFilename = "tradelog.csv";
+        } catch {
+          // No standard tradelog
+        }
+
+        try {
+          await fs.access(standardDailylogPath);
+          dailylogFilename = "dailylog.csv";
+        } catch {
+          // No standard dailylog
+        }
+
+        // If no standard tradelog, try discovery
+        if (!hasStandardTradelog) {
+          const discovered = await discoverCsvFiles(blockPath);
+
+          if (discovered.mappings.tradelog) {
+            tradelogFilename = discovered.mappings.tradelog;
+            dailylogFilename = discovered.mappings.dailylog || dailylogFilename;
+            needsMetadataUpdate = true;
+
+            // Log that we discovered non-standard files
+            if (tradelogFilename !== "tradelog.csv") {
+              console.error(
+                `Discovered trade log in '${entry.name}': ${tradelogFilename}`
+              );
+            }
+          } else if (discovered.unrecognized.length > 0) {
+            // Has CSV files but none recognized as tradelog
+            logCsvDiscoveryWarning(entry.name, discovered.unrecognized);
+            continue; // Skip this folder
+          } else {
+            // No CSV files at all
+            continue;
+          }
+        }
+      }
+
+      // If still no tradelog, skip this folder
+      if (!tradelogFilename) {
+        continue;
+      }
+
+      const hasDailyLog = !!dailylogFilename;
+
+      // Use cached stats from metadata if available
+      if (metadata?.cachedStats && !needsMetadataUpdate) {
         blocks.push({
           blockId: entry.name,
           name: metadata.name || entry.name,
@@ -418,7 +687,7 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
       } else {
         // Load trades to get basic info
         try {
-          const trades = await loadTrades(blockPath);
+          const trades = await loadTrades(blockPath, tradelogFilename);
           const strategies = Array.from(
             new Set(trades.map((t) => t.strategy))
           ).sort();
@@ -443,6 +712,38 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
             totalPl,
             netPl: totalPl - totalCommissions,
           });
+
+          // Update metadata with discovered mappings for faster future loads
+          if (needsMetadataUpdate) {
+            const csvMappings: CsvMappings = { tradelog: tradelogFilename };
+            if (dailylogFilename) {
+              csvMappings.dailylog = dailylogFilename;
+            }
+
+            const updatedMetadata: BlockMetadata = {
+              blockId: entry.name,
+              name: entry.name,
+              createdAt: metadata?.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              tradeCount: trades.length,
+              dailyLogCount: 0, // Will be updated if daily logs loaded
+              dateRange: {
+                start:
+                  dates.length > 0
+                    ? new Date(Math.min(...dates)).toISOString()
+                    : null,
+                end:
+                  dates.length > 0
+                    ? new Date(Math.max(...dates)).toISOString()
+                    : null,
+              },
+              strategies,
+              csvMappings,
+            };
+
+            // Save updated metadata (cache the mappings)
+            await saveMetadata(blockPath, updatedMetadata);
+          }
         } catch (error) {
           console.error(`Error loading block ${entry.name}:`, error);
         }
@@ -519,20 +820,44 @@ function convertToReportingTrade(
 }
 
 /**
- * Load reporting log (actual trades) from reportinglog.csv
- * @throws Error if reportinglog.csv does not exist
+ * Load reporting log (actual trades) from reportinglog CSV
+ * Uses CSV mappings from metadata if available.
+ * @throws Error if reportinglog CSV does not exist
  */
 export async function loadReportingLog(
   baseDir: string,
   blockId: string
 ): Promise<ReportingTrade[]> {
   const blockPath = path.join(baseDir, blockId);
-  const reportingLogPath = path.join(blockPath, "reportinglog.csv");
+
+  // Load metadata to check for CSV mappings
+  const metadata = await loadMetadata(blockPath);
+  const filename = metadata?.csvMappings?.reportinglog || "reportinglog.csv";
+  const reportingLogPath = path.join(blockPath, filename);
 
   // Check if file exists - throw if not
   try {
     await fs.access(reportingLogPath);
   } catch {
+    // Try discovery as fallback
+    if (filename === "reportinglog.csv") {
+      const discovered = await discoverCsvFiles(blockPath);
+      if (discovered.mappings.reportinglog) {
+        const altPath = path.join(blockPath, discovered.mappings.reportinglog);
+        const content = await fs.readFile(altPath, "utf-8");
+        const records = parseCSV(content);
+        const trades: ReportingTrade[] = [];
+        for (const record of records) {
+          const trade = convertToReportingTrade(record);
+          if (trade) trades.push(trade);
+        }
+        trades.sort(
+          (a, b) =>
+            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+        );
+        return trades;
+      }
+    }
     throw new Error(`reportinglog.csv not found in block: ${blockId}`);
   }
 
