@@ -2,155 +2,54 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-11)
+See: .planning/PROJECT.md (updated 2026-01-17)
 
-**Core value:** Make WFA results clear and understandable for users new to walk-forward analysis
-**Current focus:** v2.0 Claude Integration — Phase 16 (Documentation Review)
+**Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 16 of 16 (Documentation Review)
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-01-17 — Completed 16-01-PLAN.md
+Milestone: v2.0 Claude Integration — SHIPPED 2026-01-17
+Status: Complete
+Last activity: 2026-01-17 — Milestone archived
 
-Progress: ██████████ 100% (All phases complete)
+Progress: ██████████ 100%
 
-## v2.0 Goal
+## v2.0 Accomplishments
 
-Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP server or skill, providing full API access to data queries, analysis execution, and automated exploration.
+- MCP server (`tradeblocks-mcp`) with 19 tools at packages/mcp-server/
+- 6 agent skills at packages/agent-skills/ following agentskills.io standard
+- JSON-first output pattern optimized for AI reasoning
+- Flexible CSV discovery by column headers (ISS-006 fix)
+- GitHub Actions release pipeline with MCPB bundle distribution
+- 20 integration tests and comprehensive documentation
 
-## Accumulated Context
+**Stats:**
+- 98 files created/modified
+- ~10,400 LOC in packages/ (MCP server + agent skills)
+- 7 phases (including 13.1), 15 plans
+- 4 days (2026-01-14 → 2026-01-17)
 
-### Decisions
+## What's Next
 
-**v2.0 Phase 11-01:**
-- Monorepo with npm workspaces (migrated from pnpm 2026-01-15)
-- MCP server at packages/mcp-server/ with ESM-only config
-- tsup bundles lib/ imports for standalone npm distribution
-- Path alias @lib/* for shared code imports
+To release v2.0:
+1. Merge feature/ai_analysis to master
+2. Create tag: `git tag v2.0.0 && git push --tags`
+3. GitHub Actions will build and release MCPB bundle
 
-**v2.0 Phase 11-02:**
-- Use McpServer API (not deprecated Server class)
-- Use zod@4 for SDK compatibility
-- Folder-based block structure for MCP:
-  - Each folder = one block
-  - Contains tradelog.csv (required), dailylog.csv (optional), reportinglog.csv (optional)
-  - .block.json stores metadata + cached stats
-- MCP "reprocess" = re-parse CSVs + recalculate (different from UI "recalculate")
+For next milestone:
+- Run `/gsd:discuss-milestone` to explore ideas
+- Or `/gsd:new-milestone` to start planning
 
-**v2.0 Phase 12-01:**
-- CSV parsing inline in block-loader (TradeProcessor uses browser File API)
-- Strategy filtering forces trade-based calculations (daily logs = full portfolio)
-- Automatic metadata caching in .block.json for faster listing
-- ESM imports require .js extension in TypeScript
+## Historical Context
 
-**v2.0 Phase 12-02:**
-- JSON-first output pattern: All tools return brief text summary + structured JSON resource
-  - JSON is authoritative source for Claude reasoning (machine-readable)
-  - Text summary for user visibility only (1-3 lines)
-  - Removed verbose markdown tables to reduce context bloat
-- Walk-forward uses dynamic window sizing based on trade date range
-- Monte Carlo defaults to trades resample method with 5% worst-case pool injection
-- Correlation defaults to Kendall's tau (robust to outliers)
-- Kelly warnings for portfolio > 25% or strategy > 50%
-- UAT-001 Fix: Expanded all tool schemas to expose underlying calculation module parameters
-
-**v2.0 Phase 12-03:**
-- 16 chart types in get_performance_charts including MFE/MAE for stop loss/take profit optimization
-- MFE/MAE implemented inline to avoid bundle dependency issues
-- Backtest vs actual supports three scaling modes: raw, perContract, toReported
-- All performance tools expose full parameters (dateRange, normalizeTo1Lot, etc.)
-- Report Builder documented for Phase 13 consideration (custom filtered reports via MCP)
-
-**v2.0 Phase 13-01:**
-- 4 Report Builder MCP tools: list_available_fields, run_filtered_query, get_field_statistics, aggregate_by_field
-- Inline trade enrichment required (browser deps prevent importing enrichTrades)
-- Filter logic implemented inline with all 7 operators (eq, neq, gt, gte, lt, lte, between)
-- MFE/MAE approximated from maxProfit/maxLoss when full calculation unavailable
-- Total MCP tools: 18 (6 core + 5 analysis + 3 performance + 4 report)
-
-**v2.0 Phase 13.1-01:**
-- import_csv MCP tool for ad-hoc CSV analysis without pre-configured blocks
-- CSV validation for tradelog (17 columns), dailylog (5 columns), reportinglog formats
-- Copy-on-import pattern: copies CSV to blocks directory with .block.json metadata
-- Total MCP tools: 19 (6 core + 5 analysis + 3 performance + 4 report + 1 import)
-
-**v2.0 Phase 14-01:**
-- Agent Skills standard (agentskills.io) for cross-platform compatibility
-- Progressive disclosure: SKILL.md (~120-140 lines) + references/ for detailed education
-- 3 core skills created: tradeblocks-health-check, tradeblocks-wfa, tradeblocks-risk
-- Conversational workflow pattern: gather context → analyze → interpret → recommend
-- Skills installable at .claude/skills/, .codex/skills/, .gemini/skills/
-
-**v2.0 Phase 14-02:**
-- 3 additional skills: tradeblocks-compare, tradeblocks-portfolio, tradeblocks-optimize
-- Compare skill handles 3 comparison types with scaling mode explanations
-- Portfolio skill uses ADD/CONSIDER/SKIP recommendation framework
-- Optimize skill uses Report Builder tools with overfitting warnings
-
-**v2.0 Phase 14-03:**
-- Two distribution paths: Skills (CLI) and Desktop Extension (Claude Desktop)
-- Skills documentation: README.md, INSTALL.md, install.sh helper script
-- Desktop Extension: manifest.json for MCPB packaging (.mcpb bundle)
-- MCP server README.md with Claude Desktop installation instructions
-
-**v2.0 Phase 14-04:**
-- Skill manifest (index.json) for programmatic skill listing
-- Copy-on-build pattern for npm package portability (symlinks not supported)
-- Multi-entry tsup: index.ts (executable) + skill-installer.ts (library)
-- Skill installer API: install/uninstall/check functions for Phase 15 CLI
-- Phase 14 complete: 6 skills with documentation, packaging, and installer module
-
-**v2.0 Phase 15-01:**
-- CLI commands: install-skills, uninstall-skills, check-skills
-- Manual argv parsing (no external library)
-- Flexible CSV discovery by column header analysis (ISS-006 fix)
-- CSV type detection patterns: trade log needs P/L + 2 trade columns
-- Discovered mappings cached in .block.json under csvMappings
-- Backward compatible: standard filenames still work
-
-**v2.0 Phase 15-02:**
-- GitHub Actions release workflow triggers on v* tags
-- MCPB bundle attached as release asset automatically
-- Jest integration tests for MCP server (20 tests)
-- Tests import from bundled output (test-exports.ts pattern)
-- Comprehensive USAGE.md with workflows, tool reference, CSV formats
-- README.md updated with all installation methods
-
-All v1.0 decisions documented in PROJECT.md and archived in milestone file.
-
-**v2.0 Phase 16-01:**
-- Documentation audit completed: fixed Recharts→Plotly reference, removed stale roadmap
-- Added monorepo structure documentation with npm workspace commands
-- README refocused as developer navigation hub
-- MCP tool tables verified and corrected (19 tools total)
-
-**v2.0 MILESTONE COMPLETE** - All 16 phases executed, release ready.
-
-### Deferred Issues
-
-ISS-005: Plotly TypeScript type conflicts with pnpm (pre-existing, exposed by package manager switch)
-
-All v1.0 issues resolved. ISS-006 resolved in 15-01. See `.planning/ISSUES.md` for closed issues with resolution notes.
-
-### Blockers/Concerns
-
-None — ISS-005 is a build-time type issue only, runtime works correctly.
-
-### Roadmap Evolution
-
-- Milestone v2.0 created: Claude Integration, 5 phases (Phase 11-15)
-- Phase 11 complete: Research & Architecture
-- Phase 14 added: Multi-Platform Agent Skills (Claude, OpenAI, Gemini)
-- Phase 15: Polish & Documentation (moved from Phase 14)
-- Phase 13.1 inserted after Phase 13: Import CSV Tool (URGENT) — enables ad-hoc CSV analysis without pre-configured blocks
-- Phase 16 added: Documentation Review — comprehensive docs review before v2.0 release
+See [v2.0 archive](milestones/v2.0-claude-integration.md) for full phase details and decisions.
+See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement history.
 
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: Completed 16-01-PLAN.md (Documentation Review)
+Stopped at: v2.0 milestone completed and archived
 Resume file: None
 
-Next: /gsd:complete-milestone (all phases done)
+Next: Merge to master and tag release, or plan next milestone

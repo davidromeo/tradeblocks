@@ -1,33 +1,30 @@
-# Walk-Forward Analysis Enhancement
+# TradeBlocks
 
 ## What This Is
 
-A user-controlled walk-forward analysis system with clear, understandable results. Users configure parameter sweeps via opt-in collapsible sections, run analysis, and see results organized into tabs with summary view, interpretation guidance, red flags, and detailed metrics. Designed for traders new to WFA concepts.
+Options trading analytics platform with a web dashboard and AI-powered analysis via MCP (Model Context Protocol). Includes walk-forward analysis, Monte Carlo simulation, correlation analysis, position sizing, and more — all accessible through a browser UI or programmatically via MCP server for integration with Claude, Codex, and Gemini AI assistants.
 
 ## Core Value
 
-Make WFA results clear and understandable for users new to walk-forward analysis. If nothing else works, users must be able to understand what the analysis is telling them.
+Make trading analytics accessible and understandable. Complex analysis should be easy to run and interpret, whether through the UI or AI-assisted workflows.
 
 ## Requirements
 
 ### Validated
 
-- ✓ Walk-forward analysis calculation engine — existing
-- ✓ WFA UI page with results display — existing
-- ✓ WFA state management — existing
-- ✓ WFA UI components — existing
-- ✓ Block-based data model integration — existing
-- ✓ Client-side only architecture — existing
-- ✓ Parameter selection control — v1.0 (opt-in collapsible sections, disabled by default)
-- ✓ Parameter range configuration — v1.0 (min/max/step inputs with string state pattern)
-- ✓ Input validation improvements — v1.0 (free text editing, minimum of 1 for day/trade inputs)
-- ✓ Optimization targets audit — v1.0 (removed 3 broken diversification targets)
-- ✓ Results summary view — v1.0 (tab-based with verdict badges)
-- ✓ WFA terminology explanations — v1.0 (comprehensive tooltips, IS/OOS glossary)
-- ✓ Interpretation guidance — v1.0 (Analysis tab with red flags and insights)
-- ✓ Robustness validation — v1.0 (sample variance N-1, documented formulas, 179 tests)
-- ✓ Pre-run configuration guidance — v1.0 (validatePreRunConfiguration, auto-config alerts)
-- ✓ Error handling — v1.0 (error boundary, empty state guidance)
+**v1.0 WFA Enhancement:**
+- ✓ Walk-forward analysis with user-controlled parameters — v1.0
+- ✓ Tab-based results organization with verdict badges — v1.0
+- ✓ Interpretation guidance with red flags and insights — v1.0
+- ✓ Calculation robustness (sample variance N-1, 179 tests) — v1.0
+
+**v2.0 Claude Integration:**
+- ✓ MCP server with 19 tools (stats, analysis, performance, reports) — v2.0
+- ✓ JSON-first output pattern for AI reasoning — v2.0
+- ✓ 6 agent skills for guided analysis workflows — v2.0
+- ✓ Multi-platform support (Claude, Codex, Gemini) — v2.0
+- ✓ Flexible CSV discovery by column headers — v2.0
+- ✓ GitHub Actions release pipeline — v2.0
 
 ### Active
 
@@ -35,46 +32,42 @@ Make WFA results clear and understandable for users new to walk-forward analysis
 
 ### Out of Scope
 
-- New optimization algorithms — Stick with current optimization approach
-- Server-side computation — Must remain 100% client-side
-- Multi-strategy simultaneous WFA — Keep single-strategy focus
-- Diversification optimization targets — Too expensive to compute per parameter combination
+- Server-side computation — Must remain 100% client-side for web app
+- New optimization algorithms — Focus on UX and AI integration
+- Mobile app — Web-first approach, PWA works well
 
 ## Context
 
-TradeBlocks is a Next.js 15 client-side application for options trading performance analysis. WFA v1.0 shipped with user-controlled parameter sweeps, tab-based results organization, and comprehensive interpretation guidance for newcomers.
+**Current state (v2.0):**
+- Next.js 15 web application with client-side computation
+- MCP server (`tradeblocks-mcp`) with 19 tools at packages/mcp-server/
+- 6 agent skills at packages/agent-skills/
+- ~10,400 LOC in packages/, ~12,500 LOC in WFA-related files
+- 179 walk-forward tests + 20 MCP integration tests
 
-**Current state (v1.0):**
-- 12,584 LOC in WFA-related files
-- 179 walk-forward tests
-- Parameters disabled by default (opt-in model)
-- Tab-based results: Analysis | Details | Charts | Windows
-
-Key files:
-- `lib/calculations/walk-forward-analyzer.ts` — Core WFA logic
-- `lib/calculations/walk-forward-interpretation.ts` — Interpretation module
-- `lib/stores/walk-forward-store.ts` — WFA state management
-- `app/(platform)/walk-forward/page.tsx` — WFA page with tab organization
-- `components/walk-forward/` — WFA UI components
+**Architecture:**
+- Monorepo with npm workspaces
+- Root: Next.js web app
+- packages/mcp-server/: MCP server (npm: tradeblocks-mcp)
+- packages/agent-skills/: Agent skill definitions
 
 ## Constraints
 
-- **Client-side only**: All computation in browser, no backend API
+- **Client-side web app**: All web computation in browser, no backend API
+- **MCP server**: Node.js process, stdio transport
 - **Compatibility**: Must work with existing Block/Trade data structures
-- **Performance**: Large parameter sweeps must remain responsive (Web Workers if needed)
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Results clarity as core priority | New users being overwhelmed is the biggest barrier to adoption | ✓ Good |
-| Keep current optimization algorithms | Focus on UX, not algorithmic changes | ✓ Good |
-| Parameters disabled by default | Prevents 5400+ default combinations | ✓ Good |
-| Tabs instead of Collapsible for results | Clearer navigation | ✓ Good |
-| Efficiency as headline metric | Intuitive "is it overfit?" indicator | ✓ Good |
-| Sample variance (N-1) for stability | More accurate for typical 5-10 WFA periods | ✓ Good |
-| Error boundary on results only | Config stays accessible on failure | ✓ Good |
-| String state pattern for inputs | Allows free text editing without HTML5 blocking | ✓ Good |
+| Results clarity as core priority | New users overwhelmed is biggest barrier | ✓ Good |
+| MCP over custom Claude skill | Wider platform support, standard protocol | ✓ Good |
+| JSON-first output pattern | Optimizes for AI reasoning, not human reading | ✓ Good |
+| Folder-based blocks with .block.json | Simple file structure, cacheable metadata | ✓ Good |
+| Flexible CSV discovery | UX improvement, column headers over filenames | ✓ Good |
+| Agent Skills standard (agentskills.io) | Cross-platform compatibility | ✓ Good |
+| npm workspaces monorepo | Simpler than pnpm, better npm compatibility | ✓ Good |
 
 ---
-*Last updated: 2026-01-11 after v1.0 milestone*
+*Last updated: 2026-01-17 after v2.0 milestone*

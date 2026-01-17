@@ -1,5 +1,33 @@
 # Project Milestones: TradeBlocks
 
+## v2.0 Claude Integration (Shipped: 2026-01-17)
+
+**Delivered:** MCP server with 19 tools for AI-powered trading analytics, plus 6 agent skills for guided analysis workflows across Claude, Codex, and Gemini platforms.
+
+**Phases completed:** 11-16 (15 plans total, including Phase 13.1)
+
+**Key accomplishments:**
+
+- MCP server (`tradeblocks-mcp`) with 19 tools covering statistics, analysis, performance, and reports
+- JSON-first output pattern optimized for Claude reasoning with structured data
+- 6 agent skills (health-check, wfa, risk, compare, portfolio, optimize) following agentskills.io standard
+- Flexible CSV discovery by column headers (ISS-006 fix)
+- GitHub Actions release pipeline with MCPB bundle distribution
+- 20 integration tests and comprehensive documentation
+
+**Stats:**
+
+- 98 files created/modified
+- ~10,400 LOC in packages/ (MCP server + agent skills)
+- 7 phases (including 13.1), 15 plans
+- 4 days (2026-01-14 → 2026-01-17)
+
+**Git range:** `feat(11-01)` → `docs(16-01)`
+
+**What's next:** Planning next milestone
+
+---
+
 ## v1.0 WFA Enhancement (Shipped: 2026-01-11)
 
 **Delivered:** Transformed walk-forward analysis from a rigid automatic tool into a user-controlled system with clear, understandable results for newcomers.
@@ -24,23 +52,6 @@
 
 **Git range:** `7e8178d` → `3c9adb9`
 
-**What's next:** v2.0 Claude Integration
-
----
-
-## v2.0 Claude Integration (In Progress)
-
-**Goal:** Enable Claude Code/Cowork to interact with TradeBlocks programmatically via MCP server or skill, providing full API access to data queries, analysis execution, and automated exploration.
-
-**Phases:** 11-14 (4 phases total)
-
-| Phase | Name | Goal | Research |
-|-------|------|------|----------|
-| 11 | Research & Architecture | MCP vs skill investigation, design | Likely |
-| 12 | Core Integration Layer | Build integration foundation | Likely |
-| 13 | Analysis Capabilities | WFA execution, automated exploration | Unlikely |
-| 14 | Polish & Documentation | Error handling, examples, docs | Unlikely |
-
-**Started:** 2026-01-14
+**What's next:** v2.0 Claude Integration ✓
 
 ---
