@@ -62,6 +62,7 @@ Both the web dashboard and MCP server accept CSV exports from platforms like [Op
 
 - `tradelog.csv` (required) - Trade history with P/L, dates, strategy name
 - `dailylog.csv` (optional) - Daily portfolio values for enhanced drawdown calculations
+- `reportinglog.csv` (optional) - Actual/reported trades for backtest vs live comparison
 
 Files are auto-detected by column headers, not filenames. See [USAGE.md](packages/mcp-server/docs/USAGE.md) for format details.
 
