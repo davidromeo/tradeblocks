@@ -8,7 +8,7 @@ Model Context Protocol (MCP) server for options trading analysis. Provides progr
 - **Block-based data organization** - each folder is a trading strategy
 - **Automatic caching** - statistics cached in `.block.json` for fast access
 - **Flexible CSV detection** - auto-detects file types by column headers
-- **Cross-platform** - works with Claude Desktop, Claude Code, and other MCP clients
+- **Cross-platform** - works with Claude, Codex CLI, Gemini CLI, and any MCP client
 
 ## Installation
 
@@ -59,7 +59,9 @@ node packages/mcp-server/server/index.js ~/Trading/backtests
 
 For detailed usage examples, see [docs/USAGE.md](docs/USAGE.md).
 
-## Claude Desktop Configuration
+## Configuration by Platform
+
+### Claude Desktop
 
 | Platform | Config Location |
 |----------|-----------------|
@@ -71,25 +73,58 @@ For detailed usage examples, see [docs/USAGE.md](docs/USAGE.md).
 {
   "mcpServers": {
     "tradeblocks": {
-      "command": "node",
-      "args": ["/path/to/tradeblocks/packages/mcp-server/server/index.js"],
-      "env": {
-        "BLOCKS_DIRECTORY": "/path/to/your/backtests"
-      }
+      "command": "npx",
+      "args": ["tradeblocks-mcp", "/path/to/your/backtests"]
     }
   }
 }
 ```
 
-## Claude Code (CLI) Installation
+### Claude Code (CLI)
 
 ```bash
-# Add the MCP server to Claude Code
-claude mcp add tradeblocks -- node /path/to/tradeblocks/packages/mcp-server/server/index.js
+# Add the MCP server
+claude mcp add tradeblocks -- npx tradeblocks-mcp ~/Trading/backtests
 
-# Set the blocks directory in your shell profile
+# Or with environment variable
 export BLOCKS_DIRECTORY=~/Trading/backtests
+claude mcp add tradeblocks -- npx tradeblocks-mcp
 ```
+
+### OpenAI Codex CLI
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.tradeblocks]
+command = "npx"
+args = ["tradeblocks-mcp", "/path/to/your/backtests"]
+```
+
+Or add via command line:
+
+```bash
+codex mcp add tradeblocks -- npx tradeblocks-mcp ~/Trading/backtests
+```
+
+See [Codex MCP documentation](https://developers.openai.com/codex/mcp/) for more options.
+
+### Gemini CLI
+
+Add to `~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "tradeblocks": {
+      "command": "npx",
+      "args": ["tradeblocks-mcp", "/path/to/your/backtests"]
+    }
+  }
+}
+```
+
+See [Gemini CLI MCP documentation](https://geminicli.com/docs/tools/mcp-server/) for more options.
 
 ## Agent Skills
 

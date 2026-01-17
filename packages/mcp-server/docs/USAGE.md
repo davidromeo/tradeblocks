@@ -23,9 +23,16 @@ npx tradeblocks-mcp ~/Trading/backtests
 tradeblocks-mcp ~/Trading/backtests
 ```
 
-### 3. Connect Claude Desktop
+### 3. Connect Your AI Assistant
 
-The server connects via stdio. Claude Desktop will auto-configure when you install the .mcpb bundle.
+The server communicates via stdio and works with any MCP-compatible client:
+
+- **Claude Desktop** - Install the .mcpb bundle or add to `claude_desktop_config.json`
+- **Claude Code** - `claude mcp add tradeblocks -- npx tradeblocks-mcp ~/backtests`
+- **Codex CLI** - Add to `~/.codex/config.toml`
+- **Gemini CLI** - Add to `~/.gemini/settings.json`
+
+See [README.md](../README.md) for platform-specific configuration.
 
 ---
 
@@ -35,7 +42,7 @@ The server connects via stdio. Claude Desktop will auto-configure when you insta
 
 "Run a health check on my iron-condor strategy"
 
-Claude will:
+Your AI assistant will:
 1. `list_backtests` - Find available blocks
 2. `get_statistics` - Get performance metrics
 3. `run_walk_forward` - Check for overfitting
@@ -45,7 +52,7 @@ Claude will:
 
 "Compare my spy-puts strategy against qqq-calls"
 
-Claude will:
+Your AI assistant will:
 1. Load both blocks
 2. `get_statistics` on each
 3. `calculate_correlation` between them
@@ -55,7 +62,7 @@ Claude will:
 
 "Should I add this new strategy to my portfolio?"
 
-Claude will:
+Your AI assistant will:
 1. Run health check on new strategy
 2. Calculate correlation with existing strategies
 3. Assess diversification benefit
@@ -65,7 +72,7 @@ Claude will:
 
 "What's the best day of week to enter trades?"
 
-Claude will:
+Your AI assistant will:
 1. `list_available_fields` - Find filterable fields
 2. `aggregate_by_field` - Group by day of week
 3. `get_field_statistics` - Compare performance
@@ -211,15 +218,13 @@ Consider using `run_monte_carlo` for additional robustness testing.
 |----------|-------------|---------|
 | `BLOCKS_DIRECTORY` | Path to blocks folder | (required) |
 
-### Using with Claude Code (CLI)
+### Platform-Specific Configuration
 
-```bash
-# Add MCP server
-claude mcp add tradeblocks -- node /path/to/server/index.js
-
-# Set blocks directory
-export BLOCKS_DIRECTORY=~/Trading/backtests
-```
+See [README.md](../README.md#configuration-by-platform) for configuration examples for:
+- Claude Desktop
+- Claude Code (CLI)
+- OpenAI Codex CLI
+- Gemini CLI
 
 ### Installing Agent Skills
 
