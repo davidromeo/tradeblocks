@@ -85,19 +85,21 @@ Your AI assistant will:
 ### Core Tools
 | Tool | Purpose |
 |------|---------|
-| `list_backtests` | List all available blocks |
+| `list_backtests` | List all available blocks with summary stats |
+| `get_block_info` | Detailed info for a specific block |
 | `get_statistics` | Performance metrics for a block |
-| `get_trades` | Raw trade data with optional filters |
-| `reprocess_block` | Re-parse CSVs and recalculate stats |
+| `get_strategy_comparison` | Compare strategies within a block |
+| `compare_blocks` | Compare statistics across multiple blocks |
+| `get_trades` | Raw trade data with filtering and pagination |
 
 ### Analysis Tools
 | Tool | Purpose |
 |------|---------|
 | `run_walk_forward` | Detect overfitting via WFA |
 | `run_monte_carlo` | Risk simulation with confidence intervals |
-| `calculate_correlation` | Strategy correlation matrix |
-| `get_tail_risk` | VaR, CVaR, max drawdown analysis |
-| `calculate_position_sizing` | Kelly criterion position sizing |
+| `get_correlation_matrix` | Strategy correlation matrix |
+| `get_tail_risk` | Tail dependence and copula-based risk |
+| `get_position_sizing` | Kelly criterion position sizing |
 
 ### Performance Tools
 | Tool | Purpose |

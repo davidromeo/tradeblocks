@@ -189,19 +189,21 @@ backtests/
 ### Core Tools
 | Tool | Description |
 |------|-------------|
-| `list_backtests` | List all available blocks |
+| `list_backtests` | List all available blocks with summary stats |
+| `get_block_info` | Detailed info for a specific block |
 | `get_statistics` | Performance metrics (Sharpe, Sortino, drawdown, etc.) |
-| `get_trades` | Raw trade data with optional filters |
-| `reprocess_block` | Re-parse CSVs and recalculate statistics |
+| `get_strategy_comparison` | Compare strategies within a block |
+| `compare_blocks` | Compare statistics across multiple blocks |
+| `get_trades` | Raw trade data with filtering, sorting, pagination |
 
 ### Analysis Tools
 | Tool | Description |
 |------|-------------|
 | `run_walk_forward` | Walk-forward analysis with configurable windows |
 | `run_monte_carlo` | Monte Carlo simulation with worst-case scenarios |
-| `calculate_correlation` | Strategy correlation matrix (Kendall's tau) |
-| `get_tail_risk` | VaR, CVaR, and max drawdown analysis |
-| `calculate_position_sizing` | Kelly criterion position sizing |
+| `get_correlation_matrix` | Strategy correlation matrix (Kendall, Spearman, Pearson) |
+| `get_tail_risk` | Tail dependence and copula-based risk analysis |
+| `get_position_sizing` | Kelly criterion position sizing |
 
 ### Performance Tools
 | Tool | Description |

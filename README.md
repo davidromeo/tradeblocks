@@ -74,7 +74,7 @@ Files are auto-detected by column headers, not filenames. See [USAGE.md](package
 - Client-side storage (IndexedDB) - data stays on your machine
 
 ### MCP Server
-- 18 analysis tools for statistics, simulations, walk-forward analysis
+- 19 analysis tools for statistics, simulations, walk-forward analysis
 - Works with Claude Desktop, Claude Code, Codex CLI, Gemini CLI
 - Agent skills for guided strategy health checks and portfolio recommendations
 
