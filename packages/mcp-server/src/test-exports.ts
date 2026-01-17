@@ -19,3 +19,6 @@ export {
   type ImportCsvResult,
   type ImportCsvOptions,
 } from './utils/block-loader.js';
+
+// Export PortfolioStatsCalculator for testing block_diff logic
+export { PortfolioStatsCalculator } from '@lib/calculations/portfolio-stats';
