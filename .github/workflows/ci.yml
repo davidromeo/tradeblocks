@@ -29,3 +29,25 @@ jobs:
       - name: Build
         run: npm run build
 
+  mcp-server:
+    name: MCP Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build MCP Server
+        run: npm run build -w packages/mcp-server
+
+      - name: Run MCP Server Tests
+        run: npm test -w packages/mcp-server
+
