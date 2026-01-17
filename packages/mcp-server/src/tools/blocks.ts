@@ -704,7 +704,235 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     }
   );
 
-  // Tool 6: get_trades
+  // Tool 6: block_diff
+  server.registerTool(
+    "block_diff",
+    {
+      description:
+        "Compare two blocks with strategy overlap analysis and P/L attribution. Shows which strategies are shared vs unique between blocks, and calculates performance deltas for shared strategies.",
+      inputSchema: z.object({
+        blockIdA: z.string().describe("First block (baseline) for comparison"),
+        blockIdB: z.string().describe("Second block (comparison target)"),
+        startDate: z
+          .string()
+          .optional()
+          .describe("Optional start date filter (YYYY-MM-DD)"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("Optional end date filter (YYYY-MM-DD)"),
+        metricsToCompare: z
+          .array(
+            z.enum([
+              "trades",
+              "pl",
+              "winRate",
+              "profitFactor",
+              "sharpeRatio",
+              "maxDrawdown",
+            ])
+          )
+          .optional()
+          .describe(
+            "Specific metrics to include in comparison (default: all). Use to focus output."
+          ),
+      }),
+    },
+    async ({ blockIdA, blockIdB, startDate, endDate, metricsToCompare }) => {
+      try {
+        // Load both blocks
+        const [blockA, blockB] = await Promise.all([
+          loadBlock(baseDir, blockIdA),
+          loadBlock(baseDir, blockIdB),
+        ]);
+
+        // Apply date filters
+        const tradesA = filterByDateRange(blockA.trades, startDate, endDate);
+        const tradesB = filterByDateRange(blockB.trades, startDate, endDate);
+
+        // Extract unique strategy names from each block
+        const strategiesA = new Set(tradesA.map((t) => t.strategy));
+        const strategiesB = new Set(tradesB.map((t) => t.strategy));
+
+        // Categorize strategies
+        const shared: string[] = [];
+        const uniqueToA: string[] = [];
+        const uniqueToB: string[] = [];
+
+        for (const strategy of strategiesA) {
+          if (strategiesB.has(strategy)) {
+            shared.push(strategy);
+          } else {
+            uniqueToA.push(strategy);
+          }
+        }
+
+        for (const strategy of strategiesB) {
+          if (!strategiesA.has(strategy)) {
+            uniqueToB.push(strategy);
+          }
+        }
+
+        // Sort for consistent output
+        shared.sort();
+        uniqueToA.sort();
+        uniqueToB.sort();
+
+        // Calculate overlap percentage
+        const totalUniqueStrategies = new Set([...strategiesA, ...strategiesB]).size;
+        const overlapPercent =
+          totalUniqueStrategies > 0
+            ? (shared.length / totalUniqueStrategies) * 100
+            : 0;
+
+        // Calculate per-strategy stats using trade-based calculations only
+        const statsA = calculator.calculateStrategyStats(tradesA);
+        const statsB = calculator.calculateStrategyStats(tradesB);
+
+        // Helper to build strategy comparison entry
+        const buildStrategyEntry = (strategy: string) => {
+          const blockAStats = statsA[strategy];
+          const blockBStats = statsB[strategy];
+
+          const entryA = blockAStats
+            ? {
+                trades: blockAStats.tradeCount,
+                pl: blockAStats.totalPl,
+                winRate: blockAStats.winRate,
+                profitFactor: blockAStats.profitFactor,
+              }
+            : null;
+
+          const entryB = blockBStats
+            ? {
+                trades: blockBStats.tradeCount,
+                pl: blockBStats.totalPl,
+                winRate: blockBStats.winRate,
+                profitFactor: blockBStats.profitFactor,
+              }
+            : null;
+
+          // Calculate delta only for shared strategies
+          const delta =
+            entryA && entryB
+              ? {
+                  trades: entryB.trades - entryA.trades,
+                  pl: entryB.pl - entryA.pl,
+                  winRate: entryB.winRate - entryA.winRate,
+                }
+              : null;
+
+          return {
+            strategy,
+            blockA: entryA,
+            blockB: entryB,
+            delta,
+          };
+        };
+
+        // Build per-strategy comparison for all strategies
+        const perStrategyComparison = [
+          ...shared.map(buildStrategyEntry),
+          ...uniqueToA.map(buildStrategyEntry),
+          ...uniqueToB.map(buildStrategyEntry),
+        ];
+
+        // Calculate portfolio-level totals
+        // Use trade-based calculations for filtered comparison
+        const portfolioStatsA = calculator.calculatePortfolioStats(
+          tradesA,
+          undefined, // Don't use daily logs for comparison - trades only
+          true // Force trade-based calculations
+        );
+        const portfolioStatsB = calculator.calculatePortfolioStats(
+          tradesB,
+          undefined,
+          true
+        );
+
+        // Build portfolio totals with all or filtered metrics
+        const allMetrics = !metricsToCompare || metricsToCompare.length === 0;
+        const includeMetric = (m: string) =>
+          allMetrics || metricsToCompare?.includes(m as typeof metricsToCompare[number]);
+
+        const buildPortfolioEntry = (
+          stats: ReturnType<typeof calculator.calculatePortfolioStats>
+        ) => {
+          const entry: Record<string, number | null> = {};
+          if (includeMetric("trades")) entry.totalTrades = stats.totalTrades;
+          if (includeMetric("pl")) entry.netPl = stats.netPl;
+          if (includeMetric("winRate")) entry.winRate = stats.winRate;
+          if (includeMetric("profitFactor"))
+            entry.profitFactor = stats.profitFactor;
+          if (includeMetric("sharpeRatio"))
+            entry.sharpeRatio = stats.sharpeRatio ?? null;
+          if (includeMetric("maxDrawdown"))
+            entry.maxDrawdown = stats.maxDrawdown;
+          return entry;
+        };
+
+        const portfolioA = buildPortfolioEntry(portfolioStatsA);
+        const portfolioB = buildPortfolioEntry(portfolioStatsB);
+
+        // Calculate deltas for portfolio totals
+        const portfolioDelta: Record<string, number | null> = {};
+        for (const key of Object.keys(portfolioA)) {
+          const valA = portfolioA[key];
+          const valB = portfolioB[key];
+          portfolioDelta[key] =
+            valA !== null && valB !== null ? valB - valA : null;
+        }
+
+        // Brief summary for user display
+        const summary = `Block Diff: ${blockIdA} vs ${blockIdB} | ${shared.length} shared, ${uniqueToA.length} unique to A, ${uniqueToB.length} unique to B | P/L delta: ${formatCurrency(portfolioStatsB.netPl - portfolioStatsA.netPl)}`;
+
+        // Build structured output
+        const structuredData = {
+          blockA: {
+            id: blockIdA,
+            tradeCount: tradesA.length,
+            strategies: Array.from(strategiesA).sort(),
+          },
+          blockB: {
+            id: blockIdB,
+            tradeCount: tradesB.length,
+            strategies: Array.from(strategiesB).sort(),
+          },
+          strategyOverlap: {
+            shared,
+            uniqueToA,
+            uniqueToB,
+            overlapPercent,
+          },
+          perStrategyComparison,
+          portfolioTotals: {
+            blockA: portfolioA,
+            blockB: portfolioB,
+            delta: portfolioDelta,
+          },
+          filters: {
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+            metricsToCompare: metricsToCompare ?? null,
+          },
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error comparing blocks: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 7: get_trades
   server.registerTool(
     "get_trades",
     {
