@@ -20,7 +20,7 @@ import { Trade } from '../models/trade'
 import { DailyLogEntry } from '../models/daily-log'
 import { PortfolioStats, StrategyStats, AnalysisConfig } from '../models/portfolio-stats'
 import type { NormalizedPortfolioStats } from '../models/portfolio-stats-normalized'
-import { asDecimal01, type Decimal01 } from '../types/percentage'
+import { asDecimal01 } from '../types/percentage'
 
 /**
  * Default analysis configuration

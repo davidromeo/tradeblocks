@@ -6,8 +6,6 @@
  */
 
 import {
-  Decimal01,
-  Percentage,
   toPercentage,
   toDecimal,
   asDecimal01,
