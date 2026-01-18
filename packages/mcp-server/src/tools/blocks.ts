@@ -2155,12 +2155,54 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         }
 
         // Create modified trades for scaled portfolio calculation
-        // We need to modify pl and commissions for the calculator
-        const modifiedTrades: Trade[] = scaledTrades.map((st) => ({
+        // We need to modify pl, commissions, AND fundsAtClose for the calculator.
+        // fundsAtClose must be recalculated to reflect the scaled equity curve,
+        // otherwise drawdown calculations will use unscaled equity values.
+
+        // First, get original initial capital from trades
+        const sortedOriginal = [...trades]
+          .filter((t) => t.dateClosed && t.fundsAtClose !== undefined)
+          .sort((a, b) => {
+            const dateA = new Date(a.dateClosed!);
+            const dateB = new Date(b.dateClosed!);
+            const cmp = dateA.getTime() - dateB.getTime();
+            if (cmp !== 0) return cmp;
+            return (a.timeClosed || "").localeCompare(b.timeClosed || "");
+          });
+        const originalInitialCapital =
+          sortedOriginal.length > 0
+            ? PortfolioStatsCalculator.calculateInitialCapital(sortedOriginal)
+            : 1000000; // Fallback
+
+        // Sort scaled trades by close date to build equity curve
+        const sortedScaled = [...scaledTrades]
+          .filter((t) => t.dateClosed)
+          .sort((a, b) => {
+            const dateA = new Date(a.dateClosed!);
+            const dateB = new Date(b.dateClosed!);
+            const cmp = dateA.getTime() - dateB.getTime();
+            if (cmp !== 0) return cmp;
+            return (a.timeClosed || "").localeCompare(b.timeClosed || "");
+          });
+
+        // Build a map of trade index -> scaled fundsAtClose
+        // by accumulating scaled P&L from initial capital
+        let runningEquity = originalInitialCapital;
+        const scaledFundsAtCloseMap = new Map<number, number>();
+        for (const st of sortedScaled) {
+          runningEquity += st.scaledPl;
+          // Find the index of this trade in the original scaledTrades array
+          const idx = scaledTrades.indexOf(st);
+          scaledFundsAtCloseMap.set(idx, runningEquity);
+        }
+
+        const modifiedTrades: Trade[] = scaledTrades.map((st, idx) => ({
           ...st,
           pl: st.scaledPl,
           openingCommissionsFees: st.scaledOpeningComm,
           closingCommissionsFees: st.scaledClosingComm,
+          // Use the recalculated fundsAtClose based on scaled P&L
+          fundsAtClose: scaledFundsAtCloseMap.get(idx) ?? st.fundsAtClose,
         }));
 
         // Calculate scaled portfolio metrics
@@ -2813,15 +2855,19 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         }
 
         // MC median MDD vs historical MDD multiplier
+        // mcStats.medianMaxDrawdown is a decimal (0.12 = 12%)
+        // stats.maxDrawdown is a percentage (12 = 12%)
+        // Convert stats.maxDrawdown to decimal for comparison
+        const historicalMddDecimal = stats.maxDrawdown / 100;
         const mcMddMultiplier =
-          stats.maxDrawdown > 0
-            ? mcStats.medianMaxDrawdown / stats.maxDrawdown
+          historicalMddDecimal > 0
+            ? mcStats.medianMaxDrawdown / historicalMddDecimal
             : null;
         if (mcMddMultiplier !== null && mcMddMultiplier > mddMultThresh) {
           flags.push({
             type: "warning",
             dimension: "consistency",
-            message: `Monte Carlo median MDD (${formatPercent(mcStats.medianMaxDrawdown * 100)}) is ${mcMddMultiplier.toFixed(1)}x historical MDD (${formatPercent(stats.maxDrawdown * 100)}) - exceeds ${mddMultThresh}x threshold`,
+            message: `Monte Carlo median MDD (${formatPercent(mcStats.medianMaxDrawdown * 100)}) is ${mcMddMultiplier.toFixed(1)}x historical MDD (${formatPercent(stats.maxDrawdown)}) - exceeds ${mddMultThresh}x threshold`,
           });
         } else if (mcMddMultiplier !== null) {
           flags.push({
@@ -2907,12 +2953,13 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         }
 
         // Build key numbers
+        // Note: stats.maxDrawdown is already in percentage form (e.g., 5.66 = 5.66%)
         const keyNumbers = {
           strategies: strategies.length,
           trades: trades.length,
           sharpe: stats.sharpeRatio,
           sortino: stats.sortinoRatio,
-          maxDrawdownPct: stats.maxDrawdown * 100,
+          maxDrawdownPct: stats.maxDrawdown, // Already a percentage
           netPl: stats.netPl,
           avgCorrelation,
           avgTailDependence,
