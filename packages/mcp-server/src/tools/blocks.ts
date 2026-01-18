@@ -15,6 +15,8 @@ import {
   formatRatio,
 } from "../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@lib/calculations/portfolio-stats";
+import { calculateCorrelationMatrix } from "@lib/calculations/correlation";
+import { performTailRiskAnalysis } from "@lib/calculations/tail-risk-analysis";
 import type { Trade } from "@lib/models/trade";
 
 /**
@@ -1692,7 +1694,288 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     }
   );
 
-  // Tool 10: get_trades
+  // Tool 10: strategy_similarity
+  server.registerTool(
+    "strategy_similarity",
+    {
+      description:
+        "Detect potentially redundant strategies based on correlation, tail dependence, and trading day overlap. Flags strategy pairs that may be adding risk without diversification benefit.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        correlationThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.7)
+          .describe("Minimum correlation to flag as similar (default: 0.7)"),
+        tailDependenceThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.5)
+          .describe("Minimum tail dependence to flag as high joint risk (default: 0.5)"),
+        method: z
+          .enum(["kendall", "spearman", "pearson"])
+          .default("kendall")
+          .describe("Correlation method (default: kendall)"),
+        minSharedDays: z
+          .number()
+          .int()
+          .min(1)
+          .default(30)
+          .describe("Minimum shared trading days for valid comparison (default: 30)"),
+        topN: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(5)
+          .describe("Number of most similar pairs to return (default: 5)"),
+      }),
+    },
+    async ({ blockId, correlationThreshold, tailDependenceThreshold, method, minSharedDays, topN }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const trades = block.trades;
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found in block "${blockId}".`,
+              },
+            ],
+          };
+        }
+
+        // Get unique strategies
+        const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+        // Need at least 2 strategies for similarity analysis
+        if (strategies.length < 2) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Strategy similarity requires at least 2 strategies. Found ${strategies.length} strategy in block "${blockId}".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Calculate correlation matrix using existing utility
+        const correlationMatrix = calculateCorrelationMatrix(trades, {
+          method: method,
+          normalization: "raw",
+          dateBasis: "opened",
+          alignment: "shared",
+        });
+
+        // Calculate tail risk using existing utility
+        const tailRisk = performTailRiskAnalysis(trades, {
+          normalization: "raw",
+          dateBasis: "opened",
+          minTradingDays: minSharedDays,
+        });
+
+        // Calculate overlap scores: count shared trading days / total unique days
+        // Group trades by strategy and date
+        const strategyDates: Record<string, Set<string>> = {};
+        for (const trade of trades) {
+          if (!trade.strategy || !trade.dateOpened) continue;
+          if (!strategyDates[trade.strategy]) {
+            strategyDates[trade.strategy] = new Set();
+          }
+          // Extract date key from dateOpened
+          const dateKey = trade.dateOpened.toISOString().split("T")[0];
+          strategyDates[trade.strategy].add(dateKey);
+        }
+
+        // Build similarity pairs
+        interface SimilarPair {
+          strategyA: string;
+          strategyB: string;
+          correlation: number | null;
+          tailDependence: number | null;
+          overlapScore: number;
+          compositeSimilarity: number | null;
+          sharedTradingDays: number;
+          flags: {
+            isHighCorrelation: boolean;
+            isHighTailDependence: boolean;
+            isRedundant: boolean;
+          };
+          recommendation: string | null;
+        }
+
+        const pairs: SimilarPair[] = [];
+        let redundantPairs = 0;
+        let highCorrelationPairs = 0;
+        let highTailDependencePairs = 0;
+
+        // Iterate over unique strategy pairs (i < j)
+        for (let i = 0; i < strategies.length; i++) {
+          for (let j = i + 1; j < strategies.length; j++) {
+            const strategyA = strategies[i];
+            const strategyB = strategies[j];
+
+            // Get correlation from matrix
+            const idxA = correlationMatrix.strategies.indexOf(strategyA);
+            const idxB = correlationMatrix.strategies.indexOf(strategyB);
+            const correlation =
+              idxA >= 0 && idxB >= 0 && correlationMatrix.correlationData[idxA]
+                ? correlationMatrix.correlationData[idxA][idxB]
+                : null;
+            const sharedDaysFromCorr =
+              idxA >= 0 && idxB >= 0 && correlationMatrix.sampleSizes[idxA]
+                ? correlationMatrix.sampleSizes[idxA][idxB]
+                : 0;
+
+            // Get tail dependence from jointTailRiskMatrix
+            const tailIdxA = tailRisk.strategies.indexOf(strategyA);
+            const tailIdxB = tailRisk.strategies.indexOf(strategyB);
+            let tailDependence: number | null = null;
+            if (
+              tailIdxA >= 0 &&
+              tailIdxB >= 0 &&
+              tailRisk.jointTailRiskMatrix[tailIdxA] &&
+              tailRisk.jointTailRiskMatrix[tailIdxB]
+            ) {
+              // Average both directions since matrix can be asymmetric
+              const valAB = tailRisk.jointTailRiskMatrix[tailIdxA][tailIdxB];
+              const valBA = tailRisk.jointTailRiskMatrix[tailIdxB][tailIdxA];
+              if (!Number.isNaN(valAB) && !Number.isNaN(valBA)) {
+                tailDependence = (valAB + valBA) / 2;
+              }
+            }
+
+            // Calculate overlap score
+            const datesA = strategyDates[strategyA] || new Set();
+            const datesB = strategyDates[strategyB] || new Set();
+            const allDates = new Set([...datesA, ...datesB]);
+            const sharedDates = [...datesA].filter((d) => datesB.has(d)).length;
+            const overlapScore = allDates.size > 0 ? sharedDates / allDates.size : 0;
+
+            // Use sharedDaysFromCorr or calculate from overlap
+            const sharedTradingDays = sharedDaysFromCorr > 0 ? sharedDaysFromCorr : sharedDates;
+
+            // Calculate composite similarity score (weighted average)
+            // 50% correlation (absolute value), 30% tail dependence, 20% overlap score
+            let compositeSimilarity: number | null = null;
+            if (correlation !== null && !Number.isNaN(correlation)) {
+              const corrComponent = Math.abs(correlation) * 0.5;
+              const tailComponent = (tailDependence !== null ? tailDependence : 0) * 0.3;
+              const overlapComponent = overlapScore * 0.2;
+              compositeSimilarity = corrComponent + tailComponent + overlapComponent;
+            }
+
+            // Determine flags
+            const isHighCorrelation =
+              correlation !== null && !Number.isNaN(correlation) && Math.abs(correlation) >= correlationThreshold;
+            const isHighTailDependence =
+              tailDependence !== null && tailDependence >= tailDependenceThreshold;
+            const isRedundant = isHighCorrelation && isHighTailDependence;
+
+            // Update counters
+            if (isHighCorrelation) highCorrelationPairs++;
+            if (isHighTailDependence) highTailDependencePairs++;
+            if (isRedundant) redundantPairs++;
+
+            // Generate recommendation
+            let recommendation: string | null = null;
+            if (isRedundant) {
+              recommendation = "Consider consolidating - these strategies move together and suffer losses together";
+            } else if (isHighCorrelation) {
+              recommendation = "Moderate redundancy - correlated returns reduce diversification benefit";
+            } else if (isHighTailDependence) {
+              recommendation = "Tail risk overlap - may amplify losses during market stress";
+            }
+
+            pairs.push({
+              strategyA,
+              strategyB,
+              correlation: correlation !== null && !Number.isNaN(correlation) ? correlation : null,
+              tailDependence,
+              overlapScore,
+              compositeSimilarity,
+              sharedTradingDays,
+              flags: {
+                isHighCorrelation,
+                isHighTailDependence,
+                isRedundant,
+              },
+              recommendation,
+            });
+          }
+        }
+
+        // Sort by composite similarity (highest first), handling nulls
+        pairs.sort((a, b) => {
+          if (a.compositeSimilarity === null && b.compositeSimilarity === null) return 0;
+          if (a.compositeSimilarity === null) return 1;
+          if (b.compositeSimilarity === null) return -1;
+          return b.compositeSimilarity - a.compositeSimilarity;
+        });
+
+        // Apply topN limit
+        const topPairs = pairs.slice(0, topN);
+
+        // Build recommendations list
+        const recommendations: string[] = [];
+        for (const pair of topPairs) {
+          if (pair.flags.isRedundant) {
+            recommendations.push(
+              `Pair ${pair.strategyA}-${pair.strategyB} flagged as redundant: high correlation (${pair.correlation?.toFixed(2) ?? "N/A"}) + high tail dependence (${pair.tailDependence?.toFixed(2) ?? "N/A"})`
+            );
+            recommendations.push(
+              `Consider removing one of ${pair.strategyA} or ${pair.strategyB} to reduce concentrated risk`
+            );
+          }
+        }
+
+        // Build summary line
+        const mostSimilar = topPairs[0];
+        const summary = `Strategy Similarity: ${blockId} | ${strategies.length} strategies | ${redundantPairs} redundant pairs | Most similar: ${mostSimilar ? `${mostSimilar.strategyA}-${mostSimilar.strategyB} (${mostSimilar.compositeSimilarity?.toFixed(2) ?? "N/A"})` : "N/A"}`;
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          options: {
+            correlationThreshold,
+            tailDependenceThreshold,
+            method,
+            minSharedDays,
+            topN,
+          },
+          strategySummary: {
+            totalStrategies: strategies.length,
+            totalPairs: (strategies.length * (strategies.length - 1)) / 2,
+            redundantPairs,
+            highCorrelationPairs,
+            highTailDependencePairs,
+          },
+          similarPairs: topPairs,
+          recommendations,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating strategy similarity: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 11: get_trades
   server.registerTool(
     "get_trades",
     {
