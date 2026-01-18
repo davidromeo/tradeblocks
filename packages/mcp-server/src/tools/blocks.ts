@@ -1027,9 +1027,16 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           )
           .optional()
           .describe("User-defined scenarios with custom date ranges"),
+        includeEmpty: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            "Include scenarios with no trades in the results. Default false - only shows scenarios with data coverage."
+          ),
       }),
     },
-    async ({ blockId, scenarios, customScenarios }) => {
+    async ({ blockId, scenarios, customScenarios, includeEmpty }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
@@ -1112,11 +1119,29 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             avgLoss: number | null;
           } | null;
           isCustom: boolean;
+          noCoverage?: boolean;
         }> = [];
 
         let worstScenario: { name: string; netPl: number } | null = null;
         let bestScenario: { name: string; netPl: number } | null = null;
         let scenariosWithTrades = 0;
+        let scenariosSkipped = 0;
+        const skippedScenarioNames: string[] = [];
+
+        // Get portfolio date range for context
+        const sortedTrades = [...trades].sort(
+          (a, b) =>
+            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+        );
+        const portfolioStartDate = sortedTrades[0]?.dateOpened
+          ? new Date(sortedTrades[0].dateOpened).toISOString().split("T")[0]
+          : null;
+        const portfolioEndDate = sortedTrades[sortedTrades.length - 1]
+          ?.dateClosed
+          ? new Date(sortedTrades[sortedTrades.length - 1].dateClosed)
+              .toISOString()
+              .split("T")[0]
+          : null;
 
         for (const scenario of scenariosToRun) {
           // Filter trades to scenario date range
@@ -1127,15 +1152,20 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           );
 
           if (scenarioTrades.length === 0) {
-            // No trades in this scenario - null stats
-            scenarioResults.push({
-              name: scenario.name,
-              description: scenario.description,
-              dateRange: { start: scenario.startDate, end: scenario.endDate },
-              tradeCount: 0,
-              stats: null,
-              isCustom: scenario.isCustom,
-            });
+            // No trades in this scenario - only include if requested
+            scenariosSkipped++;
+            skippedScenarioNames.push(scenario.name);
+            if (includeEmpty) {
+              scenarioResults.push({
+                name: scenario.name,
+                description: scenario.description,
+                dateRange: { start: scenario.startDate, end: scenario.endDate },
+                tradeCount: 0,
+                stats: null,
+                isCustom: scenario.isCustom,
+                noCoverage: true,
+              });
+            }
           } else {
             // Calculate trade-based stats (no daily logs per constraining decision)
             const stats = calculator.calculatePortfolioStats(
@@ -1174,14 +1204,24 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
 
         // Build summary
         const summaryData = {
-          totalScenarios: scenarioResults.length,
+          totalScenariosTested: scenariosToRun.length,
           scenariosWithTrades,
+          scenariosSkipped,
+          skippedScenarios: skippedScenarioNames,
           worstScenario: worstScenario?.name ?? null,
           bestScenario: bestScenario?.name ?? null,
+          portfolioDateRange: {
+            start: portfolioStartDate,
+            end: portfolioEndDate,
+          },
         };
 
         // Brief summary for user display
-        const summary = `Stress Test: ${blockId} | ${scenariosWithTrades}/${scenarioResults.length} scenarios with trades | Worst: ${worstScenario?.name ?? "N/A"} (${worstScenario ? formatCurrency(worstScenario.netPl) : "N/A"}) | Best: ${bestScenario?.name ?? "N/A"} (${bestScenario ? formatCurrency(bestScenario.netPl) : "N/A"})`;
+        const skippedNote =
+          scenariosSkipped > 0
+            ? ` (${scenariosSkipped} skipped - no data coverage, portfolio starts ${portfolioStartDate})`
+            : "";
+        const summary = `Stress Test: ${blockId} | ${scenariosWithTrades} scenarios with trades${skippedNote} | Worst: ${worstScenario?.name ?? "N/A"} (${worstScenario ? formatCurrency(worstScenario.netPl) : "N/A"}) | Best: ${bestScenario?.name ?? "N/A"} (${bestScenario ? formatCurrency(bestScenario.netPl) : "N/A"})`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
