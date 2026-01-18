@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-01-17)
 ## Current Position
 
 Milestone: v2.1 Portfolio Comparison
-Phase: 21 complete, ready for 22
-Plan: 1 of 1 in Phase 21
+Phase: 22 complete, ready for 23
+Plan: 1 of 1 in Phase 22
 Status: Phase complete
-Last activity: 2026-01-18 — Completed 21-01-PLAN.md (Strategy Similarity Tool)
+Last activity: 2026-01-18 — Completed 22-01-PLAN.md (What-If Scaling Tool)
 
-Progress: ██████░░░░ 63%
+Progress: ███████░░░ 75%
 
 ## v2.1 Portfolio Comparison Goal
 
@@ -25,7 +25,7 @@ Add 7 new MCP tools to improve portfolio comparison and analysis capabilities:
 3. `drawdown_attribution` - Identify which strategies drive drawdowns [DONE - Phase 19]
 4. `marginal_contribution` - Calculate marginal Sharpe/Sortino of adding strategies [DONE - Phase 20]
 5. `strategy_similarity` - Detect redundant strategies [DONE - Phase 21]
-6. `what_if_scaling` - Project metrics at different position sizes
+6. `what_if_scaling` - Project metrics at different position sizes [DONE - Phase 22]
 7. `portfolio_health_check` - Unified health assessment in one call
 
 ## Historical Context
@@ -41,6 +41,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 - Phase 19 complete: drawdown_attribution tool with equity curve analysis
 - Phase 20 complete: marginal_contribution tool with with/without comparison
 - Phase 21 complete: strategy_similarity tool with composite scoring
+- Phase 22 complete: what_if_scaling tool with strategy weights
 
 ## Accumulated Decisions
 
@@ -56,14 +57,16 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 | 20 | Interpretation thresholds: |delta| < 0.01 = negligible | Consistent categorization |
 | 21 | Composite similarity: 50% correlation, 30% tail dep, 20% overlap | Balance correlation and tail risk signals |
 | 21 | Redundant requires BOTH high correlation AND high tail dependence | Conservative flag to avoid false positives |
+| 22 | Weight range 0-2.0 for realism | 2x leverage is reasonable, higher would be extreme |
+| 22 | Commissions scale proportionally with weight | 0.5x size ≈ 0.5x trading costs |
 
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 21-01-PLAN.md (Strategy Similarity Tool)
+Stopped at: Completed 22-01-PLAN.md (What-If Scaling Tool)
 Resume file: None
 
-Next: `/gsd:plan-phase 22` to plan What-If Scaling tool
+Next: `/gsd:plan-phase 23` to plan Portfolio Health Check tool
 
 ## Testing Infrastructure
 

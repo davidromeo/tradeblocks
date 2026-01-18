@@ -64,14 +64,14 @@ Plans:
 Plans:
 - [x] 21-01: Implement strategy_similarity tool with composite scoring
 
-### Phase 22: What-If Scaling Tool
+### Phase 22: What-If Scaling Tool ✓
 **Goal:** Project portfolio metrics if strategies were run at different sizes
 **Depends on:** Phase 21
 **Research:** Unlikely (straightforward scaling logic)
-**Plans:** TBD
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 22-01: TBD
+- [x] 22-01: Implement what_if_scaling tool with strategy weights
 
 ### Phase 23: Portfolio Health Check Tool
 **Goal:** Run correlation + tail risk + Monte Carlo in one call, return unified portfolio health assessment
@@ -142,7 +142,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | 19. Drawdown Attribution | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 20. Marginal Contribution | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 21. Strategy Similarity | v2.1 | 1/1 | Complete | 2026-01-18 |
-| 22. What-If Scaling | v2.1 | 0/? | Not started | - |
+| 22. What-If Scaling | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 23. Portfolio Health Check | v2.1 | 0/? | Not started | - |
 | 24. Web Platform Guide | v2.1 | 0/? | Not started | - |
 
