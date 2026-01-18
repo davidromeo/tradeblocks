@@ -107,7 +107,6 @@ export interface PerformanceMetrics {
  * Analysis configuration settings
  */
 export interface AnalysisConfig {
-  riskFreeRate: number  // Annual risk-free rate for Sharpe/Sortino calculations
   useBusinessDaysOnly: boolean
   annualizationFactor: number  // 252 for business days, 365 for calendar days
   confidenceLevel: number  // 0.95 for 95% confidence
