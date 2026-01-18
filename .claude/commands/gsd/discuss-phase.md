@@ -1,15 +1,20 @@
 ---
 name: gsd:discuss-phase
 description: Gather phase context through adaptive questioning before planning
-argument-hint: "[phase]"
+argument-hint: "<phase>"
+allowed-tools: [Read, Write, Bash, Glob, Grep, AskUserQuestion]
 ---
 
 <objective>
-Help the user articulate their vision for a phase through collaborative thinking.
+Extract implementation decisions that downstream agents need — researcher and planner will use CONTEXT.md to know what to investigate and what choices are locked.
 
-Purpose: Understand HOW the user imagines this phase working — what it looks like, what's essential. You're a thinking partner helping them crystallize their vision, not an interviewer gathering technical requirements.
+**How it works:**
+1. Analyze the phase to identify gray areas (UI, UX, behavior, etc.)
+2. Present gray areas — user selects which to discuss
+3. Deep-dive each selected area until satisfied
+4. Create CONTEXT.md with decisions that guide research and planning
 
-Output: {phase}-CONTEXT.md capturing the user's vision for the phase
+**Output:** `{phase}-CONTEXT.md` — decisions clear enough that downstream agents can act without asking the user again
 </objective>
 
 <execution_context>
@@ -20,7 +25,7 @@ Output: {phase}-CONTEXT.md capturing the user's vision for the phase
 <context>
 Phase number: $ARGUMENTS (required)
 
-**Load project state first:**
+**Load project state:**
 @.planning/STATE.md
 
 **Load roadmap:**
@@ -28,32 +33,48 @@ Phase number: $ARGUMENTS (required)
 </context>
 
 <process>
-1. Validate phase number argument (error if missing or invalid)
-2. Check if phase exists in roadmap
-3. Check if CONTEXT.md already exists (offer to update if yes)
-4. Follow discuss-phase.md workflow with **ALL questions using AskUserQuestion**:
-   - Present phase from roadmap
-   - Use AskUserQuestion: "How do you imagine this working?" with interpretation options
-   - Use AskUserQuestion to follow their thread — probe what excites them
-   - Use AskUserQuestion to sharpen the core — what's essential for THIS phase
-   - Use AskUserQuestion for decision gate (ready / ask more / let me add context)
-   - Create CONTEXT.md capturing their vision
-5. Offer next steps (research or plan the phase)
+1. Validate phase number (error if missing or not in roadmap)
+2. Check if CONTEXT.md exists (offer update/view/skip if yes)
+3. **Analyze phase** — Identify domain and generate phase-specific gray areas
+4. **Present gray areas** — Multi-select: which to discuss? (NO skip option)
+5. **Deep-dive each area** — 4 questions per area, then offer more/next
+6. **Write CONTEXT.md** — Sections match areas discussed
+7. Offer next steps (research or plan)
 
-**CRITICAL: ALL questions use AskUserQuestion. Never ask inline text questions.**
+**CRITICAL: Scope guardrail**
+- Phase boundary from ROADMAP.md is FIXED
+- Discussion clarifies HOW to implement, not WHETHER to add more
+- If user suggests new capabilities: "That's its own phase. I'll note it for later."
+- Capture deferred ideas — don't lose them, don't act on them
 
-User is the visionary, you are the builder:
-- Ask about vision, feel, essential outcomes
-- DON'T ask about technical risks (you figure those out)
-- DON'T ask about codebase patterns (you read the code)
-- DON'T ask about success metrics (too corporate)
-- DON'T interrogate about constraints they didn't mention
+**Domain-aware gray areas:**
+Gray areas depend on what's being built. Analyze the phase goal:
+- Something users SEE → layout, density, interactions, states
+- Something users CALL → responses, errors, auth, versioning
+- Something users RUN → output format, flags, modes, error handling
+- Something users READ → structure, tone, depth, flow
+- Something being ORGANIZED → criteria, grouping, naming, exceptions
+
+Generate 3-4 **phase-specific** gray areas, not generic categories.
+
+**Probing depth:**
+- Ask 4 questions per area before checking
+- "More questions about [area], or move to next?"
+- If more → ask 4 more, check again
+- After all areas → "Ready to create context?"
+
+**Do NOT ask about (Claude handles these):**
+- Technical implementation
+- Architecture choices
+- Performance concerns
+- Scope expansion
 </process>
 
 <success_criteria>
-
-- Phase validated against roadmap
-- Vision gathered through collaborative thinking (not interrogation)
-- CONTEXT.md captures: how it works, what's essential
-- User knows next steps (research or plan the phase)
+- Gray areas identified through intelligent analysis
+- User chose which areas to discuss
+- Each selected area explored until satisfied
+- Scope creep redirected to deferred ideas
+- CONTEXT.md captures decisions, not vague vision
+- User knows next steps
 </success_criteria>

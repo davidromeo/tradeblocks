@@ -54,12 +54,6 @@ Recent decisions affecting current work:
 - [Phase X]: [Decision summary]
 - [Phase Y]: [Decision summary]
 
-### Deferred Issues
-
-[From ISSUES.md — list open items with phase of origin]
-
-None yet.
-
 ### Pending Todos
 
 [From .planning/todos/pending/ — ideas captured during sessions]
@@ -110,7 +104,6 @@ STATE.md is the project's short-term memory spanning all phases and sessions.
 - execute: After SUMMARY.md created
   - Update position (phase, plan, status)
   - Note new decisions (detail in PROJECT.md)
-  - Update deferred issues list
   - Add blockers/concerns
 - transition: After phase marked complete
   - Update progress bar
@@ -152,12 +145,6 @@ Updated after each plan completion.
 
 **Decisions:** Reference to PROJECT.md Key Decisions table, plus recent decisions summary for quick access. Full decision log lives in PROJECT.md.
 
-**Deferred Issues:** Open items from ISSUES.md
-- Brief description with ISS-XXX number
-- Phase where discovered
-- Effort estimate if known
-- Helps phase planning identify what to address
-
 **Pending Todos:** Ideas captured via /gsd:add-todo
 - Count of pending todos
 - Reference to .planning/todos/pending/
@@ -182,7 +169,6 @@ Keep STATE.md under 100 lines.
 
 It's a DIGEST, not an archive. If accumulated context grows too large:
 - Keep only 3-5 recent decisions in summary (full log in PROJECT.md)
-- Reference ISSUES.md instead of listing all: "12 open issues — see ISSUES.md"
 - Keep only active blockers, remove resolved ones
 
 The goal is "read once, know where we are" — if it's too long, that fails.
@@ -208,14 +194,13 @@ The goal is "read once, know where we are" — if it's too long, that fails.
 **Size management:**
 - Keep under 100 lines total
 - Recent decisions only in STATE.md (full log in PROJECT.md)
-- Reference ISSUES.md instead of listing all issues
 - Keep only active blockers
 
 **Sections:**
 - Project Reference: Pointer to PROJECT.md with core value
 - Current Position: Where we are now (phase, plan, status)
 - Performance Metrics: Velocity tracking
-- Accumulated Context: Recent decisions, deferred issues, blockers
+- Accumulated Context: Recent decisions, pending todos, blockers
 - Session Continuity: Resume information
 
 </guidelines>

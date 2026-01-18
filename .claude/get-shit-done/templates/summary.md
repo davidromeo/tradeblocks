@@ -38,8 +38,6 @@ patterns-established:
   - "Pattern 1: description"
   - "Pattern 2: description"
 
-issues-created: [ISS-XXX, ISS-YYY] # From ISSUES.md if any
-
 # Metrics
 duration: Xmin
 completed: YYYY-MM-DD
@@ -99,21 +97,26 @@ _Note: TDD tasks may have multiple commits (test → feat → refactor)_
 
 [... repeat for each auto-fix ...]
 
-### Deferred Enhancements
-
-Logged to .planning/ISSUES.md for future consideration:
-- ISS-XXX: [Brief description] (discovered in Task [N])
-- ISS-XXX: [Brief description] (discovered in Task [N])
-
 ---
 
-**Total deviations:** [N] auto-fixed ([breakdown by rule]), [N] deferred
+**Total deviations:** [N] auto-fixed ([breakdown by rule])
 **Impact on plan:** [Brief assessment - e.g., "All auto-fixes necessary for correctness/security. No scope creep."]
 
 ## Issues Encountered
 [Problems and how they were resolved, or "None"]
 
 [Note: "Deviations from Plan" documents unplanned work that was handled automatically via deviation rules. "Issues Encountered" documents problems during planned work that required problem-solving.]
+
+## User Setup Required
+
+[If USER-SETUP.md was generated:]
+**External services require manual configuration.** See [{phase}-USER-SETUP.md](./{phase}-USER-SETUP.md) for:
+- Environment variables to add
+- Dashboard configuration steps
+- Verification commands
+
+[If no USER-SETUP.md:]
+None - no external service configuration required.
 
 ## Next Phase Readiness
 [What's ready for next phase]
@@ -211,15 +214,9 @@ The one-liner should tell someone what actually shipped.
 - **Verification:** Import succeeds, build passes
 - **Committed in:** def456g (Task 4 commit)
 
-### Deferred Enhancements
-
-Logged to .planning/ISSUES.md for future consideration:
-- ISS-001: Add rate limiting to login endpoint (discovered in Task 2)
-- ISS-002: Improve token refresh UX with auto-retry on 401 (discovered in Task 5)
-
 ---
 
-**Total deviations:** 2 auto-fixed (1 missing critical, 1 blocking), 2 deferred
+**Total deviations:** 2 auto-fixed (1 missing critical, 1 blocking)
 **Impact on plan:** Both auto-fixes essential for security and functionality. No scope creep.
 
 ## Issues Encountered
@@ -259,7 +256,6 @@ Logged to .planning/ISSUES.md for future consideration:
 - Documents unplanned work handled via deviation rules
 - Separate from "Issues Encountered" (which is planned work problems)
 - Auto-fixed issues: What was wrong, how fixed, verification
-- Deferred enhancements: Logged to ISSUES.md with ISS-XXX numbers
 
 **Decisions section:**
 - Key decisions made during execution

@@ -19,7 +19,6 @@ cat .planning/STATE.md 2>/dev/null
 
 - Current position (phase, plan, status)
 - Accumulated decisions (constraints on this execution)
-- Deferred issues (context for deviations)
 - Blockers/concerns (things to watch for)
 - Brief alignment status
 
@@ -206,7 +205,7 @@ No segmentation benefit - execute entirely in main
 ```
 1. Run init_agent_tracking step first (see step below)
 
-2. Use Task tool with subagent_type="general-purpose":
+2. Use Task tool with subagent_type="gsd-executor":
 
    Prompt: "Execute plan at .planning/phases/{phase}-{plan}-PLAN.md
 
@@ -358,7 +357,7 @@ For Pattern A (fully autonomous) and Pattern C (decision-dependent), skip this s
 
    B. If routing = Subagent:
       ```
-      Spawn Task tool with subagent_type="general-purpose":
+      Spawn Task tool with subagent_type="gsd-executor":
 
       Prompt: "Execute tasks [task numbers/names] from plan at [plan path].
 
@@ -467,12 +466,21 @@ Execution:
 [1] Spawning subagent for tasks 1-3...
 → Subagent completes: 3 files modified, 0 deviations
 [2] Executing checkpoint 4 (human-verify)...
-════════════════════════════════════════
-CHECKPOINT: Verification Required
-Task 4 of 8: Verify database schema
-I built: User and Session tables with relations
-How to verify: Check src/db/schema.ts for correct types
-════════════════════════════════════════
+╔═══════════════════════════════════════════════════════╗
+║  CHECKPOINT: Verification Required                    ║
+╚═══════════════════════════════════════════════════════╝
+
+Progress: 3/8 tasks complete
+Task: Verify database schema
+
+Built: User and Session tables with relations
+
+How to verify:
+  1. Check src/db/schema.ts for correct types
+
+────────────────────────────────────────────────────────
+→ YOUR ACTION: Type "approved" or describe issues
+────────────────────────────────────────────────────────
 User: "approved"
 [3] Spawning subagent for tasks 5-6...
 → Subagent completes: 2 files modified, 1 deviation (added error handling)
@@ -610,23 +618,25 @@ Error: Not authenticated. Please run 'vercel login'
 
 [Create checkpoint dynamically]
 
-════════════════════════════════════════
-CHECKPOINT: Authentication Required
-════════════════════════════════════════
+╔═══════════════════════════════════════════════════════╗
+║  CHECKPOINT: Action Required                          ║
+╚═══════════════════════════════════════════════════════╝
 
-Task 3 of 8: Authenticate Vercel CLI
+Progress: 2/8 tasks complete
+Task: Authenticate Vercel CLI
 
-I tried to deploy but got authentication error.
+Attempted: vercel --yes
+Error: Not authenticated
 
 What you need to do:
-Run: vercel login
+  1. Run: vercel login
+  2. Complete browser authentication
 
-This will open your browser - complete the authentication flow.
+I'll verify: vercel whoami returns your account
 
-I'll verify after: vercel whoami returns your account
-
-Type "done" when authenticated
-════════════════════════════════════════
+────────────────────────────────────────────────────────
+→ YOUR ACTION: Type "done" when authenticated
+────────────────────────────────────────────────────────
 
 [Wait for user response]
 
@@ -804,37 +814,9 @@ Proceed with proposed change? (yes / different approach / defer)
 3. WAIT for user response
 4. If approved: implement, track as `[Rule 4 - Architectural] [description]`
 5. If different approach: discuss and implement
-6. If deferred: log to ISSUES.md, continue without change
+6. If deferred: note in Summary and continue without change
 
 **User decision required.** These changes affect system design.
-
----
-
-**RULE 5: Log non-critical enhancements**
-
-**Trigger:** Improvement that would enhance code but isn't essential now
-
-**Action:** Add to .planning/ISSUES.md automatically, continue task
-
-**Examples:**
-
-- Performance optimization (works correctly, just slower than ideal)
-- Code refactoring (works, but could be cleaner/DRY-er)
-- Better naming (works, but variables could be clearer)
-- Organizational improvements (works, but file structure could be better)
-- Nice-to-have UX improvements (works, but could be smoother)
-- Additional test coverage beyond basics (basics exist, could be more thorough)
-- Documentation improvements (code works, docs could be better)
-- Accessibility enhancements beyond minimum
-
-**Process:**
-
-1. Create .planning/ISSUES.md if doesn't exist (use `./.claude/get-shit-done/templates/issues.md`)
-2. Add entry with ISS-XXX number (auto-increment)
-3. Brief notification: `📋 Logged enhancement: [brief] (ISS-XXX)`
-4. Continue task without implementing
-
-**No user permission needed.** Logging for future consideration.
 
 ---
 
@@ -842,22 +824,18 @@ Proceed with proposed change? (yes / different approach / defer)
 
 1. **If Rule 4 applies** → STOP and ask (architectural decision)
 2. **If Rules 1-3 apply** → Fix automatically, track for Summary
-3. **If Rule 5 applies** → Log to ISSUES.md, continue
-4. **If genuinely unsure which rule** → Apply Rule 4 (ask user)
+3. **If genuinely unsure which rule** → Apply Rule 4 (ask user)
 
 **Edge case guidance:**
 
 - "This validation is missing" → Rule 2 (critical for security)
-- "This validation could be better" → Rule 5 (enhancement)
 - "This crashes on null" → Rule 1 (bug)
-- "This could be faster" → Rule 5 (enhancement) UNLESS actually timing out → Rule 2 (critical)
 - "Need to add table" → Rule 4 (architectural)
 - "Need to add column" → Rule 1 or 2 (depends: fixing bug or adding critical field)
 
 **When in doubt:** Ask yourself "Does this affect correctness, security, or ability to complete task?"
 
 - YES → Rules 1-3 (fix automatically)
-- NO → Rule 5 (log it)
 - MAYBE → Rule 4 (ask user)
 
 </deviation_rules>
@@ -901,16 +879,9 @@ None - plan executed exactly as written.
 - **Verification:** Expired token test passes - properly rejects with 401
 - **Commit:** def456g
 
-### Deferred Enhancements
-
-Logged to .planning/ISSUES.md for future consideration:
-
-- ISS-001: Refactor UserService into smaller modules (discovered in Task 3)
-- ISS-002: Add connection pooling for Redis (discovered in Task 6)
-
 ---
 
-**Total deviations:** 4 auto-fixed (1 bug, 1 missing critical, 1 blocking, 1 architectural with approval), 3 deferred
+**Total deviations:** 4 auto-fixed (1 bug, 1 missing critical, 1 blocking, 1 architectural with approval)
 **Impact on plan:** All auto-fixes necessary for correctness/security/performance. No scope creep.
 ```
 
@@ -1082,29 +1053,33 @@ When encountering `type="checkpoint:*"`:
 **Display checkpoint clearly:**
 
 ```
-════════════════════════════════════════
-CHECKPOINT: [Type]
-════════════════════════════════════════
+╔═══════════════════════════════════════════════════════╗
+║  CHECKPOINT: [Type]                                   ║
+╚═══════════════════════════════════════════════════════╝
 
-Task [X] of [Y]: [Action/What-Built/Decision]
+Progress: {X}/{Y} tasks complete
+Task: [task name]
 
 [Display task-specific content based on type]
 
-[Resume signal instruction]
-════════════════════════════════════════
+────────────────────────────────────────────────────────
+→ YOUR ACTION: [Resume signal instruction]
+────────────────────────────────────────────────────────
 ```
 
 **For checkpoint:human-verify (90% of checkpoints):**
 
 ```
-I automated: [what was automated - deployed, built, configured]
+Built: [what was automated - deployed, built, configured]
 
 How to verify:
-1. [Step 1 - exact command/URL]
-2. [Step 2 - what to check]
-3. [Step 3 - expected behavior]
+  1. [Step 1 - exact command/URL]
+  2. [Step 2 - what to check]
+  3. [Step 3 - expected behavior]
 
-[Resume signal - e.g., "Type 'approved' or describe issues"]
+────────────────────────────────────────────────────────
+→ YOUR ACTION: Type "approved" or describe issues
+────────────────────────────────────────────────────────
 ```
 
 **For checkpoint:decision (9% of checkpoints):**
@@ -1158,9 +1133,6 @@ See ./.claude/get-shit-done/references/checkpoints.md for complete checkpoint gu
 If you were spawned via Task tool and hit a checkpoint, you cannot directly interact with the user. Instead, RETURN to the orchestrator with structured checkpoint state so it can present to the user and spawn a fresh continuation agent.
 
 **Return format for checkpoints:**
-
-Use the structured format from:
-@./.claude/get-shit-done/templates/checkpoint-return.md
 
 **Required in your return:**
 
@@ -1224,7 +1196,7 @@ You will NOT be resumed. A new agent continues from where you stopped, using you
 
 **How to know if you were spawned:**
 
-If you're reading this workflow because an orchestrator spawned you (vs running directly from /gsd:execute-plan), the orchestrator's prompt will include checkpoint return instructions. Follow those instructions when you hit a checkpoint.
+If you're reading this workflow because an orchestrator spawned you (vs running directly), the orchestrator's prompt will include checkpoint return instructions. Follow those instructions when you hit a checkpoint.
 
 **If running in main context (not spawned):**
 
@@ -1275,6 +1247,76 @@ fi
 Pass timing data to SUMMARY.md creation.
 </step>
 
+<step name="generate_user_setup">
+**Generate USER-SETUP.md if plan has user_setup in frontmatter.**
+
+Check PLAN.md frontmatter for `user_setup` field:
+
+```bash
+grep -A 50 "^user_setup:" .planning/phases/XX-name/{phase}-{plan}-PLAN.md | head -50
+```
+
+**If user_setup exists and is not empty:**
+
+Create `.planning/phases/XX-name/{phase}-USER-SETUP.md` using template from `./.claude/get-shit-done/templates/user-setup.md`.
+
+**Content generation:**
+
+1. Parse each service in `user_setup` array
+2. For each service, generate sections:
+   - Environment Variables table (from `env_vars`)
+   - Account Setup checklist (from `account_setup`, if present)
+   - Dashboard Configuration steps (from `dashboard_config`, if present)
+   - Local Development notes (from `local_dev`, if present)
+3. Add verification section with commands to confirm setup works
+4. Set status to "Incomplete"
+
+**Example output:**
+
+```markdown
+# Phase 10: User Setup Required
+
+**Generated:** 2025-01-14
+**Phase:** 10-monetization
+**Status:** Incomplete
+
+## Environment Variables
+
+| Status | Variable | Source | Add to |
+|--------|----------|--------|--------|
+| [ ] | `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API keys → Secret key | `.env.local` |
+| [ ] | `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks → Signing secret | `.env.local` |
+
+## Dashboard Configuration
+
+- [ ] **Create webhook endpoint**
+  - Location: Stripe Dashboard → Developers → Webhooks → Add endpoint
+  - Details: URL: https://[your-domain]/api/webhooks/stripe, Events: checkout.session.completed
+
+## Local Development
+
+For local testing:
+\`\`\`bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+\`\`\`
+
+## Verification
+
+[Verification commands based on service]
+
+---
+**Once all items complete:** Mark status as "Complete"
+```
+
+**If user_setup is empty or missing:**
+
+Skip this step - no USER-SETUP.md needed.
+
+**Track for offer_next:**
+
+Set `USER_SETUP_CREATED=true` if file was generated, for use in completion messaging.
+</step>
+
 <step name="create_summary">
 Create `{phase}-{plan}-SUMMARY.md` as specified in the prompt's `<output>` section.
 Use ./.claude/get-shit-done/templates/summary.md for structure.
@@ -1307,10 +1349,7 @@ Before writing summary content, populate frontmatter fields from execution conte
 5. **Decisions:**
    - key-decisions: Extract from "Decisions Made" section
 
-6. **Issues:**
-   - issues-created: Check if ISSUES.md was updated during execution
-
-7. **Metrics:**
+6. **Metrics:**
    - duration: From $DURATION variable
    - completed: From $PLAN_END_TIME (date only, format YYYY-MM-DD)
 
@@ -1405,12 +1444,6 @@ Extract decisions, issues, and concerns from SUMMARY.md into STATE.md accumulate
   - Add each decision to STATE.md Decisions table
   - Format: `| [phase number] | [decision summary] | [rationale] |`
 
-**Deferred Issues:**
-
-- Read SUMMARY.md to check if new issues were logged to ISSUES.md
-- If new ISS-XXX entries created:
-  - Update STATE.md "Deferred Issues" section
-
 **Blockers/Concerns:**
 
 - Read SUMMARY.md "## Next Phase Readiness" section
@@ -1470,7 +1503,7 @@ ROADMAP_FILE=".planning/ROADMAP.md"
 
 - Mark phase complete: status → "Complete"
 - Add completion date
-  </step>
+</step>
 
 <step name="git_commit_metadata">
 Commit execution metadata (SUMMARY + STATE + ROADMAP):
@@ -1485,7 +1518,7 @@ git add .planning/phases/XX-name/{phase}-{plan}-SUMMARY.md
 git add .planning/STATE.md
 ```
 
-**2. Stage roadmap file:**
+**2. Stage roadmap:**
 
 ```bash
 git add .planning/ROADMAP.md
@@ -1585,49 +1618,34 @@ git commit --amend --no-edit  # Include in metadata commit
 Skip this step.
 </step>
 
-<step name="check_phase_issues">
-**Check if issues were created during this phase:**
-
-```bash
-# Check if ISSUES.md exists and has issues from current phase
-if [ -f .planning/ISSUES.md ]; then
-  grep -E "Phase ${PHASE}.*Task" .planning/ISSUES.md | grep -v "^#" || echo "NO_ISSUES_THIS_PHASE"
-fi
-```
-
-**If issues were created during this phase:**
-
-```
-📋 Issues logged during this phase:
-- ISS-XXX: [brief description]
-- ISS-YYY: [brief description]
-
-Review these now?
-```
-
-Use AskUserQuestion:
-- header: "Phase Issues"
-- question: "[N] issues were logged during this phase. Review now?"
-- options:
-  - "Review issues" - Analyze with /gsd:consider-issues
-  - "Continue" - Address later, proceed to next work
-
-**If "Review issues" selected:**
-- Invoke: `SlashCommand("/gsd:consider-issues")`
-- After consider-issues completes, return to offer_next
-
-**If "Continue" selected or no issues found:**
-- Proceed to offer_next step
-
-**In YOLO mode:**
-- Note issues were logged but don't prompt: `📋 [N] issues logged this phase (review later with /gsd:consider-issues)`
-- Continue to offer_next automatically
-</step>
-
 <step name="offer_next">
 **MANDATORY: Verify remaining work before presenting next steps.**
 
 Do NOT skip this verification. Do NOT assume phase or milestone completion without checking.
+
+**Step 0: Check for USER-SETUP.md**
+
+If `USER_SETUP_CREATED=true` (from generate_user_setup step), always include this warning block at the TOP of completion output:
+
+```
+⚠️ USER SETUP REQUIRED
+
+This phase introduced external services requiring manual configuration:
+
+📋 .planning/phases/{phase-dir}/{phase}-USER-SETUP.md
+
+Quick view:
+- [ ] {ENV_VAR_1}
+- [ ] {ENV_VAR_2}
+- [ ] {Dashboard config task}
+
+Complete this setup for the integration to function.
+Run `cat .planning/phases/{phase-dir}/{phase}-USER-SETUP.md` for full details.
+
+---
+```
+
+This warning appears BEFORE "Plan complete" messaging. User sees setup requirements prominently.
 
 **Step 1: Count plans and summaries in current phase**
 
@@ -1683,7 +1701,7 @@ Summary: .planning/phases/{phase-dir}/{phase}-{plan}-SUMMARY.md
 
 **{phase}-{next-plan}: [Plan Name]** — [objective from next PLAN.md]
 
-`/gsd:execute-plan .planning/phases/{phase-dir}/{phase}-{next-plan}-PLAN.md`
+`/gsd:execute-phase {phase}`
 
 <sub>`/clear` first → fresh context window</sub>
 
@@ -1753,7 +1771,6 @@ All {Y} plans finished.
 **Also available:**
 - `/gsd:verify-work {Z}` — manual acceptance testing before continuing
 - `/gsd:discuss-phase {Z+1}` — gather context first
-- `/gsd:research-phase {Z+1}` — investigate unknowns
 - Review phase accomplishments before continuing
 
 ---
@@ -1773,10 +1790,9 @@ Summary: .planning/phases/{phase-dir}/{phase}-{plan}-SUMMARY.md
 
 All {Y} plans finished.
 
-════════════════════════════════════════
-All {N} phases complete!
-Milestone is 100% done.
-════════════════════════════════════════
+╔═══════════════════════════════════════════════════════╗
+║  All {N} phases complete! Milestone is 100% done.     ║
+╚═══════════════════════════════════════════════════════╝
 
 ---
 
@@ -1806,8 +1822,10 @@ Milestone is 100% done.
 
 - All tasks from PLAN.md completed
 - All verifications pass
+- USER-SETUP.md generated if user_setup in frontmatter
 - SUMMARY.md created with substantive content
 - STATE.md updated (position, decisions, issues, session)
 - ROADMAP.md updated
 - If codebase map exists: map updated with execution changes (or skipped if no significant changes)
+- If USER-SETUP.md created: prominently surfaced in completion output
   </success_criteria>

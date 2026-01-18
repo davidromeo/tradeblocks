@@ -4,11 +4,34 @@
 
 - ✅ [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
 - ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
+- ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
+- 📋 **Next milestone** — To be planned
 
 ## Completed Milestones
 
 <details>
-<summary>v2.0 Claude Integration (Phases 11-16) — SHIPPED 2026-01-17</summary>
+<summary>✅ v2.1 Portfolio Comparison (Phases 17-24) — SHIPPED 2026-01-18</summary>
+
+7 new MCP tools for advanced portfolio comparison and analysis, plus CLI test mode and web platform integration documentation.
+
+- [x] Phase 17: Block Diff (1/1 plan) — completed 2026-01-17
+- [x] Phase 17.1: CLI Test Mode (1/1 plan) — completed 2026-01-17
+- [x] Phase 18: Stress Test (1/1 plan) — completed 2026-01-18
+- [x] Phase 19: Drawdown Attribution (1/1 plan) — completed 2026-01-18
+- [x] Phase 20: Marginal Contribution (1/1 plan) — completed 2026-01-18
+- [x] Phase 21: Strategy Similarity (1/1 plan) — completed 2026-01-18
+- [x] Phase 22: What-If Scaling (1/1 plan) — completed 2026-01-18
+- [x] Phase 23: Portfolio Health Check (1/1 plan) — completed 2026-01-18
+- [x] Phase 24: Web Platform Guide (1/1 plan) — completed 2026-01-18
+
+**Stats:** 9 phases (including 17.1), 9 plans, 2 days execution time
+
+See [v2.1 archive](milestones/v2.1-portfolio-comparison.md) for full details.
+
+</details>
+
+<details>
+<summary>✅ v2.0 Claude Integration (Phases 11-16) — SHIPPED 2026-01-17</summary>
 
 MCP server with 19 tools for AI-powered trading analytics, plus 6 agent skills for guided analysis workflows across Claude, Codex, and Gemini platforms.
 
@@ -27,7 +50,7 @@ See [v2.0 archive](milestones/v2.0-claude-integration.md) for full details.
 </details>
 
 <details>
-<summary>v1.0 WFA Enhancement (Phases 1-10) — SHIPPED 2026-01-11</summary>
+<summary>✅ v1.0 WFA Enhancement (Phases 1-10) — SHIPPED 2026-01-11</summary>
 
 Transform TradeBlocks' walk-forward analysis from a rigid automatic tool into a user-controlled system with clear, understandable results.
 
@@ -47,11 +70,13 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
-## What's Next
+## Progress
 
-Planning next milestone. Ideas under consideration:
-- v2.1: Enhanced AI workflows and prompt optimization
-- v3.0: Additional analysis capabilities
+| Milestone | Phases | Plans | Status | Shipped |
+|-----------|--------|-------|--------|---------|
+| v1.0 WFA Enhancement | 1-10 | 17 | Complete | 2026-01-11 |
+| v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
+| v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 
 ## Audit Notes
 

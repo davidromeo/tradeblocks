@@ -28,6 +28,7 @@ import {
   getTargetPath,
   type Platform,
 } from "./skill-installer.js";
+import { handleDirectCall } from "./cli-handler.js";
 
 // CLI usage help
 function printUsage(): void {
@@ -39,6 +40,7 @@ Commands:
   install-skills    Install TradeBlocks skills to AI platform
   uninstall-skills  Remove TradeBlocks skills from AI platform
   check-skills      Check skill installation status
+  --call <tool> '<args>'  Directly invoke an MCP tool (for testing)
 
 Options for skill commands:
   --platform <name>  Target platform: claude, codex, gemini (default: claude)
@@ -47,6 +49,10 @@ Options for skill commands:
 MCP Server:
   tradeblocks-mcp <backtests-folder>
   BLOCKS_DIRECTORY=/path tradeblocks-mcp
+
+Direct Tool Invocation:
+  TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call list_backtests '{}'
+  TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call block_diff '{"blockIdA":"block1","blockIdB":"block2"}'
 
 Examples:
   tradeblocks-mcp install-skills
@@ -171,6 +177,12 @@ async function handleSkillCommand(command: string): Promise<void> {
 // Main entry point - handles both skill CLI commands and MCP server mode
 async function main(): Promise<void> {
   const command = process.argv[2];
+
+  // Handle --call mode for direct tool invocation
+  if (command === "--call") {
+    await handleDirectCall(process.argv.slice(3));
+    return;
+  }
 
   // Handle skill commands (exit after handling)
   if (
