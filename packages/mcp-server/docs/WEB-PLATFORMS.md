@@ -85,3 +85,93 @@ Note the ngrok URL (e.g., `https://abc123.ngrok.io`) - you'll need this for plat
 
 ---
 
+## Google AI Studio Integration
+
+### Requirements
+
+- Google account
+- ngrok tunnel running
+
+### Setup Steps
+
+1. **Open AI Studio:** Navigate to [aistudio.google.com](https://aistudio.google.com)
+
+2. **Add MCP Server:**
+   - Click Settings (gear icon) > MCP Servers
+   - Add new server with your ngrok URL: `https://your-subdomain.ngrok.io/mcp`
+   - Name it "TradeBlocks"
+
+3. **Test the connection:**
+   - Start a new prompt
+   - Ask: "Use TradeBlocks to list my backtests"
+   - AI Studio should discover and use the MCP tools
+
+### Notes
+
+- Google AI Studio MCP support is experimental
+- All 19+ TradeBlocks tools are available
+- Works with Gemini models
+
+---
+
+## Julius AI Integration
+
+### Requirements
+
+- Julius AI account (free tier available)
+- ngrok tunnel running
+
+### Setup Steps
+
+1. **Open Julius:** Navigate to [julius.ai](https://julius.ai)
+
+2. **Connect MCP Server:**
+   - Go to Settings > Data Connections > MCP
+   - Add your ngrok URL: `https://your-subdomain.ngrok.io/mcp`
+   - Name the connection "TradeBlocks"
+
+3. **Test the connection:**
+   - Start a new conversation
+   - Ask: "Connect to TradeBlocks and show my available backtests"
+
+### Notes
+
+- Julius excels at data visualization - great for chart-heavy analysis
+- Combine with `get_performance_charts` tool for visual reports
+
+---
+
+## Tips for All Platforms
+
+### Keeping ngrok Running
+
+For extended sessions, consider:
+
+- **Paid ngrok**: Stable URLs that don't change between restarts
+- **Screen/tmux**: Keep terminal sessions alive when you disconnect
+- **PM2**: Process manager for Node.js (`pm2 start tradeblocks-mcp -- --http --port 3100 ~/backtests`)
+
+### Security Considerations
+
+- ngrok exposes your local server to the internet
+- Your backtest data stays local - only analysis results are transmitted
+- Consider ngrok's IP allowlisting for extra security
+- Use authentication tokens when available
+
+### Alternative: Cloudflare Tunnel
+
+For a free stable URL alternative:
+
+```bash
+cloudflared tunnel --url http://localhost:3100
+```
+
+Cloudflare Tunnel provides stable URLs without a paid plan.
+
+---
+
+## Related Documentation
+
+- [README.md](../README.md) - Installation and CLI setup
+- [USAGE.md](./USAGE.md) - Detailed usage examples
+- [Agent Skills](../../agent-skills/README.md) - Conversational workflows
