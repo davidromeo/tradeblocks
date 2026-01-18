@@ -21,6 +21,16 @@ import { DailyLogEntry } from '../models/daily-log'
 import { PortfolioStats, StrategyStats, AnalysisConfig } from '../models/portfolio-stats'
 import type { NormalizedPortfolioStats } from '../models/portfolio-stats-normalized'
 import { asDecimal01 } from '../types/percentage'
+import { getRiskFreeRate } from '../utils/risk-free-rate'
+
+/**
+ * Daily return with associated date for date-based risk-free rate calculations.
+ * Used by Sharpe and Sortino ratio calculations.
+ */
+interface DailyReturnWithDate {
+  date: Date
+  return: number
+}
 
 /**
  * Default analysis configuration
@@ -346,63 +356,41 @@ export class PortfolioStatsCalculator {
   }
 
   /**
-   * Calculate Sharpe ratio
+   * Calculate Sharpe ratio using date-based Treasury rates.
+   *
+   * Uses historical 3-month T-bill rates from Phase 25 utility for each day's
+   * excess return calculation instead of a fixed rate.
+   *
+   * Formula: (mean(excessReturns) / std(returns)) * sqrt(252)
+   * Where excessReturn[i] = return[i] - (getRiskFreeRate(date[i]) / 100 / 252)
    */
   private calculateSharpeRatio(trades: Trade[], dailyLogEntries?: DailyLogEntry[]): number | undefined {
-    const dailyReturns: number[] = []
+    // Get daily returns with dates for date-based risk-free rate lookup
+    const dailyReturnsWithDates = this.calculateDailyReturnsWithDates(trades, dailyLogEntries)
 
-    if (dailyLogEntries && dailyLogEntries.length > 1) {
-      // Calculate returns from daily log data
-      for (let i = 1; i < dailyLogEntries.length; i++) {
-        const prevValue = dailyLogEntries[i - 1].netLiquidity
-        const currentValue = dailyLogEntries[i].netLiquidity
-        if (prevValue > 0) {
-          const dailyReturn = (currentValue - prevValue) / prevValue
-          dailyReturns.push(dailyReturn)
-        }
-      }
-    } else if (trades.length > 0) {
-      // Calculate from trade data grouped by day
-      const dailyPl = new Map<string, number>()
-      let portfolioValue = trades[0]?.fundsAtClose - trades[0]?.pl || 0
+    if (dailyReturnsWithDates.length < 2) return undefined
 
-      trades.forEach(trade => {
-        try {
-          const date = new Date(trade.dateOpened)
-          if (!isNaN(date.getTime())) {
-            const dateKey = date.toISOString().split('T')[0]
-            const currentPl = dailyPl.get(dateKey) || 0
-            dailyPl.set(dateKey, currentPl + trade.pl)
-          }
-        } catch {
-          // Skip invalid dates
-        }
-      })
+    // Calculate excess returns using per-day Treasury rates
+    const excessReturns: number[] = []
+    const rawReturns: number[] = []
 
-      // Convert P/L to returns
-      const sortedDates = Array.from(dailyPl.keys()).sort()
-      for (const date of sortedDates) {
-        const dayPl = dailyPl.get(date)!
-        if (portfolioValue > 0) {
-          const dailyReturn = dayPl / portfolioValue
-          dailyReturns.push(dailyReturn)
-          portfolioValue += dayPl
-        }
-      }
+    for (const { date, return: dailyReturn } of dailyReturnsWithDates) {
+      // Get the actual Treasury rate for this specific date
+      const annualRate = getRiskFreeRate(date) // Returns annual % (e.g., 4.32 for 4.32%)
+      const dailyRiskFreeRate = annualRate / 100 / this.config.annualizationFactor
+
+      excessReturns.push(dailyReturn - dailyRiskFreeRate)
+      rawReturns.push(dailyReturn)
     }
 
-    if (dailyReturns.length < 2) return undefined
-
     // Calculate Sharpe ratio using math.js for statistical consistency
-    const avgDailyReturn = mean(dailyReturns) as number
-    const stdDev = std(dailyReturns, 'uncorrected') as number // Use sample std (N-1) for Sharpe
+    const avgExcessReturn = mean(excessReturns) as number
+    const stdDev = std(rawReturns, 'uncorrected') as number // Use sample std (N-1) for Sharpe
 
     if (stdDev === 0) return undefined
 
     // Annualize the Sharpe ratio
-    const dailyRiskFreeRate = this.config.riskFreeRate / 100 / this.config.annualizationFactor
-    const excessReturn = avgDailyReturn - dailyRiskFreeRate
-    const sharpeRatio = (excessReturn / stdDev) * Math.sqrt(this.config.annualizationFactor)
+    const sharpeRatio = (avgExcessReturn / stdDev) * Math.sqrt(this.config.annualizationFactor)
 
     return sharpeRatio
   }
@@ -455,18 +443,32 @@ export class PortfolioStatsCalculator {
   }
 
   /**
-   * Calculate Sortino Ratio
+   * Calculate Sortino Ratio using date-based Treasury rates.
+   *
+   * Uses historical 3-month T-bill rates from Phase 25 utility for each day's
+   * excess return calculation instead of a fixed rate.
+   *
+   * Formula: (mean(excessReturns) / std(negativeExcessReturns)) * sqrt(252)
+   * Where excessReturn[i] = return[i] - (getRiskFreeRate(date[i]) / 100 / 252)
    */
   private calculateSortinoRatio(trades: Trade[], dailyLogEntries?: DailyLogEntry[]): number | undefined {
     if (trades.length < 2) return undefined
 
-    const dailyReturns = this.calculateDailyReturns(trades, dailyLogEntries)
-    if (dailyReturns.length < 2) return undefined
+    // Get daily returns with dates for date-based risk-free rate lookup
+    const dailyReturnsWithDates = this.calculateDailyReturnsWithDates(trades, dailyLogEntries)
+    if (dailyReturnsWithDates.length < 2) return undefined
 
-    const dailyRiskFreeRate = this.config.riskFreeRate / 100 / this.config.annualizationFactor
+    // Calculate excess returns using per-day Treasury rates
+    const excessReturns: number[] = []
 
-    // Calculate excess returns (returns minus risk-free rate)
-    const excessReturns = dailyReturns.map(ret => ret - dailyRiskFreeRate)
+    for (const { date, return: dailyReturn } of dailyReturnsWithDates) {
+      // Get the actual Treasury rate for this specific date
+      const annualRate = getRiskFreeRate(date) // Returns annual % (e.g., 4.32 for 4.32%)
+      const dailyRiskFreeRate = annualRate / 100 / this.config.annualizationFactor
+
+      excessReturns.push(dailyReturn - dailyRiskFreeRate)
+    }
+
     const avgExcessReturn = mean(excessReturns) as number
 
     // Only consider negative excess returns for downside deviation
@@ -683,11 +685,26 @@ export class PortfolioStatsCalculator {
    * Calculate daily returns for advanced metrics
    */
   private calculateDailyReturns(trades: Trade[], dailyLogEntries?: DailyLogEntry[]): number[] {
+    // Use the new method and extract just the return values
+    return this.calculateDailyReturnsWithDates(trades, dailyLogEntries).map(r => r.return)
+  }
+
+  /**
+   * Calculate daily returns WITH associated dates for date-based risk-free rate calculations.
+   * Returns an array of {date, return} pairs where:
+   * - date: The trading day's date (for looking up that day's Treasury rate)
+   * - return: The portfolio return for that day as a decimal (e.g., 0.01 = 1%)
+   */
+  private calculateDailyReturnsWithDates(trades: Trade[], dailyLogEntries?: DailyLogEntry[]): DailyReturnWithDate[] {
     if (dailyLogEntries && dailyLogEntries.length > 0) {
       return dailyLogEntries.map(entry => {
         // Calculate previous day's portfolio value (net liquidity minus today's P/L)
         const previousValue = entry.netLiquidity - entry.dailyPl
-        return previousValue > 0 ? entry.dailyPl / previousValue : 0
+        const dailyReturn = previousValue > 0 ? entry.dailyPl / previousValue : 0
+        return {
+          date: new Date(entry.date),
+          return: dailyReturn
+        }
       })
     }
 
@@ -698,26 +715,34 @@ export class PortfolioStatsCalculator {
       return a.timeOpened.localeCompare(b.timeOpened)
     })
 
-    const dailyReturns: number[] = []
-    const tradesByDate = new Map<string, Trade[]>()
+    const dailyReturns: DailyReturnWithDate[] = []
+    const tradesByDate = new Map<string, { date: Date; trades: Trade[] }>()
 
     // Group trades by date
     for (const trade of sortedTrades) {
-      const dateKey = new Date(trade.dateOpened).toISOString().split('T')[0]
+      const tradeDate = new Date(trade.dateOpened)
+      const dateKey = tradeDate.toISOString().split('T')[0]
       if (!tradesByDate.has(dateKey)) {
-        tradesByDate.set(dateKey, [])
+        tradesByDate.set(dateKey, { date: tradeDate, trades: [] })
       }
-      tradesByDate.get(dateKey)!.push(trade)
+      tradesByDate.get(dateKey)!.trades.push(trade)
     }
 
-    // Calculate daily returns
+    // Calculate daily returns with dates
     const initialCapital = PortfolioStatsCalculator.calculateInitialCapital(trades)
     let portfolioValue = initialCapital
 
-    for (const [, dayTrades] of tradesByDate) {
+    // Sort by date key to ensure chronological order
+    const sortedDateKeys = Array.from(tradesByDate.keys()).sort()
+
+    for (const dateKey of sortedDateKeys) {
+      const { date, trades: dayTrades } = tradesByDate.get(dateKey)!
       const dayPl = dayTrades.reduce((sum, trade) => sum + trade.pl, 0)
       if (portfolioValue > 0) {
-        dailyReturns.push(dayPl / portfolioValue)
+        dailyReturns.push({
+          date,
+          return: dayPl / portfolioValue
+        })
         portfolioValue += dayPl
       }
     }
