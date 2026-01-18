@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-01-17)
 ## Current Position
 
 Milestone: v2.1 Portfolio Comparison
-Phase: 23 complete (portfolio_health_check tool)
-Plan: 1 of 1 in Phase 23
-Status: v2.1 tools complete, ready for Phase 24 (Web Platform Guide)
-Last activity: 2026-01-18 — Completed 23-01-PLAN.md (Portfolio Health Check Tool)
+Phase: 24 complete (Web Platform Integration Guide)
+Plan: 1 of 1 in Phase 24
+Status: v2.1 milestone complete - all phases done
+Last activity: 2026-01-18 — Completed 24-01-PLAN.md (Web Platform Integration Guide)
 
-Progress: ██████████ 100% (v2.1 tools complete)
+Progress: ██████████ 100% (v2.1 milestone complete)
 
 ## v2.1 Portfolio Comparison Goal
 
@@ -43,6 +43,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 - Phase 21 complete: strategy_similarity tool with composite scoring
 - Phase 22 complete: what_if_scaling tool with strategy weights
 - Phase 23 complete: portfolio_health_check tool with 4-layer response
+- Phase 24 complete: Web platform integration guide (ChatGPT, Google AI Studio, Julius)
 
 ## Accumulated Decisions
 
@@ -63,14 +64,16 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 | 23 | 4-layer response: verdict -> grades -> flags -> keyNumbers | Progressive detail from quick verdict to actionable flags |
 | 23 | Grades A/B/C/F (no +/- modifiers) | Simplicity over granularity |
 | 23 | Robustness grade null when WFA skipped | Don't penalize for insufficient data |
+| 24 | ngrok tunnel for web platform access | Keeps data local while enabling remote MCP URLs |
+| 24 | ChatGPT, Google AI Studio, Julius only | Focus on platforms with confirmed MCP support |
 
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 23-01-PLAN.md (Portfolio Health Check Tool)
+Stopped at: Completed 24-01-PLAN.md (Web Platform Integration Guide)
 Resume file: None
 
-Next: `/gsd:plan-phase 24` to plan Web Platform Integration Guide
+Next: `/gsd:complete-milestone` to archive v2.1 and prepare for next version
 
 ## Testing Infrastructure
 

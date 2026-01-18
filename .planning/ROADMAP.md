@@ -82,14 +82,14 @@ Plans:
 Plans:
 - [x] 23-01: Implement portfolio_health_check tool with 4-layer response
 
-### Phase 24: Web Platform Integration Guide
-**Goal:** Documentation for using TradeBlocks MCP with web-based AI platforms (ChatGPT, Julius, Poe, etc.)
+### Phase 24: Web Platform Integration Guide ✓
+**Goal:** Documentation for using TradeBlocks MCP with web-based AI platforms (ChatGPT, Google AI Studio, Julius)
 **Depends on:** Phase 23 (all tools complete)
-**Research:** Likely (each platform has different MCP/plugin integration patterns)
-**Plans:** TBD
+**Research:** No (ngrok tunnel approach straightforward)
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 24-01: TBD
+- [x] 24-01: Web platform integration guide with ngrok tunnel setup
 
 ## Completed Milestones
 
@@ -144,7 +144,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | 21. Strategy Similarity | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 22. What-If Scaling | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 23. Portfolio Health Check | v2.1 | 1/1 | Complete | 2026-01-18 |
-| 24. Web Platform Guide | v2.1 | 0/? | Not started | - |
+| 24. Web Platform Guide | v2.1 | 1/1 | Complete | 2026-01-18 |
 
 ## Audit Notes
 
