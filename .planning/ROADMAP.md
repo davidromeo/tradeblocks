@@ -93,15 +93,15 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 - Remove manual riskFreeRate input entirely (no override needed)
 - Local-only: no external API calls, data bundled in app
 
-### Phase 25: Treasury Data
+### Phase 25: Treasury Data ✅
 
 **Goal**: Create embedded rate data file and lookup utility
 **Depends on**: Previous milestone complete
 **Research**: Unlikely (data format known from research)
-**Plans**: TBD
+**Plans**: 1 plan (TDD)
 
 Plans:
-- [ ] 25-01: TBD (run /gsd:plan-phase 25 to break down)
+- [x] 25-01: Treasury rate data and lookup utility (TDD) — completed 2026-01-18
 
 ### Phase 26: Core Calculations
 
@@ -139,7 +139,7 @@ Plans:
 
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
-| 25. Treasury Data | v2.2 | 0/? | Not started | - |
+| 25. Treasury Data | v2.2 | 1/1 | Complete | 2026-01-18 |
 | 26. Core Calculations | v2.2 | 0/? | Not started | - |
 | 27. Remove Manual Input | v2.2 | 0/? | Not started | - |
 | 28. MCP & Tests | v2.2 | 0/? | Not started | - |

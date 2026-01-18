@@ -33,16 +33,16 @@
 
 ## Files Created/Modified
 
-- `lib/data/treasury-rates.ts` - Static rate data (3,250 entries, ~70KB)
+- `lib/data/treasury-rates.ts` - Static rate data (3,260 entries, ~71KB)
 - `lib/utils/risk-free-rate.ts` - Lookup utility with fallback behavior
 - `tests/unit/risk-free-rate.test.ts` - Test suite (20 tests)
 
 ## Data Stats
 
-- **Date range:** 2013-01-02 to 2025-12-31
-- **Number of entries:** 3,250 daily trading day rates
+- **Date range:** 2013-01-02 to 2026-01-15
+- **Number of entries:** 3,260 daily trading day rates
 - **Data source:** FRED DTB3 (Federal Reserve Economic Data)
-- **File size:** ~70KB
+- **File size:** ~71KB
 - **Rate range observed:** 0.01% (2020 COVID crash) to 5.36% (2023 rate hikes)
 
 ## Verification
@@ -56,6 +56,7 @@
 
 1. `51dbdbe` - test(25-01): add failing tests for risk-free rate lookup
 2. `80122d1` - feat(25-01): implement treasury rate data and lookup utility
+3. `b5678e9` - feat(25-01): add 2026 Treasury rates and update documentation
 
 ## Next Step
 

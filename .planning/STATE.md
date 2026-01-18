@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-18)
 
 Milestone: v2.2 Historical Risk-Free Rates
 Phase: 25 of 28 (Treasury Data)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-01-18 — Milestone v2.2 created
+Plan: 1 of 1 complete
+Status: Phase complete
+Last activity: 2026-01-18 — Completed 25-01-PLAN.md
 
-Progress: ░░░░░░░░░░ 0%
+Progress: █░░░░░░░░░ 25%
 
 ## Historical Context
 
@@ -52,7 +52,7 @@ Key decisions from v2.1 milestone now captured in PROJECT.md Key Decisions table
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Milestone v2.2 initialization
+Stopped at: Completed Phase 25 (Treasury Data)
 Resume file: None
 
 ## Testing Infrastructure
