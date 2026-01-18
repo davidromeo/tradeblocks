@@ -1199,7 +1199,230 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     }
   );
 
-  // Tool 8: get_trades
+  // Tool 8: drawdown_attribution
+  server.registerTool(
+    "drawdown_attribution",
+    {
+      description:
+        "Identify which strategies contributed most to losses during the portfolio's maximum drawdown period. Shows drawdown period (peak to trough) and per-strategy P/L attribution.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe(
+            "Optional: Filter to specific strategy before calculating drawdown"
+          ),
+        topN: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(5)
+          .describe("Number of top contributors to return (default: 5)"),
+      }),
+    },
+    async ({ blockId, strategy, topN }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply strategy filter if provided
+        trades = filterByStrategy(trades, strategy);
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found${strategy ? ` for strategy "${strategy}"` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        // Sort trades by close date/time for equity curve
+        const sortedTrades = [...trades].sort((a, b) => {
+          const dateA = new Date(a.dateClosed ?? a.dateOpened);
+          const dateB = new Date(b.dateClosed ?? b.dateOpened);
+          if (dateA.getTime() !== dateB.getTime()) {
+            return dateA.getTime() - dateB.getTime();
+          }
+          // Secondary sort by close time if dates equal
+          const timeA = a.timeClosed ?? a.timeOpened ?? "";
+          const timeB = b.timeClosed ?? b.timeOpened ?? "";
+          return timeA.localeCompare(timeB);
+        });
+
+        // Build equity curve from trades
+        // Initial capital = first trade's fundsAtClose - pl
+        const firstTrade = sortedTrades[0];
+        const initialCapital =
+          (firstTrade.fundsAtClose ?? 10000) - firstTrade.pl;
+
+        // Track peak equity and drawdown
+        let equity = initialCapital;
+        let peakEquity = initialCapital;
+        let peakDate: Date = new Date(
+          firstTrade.dateClosed ?? firstTrade.dateOpened
+        );
+        let maxDrawdown = 0;
+        let maxDrawdownPct = 0;
+        let troughDate: Date | null = null;
+        let drawdownPeakDate: Date | null = null;
+
+        // Track equity at each trade close
+        interface EquityPoint {
+          date: Date;
+          equity: number;
+          drawdownPct: number;
+          trade: Trade;
+        }
+        const equityPoints: EquityPoint[] = [];
+
+        for (const trade of sortedTrades) {
+          equity += trade.pl;
+          const closeDate = new Date(trade.dateClosed ?? trade.dateOpened);
+
+          // Update peak if new high
+          if (equity > peakEquity) {
+            peakEquity = equity;
+            peakDate = closeDate;
+          }
+
+          // Calculate current drawdown from peak
+          const drawdown = peakEquity - equity;
+          const drawdownPct = peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0;
+
+          equityPoints.push({
+            date: closeDate,
+            equity,
+            drawdownPct,
+            trade,
+          });
+
+          // Track max drawdown
+          if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
+            maxDrawdownPct = drawdownPct;
+            troughDate = closeDate;
+            drawdownPeakDate = peakDate;
+          }
+        }
+
+        // Handle edge case: no drawdown (always at peak or single trade)
+        if (maxDrawdown <= 0 || !troughDate || !drawdownPeakDate) {
+          const summary = `Drawdown Attribution: ${blockId}${strategy ? ` (${strategy})` : ""} | No drawdown detected (equity never declined from peak)`;
+
+          const structuredData = {
+            blockId,
+            filters: { strategy: strategy ?? null },
+            drawdownPeriod: null,
+            attribution: [],
+            message: "No drawdown detected - equity never declined from peak",
+          };
+
+          return createToolOutput(summary, structuredData);
+        }
+
+        // Filter trades to the drawdown period (closed between peak and trough)
+        const drawdownTrades = sortedTrades.filter((trade) => {
+          const closeDate = new Date(trade.dateClosed ?? trade.dateOpened);
+          return closeDate >= drawdownPeakDate! && closeDate <= troughDate!;
+        });
+
+        // Group trades by strategy and calculate attribution
+        const strategyPl: Map<
+          string,
+          { pl: number; trades: number; wins: number; losses: number }
+        > = new Map();
+
+        let totalLossDuringDrawdown = 0;
+
+        for (const trade of drawdownTrades) {
+          const existing = strategyPl.get(trade.strategy) ?? {
+            pl: 0,
+            trades: 0,
+            wins: 0,
+            losses: 0,
+          };
+          existing.pl += trade.pl;
+          existing.trades += 1;
+          if (trade.pl > 0) existing.wins += 1;
+          else if (trade.pl < 0) existing.losses += 1;
+          strategyPl.set(trade.strategy, existing);
+
+          // Track total P/L during drawdown period
+          totalLossDuringDrawdown += trade.pl;
+        }
+
+        // Calculate contribution percentages and sort by P/L (most negative first)
+        const attribution = Array.from(strategyPl.entries())
+          .map(([strategyName, data]) => ({
+            strategy: strategyName,
+            pl: data.pl,
+            trades: data.trades,
+            wins: data.wins,
+            losses: data.losses,
+            // Contribution percentage: strategy's P/L as % of total loss
+            // If total loss is negative, most negative strategy has highest contribution
+            contributionPct:
+              totalLossDuringDrawdown !== 0
+                ? Math.abs((data.pl / totalLossDuringDrawdown) * 100)
+                : 0,
+          }))
+          .sort((a, b) => a.pl - b.pl) // Most negative first
+          .slice(0, topN);
+
+        // Calculate duration in days
+        const durationMs = troughDate.getTime() - drawdownPeakDate.getTime();
+        const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+
+        // Format dates
+        const formatDate = (d: Date) => d.toISOString().split("T")[0];
+        const peakDateStr = formatDate(drawdownPeakDate);
+        const troughDateStr = formatDate(troughDate);
+
+        // Build summary
+        const topContributor = attribution[0];
+        const summary = `Drawdown Attribution: ${blockId}${strategy ? ` (${strategy})` : ""} | Max DD: ${formatPercent(maxDrawdownPct)} | ${peakDateStr} to ${troughDateStr} | Top contributor: ${topContributor?.strategy ?? "N/A"} (${formatCurrency(topContributor?.pl ?? 0)})`;
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          filters: { strategy: strategy ?? null, topN },
+          drawdownPeriod: {
+            peakDate: peakDateStr,
+            troughDate: troughDateStr,
+            peakEquity: peakEquity,
+            troughEquity: peakEquity - maxDrawdown,
+            maxDrawdown: maxDrawdown,
+            maxDrawdownPct: maxDrawdownPct,
+            durationDays: durationDays,
+          },
+          periodStats: {
+            totalTrades: drawdownTrades.length,
+            totalPl: totalLossDuringDrawdown,
+          },
+          attribution,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating drawdown attribution: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 9: get_trades
   server.registerTool(
     "get_trades",
     {
