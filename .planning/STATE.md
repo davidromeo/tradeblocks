@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-17)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** v2.1 Portfolio Comparison - Phase 22
+**Current focus:** v2.1 Portfolio Comparison - Complete (7/7 tools)
 
 ## Current Position
 
 Milestone: v2.1 Portfolio Comparison
-Phase: 22 complete, ready for 23
-Plan: 1 of 1 in Phase 22
-Status: Phase complete
-Last activity: 2026-01-18 — Completed 22-01-PLAN.md (What-If Scaling Tool)
+Phase: 23 complete (portfolio_health_check tool)
+Plan: 1 of 1 in Phase 23
+Status: v2.1 tools complete, ready for Phase 24 (Web Platform Guide)
+Last activity: 2026-01-18 — Completed 23-01-PLAN.md (Portfolio Health Check Tool)
 
-Progress: ███████░░░ 75%
+Progress: ██████████ 100% (v2.1 tools complete)
 
 ## v2.1 Portfolio Comparison Goal
 
@@ -26,7 +26,7 @@ Add 7 new MCP tools to improve portfolio comparison and analysis capabilities:
 4. `marginal_contribution` - Calculate marginal Sharpe/Sortino of adding strategies [DONE - Phase 20]
 5. `strategy_similarity` - Detect redundant strategies [DONE - Phase 21]
 6. `what_if_scaling` - Project metrics at different position sizes [DONE - Phase 22]
-7. `portfolio_health_check` - Unified health assessment in one call
+7. `portfolio_health_check` - Unified health assessment in one call [DONE - Phase 23]
 
 ## Historical Context
 
@@ -42,6 +42,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 - Phase 20 complete: marginal_contribution tool with with/without comparison
 - Phase 21 complete: strategy_similarity tool with composite scoring
 - Phase 22 complete: what_if_scaling tool with strategy weights
+- Phase 23 complete: portfolio_health_check tool with 4-layer response
 
 ## Accumulated Decisions
 
@@ -59,14 +60,17 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 | 21 | Redundant requires BOTH high correlation AND high tail dependence | Conservative flag to avoid false positives |
 | 22 | Weight range 0-2.0 for realism | 2x leverage is reasonable, higher would be extreme |
 | 22 | Commissions scale proportionally with weight | 0.5x size ≈ 0.5x trading costs |
+| 23 | 4-layer response: verdict -> grades -> flags -> keyNumbers | Progressive detail from quick verdict to actionable flags |
+| 23 | Grades A/B/C/F (no +/- modifiers) | Simplicity over granularity |
+| 23 | Robustness grade null when WFA skipped | Don't penalize for insufficient data |
 
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 22-01-PLAN.md (What-If Scaling Tool)
+Stopped at: Completed 23-01-PLAN.md (Portfolio Health Check Tool)
 Resume file: None
 
-Next: `/gsd:plan-phase 23` to plan Portfolio Health Check tool
+Next: `/gsd:plan-phase 24` to plan Web Platform Integration Guide
 
 ## Testing Infrastructure
 

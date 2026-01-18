@@ -73,14 +73,14 @@ Plans:
 Plans:
 - [x] 22-01: Implement what_if_scaling tool with strategy weights
 
-### Phase 23: Portfolio Health Check Tool
+### Phase 23: Portfolio Health Check Tool ✓
 **Goal:** Run correlation + tail risk + Monte Carlo in one call, return unified portfolio health assessment
 **Depends on:** Phase 22
 **Research:** Unlikely (orchestrates previous tools)
-**Plans:** TBD
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 23-01: TBD
+- [x] 23-01: Implement portfolio_health_check tool with 4-layer response
 
 ### Phase 24: Web Platform Integration Guide
 **Goal:** Documentation for using TradeBlocks MCP with web-based AI platforms (ChatGPT, Julius, Poe, etc.)
@@ -143,7 +143,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | 20. Marginal Contribution | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 21. Strategy Similarity | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 22. What-If Scaling | v2.1 | 1/1 | Complete | 2026-01-18 |
-| 23. Portfolio Health Check | v2.1 | 0/? | Not started | - |
+| 23. Portfolio Health Check | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 24. Web Platform Guide | v2.1 | 0/? | Not started | - |
 
 ## Audit Notes
