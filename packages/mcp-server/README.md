@@ -244,5 +244,6 @@ npm run mcpb:pack
 ## Related
 
 - [Usage Guide](docs/USAGE.md) - Detailed usage examples and workflows
+- [Web Platforms Guide](docs/WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
 - [Agent Skills](../agent-skills/README.md) - Conversational workflows for guided analysis
 - [Main Application](../../README.md) - Web-based UI for TradeBlocks

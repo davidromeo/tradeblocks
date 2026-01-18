@@ -27,12 +27,18 @@ tradeblocks-mcp ~/Trading/backtests
 
 The server communicates via stdio and works with any MCP-compatible client:
 
+**Desktop/CLI Apps:**
 - **Claude Desktop** - Install the .mcpb bundle or add to `claude_desktop_config.json`
 - **Claude Code** - `claude mcp add tradeblocks -- npx tradeblocks-mcp ~/backtests`
 - **Codex CLI** - Add to `~/.codex/config.toml`
 - **Gemini CLI** - Add to `~/.gemini/settings.json`
 
-See [README.md](../README.md) for platform-specific configuration.
+**Web Platforms** (requires ngrok tunnel):
+- **ChatGPT** - Developer Mode with remote URL
+- **Google AI Studio** - Native MCP support
+- **Julius AI** - Native MCP support
+
+See [README.md](../README.md) for desktop/CLI configuration, or [WEB-PLATFORMS.md](./WEB-PLATFORMS.md) for web platform setup.
 
 ---
 
@@ -262,4 +268,5 @@ Skills provide structured prompts for common analysis tasks.
 ## Related Documentation
 
 - [README.md](../README.md) - Installation and setup
+- [Web Platforms Guide](./WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
 - [Agent Skills](../../agent-skills/README.md) - Conversational workflows
