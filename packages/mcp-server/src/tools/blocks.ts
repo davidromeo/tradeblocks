@@ -1734,6 +1734,13 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
       }),
     },
     async ({ blockId, correlationThreshold, tailDependenceThreshold, method, minSharedDays, topN }) => {
+      // Apply defaults for optional parameters (zod defaults may not apply through MCP CLI)
+      const corrThreshold = correlationThreshold ?? 0.7;
+      const tailThreshold = tailDependenceThreshold ?? 0.5;
+      const corrMethod = method ?? "kendall";
+      const minDays = minSharedDays ?? 30;
+      const limit = topN ?? 5;
+
       try {
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
@@ -1767,7 +1774,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
 
         // Calculate correlation matrix using existing utility
         const correlationMatrix = calculateCorrelationMatrix(trades, {
-          method: method,
+          method: corrMethod,
           normalization: "raw",
           dateBasis: "opened",
           alignment: "shared",
@@ -1777,7 +1784,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const tailRisk = performTailRiskAnalysis(trades, {
           normalization: "raw",
           dateBasis: "opened",
-          minTradingDays: minSharedDays,
+          minTradingDays: minDays,
         });
 
         // Calculate overlap scores: count shared trading days / total unique days
@@ -1873,41 +1880,43 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
 
             // Determine flags
             const isHighCorrelation =
-              correlation !== null && !Number.isNaN(correlation) && Math.abs(correlation) >= correlationThreshold;
+              correlation !== null && !Number.isNaN(correlation) && Math.abs(correlation) >= corrThreshold;
             const isHighTailDependence =
-              tailDependence !== null && tailDependence >= tailDependenceThreshold;
+              tailDependence !== null && tailDependence >= tailThreshold;
             const isRedundant = isHighCorrelation && isHighTailDependence;
 
-            // Update counters
-            if (isHighCorrelation) highCorrelationPairs++;
-            if (isHighTailDependence) highTailDependencePairs++;
-            if (isRedundant) redundantPairs++;
+            // Only include pairs that meet minDays requirement
+            if (sharedTradingDays >= minDays) {
+              // Update counters (only for included pairs)
+              if (isHighCorrelation) highCorrelationPairs++;
+              if (isHighTailDependence) highTailDependencePairs++;
+              if (isRedundant) redundantPairs++;
 
-            // Generate recommendation
-            let recommendation: string | null = null;
-            if (isRedundant) {
-              recommendation = "Consider consolidating - these strategies move together and suffer losses together";
-            } else if (isHighCorrelation) {
-              recommendation = "Moderate redundancy - correlated returns reduce diversification benefit";
-            } else if (isHighTailDependence) {
-              recommendation = "Tail risk overlap - may amplify losses during market stress";
+              // Generate recommendation
+              let recommendation: string | null = null;
+              if (isRedundant) {
+                recommendation = "Consider consolidating - these strategies move together and suffer losses together";
+              } else if (isHighCorrelation) {
+                recommendation = "Moderate redundancy - correlated returns reduce diversification benefit";
+              } else if (isHighTailDependence) {
+                recommendation = "Tail risk overlap - may amplify losses during market stress";
+              }
+              pairs.push({
+                strategyA,
+                strategyB,
+                correlation: correlation !== null && !Number.isNaN(correlation) ? correlation : null,
+                tailDependence,
+                overlapScore,
+                compositeSimilarity,
+                sharedTradingDays,
+                flags: {
+                  isHighCorrelation,
+                  isHighTailDependence,
+                  isRedundant,
+                },
+                recommendation,
+              });
             }
-
-            pairs.push({
-              strategyA,
-              strategyB,
-              correlation: correlation !== null && !Number.isNaN(correlation) ? correlation : null,
-              tailDependence,
-              overlapScore,
-              compositeSimilarity,
-              sharedTradingDays,
-              flags: {
-                isHighCorrelation,
-                isHighTailDependence,
-                isRedundant,
-              },
-              recommendation,
-            });
           }
         }
 
@@ -1919,8 +1928,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           return b.compositeSimilarity - a.compositeSimilarity;
         });
 
-        // Apply topN limit
-        const topPairs = pairs.slice(0, topN);
+        // Apply limit
+        const topPairs = pairs.slice(0, limit);
 
         // Build recommendations list
         const recommendations: string[] = [];
@@ -1943,11 +1952,11 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const structuredData = {
           blockId,
           options: {
-            correlationThreshold,
-            tailDependenceThreshold,
-            method,
-            minSharedDays,
-            topN,
+            correlationThreshold: corrThreshold,
+            tailDependenceThreshold: tailThreshold,
+            method: corrMethod,
+            minSharedDays: minDays,
+            topN: limit,
           },
           strategySummary: {
             totalStrategies: strategies.length,
