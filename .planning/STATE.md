@@ -44,6 +44,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 | Phase | Decision | Rationale |
 |-------|----------|-----------|
 | 17 | Trade-based calculations only for comparison tools | Daily logs represent full portfolio, not per-strategy |
+| 17.1 | **CLI test verification required for all v2.1 MCP tools** | Real data validation catches issues unit tests miss |
 | 18 | 11 built-in scenarios (9 crashes + 2 recoveries) | Cover major market events post-2013 |
 | 18 | Return null stats for scenarios with no trades | Graceful handling, not errors |
 
