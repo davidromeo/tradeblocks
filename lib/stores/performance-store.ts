@@ -193,15 +193,13 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
   )
 
   const state = get()
-  const riskFreeRate = 2.0
 
   // Check if we can use cached snapshot (default view with no filters)
   const isDefaultView =
     !state.dateRange.from &&
     !state.dateRange.to &&
     state.selectedStrategies.length === 0 &&
-    !state.normalizeTo1Lot &&
-    riskFreeRate === 2.0 // explicit parity with block-stats page default
+    !state.normalizeTo1Lot
 
   if (isDefaultView) {
         const cachedSnapshot = await getPerformanceSnapshotCache(blockId)
@@ -255,7 +253,6 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
         trades,
         dailyLogs,
         filters: updatedFilters,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: state.normalizeTo1Lot
       })
 
@@ -303,7 +300,6 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
       trades: data.allTrades,
       dailyLogs: data.allDailyLogs,
       filters,
-      riskFreeRate: 2.0,
       normalizeTo1Lot
     })
 

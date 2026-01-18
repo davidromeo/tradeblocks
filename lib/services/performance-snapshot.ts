@@ -39,7 +39,6 @@ interface SnapshotOptions {
   trades: Trade[]
   dailyLogs?: DailyLogEntry[]
   filters?: SnapshotFilters
-  riskFreeRate?: number
   normalizeTo1Lot?: boolean
   onProgress?: (progress: SnapshotProgress) => void
   signal?: AbortSignal
@@ -120,7 +119,6 @@ export interface PerformanceSnapshot {
 export async function buildPerformanceSnapshot(options: SnapshotOptions): Promise<PerformanceSnapshot> {
   const { onProgress, signal } = options
   const normalizeTo1Lot = Boolean(options.normalizeTo1Lot)
-  const riskFreeRate = typeof options.riskFreeRate === 'number' ? options.riskFreeRate : 2.0
   const strategies = options.filters?.strategies?.length ? options.filters?.strategies : undefined
   const dateRange = options.filters?.dateRange
 
@@ -185,7 +183,7 @@ export async function buildPerformanceSnapshot(options: SnapshotOptions): Promis
   onProgress?.({ step: 'Calculating portfolio stats', percent: 10 })
   await yieldToMain()
 
-  const calculator = new PortfolioStatsCalculator({ riskFreeRate })
+  const calculator = new PortfolioStatsCalculator()
   const portfolioStats = calculator.calculatePortfolioStats(
     filteredTrades,
     filteredDailyLogs,
