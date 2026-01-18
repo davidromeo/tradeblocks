@@ -1695,6 +1695,14 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
   );
 
   // Tool 10: strategy_similarity
+  const SIMILARITY_DEFAULTS = {
+    correlationThreshold: 0.7,
+    tailDependenceThreshold: 0.5,
+    method: "kendall" as const,
+    minSharedDays: 30,
+    topN: 5,
+  };
+
   server.registerTool(
     "strategy_similarity",
     {
@@ -1706,40 +1714,40 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .number()
           .min(0)
           .max(1)
-          .default(0.7)
-          .describe("Minimum correlation to flag as similar (default: 0.7)"),
+          .default(SIMILARITY_DEFAULTS.correlationThreshold)
+          .describe(`Minimum correlation to flag as similar (default: ${SIMILARITY_DEFAULTS.correlationThreshold})`),
         tailDependenceThreshold: z
           .number()
           .min(0)
           .max(1)
-          .default(0.5)
-          .describe("Minimum tail dependence to flag as high joint risk (default: 0.5)"),
+          .default(SIMILARITY_DEFAULTS.tailDependenceThreshold)
+          .describe(`Minimum tail dependence to flag as high joint risk (default: ${SIMILARITY_DEFAULTS.tailDependenceThreshold})`),
         method: z
           .enum(["kendall", "spearman", "pearson"])
-          .default("kendall")
-          .describe("Correlation method (default: kendall)"),
+          .default(SIMILARITY_DEFAULTS.method)
+          .describe(`Correlation method (default: ${SIMILARITY_DEFAULTS.method})`),
         minSharedDays: z
           .number()
           .int()
           .min(1)
-          .default(30)
-          .describe("Minimum shared trading days for valid comparison (default: 30)"),
+          .default(SIMILARITY_DEFAULTS.minSharedDays)
+          .describe(`Minimum shared trading days for valid comparison (default: ${SIMILARITY_DEFAULTS.minSharedDays})`),
         topN: z
           .number()
           .int()
           .min(1)
           .max(50)
-          .default(5)
-          .describe("Number of most similar pairs to return (default: 5)"),
+          .default(SIMILARITY_DEFAULTS.topN)
+          .describe(`Number of most similar pairs to return (default: ${SIMILARITY_DEFAULTS.topN})`),
       }),
     },
     async ({ blockId, correlationThreshold, tailDependenceThreshold, method, minSharedDays, topN }) => {
       // Apply defaults for optional parameters (zod defaults may not apply through MCP CLI)
-      const corrThreshold = correlationThreshold ?? 0.7;
-      const tailThreshold = tailDependenceThreshold ?? 0.5;
-      const corrMethod = method ?? "kendall";
-      const minDays = minSharedDays ?? 30;
-      const limit = topN ?? 5;
+      const corrThreshold = correlationThreshold ?? SIMILARITY_DEFAULTS.correlationThreshold;
+      const tailThreshold = tailDependenceThreshold ?? SIMILARITY_DEFAULTS.tailDependenceThreshold;
+      const corrMethod = method ?? SIMILARITY_DEFAULTS.method;
+      const minDays = minSharedDays ?? SIMILARITY_DEFAULTS.minSharedDays;
+      const limit = topN ?? SIMILARITY_DEFAULTS.topN;
 
       try {
         const block = await loadBlock(baseDir, blockId);
