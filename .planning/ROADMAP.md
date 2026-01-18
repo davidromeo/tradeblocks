@@ -46,14 +46,14 @@ Plans:
 Plans:
 - [x] 19-01: Implement drawdown_attribution tool with equity curve analysis
 
-### Phase 20: Marginal Contribution Tool
+### Phase 20: Marginal Contribution Tool ✓
 **Goal:** Calculate marginal Sharpe/Sortino contribution of adding a strategy to a portfolio
 **Depends on:** Phase 19
 **Research:** Unlikely (new algorithm, uses existing ratio calculators)
-**Plans:** TBD
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 20-01: TBD
+- [x] 20-01: Implement marginal_contribution tool with with/without comparison
 
 ### Phase 21: Strategy Similarity Tool
 **Goal:** Flag strategies that may be redundant based on correlation, tail dependence, and overlap
@@ -140,7 +140,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | 17. Block Diff | v2.1 | 1/1 | Complete | 2026-01-17 |
 | 18. Stress Test | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 19. Drawdown Attribution | v2.1 | 1/1 | Complete | 2026-01-18 |
-| 20. Marginal Contribution | v2.1 | 0/? | Not started | - |
+| 20. Marginal Contribution | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 21. Strategy Similarity | v2.1 | 0/? | Not started | - |
 | 22. What-If Scaling | v2.1 | 0/? | Not started | - |
 | 23. Portfolio Health Check | v2.1 | 0/? | Not started | - |
