@@ -55,14 +55,14 @@ Plans:
 Plans:
 - [x] 20-01: Implement marginal_contribution tool with with/without comparison
 
-### Phase 21: Strategy Similarity Tool
+### Phase 21: Strategy Similarity Tool ✓
 **Goal:** Flag strategies that may be redundant based on correlation, tail dependence, and overlap
 **Depends on:** Phase 20
 **Research:** Unlikely (leverages existing correlation/tail-risk)
-**Plans:** TBD
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 21-01: TBD
+- [x] 21-01: Implement strategy_similarity tool with composite scoring
 
 ### Phase 22: What-If Scaling Tool
 **Goal:** Project portfolio metrics if strategies were run at different sizes
@@ -141,7 +141,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | 18. Stress Test | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 19. Drawdown Attribution | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 20. Marginal Contribution | v2.1 | 1/1 | Complete | 2026-01-18 |
-| 21. Strategy Similarity | v2.1 | 0/? | Not started | - |
+| 21. Strategy Similarity | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 22. What-If Scaling | v2.1 | 0/? | Not started | - |
 | 23. Portfolio Health Check | v2.1 | 0/? | Not started | - |
 | 24. Web Platform Guide | v2.1 | 0/? | Not started | - |
