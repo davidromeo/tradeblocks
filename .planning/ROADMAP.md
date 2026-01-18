@@ -103,15 +103,15 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 Plans:
 - [x] 25-01: Treasury rate data and lookup utility (TDD) — completed 2026-01-18
 
-### Phase 26: Core Calculations
+### Phase 26: Core Calculations ✅
 
 **Goal**: Update Sharpe/Sortino calculations to use date-based rate lookup
 **Depends on**: Phase 25
 **Research**: Unlikely (internal refactoring)
-**Plans**: TBD
+**Plans**: 1 plan (TDD)
 
 Plans:
-- [ ] 26-01: TBD (run /gsd:plan-phase 26 to break down)
+- [x] 26-01: Date-based risk-free rates for Sharpe/Sortino (TDD) — completed 2026-01-18
 
 ### Phase 27: Remove Manual Input
 
@@ -140,7 +140,7 @@ Plans:
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
 | 25. Treasury Data | v2.2 | 1/1 | Complete | 2026-01-18 |
-| 26. Core Calculations | v2.2 | 0/? | Not started | - |
+| 26. Core Calculations | v2.2 | 1/1 | Complete | 2026-01-18 |
 | 27. Remove Manual Input | v2.2 | 0/? | Not started | - |
 | 28. MCP & Tests | v2.2 | 0/? | Not started | - |
 
