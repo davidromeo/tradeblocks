@@ -2,13 +2,33 @@
  * Historical 3-Month Treasury Bill Rates (DTB3)
  * Source: Federal Reserve Economic Data (FRED), St. Louis Federal Reserve
  * Data series: DTB3 (Market Yield on U.S. Treasury Securities at 3-Month Constant Maturity)
- * 
+ *
  * Values are annual percentages (e.g., 4.32 = 4.32% annual rate)
  * Keys are dates in YYYY-MM-DD format (US Eastern time)
- * 
+ *
  * Used for calculating risk-free rate in Sharpe/Sortino ratio calculations.
- * 
+ *
  * @see https://fred.stlouisfed.org/series/DTB3
+ *
+ * ## How to Update (for Claude or developers)
+ *
+ * 1. Download CSV from FRED:
+ *    https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3&cosd=YYYY-MM-DD&coed=YYYY-MM-DD
+ *    Replace YYYY-MM-DD with your date range (cosd = start, coed = end)
+ *
+ * 2. CSV format is:
+ *    DATE,DTB3
+ *    2026-01-02,3.54
+ *    2026-01-03,3.54
+ *    ...
+ *
+ * 3. Add entries to this file in the format:
+ *    "YYYY-MM-DD": X.XX,
+ *
+ * 4. Run tests to verify: npm test -- tests/unit/risk-free-rate.test.ts
+ *
+ * Note: Rates are only available for trading days (weekdays, excluding market holidays).
+ * The lookup utility handles weekends/holidays by finding the most recent prior trading day.
  */
 export const TREASURY_RATES: Record<string, number> = {
   "2013-01-02": 0.08,
@@ -3261,4 +3281,15 @@ export const TREASURY_RATES: Record<string, number> = {
   "2025-12-29": 3.57,
   "2025-12-30": 3.55,
   "2025-12-31": 3.57,
+  // 2026
+  "2026-01-02": 3.54,
+  "2026-01-03": 3.54,
+  "2026-01-06": 3.53,
+  "2026-01-07": 3.52,
+  "2026-01-08": 3.52,
+  "2026-01-09": 3.52,
+  "2026-01-10": 3.56,
+  "2026-01-13": 3.57,
+  "2026-01-14": 3.57,
+  "2026-01-15": 3.57,
 };

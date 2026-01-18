@@ -105,6 +105,11 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 
 **IndexedDB Data References**: The `ProcessedBlock` interface uses `dataReferences` to store keys for related data in IndexedDB. When working with blocks, always load associated trades/daily logs separately.
 
+**Risk-Free Rate Data**: Historical Treasury rates are stored in `lib/data/treasury-rates.ts`. See the file header for update instructions. To update with new rates:
+1. Fetch CSV from FRED: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3&cosd=START_DATE&coed=END_DATE`
+2. Add entries in format `"YYYY-MM-DD": X.XX,`
+3. Run tests: `npm test -- tests/unit/risk-free-rate.test.ts`
+
 ### Trading Calendar Data Model
 
 The Trading Calendar feature compares **backtest** (theoretical) results against **actual** (reported/live) trades. **CRITICAL**: The variable names map as follows:
