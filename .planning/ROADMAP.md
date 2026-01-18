@@ -37,14 +37,14 @@ Plans:
 Plans:
 - [x] 18-01: Implement stress_test tool with 11 built-in scenarios
 
-### Phase 19: Drawdown Attribution Tool
+### Phase 19: Drawdown Attribution Tool ✓
 **Goal:** During max drawdown periods, identify which strategies contributed most to losses
 **Depends on:** Phase 18
 **Research:** Unlikely (extends existing drawdown logic)
-**Plans:** TBD
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 19-01: TBD
+- [x] 19-01: Implement drawdown_attribution tool with equity curve analysis
 
 ### Phase 20: Marginal Contribution Tool
 **Goal:** Calculate marginal Sharpe/Sortino contribution of adding a strategy to a portfolio
@@ -139,7 +139,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 |-------|-----------|-------|--------|-----------|
 | 17. Block Diff | v2.1 | 1/1 | Complete | 2026-01-17 |
 | 18. Stress Test | v2.1 | 1/1 | Complete | 2026-01-18 |
-| 19. Drawdown Attribution | v2.1 | 0/? | Not started | - |
+| 19. Drawdown Attribution | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 20. Marginal Contribution | v2.1 | 0/? | Not started | - |
 | 21. Strategy Similarity | v2.1 | 0/? | Not started | - |
 | 22. What-If Scaling | v2.1 | 0/? | Not started | - |
