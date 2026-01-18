@@ -28,14 +28,14 @@ Plans:
 Plans:
 - [x] 17.1-01: Add --call CLI mode for direct tool invocation
 
-### Phase 18: Stress Test Tool
+### Phase 18: Stress Test Tool ✓
 **Goal:** Show portfolio performance during named historical scenarios (COVID crash, 2022 bear, Aug 2024 VIX spike)
 **Depends on:** Phase 17
 **Research:** Unlikely (simple date filtering + scenario definitions)
-**Plans:** TBD
+**Plans:** 1/1 complete
 
 Plans:
-- [ ] 18-01: TBD
+- [x] 18-01: Implement stress_test tool with 11 built-in scenarios
 
 ### Phase 19: Drawdown Attribution Tool
 **Goal:** During max drawdown periods, identify which strategies contributed most to losses
@@ -138,7 +138,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
 | 17. Block Diff | v2.1 | 1/1 | Complete | 2026-01-17 |
-| 18. Stress Test | v2.1 | 0/? | Not started | - |
+| 18. Stress Test | v2.1 | 1/1 | Complete | 2026-01-18 |
 | 19. Drawdown Attribution | v2.1 | 0/? | Not started | - |
 | 20. Marginal Contribution | v2.1 | 0/? | Not started | - |
 | 21. Strategy Similarity | v2.1 | 0/? | Not started | - |
