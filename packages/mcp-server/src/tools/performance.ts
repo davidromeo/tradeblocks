@@ -14,6 +14,7 @@ import {
 } from "../utils/output-formatter.js";
 import type { Trade } from "@lib/models/trade";
 import type { ReportingTrade } from "@lib/models/reporting-trade";
+import { normalizeToOneLot } from "@lib/utils/equity-curve";
 
 /**
  * MFE/MAE data point for a single trade's excursion metrics
@@ -1090,26 +1091,10 @@ function filterByDateRange(
   });
 }
 
-/**
- * Normalize trades to 1 lot (divide P&L by contract count)
- */
-function normalizeTradesToOneLot(trades: Trade[]): Trade[] {
-  return trades.map((trade) => {
-    if (!trade.numContracts || trade.numContracts <= 0) return trade;
-
-    const scaleFactor = 1 / trade.numContracts;
-    return {
-      ...trade,
-      pl: trade.pl * scaleFactor,
-      premium: trade.premium * scaleFactor,
-      marginReq: trade.marginReq ? trade.marginReq * scaleFactor : trade.marginReq,
-      fundsAtClose: trade.fundsAtClose
-        ? trade.fundsAtClose * scaleFactor
-        : trade.fundsAtClose,
-      numContracts: 1,
-    };
-  });
-}
+// Note: normalizeTradesToOneLot was removed and replaced with shared utility
+// from @lib/utils/equity-curve that correctly rebuilds the equity curve.
+// The old implementation had a bug: it scaled fundsAtClose directly instead
+// of recalculating based on cumulative scaled P&L.
 
 /**
  * Register all performance MCP tools
@@ -1230,8 +1215,9 @@ export function registerPerformanceTools(
         }
 
         // Apply normalization if requested
+        // Uses shared utility that properly rebuilds equity curve after normalizing P&L
         if (normalizeTo1Lot) {
-          trades = normalizeTradesToOneLot(trades);
+          trades = normalizeToOneLot(trades);
         }
 
         if (trades.length === 0) {
@@ -1531,8 +1517,9 @@ export function registerPerformanceTools(
         }
 
         // Apply normalization if requested
+        // Uses shared utility that properly rebuilds equity curve after normalizing P&L
         if (normalizeTo1Lot) {
-          trades = normalizeTradesToOneLot(trades);
+          trades = normalizeToOneLot(trades);
         }
 
         if (trades.length === 0) {
