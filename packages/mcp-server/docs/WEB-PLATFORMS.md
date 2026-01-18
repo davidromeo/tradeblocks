@@ -47,3 +47,41 @@ Note the ngrok URL (e.g., `https://abc123.ngrok.io`) - you'll need this for plat
 
 ---
 
+## ChatGPT Integration
+
+### Requirements
+
+- ChatGPT Pro, Plus, Business, Enterprise, or Education plan
+- Developer Mode enabled (not available in EEA, Switzerland, UK)
+
+### Setup Steps
+
+1. **Enable Developer Mode:**
+   - Open ChatGPT Settings (gear icon)
+   - Navigate to Connectors > Advanced
+   - Toggle on "Developer Mode"
+
+2. **Add TradeBlocks connector:**
+   - In ChatGPT, go to Settings > Connectors > Add Connector
+   - Enter your ngrok URL: `https://your-subdomain.ngrok.io/mcp`
+   - Name it "TradeBlocks"
+
+3. **Test the connection:**
+   - Start a new chat
+   - Ask: "List my backtests using TradeBlocks"
+   - ChatGPT should call `list_backtests` and show your strategies
+
+### Limitations
+
+- **Developer Mode required** - Standard Connectors mode requires search/fetch tools which TradeBlocks doesn't implement
+- **Session-based** - ngrok URL changes each restart (paid ngrok has stable URLs)
+- **Not available in EEA/Switzerland/UK** - Regional restrictions apply
+
+### Troubleshooting
+
+- **"Connection failed"**: Verify ngrok is running and URL is correct
+- **"No tools found"**: Ensure MCP server started with `--http` flag
+- **"Unauthorized"**: Some ChatGPT plans don't support Developer Mode
+
+---
+
