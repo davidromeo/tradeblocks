@@ -1992,7 +1992,284 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     }
   );
 
-  // Tool 11: get_trades
+  // Tool 11: what_if_scaling
+  server.registerTool(
+    "what_if_scaling",
+    {
+      description:
+        "Explore strategy weight combinations within a portfolio. Answer 'what if I scaled strategy X to 0.5x?' questions. Shows before/after comparison with per-strategy breakdown.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategyWeights: z
+          .record(z.string(), z.number().min(0).max(2))
+          .optional()
+          .describe(
+            "Weight per strategy, e.g., {\"5/7 17Δ\": 0.5}. Unspecified strategies default to 1.0. Weight 0 = exclude strategy entirely. Max weight: 2.0"
+          ),
+        startDate: z
+          .string()
+          .optional()
+          .describe("Start date filter (YYYY-MM-DD)"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("End date filter (YYYY-MM-DD)"),
+      }),
+    },
+    async ({ blockId, strategyWeights, startDate, endDate }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply date range filter
+        trades = filterByDateRange(trades, startDate, endDate);
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found in block "${blockId}"${startDate || endDate ? " for the specified date range" : ""}.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Get all unique strategies
+        const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+        // Build applied weights (default 1.0 for unspecified)
+        const appliedWeights: Record<string, number> = {};
+        const unknownStrategies: string[] = [];
+
+        // Initialize all strategies to 1.0
+        for (const strategy of strategies) {
+          appliedWeights[strategy] = 1.0;
+        }
+
+        // Apply user-specified weights
+        if (strategyWeights) {
+          for (const [strategy, weight] of Object.entries(strategyWeights)) {
+            // Find matching strategy (case-insensitive)
+            const matchedStrategy = strategies.find(
+              (s) => s.toLowerCase() === strategy.toLowerCase()
+            );
+            if (matchedStrategy) {
+              appliedWeights[matchedStrategy] = weight;
+            } else {
+              unknownStrategies.push(strategy);
+            }
+          }
+        }
+
+        // Check if all strategies have weight 0 (empty scaled portfolio)
+        const allZeroWeight = Object.values(appliedWeights).every((w) => w === 0);
+        if (allZeroWeight) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error: All strategies have weight 0. This would result in an empty portfolio.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Calculate original (baseline) portfolio metrics using trade-based calculations
+        const baselineStats = calculator.calculatePortfolioStats(
+          trades,
+          undefined, // No daily logs per Phase 17 constraint
+          true // Force trade-based calculations
+        );
+
+        // Build scaled trades: scale P/L and commissions proportionally
+        type ScaledTrade = Trade & {
+          scaledPl: number;
+          scaledOpeningComm: number;
+          scaledClosingComm: number;
+          weight: number;
+        };
+
+        const scaledTrades: ScaledTrade[] = [];
+        for (const trade of trades) {
+          const weight = appliedWeights[trade.strategy];
+          if (weight === 0) {
+            // Exclude trade entirely
+            continue;
+          }
+
+          scaledTrades.push({
+            ...trade,
+            scaledPl: trade.pl * weight,
+            scaledOpeningComm: trade.openingCommissionsFees * weight,
+            scaledClosingComm: trade.closingCommissionsFees * weight,
+            weight,
+          } as ScaledTrade);
+        }
+
+        // Create modified trades for scaled portfolio calculation
+        // We need to modify pl and commissions for the calculator
+        const modifiedTrades: Trade[] = scaledTrades.map((st) => ({
+          ...st,
+          pl: st.scaledPl,
+          openingCommissionsFees: st.scaledOpeningComm,
+          closingCommissionsFees: st.scaledClosingComm,
+        }));
+
+        // Calculate scaled portfolio metrics
+        const scaledStats = calculator.calculatePortfolioStats(
+          modifiedTrades,
+          undefined,
+          true
+        );
+
+        // Calculate comparison deltas
+        const calcDelta = (
+          original: number | null,
+          scaled: number | null
+        ): { original: number | null; scaled: number | null; delta: number | null; deltaPct: number | null } => {
+          if (original === null || scaled === null) {
+            return { original, scaled, delta: null, deltaPct: null };
+          }
+          const delta = scaled - original;
+          const deltaPct = original !== 0 ? (delta / Math.abs(original)) * 100 : null;
+          return { original, scaled, delta, deltaPct };
+        };
+
+        const comparison = {
+          sharpeRatio: calcDelta(baselineStats.sharpeRatio, scaledStats.sharpeRatio),
+          sortinoRatio: calcDelta(baselineStats.sortinoRatio, scaledStats.sortinoRatio),
+          maxDrawdown: calcDelta(baselineStats.maxDrawdown, scaledStats.maxDrawdown),
+          netPl: calcDelta(baselineStats.netPl, scaledStats.netPl),
+          totalTrades: {
+            original: baselineStats.totalTrades,
+            scaled: scaledStats.totalTrades, // Scaled excludes weight=0 trades
+          },
+        };
+
+        // Calculate per-strategy breakdown
+        interface StrategyBreakdown {
+          strategy: string;
+          weight: number;
+          original: {
+            trades: number;
+            netPl: number;
+            plContributionPct: number;
+          };
+          scaled: {
+            trades: number;
+            netPl: number;
+            plContributionPct: number;
+          };
+          delta: {
+            netPl: number;
+            netPlPct: number;
+          };
+        }
+
+        const perStrategy: StrategyBreakdown[] = [];
+
+        // Calculate total P/L for contribution percentages
+        let totalOriginalPl = 0;
+        let totalScaledPl = 0;
+
+        // Group trades by strategy for original stats
+        const originalByStrategy: Record<string, { trades: number; netPl: number }> = {};
+        for (const trade of trades) {
+          if (!originalByStrategy[trade.strategy]) {
+            originalByStrategy[trade.strategy] = { trades: 0, netPl: 0 };
+          }
+          originalByStrategy[trade.strategy].trades++;
+          const netPl = trade.pl - trade.openingCommissionsFees - trade.closingCommissionsFees;
+          originalByStrategy[trade.strategy].netPl += netPl;
+          totalOriginalPl += netPl;
+        }
+
+        // Group scaled trades by strategy
+        const scaledByStrategy: Record<string, { trades: number; netPl: number }> = {};
+        for (const st of scaledTrades) {
+          if (!scaledByStrategy[st.strategy]) {
+            scaledByStrategy[st.strategy] = { trades: 0, netPl: 0 };
+          }
+          scaledByStrategy[st.strategy].trades++;
+          const netPl = st.scaledPl - st.scaledOpeningComm - st.scaledClosingComm;
+          scaledByStrategy[st.strategy].netPl += netPl;
+          totalScaledPl += netPl;
+        }
+
+        // Build per-strategy breakdown for ALL strategies
+        for (const strategy of strategies) {
+          const weight = appliedWeights[strategy];
+          const orig = originalByStrategy[strategy] ?? { trades: 0, netPl: 0 };
+          const scaled = scaledByStrategy[strategy] ?? { trades: 0, netPl: 0 };
+
+          const origContributionPct =
+            totalOriginalPl !== 0 ? (orig.netPl / Math.abs(totalOriginalPl)) * 100 : 0;
+          const scaledContributionPct =
+            totalScaledPl !== 0 ? (scaled.netPl / Math.abs(totalScaledPl)) * 100 : 0;
+
+          const deltaNetPl = scaled.netPl - orig.netPl;
+          const deltaNetPlPct = orig.netPl !== 0 ? (deltaNetPl / Math.abs(orig.netPl)) * 100 : 0;
+
+          perStrategy.push({
+            strategy,
+            weight,
+            original: {
+              trades: orig.trades,
+              netPl: orig.netPl,
+              plContributionPct: origContributionPct,
+            },
+            scaled: {
+              trades: weight === 0 ? 0 : scaled.trades, // 0 trades if excluded
+              netPl: scaled.netPl,
+              plContributionPct: scaledContributionPct,
+            },
+            delta: {
+              netPl: deltaNetPl,
+              netPlPct: deltaNetPlPct,
+            },
+          });
+        }
+
+        // Sort by original net P/L descending (highest contributors first)
+        perStrategy.sort((a, b) => b.original.netPl - a.original.netPl);
+
+        // Build summary line
+        const sharpeDelta = comparison.sharpeRatio.deltaPct;
+        const mddDelta = comparison.maxDrawdown.deltaPct;
+        const summary = `What-If Scaling: ${blockId} | Sharpe ${formatRatio(baselineStats.sharpeRatio)} → ${formatRatio(scaledStats.sharpeRatio)} (${sharpeDelta !== null ? (sharpeDelta >= 0 ? "+" : "") + sharpeDelta.toFixed(1) + "%" : "N/A"}) | MDD ${formatPercent(baselineStats.maxDrawdown)} → ${formatPercent(scaledStats.maxDrawdown)} (${mddDelta !== null ? (mddDelta >= 0 ? "+" : "") + mddDelta.toFixed(1) + "%" : "N/A"})`;
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          strategyWeights: appliedWeights,
+          dateRange: {
+            start: startDate ?? null,
+            end: endDate ?? null,
+          },
+          unknownStrategies: unknownStrategies.length > 0 ? unknownStrategies : undefined,
+          comparison,
+          perStrategy,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating what-if scaling: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 12: get_trades
   server.registerTool(
     "get_trades",
     {
