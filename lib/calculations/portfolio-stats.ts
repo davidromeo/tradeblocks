@@ -36,7 +36,6 @@ interface DailyReturnWithDate {
  * Default analysis configuration
  */
 export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
-  riskFreeRate: 2.0, // 2% annual
   useBusinessDaysOnly: true,
   annualizationFactor: 252, // Business days
   confidenceLevel: 0.95,
