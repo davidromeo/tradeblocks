@@ -5,7 +5,7 @@
 - ✅ [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
 - ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
 - ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
-- 📋 **Next milestone** — To be planned
+- 🚧 **v2.2 Historical Risk-Free Rates** — Phases 25-28 (in progress)
 
 ## Completed Milestones
 
@@ -77,6 +77,72 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v1.0 WFA Enhancement | 1-10 | 17 | Complete | 2026-01-11 |
 | v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
+| v2.2 Historical Risk-Free Rates | 25-28 | TBD | In progress | - |
+
+---
+
+## 🚧 v2.2 Historical Risk-Free Rates (In Progress)
+
+**Milestone Goal:** Replace fixed 2% risk-free rate with embedded historical Treasury rates (2013-2025) for accurate Sharpe/Sortino calculations that reflect actual market conditions.
+
+**Background:** Amy's feature request - Sharpe ratio gets distorted when rates move meaningfully. Using a constant rate when actual rates varied significantly (e.g., 0% in 2020 vs 5%+ in 2023) skews risk-adjusted metrics.
+
+**Approach:**
+- Embed ~3,000 daily 3-month T-bill rates (2013-2025) as static data (~60KB)
+- Lookup rate by trade date, fallback to last known rate for dates outside range
+- Remove manual riskFreeRate input entirely (no override needed)
+- Local-only: no external API calls, data bundled in app
+
+### Phase 25: Treasury Data
+
+**Goal**: Create embedded rate data file and lookup utility
+**Depends on**: Previous milestone complete
+**Research**: Unlikely (data format known from research)
+**Plans**: TBD
+
+Plans:
+- [ ] 25-01: TBD (run /gsd:plan-phase 25 to break down)
+
+### Phase 26: Core Calculations
+
+**Goal**: Update Sharpe/Sortino calculations to use date-based rate lookup
+**Depends on**: Phase 25
+**Research**: Unlikely (internal refactoring)
+**Plans**: TBD
+
+Plans:
+- [ ] 26-01: TBD (run /gsd:plan-phase 26 to break down)
+
+### Phase 27: Remove Manual Input
+
+**Goal**: Remove riskFreeRate from types, stores, UI, and services
+**Depends on**: Phase 26
+**Research**: Unlikely (deletion/cleanup)
+**Plans**: TBD
+
+Plans:
+- [ ] 27-01: TBD (run /gsd:plan-phase 27 to break down)
+
+### Phase 28: MCP & Tests
+
+**Goal**: Update MCP server and test suites for new rate behavior
+**Depends on**: Phase 27
+**Research**: Unlikely (internal patterns)
+**Plans**: TBD
+
+Plans:
+- [ ] 28-01: TBD (run /gsd:plan-phase 28 to break down)
+
+---
+
+## Progress (v2.2)
+
+| Phase | Milestone | Plans | Status | Completed |
+|-------|-----------|-------|--------|-----------|
+| 25. Treasury Data | v2.2 | 0/? | Not started | - |
+| 26. Core Calculations | v2.2 | 0/? | Not started | - |
+| 27. Remove Manual Input | v2.2 | 0/? | Not started | - |
+| 28. MCP & Tests | v2.2 | 0/? | Not started | - |
 
 ## Audit Notes
 

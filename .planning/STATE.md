@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-18)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Planning next milestone
+**Current focus:** v2.2 Historical Risk-Free Rates
 
 ## Current Position
 
-Milestone: v2.1 Portfolio Comparison — SHIPPED
-Phase: 24 of 24 complete
-Plan: All complete
-Status: Ready to plan next milestone
-Last activity: 2026-01-18 — v2.1 milestone archived
+Milestone: v2.2 Historical Risk-Free Rates
+Phase: 25 of 28 (Treasury Data)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-01-18 — Milestone v2.2 created
 
-Progress: ██████████ 100% (v2.1 complete)
+Progress: ░░░░░░░░░░ 0%
 
 ## Historical Context
 
@@ -31,13 +31,29 @@ Key decisions from v2.1 milestone now captured in PROJECT.md Key Decisions table
 - 4-layer health check response
 - ngrok tunnel for web platforms
 
+## v2.2 Context
+
+**Feature Request:** Amy's suggestion to use variable/actual risk-free rates for portfolio analysis instead of fixed 2%.
+
+**Problem:** Sharpe ratio gets distorted when rates move meaningfully - using a constant rate when actual rates varied (0% in 2020 vs 5%+ in 2023) skews results.
+
+**Solution:** Embed historical Treasury 3-month T-bill rates (2013-2025) as static data, lookup by trade date, remove manual input.
+
+**Key Decisions:**
+- Data range: 2013-01-01 to present (~3,000 trading days)
+- Fallback: Last known rate for dates outside range
+- No override: Remove manual input entirely
+- Local-only: No external API calls (maintains TradeBlocks principle)
+
+### Roadmap Evolution
+
+- Milestone v2.2 created: Historical risk-free rates, 4 phases (Phase 25-28)
+
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: v2.1 milestone complete
+Stopped at: Milestone v2.2 initialization
 Resume file: None
-
-Next: `/gsd:discuss-milestone` or `/gsd:new-milestone` to plan next version
 
 ## Testing Infrastructure
 
