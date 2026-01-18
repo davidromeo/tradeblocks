@@ -1422,7 +1422,277 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     }
   );
 
-  // Tool 9: get_trades
+  // Tool 9: marginal_contribution
+  server.registerTool(
+    "marginal_contribution",
+    {
+      description:
+        "Calculate how each strategy affects portfolio risk-adjusted returns (Sharpe/Sortino). Shows marginal contribution: positive means strategy IMPROVES the ratio, negative means it HURTS.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        targetStrategy: z
+          .string()
+          .optional()
+          .describe(
+            "Calculate for specific strategy only. If omitted, calculates for all strategies."
+          ),
+        topN: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(5)
+          .describe("Number of top contributors to return when targetStrategy is omitted (default: 5)"),
+      }),
+    },
+    async ({ blockId, targetStrategy, topN }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const trades = block.trades;
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found in block "${blockId}".`,
+              },
+            ],
+          };
+        }
+
+        // Get unique strategies
+        const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+        // Validate targetStrategy if provided
+        if (targetStrategy) {
+          const matchedStrategy = strategies.find(
+            (s) => s.toLowerCase() === targetStrategy.toLowerCase()
+          );
+          if (!matchedStrategy) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Strategy "${targetStrategy}" not found in block. Available: ${strategies.join(", ")}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        }
+
+        // Edge case: single strategy portfolio
+        if (strategies.length === 1) {
+          const baselineStats = calculator.calculatePortfolioStats(
+            trades,
+            undefined, // No daily logs per Phase 17 constraint
+            true // Force trade-based calculations
+          );
+
+          const summary = `Marginal Contribution: ${blockId} | Single strategy portfolio - cannot calculate marginal contribution`;
+
+          const structuredData = {
+            blockId,
+            filters: { targetStrategy: targetStrategy ?? null, topN },
+            baseline: {
+              totalStrategies: 1,
+              totalTrades: trades.length,
+              sharpeRatio: baselineStats.sharpeRatio,
+              sortinoRatio: baselineStats.sortinoRatio,
+            },
+            contributions: [
+              {
+                strategy: strategies[0],
+                trades: trades.length,
+                marginalSharpe: null,
+                marginalSortino: null,
+                interpretation: "only-strategy",
+              },
+            ],
+            summary: {
+              mostBeneficial: null,
+              leastBeneficial: null,
+            },
+            message: "Single strategy portfolio - marginal contribution cannot be calculated (no 'without' comparison possible)",
+          };
+
+          return createToolOutput(summary, structuredData);
+        }
+
+        // Calculate baseline portfolio metrics using ALL trades
+        const baselineStats = calculator.calculatePortfolioStats(
+          trades,
+          undefined, // No daily logs per Phase 17 constraint
+          true // Force trade-based calculations
+        );
+
+        // Determine which strategies to analyze
+        const strategiesToAnalyze = targetStrategy
+          ? strategies.filter(
+              (s) => s.toLowerCase() === targetStrategy.toLowerCase()
+            )
+          : strategies;
+
+        // Calculate marginal contribution for each strategy
+        const contributions: Array<{
+          strategy: string;
+          trades: number;
+          marginalSharpe: number | null;
+          marginalSortino: number | null;
+          interpretation: string;
+        }> = [];
+
+        for (const strategy of strategiesToAnalyze) {
+          // Filter OUT this strategy's trades (portfolio WITHOUT this strategy)
+          const tradesWithout = trades.filter(
+            (t) => t.strategy.toLowerCase() !== strategy.toLowerCase()
+          );
+          const strategyTrades = trades.filter(
+            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
+          );
+
+          // Edge case: removing this strategy leaves nothing
+          if (tradesWithout.length === 0) {
+            contributions.push({
+              strategy,
+              trades: strategyTrades.length,
+              marginalSharpe: null,
+              marginalSortino: null,
+              interpretation: "only-strategy",
+            });
+            continue;
+          }
+
+          // Calculate "without" portfolio metrics
+          const withoutStats = calculator.calculatePortfolioStats(
+            tradesWithout,
+            undefined,
+            true
+          );
+
+          // Marginal contribution = baseline - without
+          // Positive = strategy IMPROVES the ratio (removing it hurts)
+          // Negative = strategy HURTS the ratio (removing it helps)
+          const marginalSharpe =
+            baselineStats.sharpeRatio !== null &&
+            baselineStats.sharpeRatio !== undefined &&
+            withoutStats.sharpeRatio !== null &&
+            withoutStats.sharpeRatio !== undefined
+              ? baselineStats.sharpeRatio - withoutStats.sharpeRatio
+              : null;
+
+          const marginalSortino =
+            baselineStats.sortinoRatio !== null &&
+            baselineStats.sortinoRatio !== undefined &&
+            withoutStats.sortinoRatio !== null &&
+            withoutStats.sortinoRatio !== undefined
+              ? baselineStats.sortinoRatio - withoutStats.sortinoRatio
+              : null;
+
+          // Determine interpretation based on marginal Sharpe
+          let interpretation: string;
+          if (marginalSharpe === null) {
+            interpretation = "unknown";
+          } else if (Math.abs(marginalSharpe) < 0.01) {
+            interpretation = "negligible";
+          } else if (marginalSharpe > 0) {
+            interpretation = "improves";
+          } else {
+            interpretation = "hurts";
+          }
+
+          contributions.push({
+            strategy,
+            trades: strategyTrades.length,
+            marginalSharpe,
+            marginalSortino,
+            interpretation,
+          });
+        }
+
+        // Sort by marginal Sharpe (most positive/beneficial first)
+        contributions.sort((a, b) => {
+          // Put null values last
+          if (a.marginalSharpe === null && b.marginalSharpe === null) return 0;
+          if (a.marginalSharpe === null) return 1;
+          if (b.marginalSharpe === null) return -1;
+          return b.marginalSharpe - a.marginalSharpe; // Descending (most beneficial first)
+        });
+
+        // Apply topN limit (only when not filtering by targetStrategy)
+        const limitedContributions = targetStrategy
+          ? contributions
+          : contributions.slice(0, topN);
+
+        // Find most and least beneficial
+        const validContributions = contributions.filter(
+          (c) => c.marginalSharpe !== null
+        );
+        const mostBeneficial =
+          validContributions.length > 0
+            ? {
+                strategy: validContributions[0].strategy,
+                sharpe: validContributions[0].marginalSharpe,
+              }
+            : null;
+        const leastBeneficial =
+          validContributions.length > 0
+            ? {
+                strategy: validContributions[validContributions.length - 1].strategy,
+                sharpe: validContributions[validContributions.length - 1].marginalSharpe,
+              }
+            : null;
+
+        // Build summary line
+        const summaryParts: string[] = [`Marginal Contribution: ${blockId}`];
+        if (mostBeneficial && mostBeneficial.sharpe !== null) {
+          const sharpeStr = mostBeneficial.sharpe >= 0
+            ? `+${formatRatio(mostBeneficial.sharpe)}`
+            : formatRatio(mostBeneficial.sharpe);
+          summaryParts.push(`Top: ${mostBeneficial.strategy} (Sharpe ${sharpeStr})`);
+        }
+        if (leastBeneficial && leastBeneficial.sharpe !== null && leastBeneficial.strategy !== mostBeneficial?.strategy) {
+          const sharpeStr = leastBeneficial.sharpe >= 0
+            ? `+${formatRatio(leastBeneficial.sharpe)}`
+            : formatRatio(leastBeneficial.sharpe);
+          summaryParts.push(`Worst: ${leastBeneficial.strategy} (Sharpe ${sharpeStr})`);
+        }
+        const summary = summaryParts.join(" | ");
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          filters: { targetStrategy: targetStrategy ?? null, topN },
+          baseline: {
+            totalStrategies: strategies.length,
+            totalTrades: trades.length,
+            sharpeRatio: baselineStats.sharpeRatio,
+            sortinoRatio: baselineStats.sortinoRatio,
+          },
+          contributions: limitedContributions,
+          summary: {
+            mostBeneficial,
+            leastBeneficial,
+          },
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating marginal contribution: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 10: get_trades
   server.registerTool(
     "get_trades",
     {
