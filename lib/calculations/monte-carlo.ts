@@ -89,7 +89,28 @@ export interface SimulationPath {
 }
 
 /**
- * Statistical summary of all simulations
+ * Statistical summary of all simulations.
+ *
+ * ## Unit Conventions
+ *
+ * This interface uses DECIMAL convention for all percentage values:
+ * - `meanMaxDrawdown`: 0.12 means 12%, NOT 12
+ * - `medianMaxDrawdown`: 0.12 means 12%, NOT 12
+ * - `probabilityOfProfit`: 0.65 means 65%
+ *
+ * This differs from PortfolioStats which uses PERCENTAGE convention for maxDrawdown.
+ *
+ * When comparing Monte Carlo results with PortfolioStats:
+ * ```typescript
+ * // Convert portfolio maxDrawdown (percentage) to decimal for comparison
+ * const historicalMddDecimal = portfolioStats.maxDrawdown / 100;
+ * const mcMddMultiplier = mcStats.medianMaxDrawdown / historicalMddDecimal;
+ * ```
+ *
+ * Or use the type-safe utilities from `@/lib/types/percentage`.
+ *
+ * @see {@link @/lib/types/percentage} for type-safe unit conversions
+ * @see {@link PortfolioStats} for the interface that uses PERCENTAGE convention
  */
 export interface SimulationStatistics {
   /** Mean final portfolio value across all simulations */
@@ -113,16 +134,28 @@ export interface SimulationStatistics {
   /** Median annualized return percentage */
   medianAnnualizedReturn: number;
 
-  /** Mean maximum drawdown across simulations */
+  /**
+   * Mean maximum drawdown across simulations.
+   * @unit Decimal01 - 0.12 means 12% drawdown
+   */
   meanMaxDrawdown: number;
 
-  /** Median maximum drawdown */
+  /**
+   * Median maximum drawdown across simulations.
+   * @unit Decimal01 - 0.12 means 12% drawdown
+   *
+   * IMPORTANT: PortfolioStats.maxDrawdown uses PERCENTAGE convention (12 = 12%).
+   * When comparing, convert: `this.medianMaxDrawdown / (portfolioMdd / 100)`
+   */
   medianMaxDrawdown: number;
 
   /** Mean Sharpe ratio */
   meanSharpeRatio: number;
 
-  /** Probability of profit (% of simulations ending above initial capital) */
+  /**
+   * Probability of profit (simulations ending above initial capital).
+   * @unit Decimal01 - 0.65 means 65% probability
+   */
   probabilityOfProfit: number;
 
   /** Value at Risk at different confidence levels */

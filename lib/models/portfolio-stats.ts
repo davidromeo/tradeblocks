@@ -1,5 +1,22 @@
 /**
- * Portfolio statistics based on legacy Python PortfolioStats class
+ * Portfolio statistics based on legacy Python PortfolioStats class.
+ *
+ * ## Unit Conventions
+ *
+ * This interface uses PERCENTAGE convention for drawdown values:
+ * - `maxDrawdown`: 12 means 12%, NOT 0.12
+ * - `timeInDrawdown`: 50 means 50%, NOT 0.5
+ *
+ * Other rate fields use DECIMAL convention:
+ * - `winRate`: 0.65 means 65%
+ * - `monthlyWinRate`: 0.75 means 75%
+ * - `weeklyWinRate`: 0.80 means 80%
+ *
+ * When comparing with Monte Carlo results (which use DECIMAL convention),
+ * convert using: `mcValue / (portfolioMdd / 100)` or use the type-safe
+ * utilities from `@/lib/types/percentage`.
+ *
+ * @see {@link @/lib/types/percentage} for type-safe unit conversions
  */
 export interface PortfolioStats {
   totalTrades: number
@@ -7,7 +24,8 @@ export interface PortfolioStats {
   winningTrades: number
   losingTrades: number
   breakEvenTrades: number
-  winRate: number  // 0-1 decimal, not percentage
+  /** @unit Decimal01 - 0.65 means 65% win rate */
+  winRate: number
   avgWin: number
   avgLoss: number
   maxWin: number
@@ -15,20 +33,37 @@ export interface PortfolioStats {
   sharpeRatio?: number
   sortinoRatio?: number
   calmarRatio?: number
-  cagr?: number  // Compound Annual Growth Rate
+  /** @unit Decimal01 - 0.12 means 12% CAGR */
+  cagr?: number
   kellyPercentage?: number
+  /**
+   * Maximum drawdown as a PERCENTAGE (0-100).
+   * e.g., 12.5 means 12.5% drawdown.
+   *
+   * IMPORTANT: Monte Carlo results use DECIMAL convention (0.125 for 12.5%).
+   * When comparing, convert: `mcMdd / (this.maxDrawdown / 100)`
+   *
+   * @unit Percentage - 12.5 means 12.5%
+   */
   maxDrawdown: number
   avgDailyPl: number
   totalCommissions: number
   netPl: number
   profitFactor: number
-  initialCapital: number  // Starting portfolio value before any P/L
+  /** Starting portfolio value before any P/L */
+  initialCapital: number
   // Streak and consistency metrics
   maxWinStreak?: number
   maxLossStreak?: number
   currentStreak?: number
-  timeInDrawdown?: number  // Percentage of time in drawdown
+  /**
+   * Percentage of trading days spent in drawdown.
+   * @unit Percentage - 50 means 50% of time in drawdown
+   */
+  timeInDrawdown?: number
+  /** @unit Decimal01 - 0.75 means 75% monthly win rate */
   monthlyWinRate?: number
+  /** @unit Decimal01 - 0.80 means 80% weekly win rate */
   weeklyWinRate?: number
 }
 

@@ -19,6 +19,8 @@ import { std, mean, min, max } from 'mathjs'
 import { Trade } from '../models/trade'
 import { DailyLogEntry } from '../models/daily-log'
 import { PortfolioStats, StrategyStats, AnalysisConfig } from '../models/portfolio-stats'
+import type { NormalizedPortfolioStats } from '../models/portfolio-stats-normalized'
+import { asDecimal01, type Decimal01 } from '../types/percentage'
 
 /**
  * Default analysis configuration
@@ -811,4 +813,72 @@ export class PortfolioStatsCalculator {
     return initialCapital + totalPl
   }
 
+}
+
+/**
+ * Convert PortfolioStats to NormalizedPortfolioStats.
+ *
+ * This function converts percentage fields (0-100) to decimal format (0-1)
+ * for consistent handling in APIs and comparisons with Monte Carlo results.
+ *
+ * Fields converted from percentage to decimal:
+ * - `maxDrawdown`: 12 → 0.12
+ * - `timeInDrawdown`: 50 → 0.50
+ *
+ * Fields that are already decimal (no conversion needed):
+ * - `winRate`, `cagr`, `monthlyWinRate`, `weeklyWinRate`
+ *
+ * @param stats - PortfolioStats with mixed unit conventions
+ * @returns NormalizedPortfolioStats with all percentages as decimals
+ *
+ * @example
+ * ```typescript
+ * const stats = calculator.calculatePortfolioStats(trades)
+ * const normalized = normalizePortfolioStats(stats)
+ *
+ * // Now safe to compare with Monte Carlo (both use decimals)
+ * const mcMddMultiplier = mcStats.medianMaxDrawdown / normalized.maxDrawdown
+ * ```
+ */
+export function normalizePortfolioStats(stats: PortfolioStats): NormalizedPortfolioStats {
+  return {
+    totalTrades: stats.totalTrades,
+    totalPl: stats.totalPl,
+    winningTrades: stats.winningTrades,
+    losingTrades: stats.losingTrades,
+    breakEvenTrades: stats.breakEvenTrades,
+    // winRate is already decimal in PortfolioStats
+    winRate: asDecimal01(stats.winRate),
+    avgWin: stats.avgWin,
+    avgLoss: stats.avgLoss,
+    maxWin: stats.maxWin,
+    maxLoss: stats.maxLoss,
+    sharpeRatio: stats.sharpeRatio,
+    sortinoRatio: stats.sortinoRatio,
+    calmarRatio: stats.calmarRatio,
+    // cagr is already decimal in PortfolioStats
+    cagr: stats.cagr !== undefined ? asDecimal01(stats.cagr) : undefined,
+    kellyPercentage: stats.kellyPercentage,
+    // maxDrawdown is PERCENTAGE in PortfolioStats, convert to decimal
+    maxDrawdown: asDecimal01(stats.maxDrawdown / 100),
+    avgDailyPl: stats.avgDailyPl,
+    totalCommissions: stats.totalCommissions,
+    netPl: stats.netPl,
+    profitFactor: stats.profitFactor,
+    initialCapital: stats.initialCapital,
+    maxWinStreak: stats.maxWinStreak,
+    maxLossStreak: stats.maxLossStreak,
+    currentStreak: stats.currentStreak,
+    // timeInDrawdown is PERCENTAGE in PortfolioStats, convert to decimal
+    timeInDrawdown: stats.timeInDrawdown !== undefined
+      ? asDecimal01(stats.timeInDrawdown / 100)
+      : undefined,
+    // These are already decimal in PortfolioStats
+    monthlyWinRate: stats.monthlyWinRate !== undefined
+      ? asDecimal01(stats.monthlyWinRate)
+      : undefined,
+    weeklyWinRate: stats.weeklyWinRate !== undefined
+      ? asDecimal01(stats.weeklyWinRate)
+      : undefined,
+  }
 }
