@@ -932,7 +932,274 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     }
   );
 
-  // Tool 7: get_trades
+  // Tool 7: stress_test
+  // Define built-in stress scenarios (all post-2013 since backtests typically start there)
+  const STRESS_SCENARIOS: Record<
+    string,
+    { startDate: string; endDate: string; description: string }
+  > = {
+    // Crashes & Corrections
+    china_deval_2015: {
+      startDate: "2015-08-11",
+      endDate: "2015-08-25",
+      description: "China yuan devaluation, global selloff",
+    },
+    brexit: {
+      startDate: "2016-06-23",
+      endDate: "2016-06-27",
+      description: "UK Brexit vote shock",
+    },
+    volmageddon: {
+      startDate: "2018-02-02",
+      endDate: "2018-02-09",
+      description: "VIX spike, XIV blowup, largest VIX jump since 1987",
+    },
+    q4_2018: {
+      startDate: "2018-10-01",
+      endDate: "2018-12-24",
+      description: "Fed rate hike selloff",
+    },
+    covid_crash: {
+      startDate: "2020-02-19",
+      endDate: "2020-03-23",
+      description: "COVID-19 pandemic crash, peak to trough",
+    },
+    bear_2022: {
+      startDate: "2022-01-03",
+      endDate: "2022-10-12",
+      description: "Fed tightening bear market",
+    },
+    svb_crisis: {
+      startDate: "2023-03-08",
+      endDate: "2023-03-15",
+      description: "Silicon Valley Bank collapse, regional bank contagion",
+    },
+    vix_aug_2024: {
+      startDate: "2024-08-01",
+      endDate: "2024-08-15",
+      description: "Yen carry trade unwind, VIX spike",
+    },
+    liberation_day: {
+      startDate: "2025-04-02",
+      endDate: "2025-04-08",
+      description: "Trump tariffs, largest drop since COVID",
+    },
+    // Recoveries
+    covid_recovery: {
+      startDate: "2020-03-23",
+      endDate: "2020-08-18",
+      description: "V-shaped recovery from COVID crash",
+    },
+    liberation_recovery: {
+      startDate: "2025-04-09",
+      endDate: "2025-05-02",
+      description: "Post 90-day tariff pause rally, S&P +9.5% single day",
+    },
+  };
+
+  server.registerTool(
+    "stress_test",
+    {
+      description:
+        "Analyze portfolio performance during historical market stress scenarios (COVID crash, 2022 bear, VIX spikes, etc.). Shows how the portfolio performed during named periods without manually specifying date ranges.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name to analyze"),
+        scenarios: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Specific scenario names to test (e.g., 'covid_crash', 'bear_2022'). If omitted, runs all built-in scenarios."
+          ),
+        customScenarios: z
+          .array(
+            z.object({
+              name: z.string().describe("Custom scenario name"),
+              startDate: z.string().describe("Start date (YYYY-MM-DD)"),
+              endDate: z.string().describe("End date (YYYY-MM-DD)"),
+            })
+          )
+          .optional()
+          .describe("User-defined scenarios with custom date ranges"),
+      }),
+    },
+    async ({ blockId, scenarios, customScenarios }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const trades = block.trades;
+
+        // Build list of scenarios to run
+        const scenariosToRun: Array<{
+          name: string;
+          startDate: string;
+          endDate: string;
+          description: string;
+          isCustom: boolean;
+        }> = [];
+
+        // Add built-in scenarios
+        if (scenarios && scenarios.length > 0) {
+          // Validate requested scenarios exist
+          const invalidScenarios = scenarios.filter(
+            (s) => !STRESS_SCENARIOS[s]
+          );
+          if (invalidScenarios.length > 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Unknown scenario(s): ${invalidScenarios.join(", ")}. Available: ${Object.keys(STRESS_SCENARIOS).join(", ")}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          for (const scenarioName of scenarios) {
+            const scenario = STRESS_SCENARIOS[scenarioName];
+            scenariosToRun.push({
+              name: scenarioName,
+              startDate: scenario.startDate,
+              endDate: scenario.endDate,
+              description: scenario.description,
+              isCustom: false,
+            });
+          }
+        } else {
+          // Run all built-in scenarios
+          for (const [name, scenario] of Object.entries(STRESS_SCENARIOS)) {
+            scenariosToRun.push({
+              name,
+              startDate: scenario.startDate,
+              endDate: scenario.endDate,
+              description: scenario.description,
+              isCustom: false,
+            });
+          }
+        }
+
+        // Add custom scenarios
+        if (customScenarios && customScenarios.length > 0) {
+          for (const custom of customScenarios) {
+            scenariosToRun.push({
+              name: custom.name,
+              startDate: custom.startDate,
+              endDate: custom.endDate,
+              description: `Custom scenario: ${custom.startDate} to ${custom.endDate}`,
+              isCustom: true,
+            });
+          }
+        }
+
+        // Calculate stats for each scenario
+        const scenarioResults: Array<{
+          name: string;
+          description: string;
+          dateRange: { start: string; end: string };
+          tradeCount: number;
+          stats: {
+            netPl: number;
+            winRate: number;
+            maxDrawdown: number;
+            profitFactor: number | null;
+            avgWin: number | null;
+            avgLoss: number | null;
+          } | null;
+          isCustom: boolean;
+        }> = [];
+
+        let worstScenario: { name: string; netPl: number } | null = null;
+        let bestScenario: { name: string; netPl: number } | null = null;
+        let scenariosWithTrades = 0;
+
+        for (const scenario of scenariosToRun) {
+          // Filter trades to scenario date range
+          const scenarioTrades = filterByDateRange(
+            trades,
+            scenario.startDate,
+            scenario.endDate
+          );
+
+          if (scenarioTrades.length === 0) {
+            // No trades in this scenario - null stats
+            scenarioResults.push({
+              name: scenario.name,
+              description: scenario.description,
+              dateRange: { start: scenario.startDate, end: scenario.endDate },
+              tradeCount: 0,
+              stats: null,
+              isCustom: scenario.isCustom,
+            });
+          } else {
+            // Calculate trade-based stats (no daily logs per constraining decision)
+            const stats = calculator.calculatePortfolioStats(
+              scenarioTrades,
+              undefined, // No daily logs
+              true // Force trade-based calculations
+            );
+
+            scenarioResults.push({
+              name: scenario.name,
+              description: scenario.description,
+              dateRange: { start: scenario.startDate, end: scenario.endDate },
+              tradeCount: scenarioTrades.length,
+              stats: {
+                netPl: stats.netPl,
+                winRate: stats.winRate,
+                maxDrawdown: stats.maxDrawdown,
+                profitFactor: stats.profitFactor,
+                avgWin: stats.avgWin,
+                avgLoss: stats.avgLoss,
+              },
+              isCustom: scenario.isCustom,
+            });
+
+            scenariosWithTrades++;
+
+            // Track best/worst scenarios
+            if (worstScenario === null || stats.netPl < worstScenario.netPl) {
+              worstScenario = { name: scenario.name, netPl: stats.netPl };
+            }
+            if (bestScenario === null || stats.netPl > bestScenario.netPl) {
+              bestScenario = { name: scenario.name, netPl: stats.netPl };
+            }
+          }
+        }
+
+        // Build summary
+        const summaryData = {
+          totalScenarios: scenarioResults.length,
+          scenariosWithTrades,
+          worstScenario: worstScenario?.name ?? null,
+          bestScenario: bestScenario?.name ?? null,
+        };
+
+        // Brief summary for user display
+        const summary = `Stress Test: ${blockId} | ${scenariosWithTrades}/${scenarioResults.length} scenarios with trades | Worst: ${worstScenario?.name ?? "N/A"} (${worstScenario ? formatCurrency(worstScenario.netPl) : "N/A"}) | Best: ${bestScenario?.name ?? "N/A"} (${bestScenario ? formatCurrency(bestScenario.netPl) : "N/A"})`;
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          scenarios: scenarioResults,
+          summary: summaryData,
+          availableBuiltInScenarios: Object.keys(STRESS_SCENARIOS),
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error running stress test: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 8: get_trades
   server.registerTool(
     "get_trades",
     {
