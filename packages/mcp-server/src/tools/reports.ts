@@ -10,7 +10,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadBlock } from "../utils/block-loader.js";
 import { createToolOutput, formatPercent } from "../utils/output-formatter.js";
 import type { Trade, FieldInfo, FieldCategory, FilterOperator } from "@tradeblocks/lib";
-import { REPORT_FIELDS, FIELD_CATEGORY_ORDER } from "@tradeblocks/lib";
+import { REPORT_FIELDS, FIELD_CATEGORY_ORDER, pearsonCorrelation } from "@tradeblocks/lib";
 
 // =============================================================================
 // Inline Trade Enrichment (can't import enrichTrades due to browser deps)
@@ -1074,6 +1074,246 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
             {
               type: "text",
               text: `Error aggregating by field: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 5: find_predictive_fields
+  server.registerTool(
+    "find_predictive_fields",
+    {
+      description:
+        "Identify which trade entry conditions predict profitability by calculating Pearson correlations between all numeric fields and a target field (usually P/L). Returns fields ranked by predictive strength.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Pre-filter by strategy name (case-insensitive)"),
+        startDate: z
+          .string()
+          .optional()
+          .describe("Pre-filter by start date (YYYY-MM-DD)"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("Pre-filter by end date (YYYY-MM-DD)"),
+        targetField: z
+          .string()
+          .default("pl")
+          .describe("Field to correlate against (default: 'pl' for profit/loss)"),
+        minSamples: z
+          .number()
+          .min(10)
+          .default(30)
+          .describe("Minimum trades with valid values for reliable correlation (default: 30, min: 10)"),
+        includeCustomFields: z
+          .boolean()
+          .default(true)
+          .describe("Include custom fields from CSV (default: true)"),
+      }),
+    },
+    async ({
+      blockId,
+      strategy,
+      startDate,
+      endDate,
+      targetField,
+      minSamples,
+      includeCustomFields,
+    }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply pre-filters
+        trades = filterByStrategy(trades, strategy);
+        trades = filterByDateRange(trades, startDate, endDate);
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No trades found matching the specified filters.",
+              },
+            ],
+          };
+        }
+
+        // Enrich trades
+        const enrichedTrades = enrichTrades(trades);
+
+        // Build list of fields to analyze
+        const fieldsToAnalyze: Array<{ field: string; label: string }> = [];
+
+        // Add static fields from REPORT_FIELDS (excluding target field)
+        for (const fieldInfo of REPORT_FIELDS) {
+          if (fieldInfo.field !== targetField) {
+            fieldsToAnalyze.push({
+              field: fieldInfo.field,
+              label: fieldInfo.label,
+            });
+          }
+        }
+
+        // Add custom fields if requested
+        if (includeCustomFields) {
+          const customFieldNames = new Set<string>();
+          for (const trade of enrichedTrades) {
+            if (trade.customFields) {
+              for (const key of Object.keys(trade.customFields)) {
+                customFieldNames.add(key);
+              }
+            }
+          }
+
+          for (const fieldName of customFieldNames) {
+            const fullFieldName = `custom.${fieldName}`;
+            if (fullFieldName !== targetField) {
+              fieldsToAnalyze.push({
+                field: fullFieldName,
+                label: `Custom: ${fieldName}`,
+              });
+            }
+          }
+        }
+
+        // Calculate correlations
+        interface FieldCorrelationResult {
+          field: string;
+          label: string;
+          correlation: number;
+          absCorrelation: number;
+          sampleSize: number;
+          interpretation: "strong" | "moderate" | "weak" | "negligible";
+          direction: "positive" | "negative";
+        }
+
+        interface SkippedField {
+          field: string;
+          label: string;
+          reason: "insufficient_samples" | "no_variance";
+          sampleSize: number;
+        }
+
+        const rankedFields: FieldCorrelationResult[] = [];
+        const skippedFields: SkippedField[] = [];
+
+        for (const { field, label } of fieldsToAnalyze) {
+          // Extract (fieldValue, targetValue) pairs where both are valid
+          const pairs: Array<{ x: number; y: number }> = [];
+
+          for (const trade of enrichedTrades) {
+            const fieldValue = getTradeFieldValue(trade, field);
+            const targetValue = getTradeFieldValue(trade, targetField);
+
+            if (fieldValue !== null && targetValue !== null) {
+              pairs.push({ x: fieldValue, y: targetValue });
+            }
+          }
+
+          // Check minimum sample size
+          if (pairs.length < minSamples) {
+            skippedFields.push({
+              field,
+              label,
+              reason: "insufficient_samples",
+              sampleSize: pairs.length,
+            });
+            continue;
+          }
+
+          // Extract arrays for correlation
+          const xValues = pairs.map((p) => p.x);
+          const yValues = pairs.map((p) => p.y);
+
+          // Check for variance (pearsonCorrelation returns 0 if no variance)
+          const xMin = Math.min(...xValues);
+          const xMax = Math.max(...xValues);
+          if (xMin === xMax) {
+            skippedFields.push({
+              field,
+              label,
+              reason: "no_variance",
+              sampleSize: pairs.length,
+            });
+            continue;
+          }
+
+          // Calculate Pearson correlation
+          const correlation = pearsonCorrelation(xValues, yValues);
+          const absCorrelation = Math.abs(correlation);
+
+          // Determine interpretation
+          let interpretation: "strong" | "moderate" | "weak" | "negligible";
+          if (absCorrelation >= 0.7) {
+            interpretation = "strong";
+          } else if (absCorrelation >= 0.4) {
+            interpretation = "moderate";
+          } else if (absCorrelation >= 0.2) {
+            interpretation = "weak";
+          } else {
+            interpretation = "negligible";
+          }
+
+          rankedFields.push({
+            field,
+            label,
+            correlation: Math.round(correlation * 10000) / 10000, // Round to 4 decimal places
+            absCorrelation: Math.round(absCorrelation * 10000) / 10000,
+            sampleSize: pairs.length,
+            interpretation,
+            direction: correlation >= 0 ? "positive" : "negative",
+          });
+        }
+
+        // Sort by absolute correlation (descending)
+        rankedFields.sort((a, b) => b.absCorrelation - a.absCorrelation);
+
+        // Build summary
+        const fieldsWithData = rankedFields.length;
+        const totalAnalyzed = fieldsToAnalyze.length;
+        const strongFields = rankedFields.filter((f) => f.interpretation === "strong").length;
+        const moderateFields = rankedFields.filter((f) => f.interpretation === "moderate").length;
+
+        const summary = `Found ${fieldsWithData} predictive fields out of ${totalAnalyzed} analyzed${
+          strongFields > 0 ? ` | ${strongFields} strong` : ""
+        }${moderateFields > 0 ? ` | ${moderateFields} moderate` : ""}`;
+
+        const structuredData = {
+          blockId,
+          targetField,
+          filters: {
+            strategy: strategy ?? null,
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+            minSamples,
+            includeCustomFields,
+          },
+          totalFieldsAnalyzed: totalAnalyzed,
+          fieldsWithSufficientData: fieldsWithData,
+          rankedFields,
+          fieldsSkipped: skippedFields,
+          interpretationGuide: {
+            strong: "|r| >= 0.7 - Strong linear relationship",
+            moderate: "|r| >= 0.4 - Moderate linear relationship",
+            weak: "|r| >= 0.2 - Weak linear relationship",
+            negligible: "|r| < 0.2 - No meaningful linear relationship",
+          },
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error finding predictive fields: ${(error as Error).message}`,
             },
           ],
           isError: true,
