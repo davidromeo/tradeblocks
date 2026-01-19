@@ -279,7 +279,7 @@ export class TradeProcessor {
       }
 
       // Ensure required columns have values
-      const requiredFields = ['Date Opened', 'P/L', 'Strategy']
+      const requiredFields = ['Date Opened', 'P/L', 'P/L %', 'Strategy']
       for (const field of requiredFields) {
         if (!normalizedRow[field] || normalizedRow[field].trim() === '') {
           throw new Error(`Missing required field: ${field}`)
@@ -398,6 +398,7 @@ export class TradeProcessor {
         avgClosingCost: rawData['Avg. Closing Cost'] ? parseNumber(rawData['Avg. Closing Cost'], 'Avg. Closing Cost') : undefined,
         reasonForClose: rawData['Reason For Close'] || undefined,
         pl: parseNumber(rawData['P/L'], 'P/L'),
+        plPct: parseNumber(rawData['P/L %'], 'P/L %'),
         numContracts: Math.round(parseNumber(rawData['No. of Contracts'], 'No. of Contracts')),
         fundsAtClose: parseNumber(rawData['Funds at Close'], 'Funds at Close'),
         marginReq: parseNumber(rawData['Margin Req.'], 'Margin Req.'),
