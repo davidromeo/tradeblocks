@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-18)
 
 Milestone: v2.2 Historical Risk-Free Rates
 Phase: 27 of 28 (Remove Manual Input)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: In progress
-Last activity: 2026-01-18 — Completed 27-01-PLAN.md
+Last activity: 2026-01-18 — Completed 27-02-PLAN.md (Stores/Services/UI cleanup)
 
-Progress: ███░░░░░░░ 62.5%
+Progress: ████░░░░░░ 75%
 
 ## Historical Context
 
@@ -52,9 +52,9 @@ Key decisions from v2.1 milestone now captured in PROJECT.md Key Decisions table
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 27-01-PLAN.md (Types/Models cleanup)
+Stopped at: Completed 27-02-PLAN.md (Stores/Services/UI cleanup)
 Resume file: None
-Next: 27-02-PLAN.md (Stores/Services/MCP cleanup) or 27-03-PLAN.md (UI/Tests cleanup)
+Next: 27-03-PLAN.md (MCP/Tests cleanup)
 
 ## Testing Infrastructure
 
