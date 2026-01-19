@@ -117,15 +117,15 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 Plans:
 - [x] 32-01: find_predictive_fields MCP tool — completed 2026-01-19
 
-#### Phase 33: filter-curve
+#### Phase 33: filter-curve ✅
 
 **Goal**: Tool that sweeps thresholds for a field with bidirectional analysis (lt/gt/both modes), returns full outcome curve, and surfaces sweet spots
 **Depends on**: Phase 32
 **Research**: Unlikely (builds on existing query infrastructure)
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 33-01: TBD
+- [x] 33-01: filter_curve MCP tool — completed 2026-01-19
 
 #### Phase 34: report-tools-fixes
 
