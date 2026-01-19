@@ -63,6 +63,7 @@ Eliminate all `@/lib/*` imports in app, components, and tests directories to com
 | 1 | Migrate 5 dynamic imports in app/components | de919b2 | page.tsx, block-dialog.tsx |
 | 2 | Migrate ~62 test imports, update Jest config | 9801dbe | jest.config.js, 62 test files |
 | 3 | Remove @/lib/* alias from tsconfig.json | ec0a5e8 | tsconfig.json, processing/index.ts, data-loader.ts |
+| 4 | Fix missing exports and test imports (orchestrator verification) | 89e4fa6 | calculations/index.ts, 2 test files |
 
 ## Key Changes
 
@@ -91,7 +92,7 @@ Eliminate all `@/lib/*` imports in app, components, and tests directories to com
 - `npm run build` passes successfully
 - TypeScript compilation passes with no `@/lib/*` references
 - `grep -r "@/lib" tests/` returns no results
-- 977 tests run (949 passing, 28 failing - pre-existing issues unrelated to migration)
+- 1024 tests pass (65 test suites)
 
 ## Deviations from Plan
 
@@ -117,6 +118,20 @@ Eliminate all `@/lib/*` imports in app, components, and tests directories to com
 - **Fix:** Updated mocks to use relative paths `../../packages/lib/*`
 - **Files modified:** `walk-forward-store.test.ts`, `static-datasets-store.test.ts`
 - **Commit:** ec0a5e8
+
+**4. [Rule 3 - Blocking] Additional missing exports discovered during orchestrator verification**
+- **Found during:** Post-execution verification
+- **Issue:** `normalCDF`, `normalQuantile`, `pearsonCorrelation`, `createExcursionDistribution` not exported
+- **Fix:** Added `export * from './statistical-utils'` and `export * from './mfe-mae'` to calculations/index.ts
+- **Files modified:** `packages/lib/calculations/index.ts`
+- **Commit:** 89e4fa6
+
+**5. [Rule 1 - Bug] Test import issues**
+- **Found during:** Post-execution verification
+- **Issue:** `trading-calendar-store.test.ts` importing `Trade`/`ReportingTrade` from stores (should be main lib), `walk-forward-store.test.ts` mock hoisting
+- **Fix:** Fix imports, use inline `jest.fn()` to avoid hoisting issues
+- **Files modified:** `tests/unit/trading-calendar-store.test.ts`, `tests/unit/walk-forward-store.test.ts`
+- **Commit:** 89e4fa6
 
 ## Import System Summary
 
