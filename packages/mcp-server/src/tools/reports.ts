@@ -201,6 +201,11 @@ function enrichTrades(trades: Trade[]): EnrichedTrade[] {
  * Returns null if the field doesn't exist or has no value
  */
 function getTradeFieldValue(trade: EnrichedTrade, field: string): number | null {
+  // Guard against undefined or non-string field
+  if (typeof field !== 'string') {
+    return null;
+  }
+
   let value: unknown;
 
   // Handle custom trade fields (custom.fieldName)
@@ -1122,11 +1127,16 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
       strategy,
       startDate,
       endDate,
-      targetField,
-      minSamples,
-      includeCustomFields,
+      targetField: rawTargetField,
+      minSamples: rawMinSamples,
+      includeCustomFields: rawIncludeCustomFields,
     }) => {
       try {
+        // Apply defaults (Zod defaults don't always apply in MCP SDK)
+        const targetField = rawTargetField ?? "pl";
+        const minSamples = rawMinSamples ?? 30;
+        const includeCustomFields = rawIncludeCustomFields ?? true;
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -1153,6 +1163,10 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
 
         // Add static fields from REPORT_FIELDS (excluding target field)
         for (const fieldInfo of REPORT_FIELDS) {
+          // Skip if field info is invalid or matches target
+          if (!fieldInfo || !fieldInfo.field) {
+            continue;
+          }
           if (fieldInfo.field !== targetField) {
             fieldsToAnalyze.push({
               field: fieldInfo.field,
