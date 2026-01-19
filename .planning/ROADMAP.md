@@ -129,13 +129,13 @@ Plans:
 
 #### Phase 34: report-tools-fixes
 
-**Goal**: Fix `aggregate_by_field` bug and any related issues discovered during exploration
+**Goal**: Fix Zod default parameters not applying in MCP SDK CLI mode for report tools
 **Depends on**: Phase 33
 **Research**: Unlikely (bug fixes)
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 34-01: TBD
+- [x] 34-01: Fix runtime defaults for aggregate_by_field, run_filtered_query, get_field_statistics - completed 2026-01-19
 
 ## Progress
 
