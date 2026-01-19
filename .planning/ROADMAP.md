@@ -125,15 +125,15 @@ Plans:
 - [x] 27-02: Remove from stores/services/UI — completed 2026-01-18
 - [x] 27-03: Remove from MCP/tests — completed 2026-01-19
 
-### Phase 28: MCP & Tests
+### Phase 28: MCP & Tests ✅
 
 **Goal**: Update MCP server and test suites for new rate behavior
 **Depends on**: Phase 27
 **Research**: Unlikely (internal patterns)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 28-01: TBD (run /gsd:plan-phase 28 to break down)
+- [x] 28-01: Fix pre-existing test failures — completed 2026-01-19
 
 ---
 
@@ -144,7 +144,7 @@ Plans:
 | 25. Treasury Data | v2.2 | 1/1 | Complete | 2026-01-18 |
 | 26. Core Calculations | v2.2 | 1/1 | Complete | 2026-01-18 |
 | 27. Remove Manual Input | v2.2 | 3/3 | Complete | 2026-01-19 |
-| 28. MCP & Tests | v2.2 | 0/? | Not started | - |
+| 28. MCP & Tests | v2.2 | 1/1 | Complete | 2026-01-19 |
 
 ## Audit Notes
 
