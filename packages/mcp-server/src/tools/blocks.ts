@@ -22,6 +22,11 @@ import {
   type MonteCarloParams,
 } from "@lib/calculations/monte-carlo";
 import { WalkForwardAnalyzer } from "@lib/calculations/walk-forward-analyzer";
+import {
+  calculateDailyExposure,
+  type PeakExposure,
+  type EquityCurvePoint,
+} from "@lib/calculations/daily-exposure";
 import type { Trade } from "@lib/models/trade";
 
 /**
@@ -64,37 +69,8 @@ function filterByDateRange(
 }
 
 /**
- * Helper to get a finite number or undefined
- */
-function getFiniteNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && isFinite(value)) {
-    return value;
-  }
-  return undefined;
-}
-
-/**
- * Format date key to YYYY-MM-DD
- */
-function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-/**
- * Peak exposure data
- */
-interface PeakExposure {
-  date: string;
-  exposure: number;
-  exposurePercent: number;
-}
-
-/**
- * Calculate peak daily exposure by finding the day with highest total margin requirement.
- * Reconstructs which trades were open on each calendar day.
+ * Calculate peak daily exposure using the shared sweep-line algorithm.
+ * Wraps the centralized calculateDailyExposure function.
  */
 function calculatePeakExposure(
   trades: Trade[],
@@ -103,100 +79,30 @@ function calculatePeakExposure(
   peakByDollars: PeakExposure | null;
   peakByPercent: PeakExposure | null;
 } {
-  if (trades.length === 0) {
-    return { peakByDollars: null, peakByPercent: null };
-  }
-
-  // Build equity map from trades
-  const sortedTrades = [...trades].sort(
-    (a, b) => new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+  // Build equity curve from trades - P&L is realized on close date
+  const closedTrades = trades.filter(t => t.dateClosed);
+  const sortedByClose = [...closedTrades].sort(
+    (a, b) => new Date(a.dateClosed!).getTime() - new Date(b.dateClosed!).getTime()
   );
 
-  const equityByDate = new Map<string, number>();
+  const equityCurve: EquityCurvePoint[] = [];
   let runningEquity = initialCapital;
 
-  for (const trade of sortedTrades) {
+  for (const trade of sortedByClose) {
     runningEquity += trade.pl;
-    const dateKey = formatDateKey(new Date(trade.dateOpened));
-    equityByDate.set(dateKey, runningEquity);
+    equityCurve.push({
+      date: new Date(trade.dateClosed!).toISOString(),
+      equity: runningEquity,
+    });
   }
 
-  // Find date range
-  let minDate: Date | null = null;
-  let maxDate: Date | null = null;
+  // Use shared calculation
+  const result = calculateDailyExposure(trades, equityCurve);
 
-  for (const trade of trades) {
-    const openDate = new Date(trade.dateOpened);
-    if (isNaN(openDate.getTime())) continue;
-
-    if (!minDate || openDate < minDate) minDate = openDate;
-    if (!maxDate || openDate > maxDate) maxDate = openDate;
-
-    if (trade.dateClosed) {
-      const closeDate = new Date(trade.dateClosed);
-      if (!isNaN(closeDate.getTime()) && closeDate > maxDate) {
-        maxDate = closeDate;
-      }
-    }
-  }
-
-  if (!minDate || !maxDate) {
-    return { peakByDollars: null, peakByPercent: null };
-  }
-
-  // Iterate through each day
-  let peakByDollars: PeakExposure | null = null;
-  let peakByPercent: PeakExposure | null = null;
-  let lastKnownEquity = initialCapital;
-
-  const currentDate = new Date(minDate);
-  currentDate.setHours(0, 0, 0, 0);
-  const endDate = new Date(maxDate);
-  endDate.setHours(23, 59, 59, 999);
-
-  while (currentDate <= endDate) {
-    const dateKey = formatDateKey(currentDate);
-
-    let totalExposure = 0;
-    let openPositions = 0;
-
-    for (const trade of trades) {
-      const openDate = new Date(trade.dateOpened);
-      openDate.setHours(0, 0, 0, 0);
-
-      if (openDate > currentDate) continue;
-
-      if (trade.dateClosed) {
-        const closeDate = new Date(trade.dateClosed);
-        closeDate.setHours(23, 59, 59, 999);
-        if (closeDate < currentDate) continue;
-      }
-
-      const margin = getFiniteNumber(trade.marginReq) ?? 0;
-      if (margin > 0) {
-        totalExposure += margin;
-        openPositions++;
-      }
-    }
-
-    const equity = equityByDate.get(dateKey) ?? lastKnownEquity;
-    if (equity > 0) lastKnownEquity = equity;
-
-    const exposurePercent = equity > 0 ? (totalExposure / equity) * 100 : 0;
-
-    if (openPositions > 0) {
-      if (!peakByDollars || totalExposure > peakByDollars.exposure) {
-        peakByDollars = { date: dateKey, exposure: totalExposure, exposurePercent };
-      }
-      if (!peakByPercent || exposurePercent > peakByPercent.exposurePercent) {
-        peakByPercent = { date: dateKey, exposure: totalExposure, exposurePercent };
-      }
-    }
-
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
-
-  return { peakByDollars, peakByPercent };
+  return {
+    peakByDollars: result.peakDailyExposure,
+    peakByPercent: result.peakDailyExposurePercent,
+  };
 }
 
 /**
