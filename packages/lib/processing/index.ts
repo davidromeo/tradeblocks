@@ -9,6 +9,10 @@ export * from './trade-processor'
 export * from './daily-log-processor'
 export * from './reporting-trade-processor'
 export * from './static-dataset-processor'
+export * from './data-loader'
+// Note: capital-calculator exports calculateInitialCapital which conflicts with utils/equity-curve
+// Use explicit imports: import { calculateInitialCapitalFromDailyLog, calculateInitialCapitalFromTrades } from '@tradeblocks/lib/processing/capital-calculator'
+export { calculateInitialCapitalFromDailyLog, calculateInitialCapitalFromTrades } from './capital-calculator'
 
 // Re-export validation schemas from validators (but not the Raw* types which are in models)
 export {

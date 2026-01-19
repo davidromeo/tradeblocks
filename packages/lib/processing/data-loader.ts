@@ -9,7 +9,8 @@
 import { Trade, TRADE_COLUMN_ALIASES, REQUIRED_TRADE_COLUMNS } from '../models/trade'
 import { DailyLogEntry } from '../models/daily-log'
 import { assertRequiredHeaders, normalizeHeaders, parseCsvLine } from '../utils/csv-headers'
-// import { ProcessedBlock } from '../models/block'
+// Import ProcessingError from models to avoid duplicate definition
+import type { ProcessingError } from '../models'
 
 /**
  * Data source types
@@ -19,21 +20,11 @@ export type DataSource = File | string | ArrayBuffer
 /**
  * Processing result
  */
-export interface ProcessingResult<T> {
+export interface DataLoadingResult<T> {
   data: T[]
   errors: ProcessingError[]
   warnings: string[]
   stats: ProcessingStats
-}
-
-/**
- * Processing error
- */
-export interface ProcessingError {
-  row?: number
-  field?: string
-  message: string
-  code?: string
 }
 
 /**
@@ -51,7 +42,7 @@ export interface ProcessingStats {
  * CSV processor interface
  */
 export interface CSVProcessor<T> {
-  process(source: DataSource): Promise<ProcessingResult<T>>
+  process(source: DataSource): Promise<DataLoadingResult<T>>
   validate?(row: Record<string, unknown>): boolean
   transform?(row: Record<string, unknown>): T
 }
@@ -267,7 +258,7 @@ export class DataLoader {
   /**
    * Load trades from a data source
    */
-  async loadTrades(source: DataSource): Promise<ProcessingResult<Trade>> {
+  async loadTrades(source: DataSource): Promise<DataLoadingResult<Trade>> {
     const startTime = Date.now()
 
     try {
@@ -316,7 +307,7 @@ export class DataLoader {
     } catch (error) {
       return {
         data: [],
-        errors: [{ message: error instanceof Error ? error.message : String(error) }],
+        errors: [{ type: 'parsing', message: error instanceof Error ? error.message : String(error) }],
         warnings: [],
         stats: {
           totalRows: 0,
@@ -331,7 +322,7 @@ export class DataLoader {
   /**
    * Load daily logs from a data source
    */
-  async loadDailyLogs(source: DataSource): Promise<ProcessingResult<DailyLogEntry>> {
+  async loadDailyLogs(source: DataSource): Promise<DataLoadingResult<DailyLogEntry>> {
     const startTime = Date.now()
 
     try {
@@ -347,7 +338,7 @@ export class DataLoader {
       if (this.envAdapter instanceof NodeAdapter) {
         return {
           data: [],
-          errors: [{ message: 'Daily log processing not implemented for Node.js' }],
+          errors: [{ type: 'parsing', message: 'Daily log processing not implemented for Node.js' }],
           warnings: [],
           stats: {
             totalRows: 0,
@@ -378,7 +369,7 @@ export class DataLoader {
     } catch (error) {
       return {
         data: [],
-        errors: [{ message: error instanceof Error ? error.message : String(error) }],
+        errors: [{ type: 'parsing', message: error instanceof Error ? error.message : String(error) }],
         warnings: [],
         stats: {
           totalRows: 0,
@@ -398,8 +389,8 @@ export class DataLoader {
     tradeSource: DataSource,
     dailyLogSource?: DataSource
   ): Promise<{
-    trades: ProcessingResult<Trade>
-    dailyLogs?: ProcessingResult<DailyLogEntry>
+    trades: DataLoadingResult<Trade>
+    dailyLogs?: DataLoadingResult<DailyLogEntry>
   }> {
     // Load trades
     const tradesResult = await this.loadTrades(tradeSource)
@@ -410,7 +401,7 @@ export class DataLoader {
     }
 
     // Load daily logs if provided
-    let dailyLogsResult: ProcessingResult<DailyLogEntry> | undefined
+    let dailyLogsResult: DataLoadingResult<DailyLogEntry> | undefined
 
     if (dailyLogSource) {
       dailyLogsResult = await this.loadDailyLogs(dailyLogSource)
