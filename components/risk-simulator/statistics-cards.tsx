@@ -6,7 +6,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import type { MonteCarloResult } from "@/lib/calculations/monte-carlo";
+import type { MonteCarloResult } from "@tradeblocks/lib";
 import {
   AlertOctagon,
   HelpCircle,

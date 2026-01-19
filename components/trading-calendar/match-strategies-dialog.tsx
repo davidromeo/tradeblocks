@@ -12,8 +12,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Link2, Unlink, Lock } from 'lucide-react'
-import { useTradingCalendarStore, StrategyMatch } from '@/lib/stores/trading-calendar-store'
-import { cn } from '@/lib/utils'
+import { useTradingCalendarStore, StrategyMatch } from '@tradeblocks/lib/stores'
+import { cn } from '@tradeblocks/lib'
 
 interface MatchStrategiesDialogProps {
   open: boolean

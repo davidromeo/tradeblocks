@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { ChartWrapper, createBarChartLayout } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
+import { usePerformanceStore } from '@tradeblocks/lib/stores'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { Layout, PlotData } from 'plotly.js'
 

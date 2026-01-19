@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react'
 import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
+import { usePerformanceStore } from '@tradeblocks/lib/stores'
 import type { Layout, PlotData } from 'plotly.js'
 
 interface ExcursionDistributionChartProps {

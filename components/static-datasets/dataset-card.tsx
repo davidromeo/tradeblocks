@@ -42,10 +42,10 @@ import {
   AlertTriangle,
   Loader2,
 } from "lucide-react"
-import type { StaticDataset, MatchStrategy } from "@/lib/models/static-dataset"
-import { MATCH_STRATEGY_LABELS, MATCH_STRATEGY_DESCRIPTIONS } from "@/lib/models/static-dataset"
-import { useStaticDatasetsStore, makeMatchStatsCacheKey } from "@/lib/stores/static-datasets-store"
-import type { Trade } from "@/lib/models/trade"
+import type { StaticDataset, MatchStrategy } from "@tradeblocks/lib"
+import { MATCH_STRATEGY_LABELS, MATCH_STRATEGY_DESCRIPTIONS } from "@tradeblocks/lib"
+import { useStaticDatasetsStore, makeMatchStatsCacheKey } from "@tradeblocks/lib/stores"
+import type { Trade } from "@tradeblocks/lib"
 
 interface DatasetCardProps {
   dataset: StaticDataset

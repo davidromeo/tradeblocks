@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import type { Layout, PlotData } from 'plotly.js'
 import { ChartWrapper } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
+import { usePerformanceStore } from '@tradeblocks/lib/stores'
 
 interface PremiumEfficiencyChartProps {
   className?: string

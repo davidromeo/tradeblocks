@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { ReportPreset, RegimeFilterConfig } from '@/lib/models/regime'
+import { ReportPreset, RegimeFilterConfig } from '@tradeblocks/lib'
 
 interface PresetSelectorProps {
   presets: ReportPreset[]

@@ -7,15 +7,15 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
-import { cn } from "@/lib/utils"
-import type { WalkForwardResults } from "@/lib/models/walk-forward"
+import { cn } from "@tradeblocks/lib"
+import type { WalkForwardResults } from "@tradeblocks/lib"
 import { CheckCircle2, AlertTriangle, XCircle, HelpCircle, TrendingUp, Shield, Settings2 } from "lucide-react"
 import {
   assessResults,
   getRecommendedParameters,
   formatParameterName,
   type Assessment,
-} from "@/lib/calculations/walk-forward-verdict"
+} from "@tradeblocks/lib"
 
 interface WalkForwardVerdictProps {
   results: WalkForwardResults

@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { usePerformanceStore } from "@/lib/stores/performance-store";
+import { usePerformanceStore } from "@tradeblocks/lib/stores";
 import type { Layout, PlotData } from "plotly.js";
 import { useMemo, useState } from "react";
 import { ChartWrapper } from "./chart-wrapper";

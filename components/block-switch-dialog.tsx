@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { useBlockStore } from "@/lib/stores/block-store";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 import {
   Search,
   Check,

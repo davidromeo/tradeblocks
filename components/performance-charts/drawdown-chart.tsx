@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react'
 import { ChartWrapper, createLineChartLayout } from './chart-wrapper'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
+import { usePerformanceStore } from '@tradeblocks/lib/stores'
 import { useTheme } from 'next-themes'
 import type { PlotData, Layout } from 'plotly.js'
 

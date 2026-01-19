@@ -10,7 +10,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
 } from "@/components/ui/sidebar";
-import { type Block } from "@/lib/stores/block-store";
+import { type Block } from "@tradeblocks/lib/stores";
 
 export function SidebarActiveBlocks({ activeBlock }: { activeBlock: Block }) {
   const [isSwitchDialogOpen, setIsSwitchDialogOpen] = useState(false);

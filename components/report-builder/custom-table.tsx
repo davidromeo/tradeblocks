@@ -17,15 +17,15 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import { EnrichedTrade } from '@/lib/models/enriched-trade'
+import { EnrichedTrade } from '@tradeblocks/lib'
 import {
   ChartAxisConfig,
   getFieldInfo,
   getColumnLabel,
   getColumnUnit,
   DEFAULT_TABLE_COLUMNS
-} from '@/lib/models/report-config'
-import { buildTableRows, computeAggregation } from '@/lib/calculations/table-aggregation'
+} from '@tradeblocks/lib'
+import { buildTableRows, computeAggregation } from '@tradeblocks/lib'
 
 interface CustomTableProps {
   trades: EnrichedTrade[]

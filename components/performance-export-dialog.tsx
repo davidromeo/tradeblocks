@@ -15,18 +15,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PerformanceData } from "@/lib/stores/performance-store";
+import { PerformanceData } from "@tradeblocks/lib/stores";
 import {
   downloadCsv,
   downloadJson,
   generateExportFilename,
-} from "@/lib/utils/export-helpers";
+} from "@tradeblocks/lib";
 import {
   CHART_EXPORTS,
   exportMultipleCharts,
   getChartExportsByTab,
   getMultipleChartsJson,
-} from "@/lib/utils/performance-export";
+} from "@tradeblocks/lib";
 
 interface PerformanceExportDialogProps {
   data: PerformanceData;

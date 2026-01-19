@@ -31,7 +31,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn, truncateStrategyName } from "@/lib/utils";
+import { cn, truncateStrategyName } from "@tradeblocks/lib";
 
 /**
  * Animation types and configurations

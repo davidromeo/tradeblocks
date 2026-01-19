@@ -22,12 +22,12 @@ import {
   calculateDayMetrics,
   formatPercent,
   scaleStrategyComparison,
-} from "@/lib/services/calendar-data";
+} from "@tradeblocks/lib";
 import {
   ScalingMode,
   TradeFilterMode,
   useTradingCalendarStore,
-} from "@/lib/stores/trading-calendar-store";
+} from "@tradeblocks/lib/stores";
 import { AlertTriangle, BarChart3, HelpCircle, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 

@@ -31,13 +31,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useSettingsStore } from '@/lib/stores/settings-store'
+import { useSettingsStore } from '@tradeblocks/lib/stores'
 import {
   ReportConfig,
   ReportCategory,
   ChartType,
   REPORT_CATEGORY_LABELS
-} from '@/lib/models/report-config'
+} from '@tradeblocks/lib'
 
 // Map chart types to icons
 const CHART_TYPE_ICONS: Record<ChartType, LucideIcon> = {

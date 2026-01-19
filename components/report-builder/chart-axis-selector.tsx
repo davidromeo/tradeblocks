@@ -28,8 +28,8 @@ import {
   FieldCategory,
   CustomFieldCategory,
   StaticDatasetFieldInfo
-} from '@/lib/models/report-config'
-import { EnrichedTrade } from '@/lib/models/enriched-trade'
+} from '@tradeblocks/lib'
+import { EnrichedTrade } from '@tradeblocks/lib'
 
 interface ChartAxisSelectorProps {
   label: string

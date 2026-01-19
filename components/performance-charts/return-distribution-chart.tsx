@@ -1,6 +1,6 @@
 "use client";
 
-import { usePerformanceStore } from "@/lib/stores/performance-store";
+import { usePerformanceStore } from "@tradeblocks/lib/stores";
 import type { PlotData } from "plotly.js";
 import { useMemo } from "react";
 import { ChartWrapper, createHistogramLayout } from "./chart-wrapper";

@@ -10,18 +10,18 @@ import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import {
   EnrichedTrade,
   getEnrichedTradeValue,
-} from "@/lib/models/enriched-trade";
+} from "@tradeblocks/lib";
 import {
   ChartAxisConfig,
   ChartType,
   getFieldInfo,
-} from "@/lib/models/report-config";
+} from "@tradeblocks/lib";
 import {
   formatMinutesToTime,
   generateTimeAxisTicksFromData,
   getTimingLabel,
   isDiscreteTimingField,
-} from "@/lib/utils/time-formatting";
+} from "@tradeblocks/lib";
 import type { Layout, PlotData } from "plotly.js";
 import { useMemo } from "react";
 

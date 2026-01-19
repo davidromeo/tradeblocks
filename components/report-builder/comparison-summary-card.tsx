@@ -7,8 +7,8 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { RegimeComparisonStats, formatStatWithDelta } from '@/lib/calculations/regime-comparison'
-import { cn } from '@/lib/utils'
+import { RegimeComparisonStats, formatStatWithDelta } from '@tradeblocks/lib'
+import { cn } from '@tradeblocks/lib'
 
 interface ComparisonSummaryCardProps {
   stats: RegimeComparisonStats

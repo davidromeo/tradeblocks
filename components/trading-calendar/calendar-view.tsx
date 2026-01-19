@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
+import { useTradingCalendarStore } from '@tradeblocks/lib/stores'
 import {
   formatCurrency,
   getDayBackgroundStyle,
@@ -11,8 +11,8 @@ import {
   getFilteredScaledDayActualPl,
   getFilteredTradeCounts,
   getScaledDayMargin
-} from '@/lib/services/calendar-data'
-import { cn } from '@/lib/utils'
+} from '@tradeblocks/lib'
+import { cn } from '@tradeblocks/lib'
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 

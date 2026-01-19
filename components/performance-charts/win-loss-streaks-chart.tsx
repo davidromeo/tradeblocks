@@ -1,12 +1,12 @@
 "use client"
 
 import { useMemo } from 'react'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
+import { usePerformanceStore } from '@tradeblocks/lib/stores'
 import { ChartWrapper } from './chart-wrapper'
 import { Badge } from '@/components/ui/badge'
 import { AlertTriangle, TrendingUp, Shuffle, ArrowLeftRight } from 'lucide-react'
 import type { PlotData, Layout } from 'plotly.js'
-import type { RunsTestResult } from '@/lib/calculations/streak-analysis'
+import type { RunsTestResult } from '@tradeblocks/lib'
 
 function RunsTestCard({ runsTest }: { runsTest: RunsTestResult }) {
   const pValueFormatted = runsTest.pValue < 0.001

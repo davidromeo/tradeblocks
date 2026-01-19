@@ -9,7 +9,7 @@
 import { useMemo } from 'react'
 import type { Layout, PlotData } from 'plotly.js'
 import { ChartWrapper } from '@/components/performance-charts/chart-wrapper'
-import { CumulativeDistributionAnalysis } from '@/lib/calculations/cumulative-distribution'
+import { CumulativeDistributionAnalysis } from '@tradeblocks/lib'
 
 interface CumulativeDistributionChartProps {
   analysis: CumulativeDistributionAnalysis

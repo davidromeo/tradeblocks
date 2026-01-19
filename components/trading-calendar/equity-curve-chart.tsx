@@ -2,9 +2,9 @@
 
 import { ChartWrapper, createLineChartLayout } from "@/components/performance-charts/chart-wrapper"
 import { Badge } from "@/components/ui/badge"
-import { Trade } from "@/lib/models/trade"
-import { ReportingTrade } from "@/lib/models/reporting-trade"
-import { useTradingCalendarStore, StrategyMatch, ScalingMode, CalendarViewMode } from "@/lib/stores/trading-calendar-store"
+import { Trade } from "@tradeblocks/lib"
+import { ReportingTrade } from "@tradeblocks/lib"
+import { useTradingCalendarStore, StrategyMatch, ScalingMode, CalendarViewMode } from "@tradeblocks/lib/stores"
 import type { Layout, PlotData } from "plotly.js"
 import { useMemo } from "react"
 

@@ -9,6 +9,8 @@ export * from './reporting-trade'
 export * from './report-config'
 export * from './tail-risk'
 export * from './static-dataset'
+export * from './enriched-trade'
+export * from './regime'
 
 // Type utilities
 export type ProcessingStage = 'uploading' | 'parsing' | 'processing' | 'calculating' | 'storing'

@@ -4,8 +4,8 @@ import { MetricCard } from "@/components/metric-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { HelpCircle } from "lucide-react"
-import type { WalkForwardPeriodResult, WalkForwardResults } from "@/lib/models/walk-forward"
-import { cn } from "@/lib/utils"
+import type { WalkForwardPeriodResult, WalkForwardResults } from "@tradeblocks/lib"
+import { cn } from "@tradeblocks/lib"
 
 interface RobustnessMetricsProps {
   results: WalkForwardResults | null

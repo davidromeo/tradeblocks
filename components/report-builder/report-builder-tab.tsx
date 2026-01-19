@@ -9,9 +9,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Filter, ChevronRight } from 'lucide-react'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
-import { useSettingsStore } from '@/lib/stores/settings-store'
-import { useStaticDatasetsStore } from '@/lib/stores/static-datasets-store'
+import { usePerformanceStore } from '@tradeblocks/lib/stores'
+import { useSettingsStore } from '@tradeblocks/lib/stores'
+import { useStaticDatasetsStore } from '@tradeblocks/lib/stores'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -23,10 +23,10 @@ import {
   StaticDatasetFieldInfo,
   createEmptyFilterConfig,
   DEFAULT_TABLE_COLUMNS
-} from '@/lib/models/report-config'
-import { applyFilters, FlexibleFilterResult } from '@/lib/calculations/flexible-filter'
-import { calculateRegimeComparison, RegimeComparisonStats } from '@/lib/calculations/regime-comparison'
-import { getDefaultBucketEdges } from '@/lib/calculations/table-aggregation'
+} from '@tradeblocks/lib'
+import { applyFilters, FlexibleFilterResult } from '@tradeblocks/lib'
+import { calculateRegimeComparison, RegimeComparisonStats } from '@tradeblocks/lib'
+import { getDefaultBucketEdges } from '@tradeblocks/lib'
 import { FilterPanel } from './filter-panel'
 import { MetricsGuideDialog } from './metrics-guide-dialog'
 import { ResultsPanel } from './results-panel'

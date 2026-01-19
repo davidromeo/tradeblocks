@@ -1,11 +1,11 @@
 "use client"
 
 import React from 'react'
-import { usePerformanceStore } from '@/lib/stores/performance-store'
+import { usePerformanceStore } from '@tradeblocks/lib/stores'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { TrendingUp, TrendingDown, Calendar, Target, AlertTriangle, Shield } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@tradeblocks/lib'
 
 interface PerformanceMetricsProps {
   className?: string

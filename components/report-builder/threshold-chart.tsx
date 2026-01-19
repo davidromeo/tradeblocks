@@ -15,14 +15,14 @@
  */
 
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
-import { calculateThresholdAnalysis } from "@/lib/calculations/threshold-analysis";
-import { EnrichedTrade } from "@/lib/models/enriched-trade";
+import { calculateThresholdAnalysis } from "@tradeblocks/lib";
+import { EnrichedTrade } from "@tradeblocks/lib";
 import {
   ChartAxisConfig,
   ThresholdMetric,
   getFieldInfo,
-} from "@/lib/models/report-config";
-import { generateTimeAxisTicksWithInterval } from "@/lib/utils/time-formatting";
+} from "@tradeblocks/lib";
+import { generateTimeAxisTicksWithInterval } from "@tradeblocks/lib";
 import type { Layout, PlotData } from "plotly.js";
 import { useMemo } from "react";
 import { WhatIfExplorer } from "./what-if-explorer";

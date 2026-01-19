@@ -5,8 +5,8 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
-import { MarginTimeline } from "@/lib/calculations/margin-timeline";
-import { truncateStrategyName } from "@/lib/utils";
+import { MarginTimeline } from "@tradeblocks/lib";
+import { truncateStrategyName } from "@tradeblocks/lib";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import type { Data } from "plotly.js";

@@ -13,7 +13,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn } from "@tradeblocks/lib";
 import { HelpCircle } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { Config, Data, Layout, PlotlyHTMLElement } from "plotly.js";

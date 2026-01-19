@@ -7,7 +7,7 @@ import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import type { WalkForwardPeriodResult } from "@/lib/models/walk-forward";
+import type { WalkForwardPeriodResult } from "@tradeblocks/lib";
 
 interface WalkForwardAnalysisChartProps {
   periods: WalkForwardPeriodResult[];

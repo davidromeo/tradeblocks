@@ -5,14 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ChevronDown } from 'lucide-react'
-import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
-import { Trade } from '@/lib/models/trade'
-import { ReportingTrade } from '@/lib/models/reporting-trade'
+import { useTradingCalendarStore } from '@tradeblocks/lib/stores'
+import { Trade } from '@tradeblocks/lib'
+import { ReportingTrade } from '@tradeblocks/lib'
 import {
   formatCurrency,
   createScalingContext,
   getScaleFactor
-} from '@/lib/services/calendar-data'
+} from '@tradeblocks/lib'
 import {
   groupTradesByEntry,
   combineLegGroup,
@@ -20,8 +20,8 @@ import {
   combineReportingLegGroup,
   CombinedTrade,
   CombinedReportingTrade
-} from '@/lib/utils/combine-leg-groups'
-import { cn } from '@/lib/utils'
+} from '@tradeblocks/lib'
+import { cn } from '@tradeblocks/lib'
 
 /**
  * Normalize backtest premium to dollars

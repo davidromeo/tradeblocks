@@ -22,7 +22,7 @@ import {
   FIELD_CATEGORY_LABELS,
   FIELD_CATEGORY_ORDER,
   FieldCategory
-} from '@/lib/models/report-config'
+} from '@tradeblocks/lib'
 
 /**
  * Group fields by category for display

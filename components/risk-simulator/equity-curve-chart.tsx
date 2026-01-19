@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
-import type { MonteCarloResult } from "@/lib/calculations/monte-carlo";
+import type { MonteCarloResult } from "@tradeblocks/lib";
 import type { Data } from "plotly.js";
 import { useTheme } from "next-themes";
 

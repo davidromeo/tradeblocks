@@ -11,7 +11,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { Separator } from "@/components/ui/separator";
-import { KellyMetrics } from "@/lib/calculations/kelly";
+import { KellyMetrics } from "@tradeblocks/lib";
 import { AlertTriangle, HelpCircle, Info } from "lucide-react";
 
 export interface StrategyAnalysis {

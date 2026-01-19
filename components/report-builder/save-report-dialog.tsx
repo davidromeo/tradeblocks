@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useSettingsStore } from '@/lib/stores/settings-store'
+import { useSettingsStore } from '@tradeblocks/lib/stores'
 import {
   FilterConfig,
   ChartType,
@@ -31,7 +31,7 @@ import {
   FILTER_OPERATOR_LABELS,
   CHART_TYPE_LABELS,
   THRESHOLD_METRIC_LABELS
-} from '@/lib/models/report-config'
+} from '@tradeblocks/lib'
 
 interface SaveReportDialogProps {
   filterConfig: FilterConfig

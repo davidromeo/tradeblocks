@@ -37,8 +37,8 @@ import {
   getFieldInfo,
   getFieldsByCategoryWithAll,
   getAllCategoryLabels,
-} from "@/lib/models/report-config";
-import { EnrichedTrade } from "@/lib/models/enriched-trade";
+} from "@tradeblocks/lib";
+import { EnrichedTrade } from "@tradeblocks/lib";
 import { ChevronDown, X } from "lucide-react";
 
 interface FilterConditionRowProps {

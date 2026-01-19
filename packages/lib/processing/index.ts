@@ -7,6 +7,8 @@
 export * from './csv-parser'
 export * from './trade-processor'
 export * from './daily-log-processor'
+export * from './reporting-trade-processor'
+export * from './static-dataset-processor'
 
 // Re-export validation schemas from validators (but not the Raw* types which are in models)
 export {
