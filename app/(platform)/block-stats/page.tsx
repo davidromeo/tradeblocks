@@ -76,7 +76,7 @@ export default function BlockStatsPage() {
   >({});
   const [, setIsCalculating] = useState(false);
   const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
-  const [peakDailyExposure, setPeakDailyExposure] = useState<{
+  const [peakDailyExposurePercent, setPeakDailyExposurePercent] = useState<{
     date: string;
     exposure: number;
     exposurePercent: number;
@@ -133,7 +133,7 @@ export default function BlockStatsPage() {
       setFilteredTrades([]);
       setPortfolioStats(null);
       setStrategyStats({});
-      setPeakDailyExposure(null);
+      setPeakDailyExposurePercent(null);
       setDataError(null);
       return;
     }
@@ -145,7 +145,7 @@ export default function BlockStatsPage() {
       setFilteredTrades([]);
       setPortfolioStats(null);
       setStrategyStats({});
-      setPeakDailyExposure(null);
+      setPeakDailyExposurePercent(null);
       setIsLoadingData(true);
       setDataError(null);
 
@@ -170,7 +170,7 @@ export default function BlockStatsPage() {
             setDailyLogs(cachedSnapshot.filteredDailyLogs);
             setFilteredTrades(cachedSnapshot.filteredTrades);
             setPortfolioStats(cachedSnapshot.portfolioStats);
-            setPeakDailyExposure(cachedSnapshot.chartData.peakDailyExposure);
+            setPeakDailyExposurePercent(cachedSnapshot.chartData.peakDailyExposurePercent);
 
             // Calculate strategy stats from cached trades
             const calculator = new PortfolioStatsCalculator();
@@ -210,7 +210,7 @@ export default function BlockStatsPage() {
       setPortfolioStats(null);
       setStrategyStats({});
       setFilteredTrades([]);
-      setPeakDailyExposure(null);
+      setPeakDailyExposurePercent(null);
       return;
     }
 
@@ -241,7 +241,7 @@ export default function BlockStatsPage() {
 
         setFilteredTrades(snapshot.filteredTrades);
         setPortfolioStats(snapshot.portfolioStats);
-        setPeakDailyExposure(snapshot.chartData.peakDailyExposure);
+        setPeakDailyExposurePercent(snapshot.chartData.peakDailyExposurePercent);
 
         const calculator = new PortfolioStatsCalculator();
         const strategies = calculator.calculateStrategyStats(
@@ -942,9 +942,9 @@ export default function BlockStatsPage() {
         />
         <MetricCard
           title="Peak Exposure"
-          value={peakDailyExposure?.exposurePercent || 0}
+          value={peakDailyExposurePercent?.exposurePercent || 0}
           format="percentage"
-          subtitle={peakDailyExposure ? `$${peakDailyExposure.exposure.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : undefined}
+          subtitle={peakDailyExposurePercent ? `$${peakDailyExposurePercent.exposure.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : undefined}
           tooltip={{
             flavor:
               "Maximum daily risk - the most capital at risk on any single day.",

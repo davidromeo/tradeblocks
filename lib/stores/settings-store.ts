@@ -269,6 +269,33 @@ const BUILT_IN_SAVED_REPORTS: ReportConfig[] = [
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z'
   },
+  {
+    id: 'builtin-exposure-vs-pl',
+    name: 'Exposure vs P/L %',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'scatter',
+    xAxis: { field: 'exposureOnOpen', label: 'Portfolio Exposure %' },
+    yAxis: { field: 'plPct', label: 'P/L %' },
+    colorBy: { field: 'rom', label: 'ROM %' },
+    category: 'risk',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'builtin-exposure-breakdown',
+    name: 'Exposure Level Breakdown',
+    filter: { conditions: [], logic: 'and' },
+    chartType: 'table',
+    xAxis: { field: 'exposureOnOpen', label: 'Portfolio Exposure %' },
+    yAxis: { field: 'plPct', label: '' },
+    tableBuckets: [10, 20, 30, 40],
+    tableColumns: ['count', 'winRate', 'plPct:avg', 'rom:avg'],
+    category: 'risk',
+    isBuiltIn: true,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
+  },
 
   // Table Reports (grouped with Market Analysis)
   {
