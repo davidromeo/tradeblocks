@@ -1335,4 +1335,318 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
       }
     }
   );
+
+  // Tool 6: filter_curve
+  server.registerTool(
+    "filter_curve",
+    {
+      description:
+        "Sweep filter thresholds for a field and show performance at each threshold. Use after find_predictive_fields to determine optimal filter values. Returns outcome curves and identifies sweet spots where filtering improves performance.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        field: z
+          .string()
+          .describe(
+            "Field to sweep thresholds on (e.g., 'openingVix', 'durationHours')"
+          ),
+        mode: z
+          .enum(["lt", "gt", "both"])
+          .default("both")
+          .describe(
+            "Direction of filter: 'lt' (field < threshold), 'gt' (field > threshold), 'both' (show both directions)"
+          ),
+        thresholds: z
+          .array(z.number())
+          .optional()
+          .describe(
+            "Custom threshold values to test. If omitted, auto-generates from field percentiles."
+          ),
+        percentileSteps: z
+          .array(z.number())
+          .default([5, 10, 25, 50, 75, 90, 95])
+          .describe(
+            "Percentiles to use for auto-generated thresholds (default: [5, 10, 25, 50, 75, 90, 95])"
+          ),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Pre-filter by strategy name (case-insensitive)"),
+        startDate: z
+          .string()
+          .optional()
+          .describe("Pre-filter by start date (YYYY-MM-DD)"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("Pre-filter by end date (YYYY-MM-DD)"),
+      }),
+    },
+    async ({
+      blockId,
+      field,
+      mode: rawMode,
+      thresholds: rawThresholds,
+      percentileSteps: rawPercentileSteps,
+      strategy,
+      startDate,
+      endDate,
+    }) => {
+      try {
+        // Apply runtime defaults (Zod defaults don't always apply in MCP SDK)
+        const mode = rawMode ?? "both";
+        const percentileSteps = rawPercentileSteps ?? [5, 10, 25, 50, 75, 90, 95];
+
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply pre-filters
+        trades = filterByStrategy(trades, strategy);
+        trades = filterByDateRange(trades, startDate, endDate);
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No trades found matching the specified filters.",
+              },
+            ],
+          };
+        }
+
+        // Enrich trades
+        const enrichedTrades = enrichTrades(trades);
+
+        // Extract field values
+        const fieldValues: number[] = [];
+        const tradesWithField: EnrichedTrade[] = [];
+
+        for (const trade of enrichedTrades) {
+          const value = getTradeFieldValue(trade, field);
+          if (value !== null) {
+            fieldValues.push(value);
+            tradesWithField.push(trade);
+          }
+        }
+
+        if (fieldValues.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Field "${field}" has no valid numeric values in the filtered trades.`,
+              },
+            ],
+          };
+        }
+
+        // Calculate baseline metrics (all trades with valid field values)
+        const baselinePls = tradesWithField.map((t) => t.pl);
+        const baselineTotalPl = baselinePls.reduce((a, b) => a + b, 0);
+        const baselineAvgPl = baselineTotalPl / tradesWithField.length;
+        const baselineWinners = tradesWithField.filter((t) => t.pl > 0).length;
+        const baselineWinRate = baselineWinners / tradesWithField.length;
+
+        const baseline = {
+          count: tradesWithField.length,
+          winRate: Math.round(baselineWinRate * 10000) / 10000,
+          avgPl: Math.round(baselineAvgPl * 100) / 100,
+          totalPl: Math.round(baselineTotalPl * 100) / 100,
+        };
+
+        // Generate thresholds
+        let thresholdsToTest: number[];
+
+        if (rawThresholds && rawThresholds.length > 0) {
+          // Use custom thresholds
+          thresholdsToTest = [...rawThresholds].sort((a, b) => a - b);
+        } else {
+          // Auto-generate from percentiles
+          const sorted = [...fieldValues].sort((a, b) => a - b);
+          thresholdsToTest = [];
+
+          for (const p of percentileSteps) {
+            const value = percentile(sorted, p);
+            // Round to 2 decimal places for cleaner output
+            const rounded = Math.round(value * 100) / 100;
+            // Avoid duplicates
+            if (!thresholdsToTest.includes(rounded)) {
+              thresholdsToTest.push(rounded);
+            }
+          }
+
+          thresholdsToTest.sort((a, b) => a - b);
+        }
+
+        // Helper to calculate metrics for a filtered set of trades
+        function calculateMetrics(filteredTrades: EnrichedTrade[]): {
+          count: number;
+          percentOfTrades: number;
+          winRate: number;
+          avgPl: number;
+          totalPl: number;
+          winRateDelta: number;
+          avgPlDelta: number;
+        } {
+          if (filteredTrades.length === 0) {
+            return {
+              count: 0,
+              percentOfTrades: 0,
+              winRate: 0,
+              avgPl: 0,
+              totalPl: 0,
+              winRateDelta: -baseline.winRate,
+              avgPlDelta: -baseline.avgPl,
+            };
+          }
+
+          const pls = filteredTrades.map((t) => t.pl);
+          const totalPl = pls.reduce((a, b) => a + b, 0);
+          const avgPl = totalPl / filteredTrades.length;
+          const winners = filteredTrades.filter((t) => t.pl > 0).length;
+          const winRate = winners / filteredTrades.length;
+          const percentOfTrades =
+            (filteredTrades.length / tradesWithField.length) * 100;
+
+          return {
+            count: filteredTrades.length,
+            percentOfTrades: Math.round(percentOfTrades * 100) / 100,
+            winRate: Math.round(winRate * 10000) / 10000,
+            avgPl: Math.round(avgPl * 100) / 100,
+            totalPl: Math.round(totalPl * 100) / 100,
+            winRateDelta:
+              Math.round((winRate - baseline.winRate) * 10000) / 10000,
+            avgPlDelta: Math.round((avgPl - baseline.avgPl) * 100) / 100,
+          };
+        }
+
+        // Analyze each threshold
+        interface ThresholdResult {
+          threshold: number;
+          lt?: ReturnType<typeof calculateMetrics>;
+          gt?: ReturnType<typeof calculateMetrics>;
+        }
+
+        const thresholdResults: ThresholdResult[] = [];
+
+        for (const threshold of thresholdsToTest) {
+          const result: ThresholdResult = { threshold };
+
+          if (mode === "lt" || mode === "both") {
+            const ltTrades = tradesWithField.filter((trade) => {
+              const value = getTradeFieldValue(trade, field);
+              return value !== null && value < threshold;
+            });
+            result.lt = calculateMetrics(ltTrades);
+          }
+
+          if (mode === "gt" || mode === "both") {
+            const gtTrades = tradesWithField.filter((trade) => {
+              const value = getTradeFieldValue(trade, field);
+              return value !== null && value > threshold;
+            });
+            result.gt = calculateMetrics(gtTrades);
+          }
+
+          thresholdResults.push(result);
+        }
+
+        // Identify sweet spots
+        interface SweetSpot {
+          threshold: number;
+          direction: "lt" | "gt";
+          winRateDelta: number;
+          avgPlDelta: number;
+          percentOfTrades: number;
+          score: number;
+          recommendation: string;
+        }
+
+        const sweetSpots: SweetSpot[] = [];
+
+        for (const result of thresholdResults) {
+          // Check lt direction
+          if (result.lt) {
+            const { winRateDelta, avgPlDelta, percentOfTrades } = result.lt;
+            if (
+              winRateDelta > 0 &&
+              avgPlDelta > 0 &&
+              percentOfTrades >= 20
+            ) {
+              const score = winRateDelta * avgPlDelta;
+              sweetSpots.push({
+                threshold: result.threshold,
+                direction: "lt",
+                winRateDelta,
+                avgPlDelta,
+                percentOfTrades,
+                score: Math.round(score * 10000) / 10000,
+                recommendation: `Consider filtering ${field} < ${result.threshold}`,
+              });
+            }
+          }
+
+          // Check gt direction
+          if (result.gt) {
+            const { winRateDelta, avgPlDelta, percentOfTrades } = result.gt;
+            if (
+              winRateDelta > 0 &&
+              avgPlDelta > 0 &&
+              percentOfTrades >= 20
+            ) {
+              const score = winRateDelta * avgPlDelta;
+              sweetSpots.push({
+                threshold: result.threshold,
+                direction: "gt",
+                winRateDelta,
+                avgPlDelta,
+                percentOfTrades,
+                score: Math.round(score * 10000) / 10000,
+                recommendation: `Consider filtering ${field} > ${result.threshold}`,
+              });
+            }
+          }
+        }
+
+        // Sort sweet spots by score (highest first)
+        sweetSpots.sort((a, b) => b.score - a.score);
+
+        // Build summary
+        const summary = `Filter curve for ${field}: ${thresholdsToTest.length} thresholds analyzed | ${sweetSpots.length} sweet spots found`;
+
+        const structuredData = {
+          blockId,
+          field,
+          mode,
+          filters: {
+            strategy: strategy ?? null,
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+          },
+          tradesAnalyzed: tradesWithField.length,
+          baseline,
+          thresholds: thresholdResults,
+          sweetSpots,
+          sweetSpotCriteria: {
+            winRateDelta: "> 0 (win rate improves)",
+            avgPlDelta: "> 0 (average P/L improves)",
+            percentOfTrades: ">= 20% (retains meaningful sample)",
+            scoreFormula: "winRateDelta * avgPlDelta (higher = better)",
+          },
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error generating filter curve: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }
