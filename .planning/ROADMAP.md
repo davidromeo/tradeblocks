@@ -6,6 +6,7 @@
 - ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
 - ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
 - ✅ [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
+- 🚧 **v2.3 Workspace Packages** - Phases 29-31 (in progress)
 
 ## Completed Milestones
 
@@ -86,6 +87,40 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
+### 🚧 v2.3 Workspace Packages (In Progress)
+
+**Milestone Goal:** Convert `lib/` to a proper workspace package (`@tradeblocks/lib`) to fix TypeScript path resolution issues and enable clean imports across the monorepo.
+
+#### Phase 29: workspace-setup
+
+**Goal**: Create `@tradeblocks/lib` package with workspace config
+**Depends on**: Previous milestone complete
+**Research**: Unlikely (npm workspaces are well-documented)
+**Plans**: TBD
+
+Plans:
+- [ ] 29-01: TBD (run /gsd:plan-phase 29 to break down)
+
+#### Phase 30: import-migration
+
+**Goal**: Update all imports in Next.js app and MCP server to use package imports
+**Depends on**: Phase 29
+**Research**: Unlikely (mechanical find/replace)
+**Plans**: TBD
+
+Plans:
+- [ ] 30-01: TBD
+
+#### Phase 31: cleanup-verification
+
+**Goal**: Remove old path alias configs, verify type checking/build/tests pass
+**Depends on**: Phase 30
+**Research**: Unlikely (internal cleanup)
+**Plans**: TBD
+
+Plans:
+- [ ] 31-01: TBD
+
 ## Progress
 
 | Milestone | Phases | Plans | Status | Shipped |
@@ -94,6 +129,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
+| v2.3 Workspace Packages | 29-31 | 0/? | In progress | - |
 
 ## Audit Notes
 
