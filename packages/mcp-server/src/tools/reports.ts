@@ -876,13 +876,17 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
       blockId,
       groupByField,
       bucketEdges,
-      metrics,
+      metrics: rawMetrics,
       strategy,
       startDate,
       endDate,
-      includeOutOfRange,
+      includeOutOfRange: rawIncludeOutOfRange,
     }) => {
       try {
+        // Apply runtime defaults (Zod defaults don't always apply in MCP SDK)
+        const metrics = rawMetrics ?? ["count", "winRate", "avgPl", "totalPl"];
+        const includeOutOfRange = rawIncludeOutOfRange ?? true;
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
