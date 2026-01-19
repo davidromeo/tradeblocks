@@ -11,7 +11,7 @@ interface MetricSectionProps {
   actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-  gridCols?: 2 | 3 | 4 | 5;
+  gridCols?: 2 | 3 | 4 | 5 | 6;
 }
 
 export function MetricSection({
@@ -29,6 +29,7 @@ export function MetricSection({
     3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
     4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
     5: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5",
+    6: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
   };
 
   return (

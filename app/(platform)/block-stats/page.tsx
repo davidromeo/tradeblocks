@@ -76,6 +76,11 @@ export default function BlockStatsPage() {
   >({});
   const [, setIsCalculating] = useState(false);
   const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
+  const [peakDailyExposure, setPeakDailyExposure] = useState<{
+    date: string;
+    exposure: number;
+    exposurePercent: number;
+  } | null>(null);
 
   // Get active block from store
   const activeBlock = useBlockStore((state) => {
@@ -128,6 +133,7 @@ export default function BlockStatsPage() {
       setFilteredTrades([]);
       setPortfolioStats(null);
       setStrategyStats({});
+      setPeakDailyExposure(null);
       setDataError(null);
       return;
     }
@@ -139,6 +145,7 @@ export default function BlockStatsPage() {
       setFilteredTrades([]);
       setPortfolioStats(null);
       setStrategyStats({});
+      setPeakDailyExposure(null);
       setIsLoadingData(true);
       setDataError(null);
 
@@ -163,6 +170,7 @@ export default function BlockStatsPage() {
             setDailyLogs(cachedSnapshot.filteredDailyLogs);
             setFilteredTrades(cachedSnapshot.filteredTrades);
             setPortfolioStats(cachedSnapshot.portfolioStats);
+            setPeakDailyExposure(cachedSnapshot.chartData.peakDailyExposure);
 
             // Calculate strategy stats from cached trades
             const calculator = new PortfolioStatsCalculator();
@@ -202,6 +210,7 @@ export default function BlockStatsPage() {
       setPortfolioStats(null);
       setStrategyStats({});
       setFilteredTrades([]);
+      setPeakDailyExposure(null);
       return;
     }
 
@@ -232,6 +241,7 @@ export default function BlockStatsPage() {
 
         setFilteredTrades(snapshot.filteredTrades);
         setPortfolioStats(snapshot.portfolioStats);
+        setPeakDailyExposure(snapshot.chartData.peakDailyExposure);
 
         const calculator = new PortfolioStatsCalculator();
         const strategies = calculator.calculateStrategyStats(
@@ -916,7 +926,7 @@ export default function BlockStatsPage() {
         icon={<AlertTriangle className="w-4 h-4" />}
         badge="POSITION-SIZE DEPENDENT"
         badgeVariant="secondary"
-        gridCols={5}
+        gridCols={6}
       >
         <MetricCard
           title="Max Drawdown"
@@ -928,6 +938,18 @@ export default function BlockStatsPage() {
               "Biggest foundation crack - the deepest your structure has sunk.",
             detailed:
               "Maximum percentage decline from a peak to subsequent trough. This represents your worst-case scenario and is crucial for understanding the downside risk of your strategy. Most traders find drawdowns over 20-30% psychologically challenging.",
+          }}
+        />
+        <MetricCard
+          title="Peak Exposure"
+          value={peakDailyExposure?.exposurePercent || 0}
+          format="percentage"
+          subtitle={peakDailyExposure ? `$${peakDailyExposure.exposure.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : undefined}
+          tooltip={{
+            flavor:
+              "Maximum daily risk - the most capital at risk on any single day.",
+            detailed:
+              "Peak daily exposure shows the highest sum of margin requirements across all open positions on any single day. This represents your maximum concurrent risk and helps assess position sizing discipline. High exposure relative to account size indicates aggressive positioning.",
           }}
         />
         <MetricCard

@@ -22,6 +22,11 @@ import {
   type MonteCarloParams,
 } from "@lib/calculations/monte-carlo";
 import { WalkForwardAnalyzer } from "@lib/calculations/walk-forward-analyzer";
+import {
+  calculateDailyExposure,
+  type PeakExposure,
+  type EquityCurvePoint,
+} from "@lib/calculations/daily-exposure";
 import type { Trade } from "@lib/models/trade";
 
 /**
@@ -61,6 +66,43 @@ function filterByDateRange(
   }
 
   return filtered;
+}
+
+/**
+ * Calculate peak daily exposure using the shared sweep-line algorithm.
+ * Wraps the centralized calculateDailyExposure function.
+ */
+function calculatePeakExposure(
+  trades: Trade[],
+  initialCapital: number
+): {
+  peakByDollars: PeakExposure | null;
+  peakByPercent: PeakExposure | null;
+} {
+  // Build equity curve from trades - P&L is realized on close date
+  const closedTrades = trades.filter(t => t.dateClosed);
+  const sortedByClose = [...closedTrades].sort(
+    (a, b) => new Date(a.dateClosed!).getTime() - new Date(b.dateClosed!).getTime()
+  );
+
+  const equityCurve: EquityCurvePoint[] = [];
+  let runningEquity = initialCapital;
+
+  for (const trade of sortedByClose) {
+    runningEquity += trade.pl;
+    equityCurve.push({
+      date: new Date(trade.dateClosed!).toISOString(),
+      equity: runningEquity,
+    });
+  }
+
+  // Use shared calculation
+  const result = calculateDailyExposure(trades, equityCurve);
+
+  return {
+    peakByDollars: result.peakDailyExposure,
+    peakByPercent: result.peakDailyExposurePercent,
+  };
 }
 
 /**
@@ -313,6 +355,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           isStrategyFiltered
         );
 
+        // Calculate peak daily exposure
+        const peakExposure = calculatePeakExposure(trades, stats.initialCapital);
+
         // Brief summary for user display
         const summary = `Stats: ${blockId}${strategy ? ` (${strategy})` : ""} | ${stats.totalTrades} trades | Win: ${formatPercent(stats.winRate * 100)} | Net P&L: ${formatCurrency(stats.netPl)} | Sharpe: ${formatRatio(stats.sharpeRatio)}`;
 
@@ -383,6 +428,10 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             currentStreak: stats.currentStreak,
             monthlyWinRate: stats.monthlyWinRate,
             weeklyWinRate: stats.weeklyWinRate,
+          },
+          peakExposure: {
+            byDollars: peakExposure.peakByDollars,
+            byPercent: peakExposure.peakByPercent,
           },
         };
 

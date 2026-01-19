@@ -30,6 +30,7 @@ import { GroupedLegOutcomesChart } from "@/components/performance-charts/paired-
 import { PremiumEfficiencyChart } from "@/components/performance-charts/premium-efficiency-chart";
 import { ReturnDistributionChart } from "@/components/performance-charts/return-distribution-chart";
 import { RiskEvolutionChart } from "@/components/performance-charts/risk-evolution-chart";
+import { DailyExposureChart } from "@/components/performance-charts/daily-exposure-chart";
 import { RollingMetricsChart } from "@/components/performance-charts/rolling-metrics-chart";
 import { ROMTimelineChart } from "@/components/performance-charts/rom-timeline-chart";
 import { TradeSequenceChart } from "@/components/performance-charts/trade-sequence-chart";
@@ -320,6 +321,7 @@ export default function PerformanceBlocksPage() {
           <MarginUtilizationChart />
           <MarginUtilizationTable />
           <RiskEvolutionChart />
+          <DailyExposureChart />
           <HoldingDurationChart />
         </TabsContent>
 

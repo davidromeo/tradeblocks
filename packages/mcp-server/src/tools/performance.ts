@@ -15,6 +15,7 @@ import {
 import type { Trade } from "@lib/models/trade";
 import type { ReportingTrade } from "@lib/models/reporting-trade";
 import { normalizeToOneLot } from "@lib/utils/equity-curve";
+import { calculateDailyExposure as calculateDailyExposureShared } from "@lib/calculations/daily-exposure";
 
 /**
  * MFE/MAE data point for a single trade's excursion metrics
@@ -898,9 +899,17 @@ function buildPremiumEfficiency(
 
 /**
  * Build margin utilization data
+ *
+ * Note: When filtering by strategy, uses the rebuilt equity curve for fundsAtClose
+ * values to provide accurate context. The original trade.fundsAtClose includes P&L
+ * from all strategies, which would be misleading when viewing a single strategy.
+ *
+ * The equity curve is indexed by tradeNumber (0 = initial, 1 = after trade 1, etc.)
+ * We use the equity AFTER the trade (i.e., at trade's close) for the fundsAtClose value.
  */
 function buildMarginUtilization(
-  trades: Trade[]
+  trades: Trade[],
+  equityCurve?: Array<{ date: string; equity: number; tradeNumber: number }>
 ): Array<{
   tradeNumber: number;
   date: string;
@@ -910,20 +919,43 @@ function buildMarginUtilization(
   numContracts: number;
   pl: number;
 }> {
+  // Build equity lookup by trade number if curve provided
+  // This is more reliable than date-based lookup since equity curve points are
+  // keyed by close date and may have offset timestamps for uniqueness
+  const equityByTradeNumber = new Map<number, number>();
+  if (equityCurve) {
+    for (const point of equityCurve) {
+      equityByTradeNumber.set(point.tradeNumber, point.equity);
+    }
+  }
+
   return trades
     .map((trade, index) => {
       const marginReq =
         typeof trade.marginReq === "number" && isFinite(trade.marginReq)
           ? trade.marginReq
           : 0;
-      const fundsAtClose =
-        typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
-          ? trade.fundsAtClose
-          : 0;
       const numContracts =
         typeof trade.numContracts === "number" && isFinite(trade.numContracts)
           ? trade.numContracts
           : 0;
+
+      // Use equity curve value if available, otherwise fall back to trade's fundsAtClose
+      // The equity after this trade = equityCurve[tradeNumber] where tradeNumber = index + 1
+      let fundsAtClose: number;
+      if (equityCurve && equityCurve.length > 0) {
+        const tradeNumber = index + 1;
+        const equityValue = equityByTradeNumber.get(tradeNumber);
+        fundsAtClose = equityValue ??
+          (typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
+            ? trade.fundsAtClose
+            : 0);
+      } else {
+        fundsAtClose =
+          typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
+            ? trade.fundsAtClose
+            : 0;
+      }
 
       if (marginReq === 0 && fundsAtClose === 0) return null;
 
@@ -1099,6 +1131,61 @@ function filterByDateRange(
 // of recalculating based on cumulative scaled P&L.
 
 /**
+ * Daily exposure data point
+ */
+interface DailyExposurePoint {
+  date: string;
+  exposure: number;
+  exposurePercent: number;
+  openPositions: number;
+}
+
+/**
+ * Peak exposure data
+ */
+interface PeakExposure {
+  date: string;
+  exposure: number;
+  exposurePercent: number;
+}
+
+/**
+ * Wrapper around the shared daily exposure calculation.
+ * Maps the result to the local interface format (date as string vs ISO string).
+ */
+function buildDailyExposure(
+  trades: Trade[],
+  equityCurve: Array<{ date: string; equity: number }>
+): {
+  dailyExposure: DailyExposurePoint[];
+  peakDailyExposure: PeakExposure | null;
+  peakDailyExposurePercent: PeakExposure | null;
+} {
+  // Use the shared calculation from lib/calculations/daily-exposure.ts
+  const result = calculateDailyExposureShared(trades, equityCurve);
+
+  // Map the result to local format (convert ISO dates to YYYY-MM-DD format)
+  return {
+    dailyExposure: result.dailyExposure.map((d) => ({
+      ...d,
+      date: formatDateKey(new Date(d.date)),
+    })),
+    peakDailyExposure: result.peakDailyExposure
+      ? {
+          ...result.peakDailyExposure,
+          date: formatDateKey(new Date(result.peakDailyExposure.date)),
+        }
+      : null,
+    peakDailyExposurePercent: result.peakDailyExposurePercent
+      ? {
+          ...result.peakDailyExposurePercent,
+          date: formatDateKey(new Date(result.peakDailyExposurePercent.date)),
+        }
+      : null,
+  };
+}
+
+/**
  * Register all performance MCP tools
  */
 export function registerPerformanceTools(
@@ -1136,11 +1223,12 @@ export function registerPerformanceTools(
               "margin_utilization",
               "volatility_regimes",
               "mfe_mae",
+              "daily_exposure",
             ])
           )
           .default(["equity_curve", "drawdown", "monthly_returns"])
           .describe(
-            "Which charts to include. Options: equity_curve, drawdown, monthly_returns, monthly_returns_percent, return_distribution, day_of_week, streak_data (win/loss streaks + runs test), trade_sequence (P&L by trade #), rom_timeline (Return on Margin over time), rolling_metrics (30-trade rolling sharpe/win rate), exit_reason_breakdown, holding_periods, premium_efficiency, margin_utilization, volatility_regimes (VIX-correlated), mfe_mae (Maximum Favorable/Adverse Excursion for stop loss/take profit optimization)"
+            "Which charts to include. Options: equity_curve, drawdown, monthly_returns, monthly_returns_percent, return_distribution, day_of_week, streak_data (win/loss streaks + runs test), trade_sequence (P&L by trade #), rom_timeline (Return on Margin over time), rolling_metrics (30-trade rolling sharpe/win rate), exit_reason_breakdown, holding_periods, premium_efficiency, margin_utilization, volatility_regimes (VIX-correlated), mfe_mae (Maximum Favorable/Adverse Excursion for stop loss/take profit optimization), daily_exposure (daily margin exposure with peak tracking)"
           ),
         dateRange: z
           .object({
@@ -1333,7 +1421,15 @@ export function registerPerformanceTools(
         }
 
         if (charts.includes("margin_utilization")) {
-          chartData.marginUtilization = buildMarginUtilization(trades);
+          // Pass equity curve to use rebuilt equity for fundsAtClose when filtering
+          // Equity curve includes tradeNumber for accurate lookup by trade index
+          const equityCurve =
+            (chartData.equityCurve as Array<{
+              date: string;
+              equity: number;
+              tradeNumber: number;
+            }>) || buildEquityCurve(trades);
+          chartData.marginUtilization = buildMarginUtilization(trades, equityCurve);
           dataPoints += (chartData.marginUtilization as unknown[]).length;
         }
 
@@ -1407,6 +1503,54 @@ export function registerPerformanceTools(
             },
           };
           dataPoints += simplifiedData.length + distribution.length;
+        }
+
+        if (charts.includes("daily_exposure")) {
+          // Need equity curve for percentage calculations
+          const equityCurve =
+            (chartData.equityCurve as Array<{
+              date: string;
+              equity: number;
+              highWaterMark: number;
+            }>) || buildEquityCurve(trades);
+
+          const exposureData = buildDailyExposure(trades, equityCurve);
+
+          // When filtering by strategy, percentage values may be misleading because
+          // margin values are absolute (sized for full portfolio) but divided by
+          // the filtered equity curve
+          const isStrategyFiltered = !!strategy;
+
+          chartData.dailyExposure = {
+            timeSeries: exposureData.dailyExposure,
+            peakByDollars: exposureData.peakDailyExposure,
+            peakByPercent: exposureData.peakDailyExposurePercent,
+            statistics: {
+              totalDays: exposureData.dailyExposure.length,
+              avgExposure:
+                exposureData.dailyExposure.length > 0
+                  ? exposureData.dailyExposure.reduce((sum, d) => sum + d.exposure, 0) /
+                    exposureData.dailyExposure.length
+                  : 0,
+              avgExposurePercent:
+                exposureData.dailyExposure.length > 0
+                  ? exposureData.dailyExposure.reduce((sum, d) => sum + d.exposurePercent, 0) /
+                    exposureData.dailyExposure.length
+                  : 0,
+              avgOpenPositions:
+                exposureData.dailyExposure.length > 0
+                  ? exposureData.dailyExposure.reduce((sum, d) => sum + d.openPositions, 0) /
+                    exposureData.dailyExposure.length
+                  : 0,
+            },
+            ...(isStrategyFiltered && {
+              warning: "Percentage values may be misleading when filtering by strategy. " +
+                "Margin values are absolute (sized for the full portfolio), but the equity " +
+                "curve is rebuilt for the filtered subset only. Use dollar exposure values " +
+                "for accurate analysis when filtering.",
+            }),
+          };
+          dataPoints += exposureData.dailyExposure.length;
         }
 
         // Brief summary for user display

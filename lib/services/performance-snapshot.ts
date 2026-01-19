@@ -16,6 +16,7 @@ import {
   type DistributionBucket,
   type NormalizationBasis
 } from '@/lib/calculations/mfe-mae'
+import { calculateDailyExposure as calculateDailyExposureShared } from '@/lib/calculations/daily-exposure'
 import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
 import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
 import { calculateRunsTest } from '@/lib/calculations/streak-analysis'
@@ -107,6 +108,9 @@ export interface SnapshotChartData {
   mfeMaeData: MFEMAEDataPoint[]
   mfeMaeStats: Partial<Record<NormalizationBasis, MFEMAEStats>>
   mfeMaeDistribution: DistributionBucket[]
+  dailyExposure: Array<{ date: string; exposure: number; exposurePercent: number; openPositions: number }>
+  peakDailyExposure: { date: string; exposure: number; exposurePercent: number } | null
+  peakDailyExposurePercent: { date: string; exposure: number; exposurePercent: number } | null
 }
 
 export interface PerformanceSnapshot {
@@ -325,7 +329,7 @@ export async function processChartData(
   onProgress?.({ step: 'Computing margin utilization', percent: 80 })
   await yieldToMain()
 
-  const marginUtilization = calculateMarginUtilization(trades)
+  const marginUtilization = calculateMarginUtilization(trades, equityCurve)
 
   // Yield after margin utilization
   checkCancelled(signal)
@@ -340,6 +344,13 @@ export async function processChartData(
   const holdingPeriods = calculateHoldingPeriods(trades)
 
   // Yield after holding periods
+  checkCancelled(signal)
+  onProgress?.({ step: 'Calculating daily exposure', percent: 85 })
+  await yieldToMain()
+
+  const { dailyExposure, peakDailyExposure, peakDailyExposurePercent } = calculateDailyExposure(trades, equityCurve)
+
+  // Yield after daily exposure
   checkCancelled(signal)
   onProgress?.({ step: 'Calculating MFE/MAE analysis', percent: 90 })
   await yieldToMain()
@@ -382,7 +393,10 @@ export async function processChartData(
     holdingPeriods,
     mfeMaeData,
     mfeMaeStats,
-    mfeMaeDistribution
+    mfeMaeDistribution,
+    dailyExposure,
+    peakDailyExposure,
+    peakDailyExposurePercent
   }
 }
 
@@ -1106,13 +1120,43 @@ function calculatePremiumEfficiency(trades: Trade[]) {
   return efficiency
 }
 
-function calculateMarginUtilization(trades: Trade[]) {
+/**
+ * Calculate margin utilization data for each trade.
+ * When an equity curve is provided, uses it to look up equity values instead of
+ * the raw fundsAtClose (which may include P&L from other strategies when filtering).
+ *
+ * Note: The equity curve is indexed by tradeNumber (0 = initial, 1 = after trade 1, etc.)
+ * We use the equity AFTER the trade (i.e., at trade's close) for the fundsAtClose value.
+ */
+function calculateMarginUtilization(
+  trades: Trade[],
+  equityCurve?: SnapshotChartData['equityCurve']
+) {
   const utilization: SnapshotChartData['marginUtilization'] = []
 
-  trades.forEach(trade => {
+  // Build equity lookup by trade number if curve provided
+  // This is more reliable than date-based lookup since equity curve points are
+  // keyed by close date and may have offset timestamps for uniqueness
+  const equityByTradeNumber = new Map<number, number>()
+  if (equityCurve) {
+    for (const point of equityCurve) {
+      equityByTradeNumber.set(point.tradeNumber, point.equity)
+    }
+  }
+
+  trades.forEach((trade, index) => {
     const marginReq = getFiniteNumber(trade.marginReq) ?? 0
-    const fundsAtClose = getFiniteNumber(trade.fundsAtClose) ?? 0
     const numContracts = getFiniteNumber(trade.numContracts) ?? 0
+
+    // Use equity curve value if available, otherwise fall back to trade's fundsAtClose
+    // The equity after this trade = equityCurve[tradeNumber] where tradeNumber = index + 1
+    let fundsAtClose: number
+    if (equityCurve && equityCurve.length > 0) {
+      const tradeNumber = index + 1
+      fundsAtClose = equityByTradeNumber.get(tradeNumber) ?? (getFiniteNumber(trade.fundsAtClose) ?? 0)
+    } else {
+      fundsAtClose = getFiniteNumber(trade.fundsAtClose) ?? 0
+    }
 
     if (marginReq === 0 && fundsAtClose === 0 && numContracts === 0) {
       return
@@ -1188,4 +1232,20 @@ function calculateHoldingPeriods(trades: Trade[]) {
   })
 
   return periods
+}
+
+/**
+ * Wrapper around the shared daily exposure calculation.
+ * Maps between local types and the shared function.
+ */
+function calculateDailyExposure(
+  trades: Trade[],
+  equityCurve: SnapshotChartData['equityCurve']
+): {
+  dailyExposure: SnapshotChartData['dailyExposure']
+  peakDailyExposure: SnapshotChartData['peakDailyExposure']
+  peakDailyExposurePercent: SnapshotChartData['peakDailyExposurePercent']
+} {
+  // Use the shared calculation from lib/calculations/daily-exposure.ts
+  return calculateDailyExposureShared(trades, equityCurve)
 }

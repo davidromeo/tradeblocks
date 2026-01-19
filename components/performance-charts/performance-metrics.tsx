@@ -4,7 +4,7 @@ import React from 'react'
 import { usePerformanceStore } from '@/lib/stores/performance-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { TrendingUp, TrendingDown, Calendar, Target, AlertTriangle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Calendar, Target, AlertTriangle, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PerformanceMetricsProps {
@@ -90,7 +90,7 @@ export function PerformanceMetrics({ className }: PerformanceMetricsProps) {
     )
   }
 
-  const { portfolioStats, trades } = data
+  const { portfolioStats, trades, peakDailyExposure } = data
 
   // Calculate additional metrics
   const dateRange = trades.length > 0 ? {
@@ -169,7 +169,7 @@ export function PerformanceMetrics({ className }: PerformanceMetricsProps) {
         </div>
 
         {/* Additional metrics row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-4 pt-4 border-t">
           <div className="text-center">
             <div className="text-sm text-muted-foreground mb-1">Best Month</div>
             <div className="font-semibold text-emerald-600 dark:text-emerald-400">
@@ -194,6 +194,28 @@ export function PerformanceMetrics({ className }: PerformanceMetricsProps) {
             <div className="font-semibold text-emerald-600 dark:text-emerald-400">
               {portfolioStats.maxWinStreak} trades
             </div>
+          </div>
+
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground mb-1">
+              <Shield className="h-3 w-3" />
+              Peak Exposure
+            </div>
+            {peakDailyExposure ? (
+              <div className="font-semibold text-amber-600 dark:text-amber-400">
+                {new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0
+                }).format(peakDailyExposure.exposure)}
+                <span className="text-xs ml-1">
+                  ({peakDailyExposure.exposurePercent.toFixed(1)}%)
+                </span>
+              </div>
+            ) : (
+              <div className="font-semibold text-muted-foreground">N/A</div>
+            )}
           </div>
         </div>
       </CardContent>
