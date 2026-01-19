@@ -235,6 +235,7 @@ export function calculateDailyExposure(
     let runningPositions = carryOverPositions
     let dayPeakExposure = runningExposure
     let dayPeakPositions = runningPositions
+    // Default to midnight (00:00) for days with only carry-over exposure and no events
     let dayPeakTimeMinutes = 0
 
     for (const event of dayEvents) {
@@ -407,8 +408,8 @@ export function calculateExposureAtTradeOpen(
     return result
   }
 
-  // Sort events by timestamp, with opens before closes at same time
-  // This ensures we see the state before adding the new trade
+  // Sort events by timestamp, with closes before opens at same time
+  // This ensures when we process an open, all prior closes have been applied
   events.sort((a, b) => {
     if (a.timestamp !== b.timestamp) {
       return a.timestamp - b.timestamp
