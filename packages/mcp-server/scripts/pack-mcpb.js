@@ -9,7 +9,7 @@
  * - agent-skills/ (optional: bundled skills)
  */
 
-import { createWriteStream, existsSync, readFileSync } from 'fs';
+import { createWriteStream, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import archiver from 'archiver';
@@ -18,8 +18,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageRoot = join(__dirname, '..');
 
-// Read manifest for version info
+// Read version from package.json (single source of truth)
+const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf-8'));
 const manifest = JSON.parse(readFileSync(join(packageRoot, 'manifest.json'), 'utf-8'));
+
+// Sync version from package.json to manifest.json
+if (manifest.version !== packageJson.version) {
+  console.log(`Syncing version: ${manifest.version} -> ${packageJson.version}`);
+  manifest.version = packageJson.version;
+  writeFileSync(join(packageRoot, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
+}
+
 const outputName = `${manifest.name}-${manifest.version}.mcpb`;
 const outputPath = join(packageRoot, outputName);
 

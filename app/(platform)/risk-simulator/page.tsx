@@ -502,37 +502,37 @@ export default function RiskSimulatorPage() {
     lines.push(
       toCsvRow([
         "Mean Total Return",
-        `${result.statistics.meanTotalReturn.toFixed(2)}%`,
+        `${(result.statistics.meanTotalReturn * 100).toFixed(2)}%`,
       ])
     );
     lines.push(
       toCsvRow([
         "Median Total Return",
-        `${result.statistics.medianTotalReturn.toFixed(2)}%`,
+        `${(result.statistics.medianTotalReturn * 100).toFixed(2)}%`,
       ])
     );
     lines.push(
       toCsvRow([
         "Mean Annualized Return",
-        `${result.statistics.meanAnnualizedReturn.toFixed(2)}%`,
+        `${(result.statistics.meanAnnualizedReturn * 100).toFixed(2)}%`,
       ])
     );
     lines.push(
       toCsvRow([
         "Median Annualized Return",
-        `${result.statistics.medianAnnualizedReturn.toFixed(2)}%`,
+        `${(result.statistics.medianAnnualizedReturn * 100).toFixed(2)}%`,
       ])
     );
     lines.push(
       toCsvRow([
         "Mean Max Drawdown",
-        `${result.statistics.meanMaxDrawdown.toFixed(2)}%`,
+        `${(result.statistics.meanMaxDrawdown * 100).toFixed(2)}%`,
       ])
     );
     lines.push(
       toCsvRow([
         "Median Max Drawdown",
-        `${result.statistics.medianMaxDrawdown.toFixed(2)}%`,
+        `${(result.statistics.medianMaxDrawdown * 100).toFixed(2)}%`,
       ])
     );
     lines.push(

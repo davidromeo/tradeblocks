@@ -1,5 +1,64 @@
 # Project Milestones: TradeBlocks
 
+## v2.2 Historical Risk-Free Rates (Shipped: 2026-01-18)
+
+**Delivered:** Historical Treasury rates (2013-2026) embedded for accurate Sharpe/Sortino calculations that reflect actual market conditions, replacing fixed 2% assumption.
+
+**Phases completed:** 25-28 (6 plans total)
+
+**Key accomplishments:**
+
+- Embedded 3,260 historical Treasury 3-month T-bill rates (2013-01-02 to 2026-01-15) as static data (~71KB)
+- Date-based Sharpe/Sortino calculations using actual Treasury rates per trading day
+- Removed manual riskFreeRate input from types, stores, UI, and MCP server API
+- O(1) hash lookup for trading days with O(log n) binary search fallback for weekends/holidays
+- Fixed 6 pre-existing test failures (maxLoss fallback for debit trades, calendar scaling tests)
+- Added automated treasury rate update workflow for future maintenance
+
+**Stats:**
+
+- 41 files created/modified
+- +5,866 / -179 lines of TypeScript
+- 4 phases, 6 plans
+- 1 day (2026-01-18)
+
+**Git range:** `761776b` → `5e56dda`
+
+**What's next:** Planning next milestone
+
+---
+
+## v2.1 Portfolio Comparison (Shipped: 2026-01-18)
+
+**Delivered:** 7 new MCP tools for advanced portfolio comparison and analysis, plus CLI test mode and web platform integration documentation.
+
+**Phases completed:** 17-24 (9 plans total, including Phase 17.1)
+
+**Key accomplishments:**
+
+- `block_diff` tool comparing two blocks with strategy overlap and P/L attribution
+- `stress_test` tool with 11 built-in historical scenarios (COVID crash, 2022 bear, volmageddon, etc.)
+- `drawdown_attribution` tool identifying max drawdown periods and per-strategy loss contribution
+- `marginal_contribution` tool calculating marginal Sharpe/Sortino impact of adding strategies
+- `strategy_similarity` tool with composite scoring for redundancy detection
+- `what_if_scaling` tool projecting portfolio metrics at different strategy weights
+- `portfolio_health_check` tool providing unified 4-layer health assessment
+- CLI test mode (`--call` flag) for direct tool invocation with real data
+- Web platform integration guide (ngrok tunnel setup for ChatGPT, Google AI Studio, Julius)
+
+**Stats:**
+
+- 137 files created/modified
+- ~6,200 LOC added in packages/mcp-server/
+- 9 phases (including 17.1), 9 plans
+- 2 days (2026-01-17 → 2026-01-18)
+
+**Git range:** `feat(17-01)` → `docs: update version to 0.2.0`
+
+**What's next:** Planning next milestone
+
+---
+
 ## v2.0 Claude Integration (Shipped: 2026-01-17)
 
 **Delivered:** MCP server with 19 tools for AI-powered trading analytics, plus 6 agent skills for guided analysis workflows across Claude, Codex, and Gemini platforms.

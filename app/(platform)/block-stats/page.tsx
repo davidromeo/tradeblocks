@@ -6,7 +6,6 @@ import { MultiSelect } from "@/components/multi-select";
 import { NoActiveBlock } from "@/components/no-active-block";
 import { StrategyBreakdownTable } from "@/components/strategy-breakdown-table";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SizingModeToggle } from "@/components/sizing-mode-toggle";
 import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
@@ -58,7 +57,6 @@ import { DateRange } from "react-day-picker";
 const NORMALIZE_STORAGE_KEY_PREFIX = "block-stats:normalizeTo1Lot:";
 
 export default function BlockStatsPage() {
-  const [riskFreeRate, setRiskFreeRate] = useState("2");
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
   const [normalizeTo1Lot, setNormalizeTo1Lot] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -157,10 +155,9 @@ export default function BlockStatsPage() {
           processedBlock?.analysisConfig?.combineLegGroups ?? false;
 
         // Check for cached snapshot first (for instant load with default settings)
-        // Only use cache if we're using default settings (no filters, default risk-free rate, no normalization)
+        // Only use cache if we're using default settings (no filters, no normalization)
         const isDefaultView =
           selectedStrategies.length === 0 &&
-          (parseFloat(riskFreeRate) || 2.0) === 2.0 &&
           !normalizeTo1Lot &&
           !dateRange?.from &&
           !dateRange?.to;
@@ -176,7 +173,7 @@ export default function BlockStatsPage() {
             setPeakDailyExposure(cachedSnapshot.chartData.peakDailyExposure);
 
             // Calculate strategy stats from cached trades
-            const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 });
+            const calculator = new PortfolioStatsCalculator();
             const strategies = calculator.calculateStrategyStats(cachedSnapshot.filteredTrades);
             setStrategyStats(strategies);
 
@@ -221,7 +218,6 @@ export default function BlockStatsPage() {
       setIsCalculating(true);
 
       try {
-        const riskFree = parseFloat(riskFreeRate) || 2.0;
         const hasFilters =
           selectedStrategies.length > 0 ||
           dateRange?.from ||
@@ -240,7 +236,6 @@ export default function BlockStatsPage() {
                 }),
               }
             : undefined,
-          riskFreeRate: riskFree,
           normalizeTo1Lot,
         });
 
@@ -248,9 +243,7 @@ export default function BlockStatsPage() {
         setPortfolioStats(snapshot.portfolioStats);
         setPeakDailyExposure(snapshot.chartData.peakDailyExposure);
 
-        const calculator = new PortfolioStatsCalculator({
-          riskFreeRate: riskFree,
-        });
+        const calculator = new PortfolioStatsCalculator();
         const strategies = calculator.calculateStrategyStats(
           snapshot.filteredTrades
         );
@@ -268,7 +261,7 @@ export default function BlockStatsPage() {
     // Use a small delay to avoid closing the popover during selection
     const timeoutId = setTimeout(calculateMetrics, 0);
     return () => clearTimeout(timeoutId);
-  }, [trades, dailyLogs, riskFreeRate, selectedStrategies, normalizeTo1Lot, dateRange]);
+  }, [trades, dailyLogs, selectedStrategies, normalizeTo1Lot, dateRange]);
 
   // Helper functions
   const getDateRange = () => {
@@ -461,7 +454,6 @@ export default function BlockStatsPage() {
             : "all",
         selectedStrategies:
           selectedStrategies.length > 0 ? selectedStrategies : "all",
-        riskFreeRate: parseFloat(riskFreeRate) || 2.0,
         normalizeTo1Lot,
       },
       tradeDateRange: getDateRange(),
@@ -543,7 +535,6 @@ export default function BlockStatsPage() {
           : "All time",
       ])
     );
-    lines.push(toCsvRow(["Risk-Free Rate", `${riskFreeRate}%`]));
     lines.push(toCsvRow(["Normalize to 1-Lot", normalizeTo1Lot]));
     lines.push(
       toCsvRow([
@@ -734,20 +725,6 @@ export default function BlockStatsPage() {
               />
             </PopoverContent>
           </Popover>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="risk-free-rate">Risk-free Rate (%)</Label>
-          <Input
-            id="risk-free-rate"
-            type="number"
-            value={riskFreeRate}
-            onChange={(e) => setRiskFreeRate(e.target.value)}
-            className="w-32"
-            placeholder="2"
-            min="0"
-            max="10"
-            step="0.1"
-          />
         </div>
         <div className="space-y-2 flex-1 min-w-[250px]">
           <Label>Strategies</Label>

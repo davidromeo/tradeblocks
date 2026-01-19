@@ -15,6 +15,7 @@ export default tseslint.config(
       "packages/*/dist/**",
       "packages/*/server/**",
       "next-env.d.ts",
+      ".claude/hooks/**",
     ],
   },
   {

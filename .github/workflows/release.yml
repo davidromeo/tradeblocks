@@ -2,20 +2,20 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - master
+    paths:
+      - 'packages/mcp-server/**'
+      - 'packages/agent-skills/**'
+      - 'lib/**'
   workflow_dispatch:
-    inputs:
-      skip_release:
-        description: 'Skip creating GitHub release (build only)'
-        required: false
-        default: true
-        type: boolean
 
 jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +34,10 @@ jobs:
       - name: Build MCP Server
         run: npm run build -w packages/mcp-server
 
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./packages/mcp-server/package.json').version")" >> $GITHUB_OUTPUT
+
       - name: Pack MCPB Bundle
         run: npm run mcpb:pack -w packages/mcp-server
 
@@ -47,10 +51,11 @@ jobs:
     name: Publish to npm
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     permissions:
       contents: read
-      id-token: write  # Required for OIDC trusted publishing
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -61,20 +66,41 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
+      - name: Update npm for OIDC support
+        run: npm install -g npm@latest
+
+      - name: Check if version exists on npm
+        id: check
+        run: |
+          VERSION=$(node -p "require('./packages/mcp-server/package.json').version")
+          if npm view tradeblocks-mcp@$VERSION version 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Version $VERSION already published, skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Version $VERSION not found, will publish"
+          fi
+
       - name: Install dependencies
+        if: steps.check.outputs.exists == 'false'
         run: npm ci
 
       - name: Build MCP Server
+        if: steps.check.outputs.exists == 'false'
         run: npm run build -w packages/mcp-server
 
-      - name: Publish to npm (OIDC)
-        run: npm publish -w packages/mcp-server --access public
+      - name: Publish to npm
+        id: publish
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          npm publish -w packages/mcp-server --access public --provenance
+          echo "published=true" >> $GITHUB_OUTPUT
 
   release:
     name: Create GitHub Release
     needs: [build, publish-npm]
+    if: needs.publish-npm.outputs.published == 'true'
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
@@ -89,6 +115,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.build.outputs.version }}
+          name: v${{ needs.build.outputs.version }}
           files: ./dist/*.mcpb
           generate_release_notes: true
           body: |

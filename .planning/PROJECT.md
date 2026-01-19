@@ -26,6 +26,23 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ Flexible CSV discovery by column headers — v2.0
 - ✓ GitHub Actions release pipeline — v2.0
 
+**v2.1 Portfolio Comparison:**
+- ✓ block_diff tool for two-block comparison with strategy overlap — v2.1
+- ✓ stress_test tool with 11 built-in historical scenarios — v2.1
+- ✓ drawdown_attribution tool for max drawdown period analysis — v2.1
+- ✓ marginal_contribution tool for per-strategy Sharpe/Sortino impact — v2.1
+- ✓ strategy_similarity tool for redundancy detection — v2.1
+- ✓ what_if_scaling tool for strategy weight projections — v2.1
+- ✓ portfolio_health_check tool for unified 4-layer assessment — v2.1
+- ✓ CLI test mode (--call flag) for direct tool invocation — v2.1
+- ✓ Web platform integration guide (ngrok tunnel setup) — v2.1
+
+**v2.2 Historical Risk-Free Rates:**
+- ✓ Historical Treasury rates embedded (3,260 daily rates 2013-2026) — v2.2
+- ✓ Date-based Sharpe/Sortino using actual Treasury rates per trading day — v2.2
+- ✓ Removed manual riskFreeRate input from types, stores, UI, MCP API — v2.2
+- ✓ Automated treasury rate update workflow (.github/workflows) — v2.2
+
 ### Active
 
 (None — planning next milestone)
@@ -38,12 +55,13 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.0):**
+**Current state (v2.2):**
 - Next.js 15 web application with client-side computation
-- MCP server (`tradeblocks-mcp`) with 19 tools at packages/mcp-server/
+- MCP server (`tradeblocks-mcp`) with 26 tools at packages/mcp-server/
 - 6 agent skills at packages/agent-skills/
-- ~10,400 LOC in packages/, ~12,500 LOC in WFA-related files
-- 179 walk-forward tests + 20 MCP integration tests
+- ~16,600 LOC in packages/, ~12,500 LOC in WFA-related files
+- 989 tests (179 WFA + MCP integration + risk-free rate tests)
+- Embedded historical Treasury rates (2013-2026) for accurate risk metrics
 
 **Architecture:**
 - Monorepo with npm workspaces
@@ -56,6 +74,7 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - **Client-side web app**: All web computation in browser, no backend API
 - **MCP server**: Node.js process, stdio transport
 - **Compatibility**: Must work with existing Block/Trade data structures
+- **CLI test verification**: All v2.1+ MCP tools require CLI test mode verification with real data
 
 ## Key Decisions
 
@@ -68,6 +87,12 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Flexible CSV discovery | UX improvement, column headers over filenames | ✓ Good |
 | Agent Skills standard (agentskills.io) | Cross-platform compatibility | ✓ Good |
 | npm workspaces monorepo | Simpler than pnpm, better npm compatibility | ✓ Good |
+| Trade-based calculations only for comparison tools | Daily logs represent full portfolio, not per-strategy | ✓ Good |
+| Composite similarity scoring (50% corr, 30% tail, 20% overlap) | Balance correlation and tail risk signals | ✓ Good |
+| 4-layer health check response | Progressive detail from quick verdict to actionable flags | ✓ Good |
+| ngrok tunnel for web platforms | Keeps data local while enabling remote MCP URLs | ✓ Good |
+| Embedded Treasury rates (no API calls) | Maintains 100% local data principle, ~71KB bundled | ✓ Good |
+| Date-based risk-free rates over fixed rate | Accurate Sharpe/Sortino reflecting actual market conditions | ✓ Good |
 
 ---
-*Last updated: 2026-01-17 after v2.0 milestone*
+*Last updated: 2026-01-18 after v2.2 milestone*

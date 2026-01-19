@@ -516,9 +516,7 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
       );
 
       // Recalculate all stats using the current calculation engine
-      const calculator = new PortfolioStatsCalculator({
-        riskFreeRate: processedBlock.analysisConfig?.riskFreeRate || 2.0,
-      });
+      const calculator = new PortfolioStatsCalculator();
 
       const portfolioStats = calculator.calculatePortfolioStats(
         trades,
@@ -534,7 +532,6 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
       const snapshot = await buildPerformanceSnapshot({
         trades,
         dailyLogs,
-        riskFreeRate: processedBlock.analysisConfig?.riskFreeRate || 2.0,
         normalizeTo1Lot: false,
         onProgress,
         signal,

@@ -86,8 +86,7 @@ describe('performance-store chart data', () => {
     const snapshot = await buildPerformanceSnapshot({
       trades: mockTrades,
       dailyLogs: mockDailyLogs,
-      filters: { strategies: ['Long Call'] },
-      riskFreeRate: 2
+      filters: { strategies: ['Long Call'] }
     })
 
     expect(snapshot.filteredTrades.every(trade => (trade.strategy || 'Unknown') === 'Long Call')).toBe(true)

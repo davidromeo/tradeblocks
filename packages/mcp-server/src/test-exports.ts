@@ -19,3 +19,10 @@ export {
   type ImportCsvResult,
   type ImportCsvOptions,
 } from './utils/block-loader.js';
+
+// Export PortfolioStatsCalculator for testing block_diff logic
+export { PortfolioStatsCalculator } from '@lib/calculations/portfolio-stats';
+
+// Export correlation and tail-risk utilities for testing strategy_similarity
+export { calculateCorrelationMatrix } from '@lib/calculations/correlation';
+export { performTailRiskAnalysis } from '@lib/calculations/tail-risk-analysis';

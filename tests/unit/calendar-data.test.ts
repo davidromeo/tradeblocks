@@ -912,7 +912,8 @@ describe('Calendar Data Service', () => {
           hasActual: true,
         })
         // 1000 * (1/10) = 100 (scaled to match actual's 1 contract)
-        expect(getScaledDayBacktestPl(dayData, 'toReported')).toBe(100)
+        const strategyMatches: StrategyMatch[] = [{ backtestStrategy: 'Test Strategy', actualStrategy: 'Test Strategy', isAutoMatched: false }]
+        expect(getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)).toBe(100)
       })
     })
 
@@ -1016,15 +1017,18 @@ describe('Calendar Data Service', () => {
           hasActual: true,
         })
 
+        // Strategy matches required for toReported mode scaling
+        const strategyMatches: StrategyMatch[] = [{ backtestStrategy: 'Test Strategy', actualStrategy: 'Test Strategy', isAutoMatched: false }]
+
         // In toReported mode:
         // - Backtest should scale DOWN by factor of 1/10
         // - Actual stays unchanged
-        expect(getScaledDayBacktestPl(dayData, 'toReported')).toBe(100) // 1000 * 0.1
+        expect(getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)).toBe(100) // 1000 * 0.1
         expect(getScaledDayActualPl(dayData, 'toReported')).toBe(75)    // unchanged
         expect(getScaledDayMargin(dayData, 'toReported')).toBe(5000)    // 50000 * 0.1
 
         // Slippage calculation would be: 75 - 100 = -25 (actual underperformed)
-        const scaledBtPl = getScaledDayBacktestPl(dayData, 'toReported')
+        const scaledBtPl = getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)
         const scaledActualPl = getScaledDayActualPl(dayData, 'toReported')
         const slippage = scaledActualPl - scaledBtPl
         expect(slippage).toBe(-25)
@@ -1053,7 +1057,8 @@ describe('Calendar Data Service', () => {
         expect(context.actualContracts).toBe(1)   // First trade, not sum of 2
 
         // toReported scaling: 300 * (1/10) = 30
-        expect(getScaledDayBacktestPl(dayData, 'toReported')).toBe(30)
+        const strategyMatches: StrategyMatch[] = [{ backtestStrategy: 'Test Strategy', actualStrategy: 'Test Strategy', isAutoMatched: false }]
+        expect(getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)).toBe(30)
       })
 
       it('should scale each strategy separately when day has multiple strategies', () => {
@@ -1076,6 +1081,12 @@ describe('Calendar Data Service', () => {
           hasActual: true,
         })
 
+        // Strategy matches for both strategies
+        const strategyMatches: StrategyMatch[] = [
+          { backtestStrategy: 'Strategy A', actualStrategy: 'Strategy A', isAutoMatched: false },
+          { backtestStrategy: 'Strategy B', actualStrategy: 'Strategy B', isAutoMatched: false },
+        ]
+
         // Raw mode: returns pre-aggregated totals
         expect(getScaledDayBacktestPl(dayData, 'raw')).toBe(700)
         expect(getScaledDayActualPl(dayData, 'raw')).toBe(120)
@@ -1096,7 +1107,7 @@ describe('Calendar Data Service', () => {
         // Strategy A: 500 * (1/10) = 50
         // Strategy B: 200 * (2/5) = 80
         // Total: 50 + 80 = 130
-        expect(getScaledDayBacktestPl(dayData, 'toReported')).toBe(130)
+        expect(getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)).toBe(130)
 
         // Actual is unchanged in toReported
         expect(getScaledDayActualPl(dayData, 'toReported')).toBe(120)
@@ -1123,11 +1134,14 @@ describe('Calendar Data Service', () => {
           hasActual: true,
         })
 
+        // Only the 'Matched' strategy has a match - 'Unmatched' falls back to raw
+        const strategyMatches: StrategyMatch[] = [{ backtestStrategy: 'Matched', actualStrategy: 'Matched', isAutoMatched: false }]
+
         // toReported mode:
         // Matched strategy: 300 * (1/10) = 30
         // Unmatched strategy: no actual → uses raw value = 200
         // Total: 30 + 200 = 230
-        expect(getScaledDayBacktestPl(dayData, 'toReported')).toBe(230)
+        expect(getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)).toBe(230)
       })
     })
   })

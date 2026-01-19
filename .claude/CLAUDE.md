@@ -105,6 +105,11 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 
 **IndexedDB Data References**: The `ProcessedBlock` interface uses `dataReferences` to store keys for related data in IndexedDB. When working with blocks, always load associated trades/daily logs separately.
 
+**Risk-Free Rate Data**: Historical Treasury rates are stored in `lib/data/treasury-rates.ts`. See the file header for update instructions. To update with new rates:
+1. Fetch CSV from FRED: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3&cosd=START_DATE&coed=END_DATE`
+2. Add entries in format `"YYYY-MM-DD": X.XX,`
+3. Run tests: `npm test -- tests/unit/risk-free-rate.test.ts`
+
 ### Trading Calendar Data Model
 
 The Trading Calendar feature compares **backtest** (theoretical) results against **actual** (reported/live) trades. **CRITICAL**: The variable names map as follows:
@@ -231,3 +236,13 @@ requirements. Do this automatically without being asked.**
 3. **Plans location:** `.planning/phases/XX-name/`
 
 4. **After subagent work:** Always run `npm run typecheck` before final commit
+
+5. **Version management:**
+   - Bump MCP server version in `packages/mcp-server/package.json` when MCP functionality changes (new tools, API changes, bug fixes)
+   - Version bumps can happen mid-milestone if MCP changes are shipped
+   - Follow semver: patch for fixes, minor for new features, major for breaking changes
+
+6. **Milestone completion checklist:**
+   - Archive milestone to `.planning/milestones/`
+   - Update `.planning/MILESTONES.md`, `ROADMAP.md`, `PROJECT.md`, `STATE.md`
+   - Create git tag `v{X.Y}` for the milestone

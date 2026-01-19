@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "tradeblocks",
   "display_name": "TradeBlocks",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Options trading analysis - backtest stats, walk-forward analysis, Monte Carlo simulations, and risk metrics",
   "long_description": "TradeBlocks MCP server provides comprehensive options trading analysis capabilities. Import your trade logs and get detailed performance statistics, run walk-forward analysis to detect overfitting, perform Monte Carlo simulations for risk assessment, calculate optimal position sizing with Kelly criterion, and compare backtest results against actual trading performance. All analysis runs locally on your machine.",
   "author": {
@@ -28,20 +28,62 @@
     }
   },
   "tools": [
-    { "name": "list_backtests", "description": "List all available trading backtests/blocks in the configured directory" },
-    { "name": "get_statistics", "description": "Get comprehensive performance statistics for a backtest including P&L, win rate, drawdowns, Sharpe ratio" },
-    { "name": "run_walk_forward", "description": "Run walk-forward analysis to test strategy robustness and detect overfitting" },
-    { "name": "run_monte_carlo", "description": "Monte Carlo simulation for risk assessment and confidence intervals" },
-    { "name": "calculate_correlation", "description": "Calculate correlation between multiple strategies using Kendall's tau" },
-    { "name": "get_tail_risk", "description": "Analyze tail risk metrics including VaR, CVaR, and maximum drawdown" },
-    { "name": "calculate_position_sizing", "description": "Calculate optimal position size using Kelly criterion with safety adjustments" },
-    { "name": "get_performance_charts", "description": "Get chart data for equity curves, drawdowns, returns distribution, and more" },
-    { "name": "get_period_returns", "description": "Get returns aggregated by time period (daily, weekly, monthly, yearly)" },
-    { "name": "compare_backtest_vs_actual", "description": "Compare backtest results against actual live trading performance" },
-    { "name": "list_available_fields", "description": "List all filterable fields available for trade queries" },
-    { "name": "run_filtered_query", "description": "Query trades with filters and return matching results" },
-    { "name": "get_field_statistics", "description": "Get statistics for a specific trade field" },
-    { "name": "aggregate_by_field", "description": "Aggregate trade data by field values" }
+    {
+      "name": "list_backtests",
+      "description": "List all available trading backtests/blocks in the configured directory"
+    },
+    {
+      "name": "get_statistics",
+      "description": "Get comprehensive performance statistics for a backtest including P&L, win rate, drawdowns, Sharpe ratio"
+    },
+    {
+      "name": "run_walk_forward",
+      "description": "Run walk-forward analysis to test strategy robustness and detect overfitting"
+    },
+    {
+      "name": "run_monte_carlo",
+      "description": "Monte Carlo simulation for risk assessment and confidence intervals"
+    },
+    {
+      "name": "calculate_correlation",
+      "description": "Calculate correlation between multiple strategies using Kendall's tau"
+    },
+    {
+      "name": "get_tail_risk",
+      "description": "Analyze tail risk metrics including VaR, CVaR, and maximum drawdown"
+    },
+    {
+      "name": "calculate_position_sizing",
+      "description": "Calculate optimal position size using Kelly criterion with safety adjustments"
+    },
+    {
+      "name": "get_performance_charts",
+      "description": "Get chart data for equity curves, drawdowns, returns distribution, and more"
+    },
+    {
+      "name": "get_period_returns",
+      "description": "Get returns aggregated by time period (daily, weekly, monthly, yearly)"
+    },
+    {
+      "name": "compare_backtest_vs_actual",
+      "description": "Compare backtest results against actual live trading performance"
+    },
+    {
+      "name": "list_available_fields",
+      "description": "List all filterable fields available for trade queries"
+    },
+    {
+      "name": "run_filtered_query",
+      "description": "Query trades with filters and return matching results"
+    },
+    {
+      "name": "get_field_statistics",
+      "description": "Get statistics for a specific trade field"
+    },
+    {
+      "name": "aggregate_by_field",
+      "description": "Aggregate trade data by field values"
+    }
   ],
   "prompts": [
     {

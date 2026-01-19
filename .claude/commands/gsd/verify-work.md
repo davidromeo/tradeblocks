@@ -1,7 +1,7 @@
 ---
 name: gsd:verify-work
-description: Guide manual user acceptance testing of recently built features
-argument-hint: "[optional: phase or plan number, e.g., '4' or '04-02']"
+description: Validate built features through conversational UAT
+argument-hint: "[phase number, e.g., '4']"
 allowed-tools:
   - Read
   - Bash
@@ -9,63 +9,211 @@ allowed-tools:
   - Grep
   - Edit
   - Write
-  - AskUserQuestion
+  - Task
 ---
 
 <objective>
-Guide the user through manual acceptance testing of recently built features.
+Validate built features through conversational testing with persistent state.
 
-Purpose: Validate that what Claude thinks was built actually works from the user's perspective. The USER performs all testing — Claude generates the test checklist, guides the process, and captures issues.
+Purpose: Confirm what Claude built actually works from user's perspective. One test at a time, plain text responses, no interrogation. When issues are found, automatically diagnose, plan fixes, and prepare for execution.
 
-Output: Validation of features, any issues logged to phase-scoped ISSUES.md
+Output: {phase}-UAT.md tracking all test results. If issues found: diagnosed gaps, verified fix plans ready for /gsd:execute-phase
 </objective>
 
 <execution_context>
 @./.claude/get-shit-done/workflows/verify-work.md
-@./.claude/get-shit-done/templates/uat-issues.md
+@./.claude/get-shit-done/templates/UAT.md
 </execution_context>
 
 <context>
-Scope: $ARGUMENTS (optional)
-- If provided: Test specific phase or plan (e.g., "4" or "04-02")
-- If not provided: Test most recently completed plan
+Phase: $ARGUMENTS (optional)
+- If provided: Test specific phase (e.g., "4")
+- If not provided: Check for active sessions or prompt for phase
 
-**Load project state:**
 @.planning/STATE.md
-
-**Load roadmap:**
 @.planning/ROADMAP.md
 </context>
 
 <process>
-1. Validate arguments (if provided, parse as phase or plan number)
-2. Find relevant SUMMARY.md (specified or most recent)
-3. Follow verify-work.md workflow:
-   - Extract testable deliverables
-   - Generate test checklist
-   - Guide through each test via AskUserQuestion
-   - Collect and categorize issues
-   - Log issues to `.planning/phases/XX-name/{phase}-{plan}-ISSUES.md`
-   - Present summary with verdict
-4. Offer next steps based on results:
-   - If all passed: Continue to next phase
-   - If issues found: `/gsd:plan-fix {phase} {plan}` to create fix plan
+1. Check for active UAT sessions (resume or start new)
+2. Find SUMMARY.md files for the phase
+3. Extract testable deliverables (user-observable outcomes)
+4. Create {phase}-UAT.md with test list
+5. Present tests one at a time:
+   - Show expected behavior
+   - Wait for plain text response
+   - "yes/y/next" = pass, anything else = issue (severity inferred)
+6. Update UAT.md after each response
+7. On completion: commit, present summary
+8. If issues found:
+   - Spawn parallel debug agents to diagnose root causes
+   - Spawn gsd-planner in --gaps mode to create fix plans
+   - Spawn gsd-plan-checker to verify fix plans
+   - Iterate planner ↔ checker until plans pass (max 3)
+   - Present ready status with `/clear` then `/gsd:execute-phase`
 </process>
 
 <anti_patterns>
-- Don't run automated tests (that's for CI/test suites)
-- Don't make assumptions about test results — USER reports outcomes
-- Don't skip the guidance — walk through each test
-- Don't dismiss minor issues — log everything user reports
-- Don't fix issues during testing — capture for later
+- Don't use AskUserQuestion for test responses — plain text conversation
+- Don't ask severity — infer from description
+- Don't present full checklist upfront — one test at a time
+- Don't run automated tests — this is manual user validation
+- Don't fix issues during testing — log as gaps, diagnose after all tests complete
 </anti_patterns>
 
+<offer_next>
+Output this markdown directly (not as a code block). Route based on UAT results:
+
+| Status | Route |
+|--------|-------|
+| All tests pass + more phases | Route A (next phase) |
+| All tests pass + last phase | Route B (milestone complete) |
+| Issues found + fix plans ready | Route C (execute fixes) |
+| Issues found + planning blocked | Route D (manual intervention) |
+
+---
+
+**Route A: All tests pass, more phases remain**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► PHASE {Z} VERIFIED ✓
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Phase {Z}: {Name}**
+
+{N}/{N} tests passed
+UAT complete ✓
+
+───────────────────────────────────────────────────────────────
+
+## ▶ Next Up
+
+**Phase {Z+1}: {Name}** — {Goal from ROADMAP.md}
+
+/gsd:discuss-phase {Z+1} — gather context and clarify approach
+
+<sub>/clear first → fresh context window</sub>
+
+───────────────────────────────────────────────────────────────
+
+**Also available:**
+- /gsd:plan-phase {Z+1} — skip discussion, plan directly
+- /gsd:execute-phase {Z+1} — skip to execution (if already planned)
+
+───────────────────────────────────────────────────────────────
+
+---
+
+**Route B: All tests pass, milestone complete**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► PHASE {Z} VERIFIED ✓
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Phase {Z}: {Name}**
+
+{N}/{N} tests passed
+Final phase verified ✓
+
+───────────────────────────────────────────────────────────────
+
+## ▶ Next Up
+
+**Audit milestone** — verify requirements, cross-phase integration, E2E flows
+
+/gsd:audit-milestone
+
+<sub>/clear first → fresh context window</sub>
+
+───────────────────────────────────────────────────────────────
+
+**Also available:**
+- /gsd:complete-milestone — skip audit, archive directly
+
+───────────────────────────────────────────────────────────────
+
+---
+
+**Route C: Issues found, fix plans ready**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► PHASE {Z} ISSUES FOUND ⚠
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Phase {Z}: {Name}**
+
+{N}/{M} tests passed
+{X} issues diagnosed
+Fix plans verified ✓
+
+### Issues Found
+
+{List issues with severity from UAT.md}
+
+───────────────────────────────────────────────────────────────
+
+## ▶ Next Up
+
+**Execute fix plans** — run diagnosed fixes
+
+/gsd:execute-phase {Z} --gaps-only
+
+<sub>/clear first → fresh context window</sub>
+
+───────────────────────────────────────────────────────────────
+
+**Also available:**
+- cat .planning/phases/{phase_dir}/*-PLAN.md — review fix plans
+- /gsd:plan-phase {Z} --gaps — regenerate fix plans
+
+───────────────────────────────────────────────────────────────
+
+---
+
+**Route D: Issues found, planning blocked**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GSD ► PHASE {Z} BLOCKED ✗
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Phase {Z}: {Name}**
+
+{N}/{M} tests passed
+Fix planning blocked after {X} iterations
+
+### Unresolved Issues
+
+{List blocking issues from planner/checker output}
+
+───────────────────────────────────────────────────────────────
+
+## ▶ Next Up
+
+**Manual intervention required**
+
+Review the issues above and either:
+1. Provide guidance for fix planning
+2. Manually address blockers
+3. Accept current state and continue
+
+───────────────────────────────────────────────────────────────
+
+**Options:**
+- /gsd:plan-phase {Z} --gaps — retry fix planning with guidance
+- /gsd:discuss-phase {Z} — gather more context before replanning
+
+───────────────────────────────────────────────────────────────
+</offer_next>
+
 <success_criteria>
-- [ ] Test scope identified from SUMMARY.md
-- [ ] Checklist generated based on deliverables
-- [ ] User guided through each test
-- [ ] All test results captured (pass/fail/partial/skip)
-- [ ] Any issues logged to phase-scoped ISSUES.md (not global)
-- [ ] Summary presented with verdict
-- [ ] User knows next steps based on results
+- [ ] UAT.md created with tests from SUMMARY.md
+- [ ] Tests presented one at a time with expected behavior
+- [ ] Plain text responses (no structured forms)
+- [ ] Severity inferred, never asked
+- [ ] Batched writes: on issue, every 5 passes, or completion
+- [ ] Committed on completion
+- [ ] If issues: parallel debug agents diagnose root causes
+- [ ] If issues: gsd-planner creates fix plans from diagnosed gaps
+- [ ] If issues: gsd-plan-checker verifies fix plans (max 3 iterations)
+- [ ] Ready for `/gsd:execute-phase` when complete
 </success_criteria>

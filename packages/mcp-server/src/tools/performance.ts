@@ -14,6 +14,7 @@ import {
 } from "../utils/output-formatter.js";
 import type { Trade } from "@lib/models/trade";
 import type { ReportingTrade } from "@lib/models/reporting-trade";
+import { normalizeToOneLot } from "@lib/utils/equity-curve";
 
 /**
  * MFE/MAE data point for a single trade's excursion metrics
@@ -668,11 +669,12 @@ function buildRomTimeline(
 
 /**
  * Build rolling metrics (30-trade rolling window)
+ * Note: Uses fixed 2.0% risk-free rate for Sharpe as a simplification for visualization.
+ * The accurate date-based Sharpe is computed by portfolio-stats.ts for actual statistics.
  */
 function buildRollingMetrics(
   trades: Trade[],
-  windowSize: number = 30,
-  riskFreeRate: number = 2.0
+  windowSize: number = 30
 ): Array<{
   date: string;
   tradeNumber: number;
@@ -733,8 +735,9 @@ function buildRollingMetrics(
           ? 999
           : 0;
 
-    // Sharpe uses daily risk-free rate approximation
-    const dailyRfr = riskFreeRate / 100 / 252;
+    // Sharpe uses fixed 2.0% risk-free rate approximation for visualization
+    // The accurate date-based rate is used in portfolio-stats.ts calculations
+    const dailyRfr = 2.0 / 100 / 252;
     const excessReturn = avgReturn - dailyRfr;
     const sharpeRatio = volatility > 0 ? excessReturn / volatility : 0;
 
@@ -1090,26 +1093,10 @@ function filterByDateRange(
   });
 }
 
-/**
- * Normalize trades to 1 lot (divide P&L by contract count)
- */
-function normalizeTradesToOneLot(trades: Trade[]): Trade[] {
-  return trades.map((trade) => {
-    if (!trade.numContracts || trade.numContracts <= 0) return trade;
-
-    const scaleFactor = 1 / trade.numContracts;
-    return {
-      ...trade,
-      pl: trade.pl * scaleFactor,
-      premium: trade.premium * scaleFactor,
-      marginReq: trade.marginReq ? trade.marginReq * scaleFactor : trade.marginReq,
-      fundsAtClose: trade.fundsAtClose
-        ? trade.fundsAtClose * scaleFactor
-        : trade.fundsAtClose,
-      numContracts: 1,
-    };
-  });
-}
+// Note: normalizeTradesToOneLot was removed and replaced with shared utility
+// from @lib/utils/equity-curve that correctly rebuilds the equity curve.
+// The old implementation had a bug: it scaled fundsAtClose directly instead
+// of recalculating based on cumulative scaled P&L.
 
 /**
  * Register all performance MCP tools
@@ -1168,12 +1155,6 @@ export function registerPerformanceTools(
           })
           .optional()
           .describe("Filter trades to date range"),
-        riskFreeRate: z
-          .number()
-          .default(2.0)
-          .describe(
-            "Annual risk-free rate % for Sharpe calculations in rolling_metrics (default: 2.0)"
-          ),
         normalizeTo1Lot: z
           .boolean()
           .default(false)
@@ -1211,7 +1192,6 @@ export function registerPerformanceTools(
       strategy,
       charts,
       dateRange,
-      riskFreeRate,
       normalizeTo1Lot,
       bucketCount,
       rollingWindowSize,
@@ -1230,8 +1210,9 @@ export function registerPerformanceTools(
         }
 
         // Apply normalization if requested
+        // Uses shared utility that properly rebuilds equity curve after normalizing P&L
         if (normalizeTo1Lot) {
-          trades = normalizeTradesToOneLot(trades);
+          trades = normalizeToOneLot(trades);
         }
 
         if (trades.length === 0) {
@@ -1331,8 +1312,7 @@ export function registerPerformanceTools(
         if (charts.includes("rolling_metrics")) {
           chartData.rollingMetrics = buildRollingMetrics(
             trades,
-            rollingWindowSize,
-            riskFreeRate
+            rollingWindowSize
           );
           dataPoints += (chartData.rollingMetrics as unknown[]).length;
         }
@@ -1448,7 +1428,6 @@ export function registerPerformanceTools(
           strategy: strategy ?? null,
           dateRange: dateRange ?? null,
           normalizeTo1Lot,
-          riskFreeRate,
           bucketCount,
           rollingWindowSize,
           mfeMaeBucketSize,
@@ -1531,8 +1510,9 @@ export function registerPerformanceTools(
         }
 
         // Apply normalization if requested
+        // Uses shared utility that properly rebuilds equity curve after normalizing P&L
         if (normalizeTo1Lot) {
-          trades = normalizeTradesToOneLot(trades);
+          trades = normalizeToOneLot(trades);
         }
 
         if (trades.length === 0) {

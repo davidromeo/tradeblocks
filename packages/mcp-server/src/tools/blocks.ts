@@ -6,8 +6,8 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadBlock, listBlocks, saveMetadata } from "../utils/block-loader.js";
-import type { BlockMetadata } from "../utils/block-loader.js";
+import { loadBlock, listBlocks, saveMetadata, buildBlockMetadata } from "../utils/block-loader.js";
+import type { CsvMappings } from "../utils/block-loader.js";
 import {
   createToolOutput,
   formatCurrency,
@@ -15,6 +15,13 @@ import {
   formatRatio,
 } from "../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@lib/calculations/portfolio-stats";
+import { calculateCorrelationMatrix } from "@lib/calculations/correlation";
+import { performTailRiskAnalysis } from "@lib/calculations/tail-risk-analysis";
+import {
+  runMonteCarloSimulation,
+  type MonteCarloParams,
+} from "@lib/calculations/monte-carlo";
+import { WalkForwardAnalyzer } from "@lib/calculations/walk-forward-analyzer";
 import type { Trade } from "@lib/models/trade";
 
 /**
@@ -311,30 +318,21 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
 
         // Cache stats if no filters applied
         if (!isFiltered && !block.metadata) {
-          const strategies = Array.from(
-            new Set(block.trades.map((t) => t.strategy))
-          ).sort();
-          const dates = block.trades.map((t) =>
-            new Date(t.dateOpened).getTime()
-          );
-          const metadata: BlockMetadata = {
+          const blockPath = `${baseDir}/${blockId}`;
+
+          // Build CSV mappings for cache invalidation
+          const csvMappings: CsvMappings = { tradelog: "tradelog.csv" };
+          if (dailyLogs && dailyLogs.length > 0) {
+            csvMappings.dailylog = "dailylog.csv";
+          }
+
+          // Build and save metadata asynchronously (don't block response)
+          buildBlockMetadata({
             blockId,
-            name: blockId,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            tradeCount: block.trades.length,
-            dailyLogCount: dailyLogs?.length ?? 0,
-            dateRange: {
-              start:
-                dates.length > 0
-                  ? new Date(Math.min(...dates)).toISOString()
-                  : null,
-              end:
-                dates.length > 0
-                  ? new Date(Math.max(...dates)).toISOString()
-                  : null,
-            },
-            strategies,
+            blockPath,
+            trades: block.trades,
+            dailyLogs,
+            csvMappings,
             cachedStats: {
               totalPl: stats.totalPl,
               netPl: stats.netPl,
@@ -343,11 +341,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
               maxDrawdown: stats.maxDrawdown,
               calculatedAt: new Date().toISOString(),
             },
-          };
-          // Save metadata asynchronously (don't block response)
-          saveMetadata(`${baseDir}/${blockId}`, metadata).catch((err) =>
-            console.error("Failed to save metadata:", err)
-          );
+          })
+            .then((metadata) => saveMetadata(blockPath, metadata))
+            .catch((err) => console.error("Failed to save metadata:", err));
         }
 
         // Build structured data for Claude reasoning - include full PortfolioStats
@@ -715,7 +711,1652 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     }
   );
 
-  // Tool 6: get_trades
+  // Tool 6: block_diff
+  server.registerTool(
+    "block_diff",
+    {
+      description:
+        "Compare two blocks with strategy overlap analysis and P/L attribution. Shows which strategies are shared vs unique between blocks, and calculates performance deltas for shared strategies.",
+      inputSchema: z.object({
+        blockIdA: z.string().describe("First block (baseline) for comparison"),
+        blockIdB: z.string().describe("Second block (comparison target)"),
+        startDate: z
+          .string()
+          .optional()
+          .describe("Optional start date filter (YYYY-MM-DD)"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("Optional end date filter (YYYY-MM-DD)"),
+        metricsToCompare: z
+          .array(
+            z.enum([
+              "trades",
+              "pl",
+              "winRate",
+              "profitFactor",
+              "sharpeRatio",
+              "maxDrawdown",
+            ])
+          )
+          .optional()
+          .describe(
+            "Specific metrics to include in comparison (default: all). Use to focus output."
+          ),
+      }),
+    },
+    async ({ blockIdA, blockIdB, startDate, endDate, metricsToCompare }) => {
+      try {
+        // Load both blocks
+        const [blockA, blockB] = await Promise.all([
+          loadBlock(baseDir, blockIdA),
+          loadBlock(baseDir, blockIdB),
+        ]);
+
+        // Apply date filters
+        const tradesA = filterByDateRange(blockA.trades, startDate, endDate);
+        const tradesB = filterByDateRange(blockB.trades, startDate, endDate);
+
+        // Extract unique strategy names from each block
+        const strategiesA = new Set(tradesA.map((t) => t.strategy));
+        const strategiesB = new Set(tradesB.map((t) => t.strategy));
+
+        // Categorize strategies
+        const shared: string[] = [];
+        const uniqueToA: string[] = [];
+        const uniqueToB: string[] = [];
+
+        for (const strategy of strategiesA) {
+          if (strategiesB.has(strategy)) {
+            shared.push(strategy);
+          } else {
+            uniqueToA.push(strategy);
+          }
+        }
+
+        for (const strategy of strategiesB) {
+          if (!strategiesA.has(strategy)) {
+            uniqueToB.push(strategy);
+          }
+        }
+
+        // Sort for consistent output
+        shared.sort();
+        uniqueToA.sort();
+        uniqueToB.sort();
+
+        // Calculate overlap percentage
+        const totalUniqueStrategies = new Set([...strategiesA, ...strategiesB]).size;
+        const overlapPercent =
+          totalUniqueStrategies > 0
+            ? (shared.length / totalUniqueStrategies) * 100
+            : 0;
+
+        // Calculate per-strategy stats using trade-based calculations only
+        const statsA = calculator.calculateStrategyStats(tradesA);
+        const statsB = calculator.calculateStrategyStats(tradesB);
+
+        // Helper to build strategy comparison entry
+        const buildStrategyEntry = (strategy: string) => {
+          const blockAStats = statsA[strategy];
+          const blockBStats = statsB[strategy];
+
+          const entryA = blockAStats
+            ? {
+                trades: blockAStats.tradeCount,
+                pl: blockAStats.totalPl,
+                winRate: blockAStats.winRate,
+                profitFactor: blockAStats.profitFactor,
+              }
+            : null;
+
+          const entryB = blockBStats
+            ? {
+                trades: blockBStats.tradeCount,
+                pl: blockBStats.totalPl,
+                winRate: blockBStats.winRate,
+                profitFactor: blockBStats.profitFactor,
+              }
+            : null;
+
+          // Calculate delta only for shared strategies
+          const delta =
+            entryA && entryB
+              ? {
+                  trades: entryB.trades - entryA.trades,
+                  pl: entryB.pl - entryA.pl,
+                  winRate: entryB.winRate - entryA.winRate,
+                }
+              : null;
+
+          return {
+            strategy,
+            blockA: entryA,
+            blockB: entryB,
+            delta,
+          };
+        };
+
+        // Build per-strategy comparison for all strategies
+        const perStrategyComparison = [
+          ...shared.map(buildStrategyEntry),
+          ...uniqueToA.map(buildStrategyEntry),
+          ...uniqueToB.map(buildStrategyEntry),
+        ];
+
+        // Calculate portfolio-level totals
+        // Use trade-based calculations for filtered comparison
+        const portfolioStatsA = calculator.calculatePortfolioStats(
+          tradesA,
+          undefined, // Don't use daily logs for comparison - trades only
+          true // Force trade-based calculations
+        );
+        const portfolioStatsB = calculator.calculatePortfolioStats(
+          tradesB,
+          undefined,
+          true
+        );
+
+        // Build portfolio totals with all or filtered metrics
+        const allMetrics = !metricsToCompare || metricsToCompare.length === 0;
+        const includeMetric = (m: string) =>
+          allMetrics || metricsToCompare?.includes(m as typeof metricsToCompare[number]);
+
+        const buildPortfolioEntry = (
+          stats: ReturnType<typeof calculator.calculatePortfolioStats>
+        ) => {
+          const entry: Record<string, number | null> = {};
+          if (includeMetric("trades")) entry.totalTrades = stats.totalTrades;
+          if (includeMetric("pl")) entry.netPl = stats.netPl;
+          if (includeMetric("winRate")) entry.winRate = stats.winRate;
+          if (includeMetric("profitFactor"))
+            entry.profitFactor = stats.profitFactor;
+          if (includeMetric("sharpeRatio"))
+            entry.sharpeRatio = stats.sharpeRatio ?? null;
+          if (includeMetric("maxDrawdown"))
+            entry.maxDrawdown = stats.maxDrawdown;
+          return entry;
+        };
+
+        const portfolioA = buildPortfolioEntry(portfolioStatsA);
+        const portfolioB = buildPortfolioEntry(portfolioStatsB);
+
+        // Calculate deltas for portfolio totals
+        const portfolioDelta: Record<string, number | null> = {};
+        for (const key of Object.keys(portfolioA)) {
+          const valA = portfolioA[key];
+          const valB = portfolioB[key];
+          portfolioDelta[key] =
+            valA !== null && valB !== null ? valB - valA : null;
+        }
+
+        // Brief summary for user display
+        const summary = `Block Diff: ${blockIdA} vs ${blockIdB} | ${shared.length} shared, ${uniqueToA.length} unique to A, ${uniqueToB.length} unique to B | P/L delta: ${formatCurrency(portfolioStatsB.netPl - portfolioStatsA.netPl)}`;
+
+        // Build structured output
+        const structuredData = {
+          blockA: {
+            id: blockIdA,
+            tradeCount: tradesA.length,
+            strategies: Array.from(strategiesA).sort(),
+          },
+          blockB: {
+            id: blockIdB,
+            tradeCount: tradesB.length,
+            strategies: Array.from(strategiesB).sort(),
+          },
+          strategyOverlap: {
+            shared,
+            uniqueToA,
+            uniqueToB,
+            overlapPercent,
+          },
+          perStrategyComparison,
+          portfolioTotals: {
+            blockA: portfolioA,
+            blockB: portfolioB,
+            delta: portfolioDelta,
+          },
+          filters: {
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+            metricsToCompare: metricsToCompare ?? null,
+          },
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error comparing blocks: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 7: stress_test
+  // Define built-in stress scenarios (all post-2013 since backtests typically start there)
+  const STRESS_SCENARIOS: Record<
+    string,
+    { startDate: string; endDate: string; description: string }
+  > = {
+    // Crashes & Corrections
+    china_deval_2015: {
+      startDate: "2015-08-11",
+      endDate: "2015-08-25",
+      description: "China yuan devaluation, global selloff",
+    },
+    brexit: {
+      startDate: "2016-06-23",
+      endDate: "2016-06-27",
+      description: "UK Brexit vote shock",
+    },
+    volmageddon: {
+      startDate: "2018-02-02",
+      endDate: "2018-02-09",
+      description: "VIX spike, XIV blowup, largest VIX jump since 1987",
+    },
+    q4_2018: {
+      startDate: "2018-10-01",
+      endDate: "2018-12-24",
+      description: "Fed rate hike selloff",
+    },
+    covid_crash: {
+      startDate: "2020-02-19",
+      endDate: "2020-03-23",
+      description: "COVID-19 pandemic crash, peak to trough",
+    },
+    bear_2022: {
+      startDate: "2022-01-03",
+      endDate: "2022-10-12",
+      description: "Fed tightening bear market",
+    },
+    svb_crisis: {
+      startDate: "2023-03-08",
+      endDate: "2023-03-15",
+      description: "Silicon Valley Bank collapse, regional bank contagion",
+    },
+    vix_aug_2024: {
+      startDate: "2024-08-01",
+      endDate: "2024-08-15",
+      description: "Yen carry trade unwind, VIX spike",
+    },
+    liberation_day: {
+      startDate: "2025-04-02",
+      endDate: "2025-04-08",
+      description: "Trump tariffs, largest drop since COVID",
+    },
+    // Recoveries
+    covid_recovery: {
+      startDate: "2020-03-23",
+      endDate: "2020-08-18",
+      description: "V-shaped recovery from COVID crash",
+    },
+    liberation_recovery: {
+      startDate: "2025-04-09",
+      endDate: "2025-05-02",
+      description: "Post 90-day tariff pause rally, S&P +9.5% single day",
+    },
+  };
+
+  server.registerTool(
+    "stress_test",
+    {
+      description:
+        "Analyze portfolio performance during historical market stress scenarios (COVID crash, 2022 bear, VIX spikes, etc.). Shows how the portfolio performed during named periods without manually specifying date ranges.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name to analyze"),
+        scenarios: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Specific scenario names to test (e.g., 'covid_crash', 'bear_2022'). If omitted, runs all built-in scenarios."
+          ),
+        customScenarios: z
+          .array(
+            z.object({
+              name: z.string().describe("Custom scenario name"),
+              startDate: z.string().describe("Start date (YYYY-MM-DD)"),
+              endDate: z.string().describe("End date (YYYY-MM-DD)"),
+            })
+          )
+          .optional()
+          .describe("User-defined scenarios with custom date ranges"),
+        includeEmpty: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            "Include scenarios with no trades in the results. Default false - only shows scenarios with data coverage."
+          ),
+      }),
+    },
+    async ({ blockId, scenarios, customScenarios, includeEmpty }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const trades = block.trades;
+
+        // Build list of scenarios to run
+        const scenariosToRun: Array<{
+          name: string;
+          startDate: string;
+          endDate: string;
+          description: string;
+          isCustom: boolean;
+        }> = [];
+
+        // Add built-in scenarios
+        if (scenarios && scenarios.length > 0) {
+          // Validate requested scenarios exist
+          const invalidScenarios = scenarios.filter(
+            (s) => !STRESS_SCENARIOS[s]
+          );
+          if (invalidScenarios.length > 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Unknown scenario(s): ${invalidScenarios.join(", ")}. Available: ${Object.keys(STRESS_SCENARIOS).join(", ")}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          for (const scenarioName of scenarios) {
+            const scenario = STRESS_SCENARIOS[scenarioName];
+            scenariosToRun.push({
+              name: scenarioName,
+              startDate: scenario.startDate,
+              endDate: scenario.endDate,
+              description: scenario.description,
+              isCustom: false,
+            });
+          }
+        } else {
+          // Run all built-in scenarios
+          for (const [name, scenario] of Object.entries(STRESS_SCENARIOS)) {
+            scenariosToRun.push({
+              name,
+              startDate: scenario.startDate,
+              endDate: scenario.endDate,
+              description: scenario.description,
+              isCustom: false,
+            });
+          }
+        }
+
+        // Add custom scenarios
+        if (customScenarios && customScenarios.length > 0) {
+          for (const custom of customScenarios) {
+            scenariosToRun.push({
+              name: custom.name,
+              startDate: custom.startDate,
+              endDate: custom.endDate,
+              description: `Custom scenario: ${custom.startDate} to ${custom.endDate}`,
+              isCustom: true,
+            });
+          }
+        }
+
+        // Calculate stats for each scenario
+        const scenarioResults: Array<{
+          name: string;
+          description: string;
+          dateRange: { start: string; end: string };
+          tradeCount: number;
+          stats: {
+            netPl: number;
+            winRate: number;
+            maxDrawdown: number;
+            profitFactor: number | null;
+            avgWin: number | null;
+            avgLoss: number | null;
+          } | null;
+          isCustom: boolean;
+          noCoverage?: boolean;
+        }> = [];
+
+        let worstScenario: { name: string; netPl: number } | null = null;
+        let bestScenario: { name: string; netPl: number } | null = null;
+        let scenariosWithTrades = 0;
+        let scenariosSkipped = 0;
+        const skippedScenarioNames: string[] = [];
+
+        // Get portfolio date range for context
+        const sortedTrades = [...trades].sort(
+          (a, b) =>
+            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+        );
+        const portfolioStartDate = sortedTrades[0]?.dateOpened
+          ? new Date(sortedTrades[0].dateOpened).toISOString().split("T")[0]
+          : null;
+        const portfolioEndDate = sortedTrades[sortedTrades.length - 1]
+          ?.dateClosed
+          ? new Date(sortedTrades[sortedTrades.length - 1].dateClosed)
+              .toISOString()
+              .split("T")[0]
+          : null;
+
+        for (const scenario of scenariosToRun) {
+          // Filter trades to scenario date range
+          const scenarioTrades = filterByDateRange(
+            trades,
+            scenario.startDate,
+            scenario.endDate
+          );
+
+          if (scenarioTrades.length === 0) {
+            // No trades in this scenario - only include if requested
+            scenariosSkipped++;
+            skippedScenarioNames.push(scenario.name);
+            if (includeEmpty) {
+              scenarioResults.push({
+                name: scenario.name,
+                description: scenario.description,
+                dateRange: { start: scenario.startDate, end: scenario.endDate },
+                tradeCount: 0,
+                stats: null,
+                isCustom: scenario.isCustom,
+                noCoverage: true,
+              });
+            }
+          } else {
+            // Calculate trade-based stats (no daily logs per constraining decision)
+            const stats = calculator.calculatePortfolioStats(
+              scenarioTrades,
+              undefined, // No daily logs
+              true // Force trade-based calculations
+            );
+
+            scenarioResults.push({
+              name: scenario.name,
+              description: scenario.description,
+              dateRange: { start: scenario.startDate, end: scenario.endDate },
+              tradeCount: scenarioTrades.length,
+              stats: {
+                netPl: stats.netPl,
+                winRate: stats.winRate,
+                maxDrawdown: stats.maxDrawdown,
+                profitFactor: stats.profitFactor,
+                avgWin: stats.avgWin,
+                avgLoss: stats.avgLoss,
+              },
+              isCustom: scenario.isCustom,
+            });
+
+            scenariosWithTrades++;
+
+            // Track best/worst scenarios
+            if (worstScenario === null || stats.netPl < worstScenario.netPl) {
+              worstScenario = { name: scenario.name, netPl: stats.netPl };
+            }
+            if (bestScenario === null || stats.netPl > bestScenario.netPl) {
+              bestScenario = { name: scenario.name, netPl: stats.netPl };
+            }
+          }
+        }
+
+        // Build summary
+        const summaryData = {
+          totalScenariosTested: scenariosToRun.length,
+          scenariosWithTrades,
+          scenariosSkipped,
+          skippedScenarios: skippedScenarioNames,
+          worstScenario: worstScenario?.name ?? null,
+          bestScenario: bestScenario?.name ?? null,
+          portfolioDateRange: {
+            start: portfolioStartDate,
+            end: portfolioEndDate,
+          },
+        };
+
+        // Brief summary for user display
+        const skippedNote =
+          scenariosSkipped > 0
+            ? ` (${scenariosSkipped} skipped - no data coverage, portfolio starts ${portfolioStartDate})`
+            : "";
+        const summary = `Stress Test: ${blockId} | ${scenariosWithTrades} scenarios with trades${skippedNote} | Worst: ${worstScenario?.name ?? "N/A"} (${worstScenario ? formatCurrency(worstScenario.netPl) : "N/A"}) | Best: ${bestScenario?.name ?? "N/A"} (${bestScenario ? formatCurrency(bestScenario.netPl) : "N/A"})`;
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          scenarios: scenarioResults,
+          summary: summaryData,
+          availableBuiltInScenarios: Object.keys(STRESS_SCENARIOS),
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error running stress test: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 8: drawdown_attribution
+  server.registerTool(
+    "drawdown_attribution",
+    {
+      description:
+        "Identify which strategies contributed most to losses during the portfolio's maximum drawdown period. Shows drawdown period (peak to trough) and per-strategy P/L attribution.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe(
+            "Optional: Filter to specific strategy before calculating drawdown"
+          ),
+        topN: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(5)
+          .describe("Number of top contributors to return (default: 5)"),
+      }),
+    },
+    async ({ blockId, strategy, topN }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply strategy filter if provided
+        trades = filterByStrategy(trades, strategy);
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found${strategy ? ` for strategy "${strategy}"` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        // Sort trades by close date/time for equity curve
+        const sortedTrades = [...trades].sort((a, b) => {
+          const dateA = new Date(a.dateClosed ?? a.dateOpened);
+          const dateB = new Date(b.dateClosed ?? b.dateOpened);
+          if (dateA.getTime() !== dateB.getTime()) {
+            return dateA.getTime() - dateB.getTime();
+          }
+          // Secondary sort by close time if dates equal
+          const timeA = a.timeClosed ?? a.timeOpened ?? "";
+          const timeB = b.timeClosed ?? b.timeOpened ?? "";
+          return timeA.localeCompare(timeB);
+        });
+
+        // Build equity curve from trades
+        // Initial capital = first trade's fundsAtClose - pl
+        const firstTrade = sortedTrades[0];
+        const initialCapital =
+          (firstTrade.fundsAtClose ?? 10000) - firstTrade.pl;
+
+        // Track peak equity and drawdown
+        let equity = initialCapital;
+        let peakEquity = initialCapital;
+        let peakDate: Date = new Date(
+          firstTrade.dateClosed ?? firstTrade.dateOpened
+        );
+        let maxDrawdown = 0;
+        let maxDrawdownPct = 0;
+        let troughDate: Date | null = null;
+        let drawdownPeakDate: Date | null = null;
+
+        // Track equity at each trade close
+        interface EquityPoint {
+          date: Date;
+          equity: number;
+          drawdownPct: number;
+          trade: Trade;
+        }
+        const equityPoints: EquityPoint[] = [];
+
+        for (const trade of sortedTrades) {
+          equity += trade.pl;
+          const closeDate = new Date(trade.dateClosed ?? trade.dateOpened);
+
+          // Update peak if new high
+          if (equity > peakEquity) {
+            peakEquity = equity;
+            peakDate = closeDate;
+          }
+
+          // Calculate current drawdown from peak
+          const drawdown = peakEquity - equity;
+          const drawdownPct = peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0;
+
+          equityPoints.push({
+            date: closeDate,
+            equity,
+            drawdownPct,
+            trade,
+          });
+
+          // Track max drawdown
+          if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
+            maxDrawdownPct = drawdownPct;
+            troughDate = closeDate;
+            drawdownPeakDate = peakDate;
+          }
+        }
+
+        // Handle edge case: no drawdown (always at peak or single trade)
+        if (maxDrawdown <= 0 || !troughDate || !drawdownPeakDate) {
+          const summary = `Drawdown Attribution: ${blockId}${strategy ? ` (${strategy})` : ""} | No drawdown detected (equity never declined from peak)`;
+
+          const structuredData = {
+            blockId,
+            filters: { strategy: strategy ?? null },
+            drawdownPeriod: null,
+            attribution: [],
+            message: "No drawdown detected - equity never declined from peak",
+          };
+
+          return createToolOutput(summary, structuredData);
+        }
+
+        // Filter trades to the drawdown period (closed between peak and trough)
+        const drawdownTrades = sortedTrades.filter((trade) => {
+          const closeDate = new Date(trade.dateClosed ?? trade.dateOpened);
+          return closeDate >= drawdownPeakDate! && closeDate <= troughDate!;
+        });
+
+        // Group trades by strategy and calculate attribution
+        const strategyPl: Map<
+          string,
+          { pl: number; trades: number; wins: number; losses: number }
+        > = new Map();
+
+        let totalLossDuringDrawdown = 0;
+
+        for (const trade of drawdownTrades) {
+          const existing = strategyPl.get(trade.strategy) ?? {
+            pl: 0,
+            trades: 0,
+            wins: 0,
+            losses: 0,
+          };
+          existing.pl += trade.pl;
+          existing.trades += 1;
+          if (trade.pl > 0) existing.wins += 1;
+          else if (trade.pl < 0) existing.losses += 1;
+          strategyPl.set(trade.strategy, existing);
+
+          // Track total P/L during drawdown period
+          totalLossDuringDrawdown += trade.pl;
+        }
+
+        // Calculate contribution percentages and sort by P/L (most negative first)
+        const attribution = Array.from(strategyPl.entries())
+          .map(([strategyName, data]) => ({
+            strategy: strategyName,
+            pl: data.pl,
+            trades: data.trades,
+            wins: data.wins,
+            losses: data.losses,
+            // Contribution percentage: strategy's P/L as % of total loss
+            // If total loss is negative, most negative strategy has highest contribution
+            contributionPct:
+              totalLossDuringDrawdown !== 0
+                ? Math.abs((data.pl / totalLossDuringDrawdown) * 100)
+                : 0,
+          }))
+          .sort((a, b) => a.pl - b.pl) // Most negative first
+          .slice(0, topN);
+
+        // Calculate duration in days
+        const durationMs = troughDate.getTime() - drawdownPeakDate.getTime();
+        const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+
+        // Format dates
+        const formatDate = (d: Date) => d.toISOString().split("T")[0];
+        const peakDateStr = formatDate(drawdownPeakDate);
+        const troughDateStr = formatDate(troughDate);
+
+        // Build summary
+        const topContributor = attribution[0];
+        const summary = `Drawdown Attribution: ${blockId}${strategy ? ` (${strategy})` : ""} | Max DD: ${formatPercent(maxDrawdownPct)} | ${peakDateStr} to ${troughDateStr} | Top contributor: ${topContributor?.strategy ?? "N/A"} (${formatCurrency(topContributor?.pl ?? 0)})`;
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          filters: { strategy: strategy ?? null, topN },
+          drawdownPeriod: {
+            peakDate: peakDateStr,
+            troughDate: troughDateStr,
+            peakEquity: peakEquity,
+            troughEquity: peakEquity - maxDrawdown,
+            maxDrawdown: maxDrawdown,
+            maxDrawdownPct: maxDrawdownPct,
+            durationDays: durationDays,
+          },
+          periodStats: {
+            totalTrades: drawdownTrades.length,
+            totalPl: totalLossDuringDrawdown,
+          },
+          attribution,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating drawdown attribution: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 9: marginal_contribution
+  server.registerTool(
+    "marginal_contribution",
+    {
+      description:
+        "Calculate how each strategy affects portfolio risk-adjusted returns (Sharpe/Sortino). Shows marginal contribution: positive means strategy IMPROVES the ratio, negative means it HURTS.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        targetStrategy: z
+          .string()
+          .optional()
+          .describe(
+            "Calculate for specific strategy only. If omitted, calculates for all strategies."
+          ),
+        topN: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(5)
+          .describe("Number of top contributors to return when targetStrategy is omitted (default: 5)"),
+      }),
+    },
+    async ({ blockId, targetStrategy, topN }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const trades = block.trades;
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found in block "${blockId}".`,
+              },
+            ],
+          };
+        }
+
+        // Get unique strategies
+        const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+        // Validate targetStrategy if provided
+        if (targetStrategy) {
+          const matchedStrategy = strategies.find(
+            (s) => s.toLowerCase() === targetStrategy.toLowerCase()
+          );
+          if (!matchedStrategy) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Strategy "${targetStrategy}" not found in block. Available: ${strategies.join(", ")}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        }
+
+        // Edge case: single strategy portfolio
+        if (strategies.length === 1) {
+          const baselineStats = calculator.calculatePortfolioStats(
+            trades,
+            undefined, // No daily logs per Phase 17 constraint
+            true // Force trade-based calculations
+          );
+
+          const summary = `Marginal Contribution: ${blockId} | Single strategy portfolio - cannot calculate marginal contribution`;
+
+          const structuredData = {
+            blockId,
+            filters: { targetStrategy: targetStrategy ?? null, topN },
+            baseline: {
+              totalStrategies: 1,
+              totalTrades: trades.length,
+              sharpeRatio: baselineStats.sharpeRatio,
+              sortinoRatio: baselineStats.sortinoRatio,
+            },
+            contributions: [
+              {
+                strategy: strategies[0],
+                trades: trades.length,
+                marginalSharpe: null,
+                marginalSortino: null,
+                interpretation: "only-strategy",
+              },
+            ],
+            summary: {
+              mostBeneficial: null,
+              leastBeneficial: null,
+            },
+            message: "Single strategy portfolio - marginal contribution cannot be calculated (no 'without' comparison possible)",
+          };
+
+          return createToolOutput(summary, structuredData);
+        }
+
+        // Calculate baseline portfolio metrics using ALL trades
+        const baselineStats = calculator.calculatePortfolioStats(
+          trades,
+          undefined, // No daily logs per Phase 17 constraint
+          true // Force trade-based calculations
+        );
+
+        // Determine which strategies to analyze
+        const strategiesToAnalyze = targetStrategy
+          ? strategies.filter(
+              (s) => s.toLowerCase() === targetStrategy.toLowerCase()
+            )
+          : strategies;
+
+        // Calculate marginal contribution for each strategy
+        const contributions: Array<{
+          strategy: string;
+          trades: number;
+          marginalSharpe: number | null;
+          marginalSortino: number | null;
+          interpretation: string;
+        }> = [];
+
+        for (const strategy of strategiesToAnalyze) {
+          // Filter OUT this strategy's trades (portfolio WITHOUT this strategy)
+          const tradesWithout = trades.filter(
+            (t) => t.strategy.toLowerCase() !== strategy.toLowerCase()
+          );
+          const strategyTrades = trades.filter(
+            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
+          );
+
+          // Edge case: removing this strategy leaves nothing
+          if (tradesWithout.length === 0) {
+            contributions.push({
+              strategy,
+              trades: strategyTrades.length,
+              marginalSharpe: null,
+              marginalSortino: null,
+              interpretation: "only-strategy",
+            });
+            continue;
+          }
+
+          // Calculate "without" portfolio metrics
+          const withoutStats = calculator.calculatePortfolioStats(
+            tradesWithout,
+            undefined,
+            true
+          );
+
+          // Marginal contribution = baseline - without
+          // Positive = strategy IMPROVES the ratio (removing it hurts)
+          // Negative = strategy HURTS the ratio (removing it helps)
+          const marginalSharpe =
+            baselineStats.sharpeRatio !== null &&
+            baselineStats.sharpeRatio !== undefined &&
+            withoutStats.sharpeRatio !== null &&
+            withoutStats.sharpeRatio !== undefined
+              ? baselineStats.sharpeRatio - withoutStats.sharpeRatio
+              : null;
+
+          const marginalSortino =
+            baselineStats.sortinoRatio !== null &&
+            baselineStats.sortinoRatio !== undefined &&
+            withoutStats.sortinoRatio !== null &&
+            withoutStats.sortinoRatio !== undefined
+              ? baselineStats.sortinoRatio - withoutStats.sortinoRatio
+              : null;
+
+          // Determine interpretation based on marginal Sharpe
+          let interpretation: string;
+          if (marginalSharpe === null) {
+            interpretation = "unknown";
+          } else if (Math.abs(marginalSharpe) < 0.01) {
+            interpretation = "negligible";
+          } else if (marginalSharpe > 0) {
+            interpretation = "improves";
+          } else {
+            interpretation = "hurts";
+          }
+
+          contributions.push({
+            strategy,
+            trades: strategyTrades.length,
+            marginalSharpe,
+            marginalSortino,
+            interpretation,
+          });
+        }
+
+        // Sort by marginal Sharpe (most positive/beneficial first)
+        contributions.sort((a, b) => {
+          // Put null values last
+          if (a.marginalSharpe === null && b.marginalSharpe === null) return 0;
+          if (a.marginalSharpe === null) return 1;
+          if (b.marginalSharpe === null) return -1;
+          return b.marginalSharpe - a.marginalSharpe; // Descending (most beneficial first)
+        });
+
+        // Apply topN limit (only when not filtering by targetStrategy)
+        const limitedContributions = targetStrategy
+          ? contributions
+          : contributions.slice(0, topN);
+
+        // Find most and least beneficial
+        const validContributions = contributions.filter(
+          (c) => c.marginalSharpe !== null
+        );
+        const mostBeneficial =
+          validContributions.length > 0
+            ? {
+                strategy: validContributions[0].strategy,
+                sharpe: validContributions[0].marginalSharpe,
+              }
+            : null;
+        const leastBeneficial =
+          validContributions.length > 0
+            ? {
+                strategy: validContributions[validContributions.length - 1].strategy,
+                sharpe: validContributions[validContributions.length - 1].marginalSharpe,
+              }
+            : null;
+
+        // Build summary line
+        const summaryParts: string[] = [`Marginal Contribution: ${blockId}`];
+        if (mostBeneficial && mostBeneficial.sharpe !== null) {
+          const sharpeStr = mostBeneficial.sharpe >= 0
+            ? `+${formatRatio(mostBeneficial.sharpe)}`
+            : formatRatio(mostBeneficial.sharpe);
+          summaryParts.push(`Top: ${mostBeneficial.strategy} (Sharpe ${sharpeStr})`);
+        }
+        if (leastBeneficial && leastBeneficial.sharpe !== null && leastBeneficial.strategy !== mostBeneficial?.strategy) {
+          const sharpeStr = leastBeneficial.sharpe >= 0
+            ? `+${formatRatio(leastBeneficial.sharpe)}`
+            : formatRatio(leastBeneficial.sharpe);
+          summaryParts.push(`Worst: ${leastBeneficial.strategy} (Sharpe ${sharpeStr})`);
+        }
+        const summary = summaryParts.join(" | ");
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          filters: { targetStrategy: targetStrategy ?? null, topN },
+          baseline: {
+            totalStrategies: strategies.length,
+            totalTrades: trades.length,
+            sharpeRatio: baselineStats.sharpeRatio,
+            sortinoRatio: baselineStats.sortinoRatio,
+          },
+          contributions: limitedContributions,
+          summary: {
+            mostBeneficial,
+            leastBeneficial,
+          },
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating marginal contribution: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 10: strategy_similarity
+  const SIMILARITY_DEFAULTS = {
+    correlationThreshold: 0.7,
+    tailDependenceThreshold: 0.5,
+    method: "kendall" as const,
+    minSharedDays: 30,
+    topN: 5,
+  };
+
+  server.registerTool(
+    "strategy_similarity",
+    {
+      description:
+        "Detect potentially redundant strategies based on correlation, tail dependence, and trading day overlap. Flags strategy pairs that may be adding risk without diversification benefit.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        correlationThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(SIMILARITY_DEFAULTS.correlationThreshold)
+          .describe(`Minimum correlation to flag as similar (default: ${SIMILARITY_DEFAULTS.correlationThreshold})`),
+        tailDependenceThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(SIMILARITY_DEFAULTS.tailDependenceThreshold)
+          .describe(`Minimum tail dependence to flag as high joint risk (default: ${SIMILARITY_DEFAULTS.tailDependenceThreshold})`),
+        method: z
+          .enum(["kendall", "spearman", "pearson"])
+          .default(SIMILARITY_DEFAULTS.method)
+          .describe(`Correlation method (default: ${SIMILARITY_DEFAULTS.method})`),
+        minSharedDays: z
+          .number()
+          .int()
+          .min(1)
+          .default(SIMILARITY_DEFAULTS.minSharedDays)
+          .describe(`Minimum shared trading days for valid comparison (default: ${SIMILARITY_DEFAULTS.minSharedDays})`),
+        topN: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(SIMILARITY_DEFAULTS.topN)
+          .describe(`Number of most similar pairs to return (default: ${SIMILARITY_DEFAULTS.topN})`),
+      }),
+    },
+    async ({ blockId, correlationThreshold, tailDependenceThreshold, method, minSharedDays, topN }) => {
+      // Apply defaults for optional parameters (zod defaults may not apply through MCP CLI)
+      const corrThreshold = correlationThreshold ?? SIMILARITY_DEFAULTS.correlationThreshold;
+      const tailThreshold = tailDependenceThreshold ?? SIMILARITY_DEFAULTS.tailDependenceThreshold;
+      const corrMethod = method ?? SIMILARITY_DEFAULTS.method;
+      const minDays = minSharedDays ?? SIMILARITY_DEFAULTS.minSharedDays;
+      const limit = topN ?? SIMILARITY_DEFAULTS.topN;
+
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const trades = block.trades;
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found in block "${blockId}".`,
+              },
+            ],
+          };
+        }
+
+        // Get unique strategies
+        const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+        // Need at least 2 strategies for similarity analysis
+        if (strategies.length < 2) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Strategy similarity requires at least 2 strategies. Found ${strategies.length} strategy in block "${blockId}".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Calculate correlation matrix using existing utility
+        const correlationMatrix = calculateCorrelationMatrix(trades, {
+          method: corrMethod,
+          normalization: "raw",
+          dateBasis: "opened",
+          alignment: "shared",
+        });
+
+        // Calculate tail risk using existing utility
+        const tailRisk = performTailRiskAnalysis(trades, {
+          normalization: "raw",
+          dateBasis: "opened",
+          minTradingDays: minDays,
+        });
+
+        // Calculate overlap scores: count shared trading days / total unique days
+        // Group trades by strategy and date
+        const strategyDates: Record<string, Set<string>> = {};
+        for (const trade of trades) {
+          if (!trade.strategy || !trade.dateOpened) continue;
+          if (!strategyDates[trade.strategy]) {
+            strategyDates[trade.strategy] = new Set();
+          }
+          // Extract date key from dateOpened
+          const dateKey = trade.dateOpened.toISOString().split("T")[0];
+          strategyDates[trade.strategy].add(dateKey);
+        }
+
+        // Build similarity pairs
+        interface SimilarPair {
+          strategyA: string;
+          strategyB: string;
+          correlation: number | null;
+          tailDependence: number | null;
+          overlapScore: number;
+          compositeSimilarity: number | null;
+          sharedTradingDays: number;
+          flags: {
+            isHighCorrelation: boolean;
+            isHighTailDependence: boolean;
+            isRedundant: boolean;
+          };
+          recommendation: string | null;
+        }
+
+        const pairs: SimilarPair[] = [];
+        let redundantPairs = 0;
+        let highCorrelationPairs = 0;
+        let highTailDependencePairs = 0;
+
+        // Iterate over unique strategy pairs (i < j)
+        for (let i = 0; i < strategies.length; i++) {
+          for (let j = i + 1; j < strategies.length; j++) {
+            const strategyA = strategies[i];
+            const strategyB = strategies[j];
+
+            // Get correlation from matrix
+            const idxA = correlationMatrix.strategies.indexOf(strategyA);
+            const idxB = correlationMatrix.strategies.indexOf(strategyB);
+            const correlation =
+              idxA >= 0 && idxB >= 0 && correlationMatrix.correlationData[idxA]
+                ? correlationMatrix.correlationData[idxA][idxB]
+                : null;
+            const sharedDaysFromCorr =
+              idxA >= 0 && idxB >= 0 && correlationMatrix.sampleSizes[idxA]
+                ? correlationMatrix.sampleSizes[idxA][idxB]
+                : 0;
+
+            // Get tail dependence from jointTailRiskMatrix
+            const tailIdxA = tailRisk.strategies.indexOf(strategyA);
+            const tailIdxB = tailRisk.strategies.indexOf(strategyB);
+            let tailDependence: number | null = null;
+            if (
+              tailIdxA >= 0 &&
+              tailIdxB >= 0 &&
+              tailRisk.jointTailRiskMatrix[tailIdxA] &&
+              tailRisk.jointTailRiskMatrix[tailIdxB]
+            ) {
+              // Average both directions since matrix can be asymmetric
+              const valAB = tailRisk.jointTailRiskMatrix[tailIdxA][tailIdxB];
+              const valBA = tailRisk.jointTailRiskMatrix[tailIdxB][tailIdxA];
+              if (!Number.isNaN(valAB) && !Number.isNaN(valBA)) {
+                tailDependence = (valAB + valBA) / 2;
+              }
+            }
+
+            // Calculate overlap score
+            const datesA = strategyDates[strategyA] || new Set();
+            const datesB = strategyDates[strategyB] || new Set();
+            const allDates = new Set([...datesA, ...datesB]);
+            const sharedDates = [...datesA].filter((d) => datesB.has(d)).length;
+            const overlapScore = allDates.size > 0 ? sharedDates / allDates.size : 0;
+
+            // Use sharedDaysFromCorr or calculate from overlap
+            const sharedTradingDays = sharedDaysFromCorr > 0 ? sharedDaysFromCorr : sharedDates;
+
+            // Calculate composite similarity score (weighted average)
+            // 50% correlation (absolute value), 30% tail dependence, 20% overlap score
+            let compositeSimilarity: number | null = null;
+            if (correlation !== null && !Number.isNaN(correlation)) {
+              const corrComponent = Math.abs(correlation) * 0.5;
+              const tailComponent = (tailDependence !== null ? tailDependence : 0) * 0.3;
+              const overlapComponent = overlapScore * 0.2;
+              compositeSimilarity = corrComponent + tailComponent + overlapComponent;
+            }
+
+            // Determine flags
+            const isHighCorrelation =
+              correlation !== null && !Number.isNaN(correlation) && Math.abs(correlation) >= corrThreshold;
+            const isHighTailDependence =
+              tailDependence !== null && tailDependence >= tailThreshold;
+            const isRedundant = isHighCorrelation && isHighTailDependence;
+
+            // Only include pairs that meet minDays requirement
+            if (sharedTradingDays >= minDays) {
+              // Update counters (only for included pairs)
+              if (isHighCorrelation) highCorrelationPairs++;
+              if (isHighTailDependence) highTailDependencePairs++;
+              if (isRedundant) redundantPairs++;
+
+              // Generate recommendation
+              let recommendation: string | null = null;
+              if (isRedundant) {
+                recommendation = "Consider consolidating - these strategies move together and suffer losses together";
+              } else if (isHighCorrelation) {
+                recommendation = "Moderate redundancy - correlated returns reduce diversification benefit";
+              } else if (isHighTailDependence) {
+                recommendation = "Tail risk overlap - may amplify losses during market stress";
+              }
+              pairs.push({
+                strategyA,
+                strategyB,
+                correlation: correlation !== null && !Number.isNaN(correlation) ? correlation : null,
+                tailDependence,
+                overlapScore,
+                compositeSimilarity,
+                sharedTradingDays,
+                flags: {
+                  isHighCorrelation,
+                  isHighTailDependence,
+                  isRedundant,
+                },
+                recommendation,
+              });
+            }
+          }
+        }
+
+        // Sort by composite similarity (highest first), handling nulls
+        pairs.sort((a, b) => {
+          if (a.compositeSimilarity === null && b.compositeSimilarity === null) return 0;
+          if (a.compositeSimilarity === null) return 1;
+          if (b.compositeSimilarity === null) return -1;
+          return b.compositeSimilarity - a.compositeSimilarity;
+        });
+
+        // Apply limit
+        const topPairs = pairs.slice(0, limit);
+
+        // Build recommendations list
+        const recommendations: string[] = [];
+        for (const pair of topPairs) {
+          if (pair.flags.isRedundant) {
+            recommendations.push(
+              `Pair ${pair.strategyA}-${pair.strategyB} flagged as redundant: high correlation (${pair.correlation?.toFixed(2) ?? "N/A"}) + high tail dependence (${pair.tailDependence?.toFixed(2) ?? "N/A"})`
+            );
+            recommendations.push(
+              `Consider removing one of ${pair.strategyA} or ${pair.strategyB} to reduce concentrated risk`
+            );
+          }
+        }
+
+        // Build summary line
+        const mostSimilar = topPairs[0];
+        const summary = `Strategy Similarity: ${blockId} | ${strategies.length} strategies | ${redundantPairs} redundant pairs | Most similar: ${mostSimilar ? `${mostSimilar.strategyA}-${mostSimilar.strategyB} (${mostSimilar.compositeSimilarity?.toFixed(2) ?? "N/A"})` : "N/A"}`;
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          options: {
+            correlationThreshold: corrThreshold,
+            tailDependenceThreshold: tailThreshold,
+            method: corrMethod,
+            minSharedDays: minDays,
+            topN: limit,
+          },
+          strategySummary: {
+            totalStrategies: strategies.length,
+            totalPairs: (strategies.length * (strategies.length - 1)) / 2,
+            redundantPairs,
+            highCorrelationPairs,
+            highTailDependencePairs,
+          },
+          similarPairs: topPairs,
+          recommendations,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating strategy similarity: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 11: what_if_scaling
+  server.registerTool(
+    "what_if_scaling",
+    {
+      description:
+        "Explore strategy weight combinations within a portfolio. Answer 'what if I scaled strategy X to 0.5x?' questions. Shows before/after comparison with per-strategy breakdown.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategyWeights: z
+          .record(z.string(), z.number().min(0).max(2))
+          .optional()
+          .describe(
+            "Weight per strategy, e.g., {\"5/7 17Δ\": 0.5}. Unspecified strategies default to 1.0. Weight 0 = exclude strategy entirely. Max weight: 2.0"
+          ),
+        startDate: z
+          .string()
+          .optional()
+          .describe("Start date filter (YYYY-MM-DD)"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("End date filter (YYYY-MM-DD)"),
+      }),
+    },
+    async ({ blockId, strategyWeights, startDate, endDate }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Apply date range filter
+        trades = filterByDateRange(trades, startDate, endDate);
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found in block "${blockId}"${startDate || endDate ? " for the specified date range" : ""}.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Get all unique strategies
+        const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+        // Build applied weights (default 1.0 for unspecified)
+        const appliedWeights: Record<string, number> = {};
+        const unknownStrategies: string[] = [];
+
+        // Initialize all strategies to 1.0
+        for (const strategy of strategies) {
+          appliedWeights[strategy] = 1.0;
+        }
+
+        // Apply user-specified weights
+        if (strategyWeights) {
+          for (const [strategy, weight] of Object.entries(strategyWeights)) {
+            // Find matching strategy (case-insensitive)
+            const matchedStrategy = strategies.find(
+              (s) => s.toLowerCase() === strategy.toLowerCase()
+            );
+            if (matchedStrategy) {
+              appliedWeights[matchedStrategy] = weight;
+            } else {
+              unknownStrategies.push(strategy);
+            }
+          }
+        }
+
+        // Check if all strategies have weight 0 (empty scaled portfolio)
+        const allZeroWeight = Object.values(appliedWeights).every((w) => w === 0);
+        if (allZeroWeight) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error: All strategies have weight 0. This would result in an empty portfolio.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Calculate original (baseline) portfolio metrics using trade-based calculations
+        const baselineStats = calculator.calculatePortfolioStats(
+          trades,
+          undefined, // No daily logs per Phase 17 constraint
+          true // Force trade-based calculations
+        );
+
+        // Build scaled trades: scale P/L and commissions proportionally
+        type ScaledTrade = Trade & {
+          scaledPl: number;
+          scaledOpeningComm: number;
+          scaledClosingComm: number;
+          weight: number;
+        };
+
+        const scaledTrades: ScaledTrade[] = [];
+        for (const trade of trades) {
+          const weight = appliedWeights[trade.strategy];
+          if (weight === 0) {
+            // Exclude trade entirely
+            continue;
+          }
+
+          scaledTrades.push({
+            ...trade,
+            scaledPl: trade.pl * weight,
+            scaledOpeningComm: trade.openingCommissionsFees * weight,
+            scaledClosingComm: trade.closingCommissionsFees * weight,
+            weight,
+          } as ScaledTrade);
+        }
+
+        // Create modified trades for scaled portfolio calculation
+        // We need to modify pl, commissions, AND fundsAtClose for the calculator.
+        // fundsAtClose must be recalculated to reflect the scaled equity curve,
+        // otherwise drawdown calculations will use unscaled equity values.
+
+        // First, get original initial capital from trades
+        const sortedOriginal = [...trades]
+          .filter((t) => t.dateClosed && t.fundsAtClose !== undefined)
+          .sort((a, b) => {
+            const dateA = new Date(a.dateClosed!);
+            const dateB = new Date(b.dateClosed!);
+            const cmp = dateA.getTime() - dateB.getTime();
+            if (cmp !== 0) return cmp;
+            return (a.timeClosed || "").localeCompare(b.timeClosed || "");
+          });
+        const originalInitialCapital =
+          sortedOriginal.length > 0
+            ? PortfolioStatsCalculator.calculateInitialCapital(sortedOriginal)
+            : 1000000; // Fallback
+
+        // Sort scaled trades by close date to build equity curve
+        const sortedScaled = [...scaledTrades]
+          .filter((t) => t.dateClosed)
+          .sort((a, b) => {
+            const dateA = new Date(a.dateClosed!);
+            const dateB = new Date(b.dateClosed!);
+            const cmp = dateA.getTime() - dateB.getTime();
+            if (cmp !== 0) return cmp;
+            return (a.timeClosed || "").localeCompare(b.timeClosed || "");
+          });
+
+        // Build a map of trade index -> scaled fundsAtClose
+        // by accumulating scaled P&L from initial capital
+        let runningEquity = originalInitialCapital;
+        const scaledFundsAtCloseMap = new Map<number, number>();
+        for (const st of sortedScaled) {
+          runningEquity += st.scaledPl;
+          // Find the index of this trade in the original scaledTrades array
+          const idx = scaledTrades.indexOf(st);
+          scaledFundsAtCloseMap.set(idx, runningEquity);
+        }
+
+        const modifiedTrades: Trade[] = scaledTrades.map((st, idx) => ({
+          ...st,
+          pl: st.scaledPl,
+          openingCommissionsFees: st.scaledOpeningComm,
+          closingCommissionsFees: st.scaledClosingComm,
+          // Use the recalculated fundsAtClose based on scaled P&L
+          fundsAtClose: scaledFundsAtCloseMap.get(idx) ?? st.fundsAtClose,
+        }));
+
+        // Calculate scaled portfolio metrics
+        const scaledStats = calculator.calculatePortfolioStats(
+          modifiedTrades,
+          undefined,
+          true
+        );
+
+        // Calculate comparison deltas
+        const calcDelta = (
+          original: number | null,
+          scaled: number | null
+        ): { original: number | null; scaled: number | null; delta: number | null; deltaPct: number | null } => {
+          if (original === null || scaled === null) {
+            return { original, scaled, delta: null, deltaPct: null };
+          }
+          const delta = scaled - original;
+          const deltaPct = original !== 0 ? (delta / Math.abs(original)) * 100 : null;
+          return { original, scaled, delta, deltaPct };
+        };
+
+        const comparison = {
+          sharpeRatio: calcDelta(baselineStats.sharpeRatio, scaledStats.sharpeRatio),
+          sortinoRatio: calcDelta(baselineStats.sortinoRatio, scaledStats.sortinoRatio),
+          maxDrawdown: calcDelta(baselineStats.maxDrawdown, scaledStats.maxDrawdown),
+          netPl: calcDelta(baselineStats.netPl, scaledStats.netPl),
+          totalTrades: {
+            original: baselineStats.totalTrades,
+            scaled: scaledStats.totalTrades, // Scaled excludes weight=0 trades
+          },
+        };
+
+        // Calculate per-strategy breakdown
+        interface StrategyBreakdown {
+          strategy: string;
+          weight: number;
+          original: {
+            trades: number;
+            netPl: number;
+            plContributionPct: number;
+          };
+          scaled: {
+            trades: number;
+            netPl: number;
+            plContributionPct: number;
+          };
+          delta: {
+            netPl: number;
+            netPlPct: number;
+          };
+        }
+
+        const perStrategy: StrategyBreakdown[] = [];
+
+        // Calculate total P/L for contribution percentages
+        let totalOriginalPl = 0;
+        let totalScaledPl = 0;
+
+        // Group trades by strategy for original stats
+        const originalByStrategy: Record<string, { trades: number; netPl: number }> = {};
+        for (const trade of trades) {
+          if (!originalByStrategy[trade.strategy]) {
+            originalByStrategy[trade.strategy] = { trades: 0, netPl: 0 };
+          }
+          originalByStrategy[trade.strategy].trades++;
+          const netPl = trade.pl - trade.openingCommissionsFees - trade.closingCommissionsFees;
+          originalByStrategy[trade.strategy].netPl += netPl;
+          totalOriginalPl += netPl;
+        }
+
+        // Group scaled trades by strategy
+        const scaledByStrategy: Record<string, { trades: number; netPl: number }> = {};
+        for (const st of scaledTrades) {
+          if (!scaledByStrategy[st.strategy]) {
+            scaledByStrategy[st.strategy] = { trades: 0, netPl: 0 };
+          }
+          scaledByStrategy[st.strategy].trades++;
+          const netPl = st.scaledPl - st.scaledOpeningComm - st.scaledClosingComm;
+          scaledByStrategy[st.strategy].netPl += netPl;
+          totalScaledPl += netPl;
+        }
+
+        // Build per-strategy breakdown for ALL strategies
+        for (const strategy of strategies) {
+          const weight = appliedWeights[strategy];
+          const orig = originalByStrategy[strategy] ?? { trades: 0, netPl: 0 };
+          const scaled = scaledByStrategy[strategy] ?? { trades: 0, netPl: 0 };
+
+          const origContributionPct =
+            totalOriginalPl !== 0 ? (orig.netPl / Math.abs(totalOriginalPl)) * 100 : 0;
+          const scaledContributionPct =
+            totalScaledPl !== 0 ? (scaled.netPl / Math.abs(totalScaledPl)) * 100 : 0;
+
+          const deltaNetPl = scaled.netPl - orig.netPl;
+          const deltaNetPlPct = orig.netPl !== 0 ? (deltaNetPl / Math.abs(orig.netPl)) * 100 : 0;
+
+          perStrategy.push({
+            strategy,
+            weight,
+            original: {
+              trades: orig.trades,
+              netPl: orig.netPl,
+              plContributionPct: origContributionPct,
+            },
+            scaled: {
+              trades: weight === 0 ? 0 : scaled.trades, // 0 trades if excluded
+              netPl: scaled.netPl,
+              plContributionPct: scaledContributionPct,
+            },
+            delta: {
+              netPl: deltaNetPl,
+              netPlPct: deltaNetPlPct,
+            },
+          });
+        }
+
+        // Sort by original net P/L descending (highest contributors first)
+        perStrategy.sort((a, b) => b.original.netPl - a.original.netPl);
+
+        // Build summary line
+        const sharpeDelta = comparison.sharpeRatio.deltaPct;
+        const mddDelta = comparison.maxDrawdown.deltaPct;
+        const summary = `What-If Scaling: ${blockId} | Sharpe ${formatRatio(baselineStats.sharpeRatio)} → ${formatRatio(scaledStats.sharpeRatio)} (${sharpeDelta !== null ? (sharpeDelta >= 0 ? "+" : "") + sharpeDelta.toFixed(1) + "%" : "N/A"}) | MDD ${formatPercent(baselineStats.maxDrawdown)} → ${formatPercent(scaledStats.maxDrawdown)} (${mddDelta !== null ? (mddDelta >= 0 ? "+" : "") + mddDelta.toFixed(1) + "%" : "N/A"})`;
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          strategyWeights: appliedWeights,
+          dateRange: {
+            start: startDate ?? null,
+            end: endDate ?? null,
+          },
+          unknownStrategies: unknownStrategies.length > 0 ? unknownStrategies : undefined,
+          comparison,
+          perStrategy,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error calculating what-if scaling: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 12: get_trades
   server.registerTool(
     "get_trades",
     {
@@ -889,6 +2530,483 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             {
               type: "text",
               text: `Error loading trades: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 13: portfolio_health_check
+  const HEALTH_CHECK_DEFAULTS = {
+    correlationThreshold: 0.5,
+    tailDependenceThreshold: 0.5,
+    profitProbabilityThreshold: 0.95,
+    wfeThreshold: -0.15,
+    mddMultiplierThreshold: 3.0,
+  };
+
+  server.registerTool(
+    "portfolio_health_check",
+    {
+      description:
+        "Run comprehensive portfolio health assessment combining correlation, tail risk, Monte Carlo, and walk-forward analysis. Returns unified 4-layer report: verdict -> grades -> flags -> key numbers.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        correlationThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(HEALTH_CHECK_DEFAULTS.correlationThreshold)
+          .describe(`Flag correlation pairs above this (default: ${HEALTH_CHECK_DEFAULTS.correlationThreshold})`),
+        tailDependenceThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(HEALTH_CHECK_DEFAULTS.tailDependenceThreshold)
+          .describe(`Flag tail dependence pairs above this (default: ${HEALTH_CHECK_DEFAULTS.tailDependenceThreshold})`),
+        profitProbabilityThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(HEALTH_CHECK_DEFAULTS.profitProbabilityThreshold)
+          .describe(`Monte Carlo profit probability warning threshold (default: ${HEALTH_CHECK_DEFAULTS.profitProbabilityThreshold})`),
+        wfeThreshold: z
+          .number()
+          .default(HEALTH_CHECK_DEFAULTS.wfeThreshold)
+          .describe(`Walk-forward efficiency warning threshold (default: ${HEALTH_CHECK_DEFAULTS.wfeThreshold})`),
+        mddMultiplierThreshold: z
+          .number()
+          .min(1)
+          .default(HEALTH_CHECK_DEFAULTS.mddMultiplierThreshold)
+          .describe(`MC median MDD vs historical MDD multiplier warning threshold (default: ${HEALTH_CHECK_DEFAULTS.mddMultiplierThreshold})`),
+      }),
+    },
+    async ({
+      blockId,
+      correlationThreshold,
+      tailDependenceThreshold,
+      profitProbabilityThreshold,
+      wfeThreshold,
+      mddMultiplierThreshold,
+    }) => {
+      // Apply defaults for optional parameters
+      const corrThreshold = correlationThreshold ?? HEALTH_CHECK_DEFAULTS.correlationThreshold;
+      const tailThreshold = tailDependenceThreshold ?? HEALTH_CHECK_DEFAULTS.tailDependenceThreshold;
+      const profitThreshold = profitProbabilityThreshold ?? HEALTH_CHECK_DEFAULTS.profitProbabilityThreshold;
+      const wfeThresh = wfeThreshold ?? HEALTH_CHECK_DEFAULTS.wfeThreshold;
+      const mddMultThresh = mddMultiplierThreshold ?? HEALTH_CHECK_DEFAULTS.mddMultiplierThreshold;
+
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        const trades = block.trades;
+
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No trades found in block "${blockId}".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Get unique strategies
+        const strategies = Array.from(new Set(trades.map((t) => t.strategy))).sort();
+
+        // Require at least 2 strategies and 20 trades
+        if (strategies.length < 2) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Portfolio health check requires at least 2 strategies. Found ${strategies.length} strategy in block "${blockId}".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (trades.length < 20) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Portfolio health check requires at least 20 trades. Found ${trades.length} trades in block "${blockId}".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Calculate portfolio stats
+        const stats = calculator.calculatePortfolioStats(
+          trades,
+          undefined, // No daily logs per Phase 17 constraint
+          true // Force trade-based calculations
+        );
+
+        // Calculate correlation matrix (kendall, raw, opened)
+        const correlationMatrix = calculateCorrelationMatrix(trades, {
+          method: "kendall",
+          normalization: "raw",
+          dateBasis: "opened",
+          alignment: "shared",
+        });
+
+        // Calculate tail risk (0.1 threshold)
+        const tailRisk = performTailRiskAnalysis(trades, {
+          tailThreshold: 0.1,
+          normalization: "raw",
+          dateBasis: "opened",
+          minTradingDays: 10, // Lower requirement for health check
+        });
+
+        // Run Monte Carlo (1000 sims, trades method)
+        const sortedTrades = [...trades].sort(
+          (a, b) =>
+            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+        );
+        const firstTrade = sortedTrades[0];
+        const lastTrade = sortedTrades[sortedTrades.length - 1];
+        const inferredCapital = firstTrade.fundsAtClose - firstTrade.pl;
+        const initialCapital = inferredCapital > 0 ? inferredCapital : 100000;
+        const daySpan =
+          (new Date(lastTrade.dateOpened).getTime() -
+            new Date(firstTrade.dateOpened).getTime()) /
+          (24 * 60 * 60 * 1000);
+        const calculatedTradesPerYear =
+          daySpan > 0 ? (trades.length / daySpan) * 365 : 252;
+
+        const mcParams: MonteCarloParams = {
+          numSimulations: 1000,
+          simulationLength: trades.length,
+          resampleMethod: "trades",
+          initialCapital,
+          tradesPerYear: calculatedTradesPerYear,
+          worstCaseEnabled: true,
+          worstCasePercentage: 5,
+          worstCaseMode: "pool",
+          worstCaseBasedOn: "simulation",
+          worstCaseSizing: "relative",
+        };
+
+        const mcResult = runMonteCarloSimulation(trades, mcParams);
+        const mcStats = mcResult.statistics;
+
+        // Run WFA if possible (try 5 IS windows, 1 OOS)
+        let wfeResult: number | null = null;
+        let wfaSkipped = false;
+        try {
+          const totalDays = Math.ceil(
+            (new Date(lastTrade.dateOpened).getTime() -
+              new Date(firstTrade.dateOpened).getTime()) /
+              (24 * 60 * 60 * 1000)
+          );
+          const isWindowCount = 5;
+          const oosWindowCount = 1;
+          const totalWindows = isWindowCount + oosWindowCount;
+          const daysPerWindow = Math.floor(totalDays / totalWindows);
+          const inSampleDays = daysPerWindow * isWindowCount;
+          const outOfSampleDays = daysPerWindow * oosWindowCount;
+          const stepSizeDays = daysPerWindow;
+
+          // Only run if we have enough data
+          if (inSampleDays >= 7 && outOfSampleDays >= 1 && trades.length >= 20) {
+            const analyzer = new WalkForwardAnalyzer();
+            const computation = await analyzer.analyze({
+              trades,
+              config: {
+                inSampleDays,
+                outOfSampleDays,
+                stepSizeDays,
+                optimizationTarget: "sharpeRatio",
+                parameterRanges: {},
+                minInSampleTrades: 10,
+                minOutOfSampleTrades: 3,
+              },
+            });
+            wfeResult = computation.results.summary.degradationFactor;
+          } else {
+            wfaSkipped = true;
+          }
+        } catch {
+          wfaSkipped = true;
+        }
+
+        // Calculate average correlation and tail dependence
+        let totalCorrelation = 0;
+        let correlationCount = 0;
+        for (let i = 0; i < correlationMatrix.strategies.length; i++) {
+          for (let j = i + 1; j < correlationMatrix.strategies.length; j++) {
+            const val = correlationMatrix.correlationData[i][j];
+            if (!Number.isNaN(val) && val !== null) {
+              totalCorrelation += Math.abs(val);
+              correlationCount++;
+            }
+          }
+        }
+        const avgCorrelation = correlationCount > 0 ? totalCorrelation / correlationCount : 0;
+
+        let totalTailDependence = 0;
+        let tailCount = 0;
+        for (let i = 0; i < tailRisk.strategies.length; i++) {
+          for (let j = i + 1; j < tailRisk.strategies.length; j++) {
+            const valAB = tailRisk.jointTailRiskMatrix[i]?.[j];
+            const valBA = tailRisk.jointTailRiskMatrix[j]?.[i];
+            if (
+              valAB !== undefined &&
+              valBA !== undefined &&
+              !Number.isNaN(valAB) &&
+              !Number.isNaN(valBA)
+            ) {
+              totalTailDependence += (valAB + valBA) / 2;
+              tailCount++;
+            }
+          }
+        }
+        const avgTailDependence = tailCount > 0 ? totalTailDependence / tailCount : 0;
+
+        // Build flags array
+        type Flag = {
+          type: "warning" | "pass";
+          dimension: "diversification" | "tailRisk" | "robustness" | "consistency";
+          message: string;
+        };
+        const flags: Flag[] = [];
+
+        // High correlation pairs
+        const highCorrPairs: string[] = [];
+        for (let i = 0; i < correlationMatrix.strategies.length; i++) {
+          for (let j = i + 1; j < correlationMatrix.strategies.length; j++) {
+            const val = correlationMatrix.correlationData[i][j];
+            if (!Number.isNaN(val) && Math.abs(val) > corrThreshold) {
+              highCorrPairs.push(
+                `${correlationMatrix.strategies[i]} & ${correlationMatrix.strategies[j]} (${val.toFixed(2)})`
+              );
+            }
+          }
+        }
+        if (highCorrPairs.length > 0) {
+          flags.push({
+            type: "warning",
+            dimension: "diversification",
+            message: `High correlation pairs (>${corrThreshold}): ${highCorrPairs.join(", ")}`,
+          });
+        } else {
+          flags.push({
+            type: "pass",
+            dimension: "diversification",
+            message: `No correlation pairs above ${corrThreshold} threshold`,
+          });
+        }
+
+        // High tail dependence pairs
+        const highTailPairs: string[] = [];
+        for (let i = 0; i < tailRisk.strategies.length; i++) {
+          for (let j = i + 1; j < tailRisk.strategies.length; j++) {
+            const valAB = tailRisk.jointTailRiskMatrix[i]?.[j];
+            const valBA = tailRisk.jointTailRiskMatrix[j]?.[i];
+            if (
+              valAB !== undefined &&
+              valBA !== undefined &&
+              !Number.isNaN(valAB) &&
+              !Number.isNaN(valBA)
+            ) {
+              const avgTail = (valAB + valBA) / 2;
+              if (avgTail > tailThreshold) {
+                highTailPairs.push(
+                  `${tailRisk.strategies[i]} & ${tailRisk.strategies[j]} (${avgTail.toFixed(2)})`
+                );
+              }
+            }
+          }
+        }
+        if (highTailPairs.length > 0) {
+          flags.push({
+            type: "warning",
+            dimension: "tailRisk",
+            message: `High tail dependence pairs (>${tailThreshold}): ${highTailPairs.join(", ")}`,
+          });
+        } else {
+          flags.push({
+            type: "pass",
+            dimension: "tailRisk",
+            message: `No tail dependence pairs above ${tailThreshold} threshold`,
+          });
+        }
+
+        // MC profit probability below threshold
+        if (mcStats.probabilityOfProfit < profitThreshold) {
+          flags.push({
+            type: "warning",
+            dimension: "consistency",
+            message: `Monte Carlo profit probability (${formatPercent(mcStats.probabilityOfProfit * 100)}) below ${formatPercent(profitThreshold * 100)} threshold`,
+          });
+        } else {
+          flags.push({
+            type: "pass",
+            dimension: "consistency",
+            message: `Monte Carlo profit probability (${formatPercent(mcStats.probabilityOfProfit * 100)}) meets ${formatPercent(profitThreshold * 100)} threshold`,
+          });
+        }
+
+        // MC median MDD vs historical MDD multiplier
+        // mcStats.medianMaxDrawdown is a decimal (0.12 = 12%)
+        // stats.maxDrawdown is a percentage (12 = 12%)
+        // Convert stats.maxDrawdown to decimal for comparison
+        const historicalMddDecimal = stats.maxDrawdown / 100;
+        const mcMddMultiplier =
+          historicalMddDecimal > 0
+            ? mcStats.medianMaxDrawdown / historicalMddDecimal
+            : null;
+        if (mcMddMultiplier !== null && mcMddMultiplier > mddMultThresh) {
+          flags.push({
+            type: "warning",
+            dimension: "consistency",
+            message: `Monte Carlo median MDD (${formatPercent(mcStats.medianMaxDrawdown * 100)}) is ${mcMddMultiplier.toFixed(1)}x historical MDD (${formatPercent(stats.maxDrawdown)}) - exceeds ${mddMultThresh}x threshold`,
+          });
+        } else if (mcMddMultiplier !== null) {
+          flags.push({
+            type: "pass",
+            dimension: "consistency",
+            message: `Monte Carlo median MDD (${formatPercent(mcStats.medianMaxDrawdown * 100)}) is ${mcMddMultiplier.toFixed(1)}x historical MDD - within ${mddMultThresh}x threshold`,
+          });
+        }
+
+        // WFE below threshold (only if WFA ran)
+        if (!wfaSkipped && wfeResult !== null) {
+          if (wfeResult < wfeThresh) {
+            flags.push({
+              type: "warning",
+              dimension: "robustness",
+              message: `Walk-forward efficiency (${formatPercent(wfeResult * 100)}) below ${formatPercent(wfeThresh * 100)} threshold`,
+            });
+          } else {
+            flags.push({
+              type: "pass",
+              dimension: "robustness",
+              message: `Walk-forward efficiency (${formatPercent(wfeResult * 100)}) meets ${formatPercent(wfeThresh * 100)} threshold`,
+            });
+          }
+        }
+
+        // Build grades
+        type Grade = "A" | "B" | "C" | "F";
+
+        // Diversification grade based on avg correlation (A: <0.2, B: <0.4, C: <0.6, F: >=0.6)
+        let diversificationGrade: Grade;
+        if (avgCorrelation < 0.2) diversificationGrade = "A";
+        else if (avgCorrelation < 0.4) diversificationGrade = "B";
+        else if (avgCorrelation < 0.6) diversificationGrade = "C";
+        else diversificationGrade = "F";
+
+        // Tail risk grade based on avg joint tail risk (A: <0.3, B: <0.5, C: <0.7, F: >=0.7)
+        let tailRiskGrade: Grade;
+        if (avgTailDependence < 0.3) tailRiskGrade = "A";
+        else if (avgTailDependence < 0.5) tailRiskGrade = "B";
+        else if (avgTailDependence < 0.7) tailRiskGrade = "C";
+        else tailRiskGrade = "F";
+
+        // Robustness grade based on WFE (A: >0, B: >-0.1, C: >-0.2, F: <=-0.2), null if WFA skipped
+        let robustnessGrade: Grade | null;
+        if (wfaSkipped || wfeResult === null) {
+          robustnessGrade = null;
+        } else if (wfeResult > 0) {
+          robustnessGrade = "A";
+        } else if (wfeResult > -0.1) {
+          robustnessGrade = "B";
+        } else if (wfeResult > -0.2) {
+          robustnessGrade = "C";
+        } else {
+          robustnessGrade = "F";
+        }
+
+        // Consistency grade based on MC profit probability (A: >=0.98, B: >=0.90, C: >=0.70, F: <0.70)
+        let consistencyGrade: Grade;
+        if (mcStats.probabilityOfProfit >= 0.98) consistencyGrade = "A";
+        else if (mcStats.probabilityOfProfit >= 0.9) consistencyGrade = "B";
+        else if (mcStats.probabilityOfProfit >= 0.7) consistencyGrade = "C";
+        else consistencyGrade = "F";
+
+        // Build verdict
+        const warningFlags = flags.filter((f) => f.type === "warning");
+        const flagCount = warningFlags.length;
+        let verdict: "HEALTHY" | "MODERATE_CONCERNS" | "ISSUES_DETECTED";
+        let oneLineSummary: string;
+
+        if (flagCount === 0) {
+          verdict = "HEALTHY";
+          oneLineSummary =
+            "Portfolio shows strong diversification, controlled tail risk, and consistent Monte Carlo outcomes.";
+        } else if (flagCount <= 2) {
+          verdict = "MODERATE_CONCERNS";
+          const concernDimensions = [...new Set(warningFlags.map((f) => f.dimension))];
+          oneLineSummary = `Portfolio has ${flagCount} warning(s) in ${concernDimensions.join(", ")} - review flagged items.`;
+        } else {
+          verdict = "ISSUES_DETECTED";
+          const concernDimensions = [...new Set(warningFlags.map((f) => f.dimension))];
+          oneLineSummary = `Portfolio has ${flagCount} warnings across ${concernDimensions.join(", ")} - significant review recommended.`;
+        }
+
+        // Build key numbers
+        // Note: stats.maxDrawdown is already in percentage form (e.g., 5.66 = 5.66%)
+        const keyNumbers = {
+          strategies: strategies.length,
+          trades: trades.length,
+          sharpe: stats.sharpeRatio,
+          sortino: stats.sortinoRatio,
+          maxDrawdownPct: stats.maxDrawdown, // Already a percentage
+          netPl: stats.netPl,
+          avgCorrelation,
+          avgTailDependence,
+          mcProbabilityOfProfit: mcStats.probabilityOfProfit,
+          mcMedianMdd: mcStats.medianMaxDrawdown,
+          mcMddMultiplier,
+          wfe: wfeResult,
+        };
+
+        // Build grades object
+        const grades = {
+          diversification: diversificationGrade,
+          tailRisk: tailRiskGrade,
+          robustness: robustnessGrade,
+          consistency: consistencyGrade,
+        };
+
+        // Brief summary for user display
+        const summary = `Health Check: ${blockId} | ${verdict} | ${flagCount} flags | Sharpe: ${formatRatio(stats.sharpeRatio)}`;
+
+        // Build structured data
+        const structuredData = {
+          blockId,
+          thresholds: {
+            correlationThreshold: corrThreshold,
+            tailDependenceThreshold: tailThreshold,
+            profitProbabilityThreshold: profitThreshold,
+            wfeThreshold: wfeThresh,
+            mddMultiplierThreshold: mddMultThresh,
+          },
+          verdict: {
+            status: verdict,
+            oneLineSummary,
+            flagCount,
+          },
+          grades,
+          flags,
+          keyNumbers,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error running portfolio health check: ${(error as Error).message}`,
             },
           ],
           isError: true,

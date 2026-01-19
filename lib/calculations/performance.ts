@@ -8,6 +8,7 @@
 import { Trade } from '../models/trade'
 import { DailyLogEntry } from '../models/daily-log'
 import { PerformanceMetrics, TimePeriod } from '../models/portfolio-stats'
+import { getRiskFreeRateByKey } from '../utils/risk-free-rate'
 
 /**
  * Performance calculator for chart data and visualizations
@@ -208,12 +209,11 @@ export class PerformanceCalculator {
   }
 
   /**
-   * Calculate rolling Sharpe ratio
+   * Calculate rolling Sharpe ratio using date-based Treasury rates
    */
   static calculateRollingSharpe(
     trades: Trade[],
-    windowDays: number = 30,
-    riskFreeRate: number = 0.02
+    windowDays: number = 30
   ): Array<{ date: string; sharpe: number }> {
     if (trades.length === 0) return []
 
@@ -223,17 +223,26 @@ export class PerformanceCalculator {
     if (sortedDates.length < windowDays) return []
 
     const result: Array<{ date: string; sharpe: number }> = []
-    const dailyRiskFreeRate = riskFreeRate / 252 // Assume 252 trading days
 
     for (let i = windowDays - 1; i < sortedDates.length; i++) {
       const windowDates = sortedDates.slice(i - windowDays + 1, i + 1)
       const windowReturns = windowDates.map(date => dailyPl[date])
 
-      const avgReturn = windowReturns.reduce((sum, ret) => sum + ret, 0) / windowReturns.length
-      const variance = windowReturns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / (windowReturns.length - 1)
-      const stdDev = Math.sqrt(variance)
+      // Calculate average excess returns using date-based Treasury rates
+      // Use getRiskFreeRateByKey to avoid UTC parsing issues with YYYY-MM-DD strings
+      const excessReturns = windowDates.map((date, idx) => {
+        const annualRate = getRiskFreeRateByKey(date) // Returns annual % (e.g., 4.32)
+        const dailyRiskFreeRate = annualRate / 100 / 252
+        return windowReturns[idx] - dailyRiskFreeRate
+      })
 
-      const sharpe = stdDev > 0 ? ((avgReturn - dailyRiskFreeRate) / stdDev) * Math.sqrt(252) : 0
+      const avgExcessReturn = excessReturns.reduce((sum, ret) => sum + ret, 0) / excessReturns.length
+      // Use std of excess returns (not raw returns) for consistency with date-varying rates
+      const avgExcess = avgExcessReturn
+      const excessVariance = excessReturns.reduce((sum, ret) => sum + Math.pow(ret - avgExcess, 2), 0) / (excessReturns.length - 1)
+      const stdDev = Math.sqrt(excessVariance)
+
+      const sharpe = stdDev > 0 ? (avgExcessReturn / stdDev) * Math.sqrt(252) : 0
 
       result.push({
         date: sortedDates[i],

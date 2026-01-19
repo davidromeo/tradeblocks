@@ -1028,7 +1028,6 @@ export function BlockDialog({
               : undefined,
           },
           analysisConfig: {
-            riskFreeRate: 0.05,
             useBusinessDaysOnly: false,
             annualizationFactor: 252,
             confidenceLevel: 0.95,
@@ -1101,7 +1100,6 @@ export function BlockDialog({
             const snapshot = await buildPerformanceSnapshot({
               trades: tradesToUse,
               dailyLogs: processedPreview.dailyLogs?.entries,
-              riskFreeRate: 2.0,
               normalizeTo1Lot: false,
               onProgress: (p: SnapshotProgress) => {
                 const basePercent = combineLegGroups ? 30 : 0;
@@ -1362,7 +1360,6 @@ export function BlockDialog({
                 const snapshot = await buildPerformanceSnapshot({
                   trades: combinedTrades,
                   dailyLogs: existingDailyLogs,
-                  riskFreeRate: 2.0,
                   normalizeTo1Lot: false,
                   onProgress: (p: SnapshotProgress) => {
                     // Scale snapshot progress to 30-95%
@@ -1416,7 +1413,6 @@ export function BlockDialog({
                 const snapshot = await buildPerformanceSnapshot({
                   trades: existingTrades,
                   dailyLogs: existingDailyLogs,
-                  riskFreeRate: 2.0,
                   normalizeTo1Lot: false,
                   onProgress: (p: SnapshotProgress) => {
                     // Scale to 0-95%
@@ -1645,7 +1641,6 @@ export function BlockDialog({
                 const snapshot = await buildPerformanceSnapshot({
                   trades,
                   dailyLogs,
-                  riskFreeRate: 2.0,
                   normalizeTo1Lot: false,
                   onProgress: (p: SnapshotProgress) => {
                     // Scale to 0-95%
