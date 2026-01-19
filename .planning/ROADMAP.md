@@ -110,17 +110,17 @@ Plans:
 
 Plans:
 - [x] 30-01: MCP server imports (6 files + config cleanup)
-- [ ] 30-02: Next.js app imports (127 files in app/ + components/)
+- [x] 30-02: Next.js app imports (127 files in app/ + components/)
 
-#### Phase 31: cleanup-verification
+#### Phase 31: cleanup-verification — Complete
 
 **Goal**: Remove old path alias configs, verify type checking/build/tests pass
 **Depends on**: Phase 30
 **Research**: Unlikely (internal cleanup)
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 31-01: TBD
+- [x] 31-01: Migrate remaining imports, remove @/lib/* alias, verify builds
 
 ## Progress
 
@@ -130,7 +130,7 @@ Plans:
 | v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
-| v2.3 Workspace Packages | 29-31 | 2/? | In progress | - |
+| v2.3 Workspace Packages | 29-31 | 4/4 | Complete | - |
 
 ## Audit Notes
 
