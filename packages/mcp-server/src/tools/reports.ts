@@ -1478,6 +1478,9 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
           thresholdsToTest.sort((a, b) => a - b);
         }
 
+        // Minimum sample size for reliable statistics
+        const MIN_SAMPLE_SIZE = 30;
+
         // Helper to calculate metrics for a filtered set of trades
         function calculateMetrics(filteredTrades: EnrichedTrade[]): {
           count: number;
@@ -1487,6 +1490,7 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
           totalPl: number;
           winRateDelta: number;
           avgPlDelta: number;
+          lowSampleWarning?: string;
         } {
           if (filteredTrades.length === 0) {
             return {
@@ -1508,7 +1512,7 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
           const percentOfTrades =
             (filteredTrades.length / tradesWithField.length) * 100;
 
-          return {
+          const result: ReturnType<typeof calculateMetrics> = {
             count: filteredTrades.length,
             percentOfTrades: Math.round(percentOfTrades * 100) / 100,
             winRate: Math.round(winRate * 10000) / 10000,
@@ -1518,6 +1522,13 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
               Math.round((winRate - baseline.winRate) * 10000) / 10000,
             avgPlDelta: Math.round((avgPl - baseline.avgPl) * 100) / 100,
           };
+
+          // Add warning for small sample sizes
+          if (filteredTrades.length < MIN_SAMPLE_SIZE && filteredTrades.length > 0) {
+            result.lowSampleWarning = `${filteredTrades.length} trades may be insufficient for reliable statistics (recommend >= ${MIN_SAMPLE_SIZE})`;
+          }
+
+          return result;
         }
 
         // Analyze each threshold
