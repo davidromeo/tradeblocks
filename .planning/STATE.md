@@ -5,20 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Backtest optimization tools for MCP server
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v2.4 Backtest Optimization Tools
-Phase: 34 of 34 (report-tools-fixes)
-Plan: 01 complete
-Status: Milestone complete
-Last activity: 2026-01-19 — Completed 34-01-PLAN.md
+Milestone: None active (v2.4 shipped)
+Phase: Ready to plan
+Plan: N/A
+Status: Between milestones
+Last activity: 2026-01-19 — Completed v2.4 Backtest Optimization Tools
 
-Progress: ██████████ 100% (3/3 phases)
+Progress: All milestones complete through v2.4
 
 ## Historical Context
 
+See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for backtest optimization tools.
 See [v2.3 archive](milestones/v2.3-workspace-packages.md) for workspace package migration details.
 See [v2.2 archive](milestones/v2.2-historical-risk-free-rates.md) for risk-free rate implementation details.
 See [v2.1 archive](milestones/v2.1-portfolio-comparison.md) for portfolio comparison tools.
@@ -32,9 +33,9 @@ All decisions now captured in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-01-19
-Stopped at: Completed 34-01-PLAN.md
+Stopped at: v2.4 milestone complete
 Resume file: None
-Next: Complete milestone v2.4 (archive, tag, update docs)
+Next: `/gsd:discuss-milestone` to plan next milestone
 
 ## Testing Infrastructure
 

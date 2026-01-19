@@ -1,5 +1,57 @@
 # Project Milestones: TradeBlocks
 
+## v2.4 Backtest Optimization Tools (Shipped: 2026-01-19)
+
+**Delivered:** MCP tools for data-driven filter optimization: find_predictive_fields for correlation analysis and filter_curve for threshold sweeping with sweet spot detection.
+
+**Phases completed:** 32-34 (3 plans total)
+
+**Key accomplishments:**
+
+- `find_predictive_fields` MCP tool ranking all numeric fields by Pearson correlation with P/L
+- `filter_curve` MCP tool with bidirectional threshold sweeping (lt/gt/both modes) and auto-generated percentile thresholds
+- Sweet spot detection with combined improvement scoring (winRateDelta * avgPlDelta)
+- Fixed CLI --call mode to apply Zod schema parsing, eliminating runtime default workarounds
+
+**Stats:**
+
+- 10 files modified
+- +1,565 / -21 lines of TypeScript
+- 3 phases, 3 plans
+- 1 day (2026-01-19)
+
+**Git range:** `1868a0f` → `4047d50`
+
+**What's next:** Planning next milestone
+
+---
+
+## v2.3 Workspace Packages (Shipped: 2026-01-19)
+
+**Delivered:** Converted lib/ to @tradeblocks/lib workspace package for clean imports across the monorepo.
+
+**Phases completed:** 29-31 (4 plans total)
+
+**Key accomplishments:**
+
+- @tradeblocks/lib workspace package with barrel exports (81 files)
+- MCP server imports from workspace package (bundler moduleResolution)
+- Next.js app imports migrated (127+ files)
+- Test imports migrated with Jest moduleNameMapper (62 files)
+- Removed legacy @/lib/* path alias
+
+**Stats:**
+
+- 189+ files modified
+- 3 phases, 4 plans
+- ~7 hours execution time
+
+**Git range:** See [v2.3 archive](milestones/v2.3-workspace-packages.md)
+
+**What's next:** v2.4 Backtest Optimization Tools ✓
+
+---
+
 ## v2.2 Historical Risk-Free Rates (Shipped: 2026-01-18)
 
 **Delivered:** Historical Treasury rates (2013-2026) embedded for accurate Sharpe/Sortino calculations that reflect actual market conditions, replacing fixed 2% assumption.

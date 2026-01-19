@@ -50,6 +50,12 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ Test imports migrated with Jest moduleNameMapper (62 files) — v2.3
 - ✓ Removed legacy @/lib/* path alias — v2.3
 
+**v2.4 Backtest Optimization Tools:**
+- ✓ find_predictive_fields tool for Pearson correlation analysis of all numeric fields vs P/L — v2.4
+- ✓ filter_curve tool with bidirectional threshold sweeping (lt/gt/both modes) — v2.4
+- ✓ Sweet spot detection with combined improvement scoring (winRateDelta * avgPlDelta) — v2.4
+- ✓ CLI --call mode fixed to apply Zod schema parsing for proper defaults — v2.4
+
 ### Active
 
 (None — planning next milestone)
@@ -62,14 +68,15 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.3):**
+**Current state (v2.4):**
 - Next.js 15 web application with client-side computation
-- MCP server (`tradeblocks-mcp`) with 26 tools at packages/mcp-server/
+- MCP server (`tradeblocks-mcp`) with 28 tools at packages/mcp-server/
 - 6 agent skills at packages/agent-skills/
 - Shared library at packages/lib/ (81 files, barrel exports)
-- ~16,600 LOC in packages/, ~12,500 LOC in WFA-related files
+- ~18,200 LOC in packages/, ~12,500 LOC in WFA-related files
 - 1024 tests (65 test suites)
 - Embedded historical Treasury rates (2013-2026) for accurate risk metrics
+- Backtest optimization tools for data-driven filter development
 
 **Architecture:**
 - Monorepo with npm workspaces
@@ -105,6 +112,9 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Direct TS source consumption for workspace packages | No build step needed, all consumers handle compilation | ✓ Good |
 | Bundler moduleResolution for MCP server | Enables workspace package resolution without .js extensions | ✓ Good |
 | Stores excluded from main lib export | Avoids browser/Node dependency conflicts | ✓ Good |
+| Pearson correlation for field predictiveness | Simple, interpretable, identifies linear relationships | ✓ Good |
+| Sweet spot criteria (winRateDelta > 0, avgPlDelta > 0, ≥20% trades) | Ensures actionable filters that improve both metrics | ✓ Good |
+| Fix CLI handler instead of per-tool workarounds | Single fix ensures all tools work correctly | ✓ Good |
 
 ---
-*Last updated: 2026-01-19 after v2.3 milestone*
+*Last updated: 2026-01-19 after v2.4 milestone*
