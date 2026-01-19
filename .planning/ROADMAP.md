@@ -96,10 +96,10 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 **Goal**: Create `@tradeblocks/lib` package with workspace config
 **Depends on**: Previous milestone complete
 **Research**: Unlikely (npm workspaces are well-documented)
-**Plans**: TBD
+**Plans**: 1
 
 Plans:
-- [ ] 29-01: TBD (run /gsd:plan-phase 29 to break down)
+- [ ] 29-01: Create package structure, move lib/, verify workspace resolution
 
 #### Phase 30: import-migration
 
