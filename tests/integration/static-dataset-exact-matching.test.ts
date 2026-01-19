@@ -1,17 +1,15 @@
 /**
  * Integration test for the exact matching issue from GitHub issue
- * 
+ *
  * This test reproduces the exact scenario from the bug report:
  * - Trade with date "2025-12-16" and time "15:19:00"
  * - Static dataset with timestamp "2025-12-16 15:19:00"
  * - Match strategy "Exact"
- * 
+ *
  * Expected: Should match
  */
 
-import { processStaticDatasetContent } from '@/lib/processing/static-dataset-processor'
-import { matchTradeToDataset, calculateMatchStats } from '@/lib/calculations/static-dataset-matcher'
-import type { Trade } from '@/lib/models/trade'
+import { processStaticDatasetContent, matchTradeToDataset, calculateMatchStats, Trade } from '@tradeblocks/lib'
 
 describe('Static dataset exact matching - GitHub issue reproduction', () => {
   it('matches trade to dataset with exact timestamp from bug report', async () => {

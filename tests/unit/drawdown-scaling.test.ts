@@ -1,6 +1,4 @@
-import { runMonteCarloSimulation, type MonteCarloParams } from "@/lib/calculations/monte-carlo";
-import { Trade } from "@/lib/models/trade";
-import { timeToTrades } from "@/lib/utils/time-conversions";
+import { runMonteCarloSimulation, MonteCarloParams, Trade, timeToTrades } from "@tradeblocks/lib";
 
 // Create realistic mock trades with wins AND losses
 function createRealisticTrades(count: number, winRate: number = 0.65): Trade[] {

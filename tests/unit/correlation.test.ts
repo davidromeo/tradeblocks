@@ -1,5 +1,4 @@
-import { calculateCorrelationAnalytics, calculateCorrelationMatrix } from '@/lib/calculations/correlation';
-import { Trade } from '@/lib/models/trade';
+import { calculateCorrelationAnalytics, calculateCorrelationMatrix, Trade } from '@tradeblocks/lib';
 
 /**
  * Create a date at local midnight for a given YYYY-MM-DD string.

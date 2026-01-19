@@ -2,16 +2,17 @@
  * Tests for Performance Snapshot Cache
  */
 import "fake-indexeddb/auto";
-import { Trade } from "@/lib/models/trade";
-import { DailyLogEntry } from "@/lib/models/daily-log";
 import {
+  Trade,
+  DailyLogEntry,
   storePerformanceSnapshotCache,
   getPerformanceSnapshotCache,
   deletePerformanceSnapshotCache,
   hasPerformanceSnapshotCache,
-} from "@/lib/db/performance-snapshot-cache";
-import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
-import { initializeDatabase, closeDatabase } from "@/lib/db";
+  buildPerformanceSnapshot,
+  initializeDatabase,
+  closeDatabase,
+} from "@tradeblocks/lib";
 
 // Helper to create mock trades
 function createMockTrade(overrides: Partial<Trade> = {}): Trade {

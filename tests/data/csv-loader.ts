@@ -1,18 +1,16 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { Trade } from '@/lib/models/trade';
-import { DailyLogEntry } from '@/lib/models/daily-log';
-import { DataLoader } from '@/lib/processing/data-loader';
 import {
+  Trade,
+  DailyLogEntry,
+  DataLoader,
   ReportingTrade,
   REQUIRED_REPORTING_TRADE_COLUMNS,
   REPORTING_TRADE_COLUMN_ALIASES,
-} from '@/lib/models/reporting-trade';
-import {
   assertRequiredHeaders,
   normalizeHeaders,
   parseCsvLine,
-} from '@/lib/utils/csv-headers';
+} from '@tradeblocks/lib';
 
 /**
  * CSV Test Data Loader

@@ -9,19 +9,17 @@ import {
   calculateTradeFrequency,
   calculateAutoConfig,
   TradeFrequencyInfo,
-} from '@/lib/stores/walk-forward-store'
-import type {
   WalkForwardExtendedParameterRanges,
   StrategyWeightSweepConfig,
-} from '@/lib/models/walk-forward'
+  PortfolioStats,
+  WalkForwardAnalysis,
+  WalkForwardAnalyzer,
+} from '@tradeblocks/lib/stores'
 import { mockTrades } from '../data/mock-trades'
 import { mockDailyLogs } from '../data/mock-daily-logs'
-import { PortfolioStats } from '@/lib/models/portfolio-stats'
-import type { WalkForwardAnalysis } from '@/lib/models/walk-forward'
-import * as db from '@/lib/db'
-import { WalkForwardAnalyzer } from '@/lib/calculations/walk-forward-analyzer'
+import * as db from '@tradeblocks/lib'
 
-jest.mock('@/lib/db', () => ({
+jest.mock('@tradeblocks/lib', () => ({
   getTradesByBlock: jest.fn(),
   getDailyLogsByBlock: jest.fn(),
   saveWalkForwardAnalysis: jest.fn(),

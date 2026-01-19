@@ -4,7 +4,7 @@ import {
   getLatestRateDate,
   getRateDataRange,
   formatDateToKey,
-} from "@/lib/utils/risk-free-rate";
+} from "@tradeblocks/lib";
 
 describe("Risk-Free Rate Lookup Utility", () => {
   describe("getRiskFreeRate", () => {

@@ -5,7 +5,7 @@ import {
   getRanks,
   probabilityIntegralTransform,
   pearsonCorrelation,
-} from "@/lib/calculations/statistical-utils";
+} from "@tradeblocks/lib";
 
 describe("Statistical Utilities", () => {
   describe("normalCDF", () => {

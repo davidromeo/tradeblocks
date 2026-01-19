@@ -2,34 +2,23 @@
  * Tests for Static Datasets Store - caching and state management
  */
 
-import { useStaticDatasetsStore, makeMatchStatsCacheKey } from '@/lib/stores/static-datasets-store'
-import type { StaticDataset, DatasetMatchStats } from '@/lib/models/static-dataset'
-import type { Trade } from '@/lib/models/trade'
+import { useStaticDatasetsStore, makeMatchStatsCacheKey, StaticDataset, DatasetMatchStats, Trade } from '@tradeblocks/lib/stores'
 
 // Mock the database modules
-jest.mock('@/lib/db/static-datasets-store', () => ({
+jest.mock('@tradeblocks/lib', () => ({
   getAllStaticDatasets: jest.fn().mockResolvedValue([]),
   createStaticDataset: jest.fn().mockResolvedValue(undefined),
   updateStaticDatasetMatchStrategy: jest.fn().mockResolvedValue(undefined),
   updateStaticDatasetName: jest.fn().mockResolvedValue(undefined),
   isDatasetNameTaken: jest.fn().mockResolvedValue(false),
-}))
-
-jest.mock('@/lib/db/static-dataset-rows-store', () => ({
   addStaticDatasetRows: jest.fn().mockResolvedValue(undefined),
   getStaticDatasetRows: jest.fn().mockResolvedValue([]),
   deleteStaticDatasetWithRows: jest.fn().mockResolvedValue(undefined),
 }))
 
-jest.mock('@/lib/calculations/static-dataset-matcher', () => ({
-  calculateMatchStats: jest.fn().mockReturnValue({
-    totalTrades: 10,
-    matchedTrades: 8,
-    unmatchedTrades: 2,
-    matchPercentage: 80,
-    outsideDateRange: 2,
-  }),
-}))
+// Note: The actual static-dataset-matcher functions are in @tradeblocks/lib
+// but the store uses them internally. We don't need to mock them separately
+// since the store functions are what we're testing.
 
 describe('makeMatchStatsCacheKey', () => {
   it('creates cache key from datasetId, blockId, and matchStrategy', () => {

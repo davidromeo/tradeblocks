@@ -15,10 +15,7 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
-import { Trade } from "@/lib/models/trade";
-import { DailyLogEntry } from "@/lib/models/daily-log";
-import { getRiskFreeRate } from "@/lib/utils/risk-free-rate";
+import { PortfolioStatsCalculator, Trade, DailyLogEntry, getRiskFreeRate } from "@tradeblocks/lib";
 
 /**
  * Create mock trades for a given date range with consistent P&L pattern.

@@ -2,16 +2,17 @@
  * Tests for Combined Trades Cache
  */
 import "fake-indexeddb/auto";
-import { Trade } from "@/lib/models/trade";
 import {
+  Trade,
   storeCombinedTradesCache,
   getCombinedTradesCache,
   deleteCombinedTradesCache,
   hasCombinedTradesCache,
   invalidateBlockCaches,
-} from "@/lib/db/combined-trades-cache";
-import { combineAllLegGroups } from "@/lib/utils/combine-leg-groups";
-import { initializeDatabase, closeDatabase } from "@/lib/db";
+  combineAllLegGroups,
+  initializeDatabase,
+  closeDatabase,
+} from "@tradeblocks/lib";
 
 // Helper to create mock trades
 function createMockTrade(overrides: Partial<Trade> = {}): Trade {

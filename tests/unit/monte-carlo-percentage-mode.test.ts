@@ -7,10 +7,10 @@ import {
   calculatePercentageReturns,
   getPercentageResamplePool,
   runMonteCarloSimulation,
-} from "@/lib/calculations/monte-carlo";
-import { Trade } from "@/lib/models/trade";
-import { estimateTradesPerYear } from "@/lib/utils/trade-frequency";
-import { timeToTrades } from "@/lib/utils/time-conversions";
+  Trade,
+  estimateTradesPerYear,
+  timeToTrades,
+} from "@tradeblocks/lib";
 
 // Helper to create mock trades with proper fundsAtClose values
 function createMockTrade(

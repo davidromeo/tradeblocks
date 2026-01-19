@@ -3,8 +3,7 @@
  *
  * Focuses on validatePreRunConfiguration which checks config BEFORE analysis runs.
  */
-import { validatePreRunConfiguration } from '@/lib/calculations/walk-forward-interpretation'
-import type { WalkForwardConfig } from '@/lib/models/walk-forward'
+import { validatePreRunConfiguration, WalkForwardConfig } from '@tradeblocks/lib'
 
 // Helper to create a valid config with overrides
 function makeConfig(overrides: Partial<WalkForwardConfig> = {}): WalkForwardConfig {

@@ -3,9 +3,10 @@ import {
   assessResults,
   getRecommendedParameters,
   formatParameterName,
-} from '@/lib/calculations/walk-forward-verdict'
-import type { WalkForwardResults, WalkForwardPeriodResult } from '@/lib/models/walk-forward'
-import { PortfolioStats } from '@/lib/models/portfolio-stats'
+  WalkForwardResults,
+  WalkForwardPeriodResult,
+  PortfolioStats,
+} from '@tradeblocks/lib'
 
 const baseStats: PortfolioStats = {
   totalTrades: 10,

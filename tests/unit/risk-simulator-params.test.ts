@@ -3,9 +3,10 @@ import {
   percentageToTrades,
   getDefaultSimulationPeriod,
   getDefaultResamplePercentage,
-} from "@/lib/utils/time-conversions";
-import { runMonteCarloSimulation, type MonteCarloParams } from "@/lib/calculations/monte-carlo";
-import { Trade } from "@/lib/models/trade";
+  runMonteCarloSimulation,
+  MonteCarloParams,
+  Trade,
+} from "@tradeblocks/lib";
 
 // Mock trade generator
 function createMockTrades(count: number): Trade[] {

@@ -1,5 +1,4 @@
-import { calculateKellyMetrics } from '@/lib/calculations/kelly'
-import { Trade } from '@/lib/models/trade'
+import { calculateKellyMetrics, Trade } from '@tradeblocks/lib'
 import { describe, expect, it } from '@jest/globals'
 
 describe('calculateKellyMetrics', () => {

@@ -9,12 +9,9 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats';
-import { Trade } from '@/lib/models/trade';
-import { DailyLogEntry } from '@/lib/models/daily-log';
+import { PortfolioStatsCalculator, Trade, DailyLogEntry, normalizeTradesToOneLot } from '@tradeblocks/lib';
 import { CsvTestDataLoader } from '../data/csv-loader';
 import { mockTrades as portfolioSnapshotTrades } from '../data/mock-trades';
-import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization';
 
 describe('PortfolioStatsCalculator', () => {
   let calculator: PortfolioStatsCalculator;

@@ -1,7 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 
-import { Trade } from '@/lib/models/trade'
-import { normalizeTradeToOneLot, normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
+import { Trade, normalizeTradeToOneLot, normalizeTradesToOneLot } from '@tradeblocks/lib'
 
 const baseTrade: Trade = {
   dateOpened: new Date('2024-01-01'),

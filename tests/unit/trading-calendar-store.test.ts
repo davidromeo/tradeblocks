@@ -7,9 +7,7 @@
 import 'fake-indexeddb/auto'
 
 // We need to test the internal functions, so we'll import the store and test through state
-import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
-import { ReportingTrade } from '@/lib/models/reporting-trade'
-import { Trade } from '@/lib/models/trade'
+import { useTradingCalendarStore, ReportingTrade, Trade } from '@tradeblocks/lib/stores'
 
 // Helper to create a backtest trade
 function createBacktestTrade(overrides: Partial<ReportingTrade> = {}): ReportingTrade {

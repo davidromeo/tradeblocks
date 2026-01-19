@@ -1,7 +1,7 @@
 import {
   runMonteCarloSimulation,
-  type MonteCarloParams,
-} from "@/lib/calculations/monte-carlo";
+  MonteCarloParams,
+} from "@tradeblocks/lib";
 import { CsvTestDataLoader } from "../data/csv-loader";
 
 describe("Monte Carlo legacy comparison", () => {

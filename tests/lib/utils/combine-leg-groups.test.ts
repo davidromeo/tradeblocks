@@ -1,5 +1,4 @@
-import { Trade } from '@/lib/models/trade'
-import { combineLegGroup } from '@/lib/utils/combine-leg-groups'
+import { Trade, combineLegGroup } from '@tradeblocks/lib'
 
 describe('combineLegGroup', () => {
   const baseTrade: Trade = {

@@ -1,4 +1,4 @@
-import { classifyOutcome } from '@/lib/utils/performance-helpers'
+import { classifyOutcome } from '@tradeblocks/lib'
 
 describe('classifyOutcome', () => {
   it('returns all_wins when all legs are positive', () => {

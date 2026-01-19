@@ -1,7 +1,5 @@
 import { describe, expect, it } from '@jest/globals'
-import { WalkForwardAnalyzer } from '@/lib/calculations/walk-forward-analyzer'
-import { WalkForwardConfig } from '@/lib/models/walk-forward'
-import { Trade } from '@/lib/models/trade'
+import { WalkForwardAnalyzer, WalkForwardConfig, Trade } from '@tradeblocks/lib'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 

@@ -11,6 +11,8 @@ const config = {
     '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: { jsx: 'react-jsx' } }],
   },
   moduleNameMapper: {
+    '^@tradeblocks/lib/stores$': '<rootDir>/packages/lib/stores/index.ts',
+    '^@tradeblocks/lib$': '<rootDir>/packages/lib/index.ts',
     '^@/(.*)$': '<rootDir>/$1',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],

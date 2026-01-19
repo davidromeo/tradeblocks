@@ -6,7 +6,7 @@ import {
   formatTradesWithTime,
   getDefaultSimulationPeriod,
   getDefaultResamplePercentage,
-} from "@/lib/utils/time-conversions";
+} from "@tradeblocks/lib";
 
 describe("Time Conversion Utilities", () => {
   describe("timeToTrades", () => {

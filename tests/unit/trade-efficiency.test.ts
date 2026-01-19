@@ -1,10 +1,10 @@
-import { Trade } from '@/lib/models/trade'
 import {
+  Trade,
   calculatePremiumEfficiencyPercent,
   computeTotalPremium,
   computeTotalMaxProfit,
-  computeTotalMaxLoss
-} from '@/lib/metrics/trade-efficiency'
+  computeTotalMaxLoss,
+} from '@tradeblocks/lib'
 
 const baseTrade: Trade = {
   dateOpened: new Date('2025-10-07'),

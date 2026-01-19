@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 
-import { createExcursionDistribution, type MFEMAEDataPoint, type NormalizationBasis } from '@/lib/calculations/mfe-mae'
+import { createExcursionDistribution, MFEMAEDataPoint, NormalizationBasis } from '@tradeblocks/lib'
 
 const buildPoint = (overrides: Partial<MFEMAEDataPoint>): MFEMAEDataPoint => {
   const basis: NormalizationBasis = 'premium'

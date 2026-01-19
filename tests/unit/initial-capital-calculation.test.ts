@@ -1,7 +1,4 @@
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
-import { Trade } from "@/lib/models/trade";
-import { DailyLogEntry } from "@/lib/models/daily-log";
-import { calculateInitialCapitalFromDailyLog, calculateInitialCapital } from "@/lib/processing/capital-calculator";
+import { PortfolioStatsCalculator, Trade, DailyLogEntry, calculateInitialCapitalFromDailyLog, calculateInitialCapital } from "@tradeblocks/lib";
 
 // Helper to create mock trade
 function createMockTrade(

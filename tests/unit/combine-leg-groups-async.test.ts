@@ -1,11 +1,11 @@
 /**
  * Tests for async combine leg groups functionality
  */
-import { Trade } from "@/lib/models/trade";
 import {
+  Trade,
   combineAllLegGroupsAsync,
   CombineLegGroupsProgress,
-} from "@/lib/utils/combine-leg-groups";
+} from "@tradeblocks/lib";
 
 // Helper to create mock trades
 function createMockTrade(overrides: Partial<Trade> = {}): Trade {

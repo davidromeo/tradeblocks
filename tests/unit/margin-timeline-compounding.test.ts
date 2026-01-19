@@ -1,5 +1,4 @@
-import { buildMarginTimeline } from "@/lib/calculations/margin-timeline";
-import { Trade } from "@/lib/models/trade";
+import { buildMarginTimeline, Trade } from "@tradeblocks/lib";
 
 function createTrade(
   overrides: Partial<Trade> = {}
