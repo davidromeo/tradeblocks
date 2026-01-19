@@ -898,9 +898,14 @@ function buildPremiumEfficiency(
 
 /**
  * Build margin utilization data
+ *
+ * Note: When filtering by strategy, uses the rebuilt equity curve for fundsAtClose
+ * values to provide accurate context. The original trade.fundsAtClose includes P&L
+ * from all strategies, which would be misleading when viewing a single strategy.
  */
 function buildMarginUtilization(
-  trades: Trade[]
+  trades: Trade[],
+  equityCurve?: Array<{ date: string; equity: number }>
 ): Array<{
   tradeNumber: number;
   date: string;
@@ -910,20 +915,41 @@ function buildMarginUtilization(
   numContracts: number;
   pl: number;
 }> {
+  // Build equity lookup by date if curve provided
+  const equityByDate = new Map<string, number>();
+  if (equityCurve) {
+    for (const point of equityCurve) {
+      const dateKey = point.date.slice(0, 10);
+      equityByDate.set(dateKey, point.equity);
+    }
+  }
+
+  let lastKnownEquity = 0;
+
   return trades
     .map((trade, index) => {
       const marginReq =
         typeof trade.marginReq === "number" && isFinite(trade.marginReq)
           ? trade.marginReq
           : 0;
-      const fundsAtClose =
-        typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
-          ? trade.fundsAtClose
-          : 0;
       const numContracts =
         typeof trade.numContracts === "number" && isFinite(trade.numContracts)
           ? trade.numContracts
           : 0;
+
+      // Use equity curve value if available, otherwise fall back to trade's fundsAtClose
+      let fundsAtClose: number;
+      if (equityCurve && equityCurve.length > 0) {
+        const tradeDateKey = formatDateKey(new Date(trade.dateOpened));
+        const equityValue = equityByDate.get(tradeDateKey) ?? lastKnownEquity;
+        if (equityValue > 0) lastKnownEquity = equityValue;
+        fundsAtClose = equityValue;
+      } else {
+        fundsAtClose =
+          typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
+            ? trade.fundsAtClose
+            : 0;
+      }
 
       if (marginReq === 0 && fundsAtClose === 0) return null;
 
@@ -1491,7 +1517,13 @@ export function registerPerformanceTools(
         }
 
         if (charts.includes("margin_utilization")) {
-          chartData.marginUtilization = buildMarginUtilization(trades);
+          // Pass equity curve to use rebuilt equity for fundsAtClose when filtering
+          const equityCurve =
+            (chartData.equityCurve as Array<{
+              date: string;
+              equity: number;
+            }>) || buildEquityCurve(trades);
+          chartData.marginUtilization = buildMarginUtilization(trades, equityCurve);
           dataPoints += (chartData.marginUtilization as unknown[]).length;
         }
 
@@ -1577,6 +1609,12 @@ export function registerPerformanceTools(
             }>) || buildEquityCurve(trades);
 
           const exposureData = buildDailyExposure(trades, equityCurve);
+
+          // When filtering by strategy, percentage values may be misleading because
+          // margin values are absolute (sized for full portfolio) but divided by
+          // the filtered equity curve
+          const isStrategyFiltered = !!strategy;
+
           chartData.dailyExposure = {
             timeSeries: exposureData.dailyExposure,
             peakByDollars: exposureData.peakDailyExposure,
@@ -1599,6 +1637,12 @@ export function registerPerformanceTools(
                     exposureData.dailyExposure.length
                   : 0,
             },
+            ...(isStrategyFiltered && {
+              warning: "Percentage values may be misleading when filtering by strategy. " +
+                "Margin values are absolute (sized for the full portfolio), but the equity " +
+                "curve is rebuilt for the filtered subset only. Use dollar exposure values " +
+                "for accurate analysis when filtering.",
+            }),
           };
           dataPoints += exposureData.dailyExposure.length;
         }

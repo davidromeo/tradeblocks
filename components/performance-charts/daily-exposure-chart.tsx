@@ -1,9 +1,14 @@
 "use client";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { usePerformanceStore } from "@/lib/stores/performance-store";
 import type { Layout, PlotData } from "plotly.js";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChartWrapper } from "./chart-wrapper";
 
 interface DailyExposureChartProps {
@@ -13,10 +18,24 @@ interface DailyExposureChartProps {
 type ViewMode = "dollars" | "percent";
 
 export function DailyExposureChart({ className }: DailyExposureChartProps) {
-  const { data } = usePerformanceStore();
+  const { data, selectedStrategies } = usePerformanceStore();
 
-  // View mode state
+  // Check if strategy filter is active - % view is invalid when filtering
+  // because margin values are sized for the full portfolio, not the filtered subset
+  const isStrategyFiltered = selectedStrategies.length > 0;
+
+  // View mode state - force to dollars when strategy filtered
   const [viewMode, setViewMode] = useState<ViewMode>("percent");
+
+  // Reset to dollars view when strategy filter becomes active
+  useEffect(() => {
+    if (isStrategyFiltered && viewMode === "percent") {
+      setViewMode("dollars");
+    }
+  }, [isStrategyFiltered, viewMode]);
+
+  // Effective view mode (forced to dollars when filtered)
+  const effectiveViewMode = isStrategyFiltered ? "dollars" : viewMode;
 
   const { plotData, layout } = useMemo(() => {
     if (!data?.dailyExposure || data.dailyExposure.length === 0) {
@@ -26,21 +45,21 @@ export function DailyExposureChart({ className }: DailyExposureChartProps) {
     const { dailyExposure, peakDailyExposure, peakDailyExposurePercent } = data;
 
     // Use the appropriate peak based on view mode
-    const activePeak = viewMode === "dollars" ? peakDailyExposure : peakDailyExposurePercent;
+    const activePeak = effectiveViewMode === "dollars" ? peakDailyExposure : peakDailyExposurePercent;
 
     const dates = dailyExposure.map((d) => d.date);
     const values = dailyExposure.map((d) =>
-      viewMode === "dollars" ? d.exposure : d.exposurePercent
+      effectiveViewMode === "dollars" ? d.exposure : d.exposurePercent
     );
 
     // Format based on view mode
     const hoverFormat =
-      viewMode === "dollars"
+      effectiveViewMode === "dollars"
         ? "<b>%{x|%Y-%m-%d}</b><br>Exposure: $%{y:,.0f}<br>Positions: %{customdata}<extra></extra>"
         : "<b>%{x|%Y-%m-%d}</b><br>Exposure: %{y:.1f}%<br>Positions: %{customdata}<extra></extra>";
 
     const yAxisTitle =
-      viewMode === "dollars" ? "Daily Exposure ($)" : "Daily Exposure (% of Portfolio)";
+      effectiveViewMode === "dollars" ? "Daily Exposure ($)" : "Daily Exposure (% of Portfolio)";
 
     const trace: Partial<PlotData> = {
       x: dates,
@@ -63,7 +82,7 @@ export function DailyExposureChart({ className }: DailyExposureChartProps) {
 
     if (activePeak) {
       const peakValue =
-        viewMode === "dollars"
+        effectiveViewMode === "dollars"
           ? activePeak.exposure
           : activePeak.exposurePercent;
 
@@ -79,7 +98,7 @@ export function DailyExposureChart({ className }: DailyExposureChartProps) {
           symbol: "diamond",
         },
         hovertemplate:
-          viewMode === "dollars"
+          effectiveViewMode === "dollars"
             ? "<b>Peak Exposure</b><br>%{x|%Y-%m-%d}<br>$%{y:,.0f}<extra></extra>"
             : "<b>Peak Exposure</b><br>%{x|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
       };
@@ -104,7 +123,7 @@ export function DailyExposureChart({ className }: DailyExposureChartProps) {
       plotData: traces,
       layout: chartLayout,
     };
-  }, [data, viewMode]);
+  }, [data, effectiveViewMode]);
 
   const tooltip = {
     flavor:
@@ -116,9 +135,9 @@ export function DailyExposureChart({ className }: DailyExposureChartProps) {
   const headerControls = (
     <ToggleGroup
       type="single"
-      value={viewMode}
+      value={effectiveViewMode}
       onValueChange={(value) => {
-        if (value) setViewMode(value as ViewMode);
+        if (value && !isStrategyFiltered) setViewMode(value as ViewMode);
       }}
       variant="outline"
       size="sm"
@@ -126,9 +145,29 @@ export function DailyExposureChart({ className }: DailyExposureChartProps) {
       <ToggleGroupItem value="dollars" aria-label="View in dollars" className="px-3">
         Dollars
       </ToggleGroupItem>
-      <ToggleGroupItem value="percent" aria-label="View as percent" className="px-3">
-        % Portfolio
-      </ToggleGroupItem>
+      {isStrategyFiltered ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <ToggleGroupItem
+                value="percent"
+                aria-label="View as percent (disabled when filtering by strategy)"
+                className="px-3 opacity-50 cursor-not-allowed"
+                disabled
+              >
+                % Portfolio
+              </ToggleGroupItem>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            <p>% view unavailable when filtering by strategy. Margin values are sized for the full portfolio, not individual strategies.</p>
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <ToggleGroupItem value="percent" aria-label="View as percent" className="px-3">
+          % Portfolio
+        </ToggleGroupItem>
+      )}
     </ToggleGroup>
   );
 
