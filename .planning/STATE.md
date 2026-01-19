@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-18)
 
 Milestone: v2.3 Workspace Packages
 Phase: 30 of 31 (import-migration)
-Plan: 1 of 2 in current phase
-Status: Plan complete
-Last activity: 2026-01-19 — Completed 30-01-PLAN.md (MCP server import migration)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-01-19 — Completed 30-02-PLAN.md (Next.js app import migration)
 
-Progress: ██░░░░░░░░ 20%
+Progress: ███░░░░░░░ 30%
 
 ## Historical Context
 
@@ -34,9 +34,9 @@ Key decisions from v2.2 milestone now captured in PROJECT.md Key Decisions table
 ## Session Continuity
 
 Last session: 2026-01-19
-Stopped at: Completed 30-01-PLAN.md
+Stopped at: Completed 30-02-PLAN.md
 Resume file: None
-Next: Execute 30-02-PLAN.md (Next.js app import migration)
+Next: Execute Phase 31 cleanup-verification
 
 ## Testing Infrastructure
 
