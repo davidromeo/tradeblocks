@@ -581,14 +581,19 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
     async ({
       blockId,
       conditions,
-      logic,
+      logic: rawLogic,
       strategy,
       startDate,
       endDate,
-      includeSampleTrades,
-      sampleSize,
+      includeSampleTrades: rawIncludeSampleTrades,
+      sampleSize: rawSampleSize,
     }) => {
       try {
+        // Apply runtime defaults (Zod defaults don't always apply in MCP SDK)
+        const logic = rawLogic ?? "and";
+        const includeSampleTrades = rawIncludeSampleTrades ?? true;
+        const sampleSize = rawSampleSize ?? 5;
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
