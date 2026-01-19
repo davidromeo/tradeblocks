@@ -8,8 +8,18 @@ export * from './csv-parser'
 export * from './trade-processor'
 export * from './daily-log-processor'
 
-// Re-export validators for convenience
-export * from '../models/validators'
+// Re-export validation schemas from validators (but not the Raw* types which are in models)
+export {
+  tradeSchema,
+  dailyLogEntrySchema,
+  reportingTradeSchema,
+  rawTradeDataSchema,
+  rawDailyLogDataSchema,
+  rawReportingTradeDataSchema,
+  type ValidatedTrade,
+  type ValidatedDailyLogEntry,
+  type ValidatedReportingTrade,
+} from '../models/validators'
 
 // Unified processing types
 export interface FileProcessingResult {

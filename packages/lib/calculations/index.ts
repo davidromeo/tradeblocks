@@ -7,6 +7,12 @@
 export * from './portfolio-stats'
 export * from './performance'
 export * from './walk-forward-analyzer'
+export * from './walk-forward-verdict'
+export * from './correlation'
+export * from './monte-carlo'
+export * from './tail-risk-analysis'
+export * from './kelly'
+export * from './daily-exposure'
 
 // Re-export types for convenience
 export * from '../models/portfolio-stats'

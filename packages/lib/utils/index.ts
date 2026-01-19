@@ -1,3 +1,8 @@
+/**
+ * Utility functions exports
+ */
+
+// Legacy UI utilities (from old utils.ts)
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -25,3 +30,17 @@ export function truncateStrategyName(
   }
   return `${strategyName.substring(0, maxLength)}...`
 }
+
+// Core utility modules
+export * from './equity-curve'
+export * from './risk-free-rate'
+export * from './time-conversions'
+export * from './time-formatting'
+export * from './csv-headers'
+export * from './export-helpers'
+export * from './async-helpers'
+export * from './combine-leg-groups'
+export * from './performance-export'
+export * from './trade-normalization'
+export * from './trade-frequency'
+export * from './performance-helpers'

@@ -9,14 +9,8 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadBlock } from "../utils/block-loader.js";
 import { createToolOutput, formatPercent } from "../utils/output-formatter.js";
-import type { Trade } from "@lib/models/trade";
-import {
-  REPORT_FIELDS,
-  FIELD_CATEGORY_ORDER,
-  type FieldInfo,
-  type FieldCategory,
-  type FilterOperator,
-} from "@lib/models/report-config";
+import type { Trade, FieldInfo, FieldCategory, FilterOperator } from "@tradeblocks/lib";
+import { REPORT_FIELDS, FIELD_CATEGORY_ORDER } from "@tradeblocks/lib";
 
 // =============================================================================
 // Inline Trade Enrichment (can't import enrichTrades due to browser deps)

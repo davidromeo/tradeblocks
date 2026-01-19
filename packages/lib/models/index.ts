@@ -5,6 +5,8 @@ export * from './portfolio-stats'
 export * from './strategy-alignment'
 export * from './block'
 export * from './walk-forward'
+export * from './reporting-trade'
+export * from './report-config'
 
 // Type utilities
 export type ProcessingStage = 'uploading' | 'parsing' | 'processing' | 'calculating' | 'storing'
