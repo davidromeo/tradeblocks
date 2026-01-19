@@ -106,10 +106,11 @@ Plans:
 **Goal**: Update all imports in Next.js app and MCP server to use package imports
 **Depends on**: Phase 29
 **Research**: Unlikely (mechanical find/replace)
-**Plans**: TBD
+**Plans**: 2
 
 Plans:
-- [ ] 30-01: TBD
+- [ ] 30-01: MCP server imports (6 files + config cleanup)
+- [ ] 30-02: Next.js app imports (127 files in app/ + components/)
 
 #### Phase 31: cleanup-verification
 
