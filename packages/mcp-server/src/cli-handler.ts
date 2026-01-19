@@ -10,20 +10,27 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
+import type { ZodObject, ZodRawShape } from "zod";
 import { registerBlockTools } from "./tools/blocks.js";
 import { registerAnalysisTools } from "./tools/analysis.js";
 import { registerPerformanceTools } from "./tools/performance.js";
 import { registerReportTools } from "./tools/reports.js";
 import { registerImportTools } from "./tools/imports.js";
 
+// Type for tool result content items
+type ContentItem =
+  | { type: "text"; text: string }
+  | { type: "resource"; resource: { text: string } };
+
 // Type for captured tool handlers
 type ToolHandler = (args: Record<string, unknown>) => Promise<{
-  content: Array<{ type: string; text: string }>;
+  content: ContentItem[];
 }>;
 
 interface CapturedTool {
   name: string;
   description: string;
+  inputSchema: ZodObject<ZodRawShape> | null;
   handler: ToolHandler;
 }
 
@@ -35,12 +42,13 @@ class ToolCapture {
 
   registerTool(
     name: string,
-    options: { description: string; inputSchema: unknown },
+    options: { description: string; inputSchema: ZodObject<ZodRawShape> },
     handler: ToolHandler
   ): void {
     this.tools.set(name, {
       name,
       description: options.description,
+      inputSchema: options.inputSchema,
       handler,
     });
   }
@@ -131,20 +139,36 @@ export async function handleDirectCall(args: string[]): Promise<void> {
     process.exit(1);
   }
 
+  // Apply Zod schema parsing to get defaults and validation
+  let validatedArgs: Record<string, unknown> = parsedArgs;
+  if (tool.inputSchema) {
+    const parseResult = tool.inputSchema.safeParse(parsedArgs);
+    if (!parseResult.success) {
+      console.error(JSON.stringify({
+        error: "Invalid arguments",
+        tool: toolName,
+        details: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+        hint: "Check argument types and required fields",
+      }, null, 2));
+      process.exit(1);
+    }
+    validatedArgs = parseResult.data;
+  }
+
   // Invoke the tool handler
   try {
-    const result = await tool.handler(parsedArgs);
+    const result = await tool.handler(validatedArgs);
 
     // Tools return { content: [{ type: "text", text: "summary" }, { type: "resource", resource: { text: "json" } }] }
     // We want to extract the JSON data from the resource, or fall back to text content
     if (result.content && Array.isArray(result.content)) {
       // Look for resource with JSON data first
       const resourceItem = result.content.find(
-        (item): item is { type: string; resource: { text: string } } =>
-          item.type === "resource" && "resource" in item && typeof (item as { resource?: { text?: string } }).resource?.text === "string"
+        (item): item is { type: "resource"; resource: { text: string } } =>
+          item.type === "resource"
       );
 
-      if (resourceItem?.resource?.text) {
+      if (resourceItem) {
         try {
           const parsed = JSON.parse(resourceItem.resource.text);
           console.log(JSON.stringify(parsed, null, 2));
@@ -156,11 +180,11 @@ export async function handleDirectCall(args: string[]): Promise<void> {
 
       // Fall back to text content
       const textItem = result.content.find(
-        (item): item is { type: string; text: string } =>
-          item.type === "text" && "text" in item
+        (item): item is { type: "text"; text: string } =>
+          item.type === "text"
       );
 
-      if (textItem?.text) {
+      if (textItem) {
         try {
           const parsed = JSON.parse(textItem.text);
           console.log(JSON.stringify(parsed, null, 2));

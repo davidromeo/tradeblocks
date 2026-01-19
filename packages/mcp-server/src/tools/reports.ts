@@ -581,19 +581,14 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
     async ({
       blockId,
       conditions,
-      logic: rawLogic,
+      logic,
       strategy,
       startDate,
       endDate,
-      includeSampleTrades: rawIncludeSampleTrades,
-      sampleSize: rawSampleSize,
+      includeSampleTrades,
+      sampleSize,
     }) => {
       try {
-        // Apply runtime defaults (Zod defaults don't always apply in MCP SDK)
-        const logic = rawLogic ?? "and";
-        const includeSampleTrades = rawIncludeSampleTrades ?? true;
-        const sampleSize = rawSampleSize ?? 5;
-
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -721,11 +716,8 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
           .describe("Number of histogram buckets (default: 10)"),
       }),
     },
-    async ({ blockId, field, strategy, startDate, endDate, histogramBuckets: rawHistogramBuckets }) => {
+    async ({ blockId, field, strategy, startDate, endDate, histogramBuckets }) => {
       try {
-        // Apply runtime default (Zod defaults don't always apply in MCP SDK)
-        const histogramBuckets = rawHistogramBuckets ?? 10;
-
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -884,17 +876,13 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
       blockId,
       groupByField,
       bucketEdges,
-      metrics: rawMetrics,
+      metrics,
       strategy,
       startDate,
       endDate,
-      includeOutOfRange: rawIncludeOutOfRange,
+      includeOutOfRange,
     }) => {
       try {
-        // Apply runtime defaults (Zod defaults don't always apply in MCP SDK)
-        const metrics = rawMetrics ?? ["count", "winRate", "avgPl", "totalPl"];
-        const includeOutOfRange = rawIncludeOutOfRange ?? true;
-
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -1139,16 +1127,11 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
       strategy,
       startDate,
       endDate,
-      targetField: rawTargetField,
-      minSamples: rawMinSamples,
-      includeCustomFields: rawIncludeCustomFields,
+      targetField,
+      minSamples,
+      includeCustomFields,
     }) => {
       try {
-        // Apply defaults (Zod defaults don't always apply in MCP SDK)
-        const targetField = rawTargetField ?? "pl";
-        const minSamples = rawMinSamples ?? 30;
-        const includeCustomFields = rawIncludeCustomFields ?? true;
-
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -1396,18 +1379,14 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
     async ({
       blockId,
       field,
-      mode: rawMode,
-      thresholds: rawThresholds,
-      percentileSteps: rawPercentileSteps,
+      mode,
+      thresholds,
+      percentileSteps,
       strategy,
       startDate,
       endDate,
     }) => {
       try {
-        // Apply runtime defaults (Zod defaults don't always apply in MCP SDK)
-        const mode = rawMode ?? "both";
-        const percentileSteps = rawPercentileSteps ?? [5, 10, 25, 50, 75, 90, 95];
-
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -1469,9 +1448,9 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
         // Generate thresholds
         let thresholdsToTest: number[];
 
-        if (rawThresholds && rawThresholds.length > 0) {
+        if (thresholds && thresholds.length > 0) {
           // Use custom thresholds
-          thresholdsToTest = [...rawThresholds].sort((a, b) => a - b);
+          thresholdsToTest = [...thresholds].sort((a, b) => a - b);
         } else {
           // Auto-generate from percentiles
           const sorted = [...fieldValues].sort((a, b) => a - b);

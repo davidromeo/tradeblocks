@@ -2,82 +2,96 @@
 phase: 34-report-tools-fixes
 plan: 01
 subsystem: api
-tags: [mcp, zod, runtime-defaults, report-tools]
+tags: [mcp, zod, cli-handler, defaults]
 
 # Dependency graph
 requires:
-  - phase: 32-find-predictive-fields
-    provides: Runtime default pattern for Zod params
-  - phase: 33-filter-curve
-    provides: Additional runtime default example
+  - phase: 17.1-cli-test-mode
+    provides: CLI --call handler for testing
 provides:
-  - Fixed runtime defaults for aggregate_by_field, run_filtered_query, get_field_statistics
-  - All report tools work correctly when optional params omitted in MCP SDK CLI mode
+  - Fixed CLI --call mode to apply Zod parsing (defaults now work)
+  - Cleaned up runtime default workarounds from 5 tools
 affects: []
 
 # Tech tracking
 tech-stack:
   added: []
-  patterns: [zod-runtime-defaults]
+  patterns: [zod-schema-parsing-in-cli]
 
 key-files:
   created: []
-  modified: [packages/mcp-server/src/tools/reports.ts]
+  modified: [packages/mcp-server/src/cli-handler.ts, packages/mcp-server/src/tools/reports.ts]
 
 key-decisions:
-  - "Apply established pattern: rawParam destructuring with ?? fallback"
+  - "Fix root cause in CLI handler rather than patching each tool"
 
 patterns-established:
-  - "Runtime defaults for Zod params in MCP SDK: rename to rawX, apply default with ?? operator"
+  - "CLI --call mode now applies Zod parsing like normal MCP server mode"
 
 issues-created: []
 
 # Metrics
-duration: 8min
+duration: 15min
 completed: 2026-01-19
 ---
 
 # Phase 34 Plan 01: Report Tools Fixes Summary
 
-**Applied runtime default pattern to 3 report tools fixing crashes and incorrect behavior when optional params omitted**
+**Fixed CLI --call mode to apply Zod schema parsing, eliminating need for runtime default workarounds**
 
 ## Performance
 
-- **Duration:** 8 min
-- **Started:** 2026-01-19T22:10:00Z
-- **Completed:** 2026-01-19T22:18:00Z
-- **Tasks:** 3
-- **Files modified:** 1
+- **Duration:** 15 min
+- **Started:** 2026-01-19T22:15:00Z
+- **Completed:** 2026-01-19T22:30:00Z
+- **Tasks:** 3 (plan) + 1 (root cause fix)
+- **Files modified:** 2
 
 ## Accomplishments
 
-- Fixed aggregate_by_field: metrics and includeOutOfRange params now default correctly
-- Fixed run_filtered_query: logic, includeSampleTrades, and sampleSize params now default correctly
-- Fixed get_field_statistics: histogramBuckets param now defaults to 10 buckets
+- Identified root cause: CLI --call handler bypassed Zod parsing, causing defaults to not apply
+- Fixed cli-handler.ts to call `inputSchema.safeParse()` before invoking tool handlers
+- Removed runtime default workarounds from 5 tools in reports.ts:
+  - `run_filtered_query` (logic, includeSampleTrades, sampleSize)
+  - `get_field_statistics` (histogramBuckets)
+  - `aggregate_by_field` (metrics, includeOutOfRange)
+  - `find_predictive_fields` (targetField, minSamples, includeCustomFields)
+  - `filter_curve` (mode, percentileSteps)
 
 ## Task Commits
 
-Each task was committed atomically:
+Initial plan execution (later superseded):
 
 1. **Task 1: Fix aggregate_by_field runtime defaults** - `4f0a06b` (fix)
 2. **Task 2: Fix run_filtered_query runtime defaults** - `4858d4f` (fix)
 3. **Task 3: Fix get_field_statistics runtime defaults** - `eaf10a8` (fix)
+4. **Plan metadata** - `7a209e0` (docs)
+
+Root cause fix (final):
+
+5. **Fix CLI handler + cleanup workarounds** - `99cb928` (fix)
 
 ## Files Created/Modified
 
-- `packages/mcp-server/src/tools/reports.ts` - Added runtime defaults for Zod parameters in 3 tool handlers
+- `packages/mcp-server/src/cli-handler.ts` - Added Zod schema parsing before tool invocation
+- `packages/mcp-server/src/tools/reports.ts` - Removed 5 runtime default workarounds
 
 ## Decisions Made
 
-None - followed established pattern from Phase 32 and 33 exactly as specified.
+- **Fix at CLI handler level**: Instead of patching ~74 parameters across 4 files with runtime defaults, fixed the root cause in cli-handler.ts. This ensures all current and future tools work correctly without per-tool workarounds.
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Post-execution improvement
+
+- **Found during:** Investigation after plan execution
+- **Issue:** Discovered the bug only affected CLI --call mode (our test mode), not normal MCP server operation where the SDK applies Zod parsing
+- **Fix:** Fixed cli-handler.ts to also apply Zod parsing, then reverted the workarounds from Phase 32, 33, and 34
+- **Impact:** Cleaner codebase - no scattered runtime default workarounds needed
 
 ## Issues Encountered
 
-None - straightforward application of the established runtime default pattern.
+None - root cause was clear once investigated.
 
 ## Next Phase Readiness
 
