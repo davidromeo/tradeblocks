@@ -213,15 +213,15 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
 
           // Try to get cached enriched trades, fall back to computing them
           // Note: Static datasets aren't cached - always compute fresh to pick up new datasets
-          // Also recompute if we have daily exposure data (for exposureOnOpen field)
+          // Also recompute if we have equity curve data (for exposureOnOpen field)
           let enrichedTradesData = await getEnrichedTradesCache(blockId)
-          const hasDailyExposure = cachedSnapshot.chartData.dailyExposure && cachedSnapshot.chartData.dailyExposure.length > 0
-          if (!enrichedTradesData || staticDatasetsWithRows.length > 0 || hasDailyExposure) {
-            // Cache miss, static datasets present, or daily exposure available - compute enriched trades
+          const hasEquityCurve = cachedSnapshot.chartData.equityCurve && cachedSnapshot.chartData.equityCurve.length > 0
+          if (!enrichedTradesData || staticDatasetsWithRows.length > 0 || hasEquityCurve) {
+            // Cache miss, static datasets present, or equity curve available - compute enriched trades
             enrichedTradesData = enrichTrades(cachedSnapshot.filteredTrades, {
               dailyLogs: cachedSnapshot.filteredDailyLogs,
               staticDatasets: staticDatasetsWithRows,
-              dailyExposure: cachedSnapshot.chartData.dailyExposure
+              equityCurve: cachedSnapshot.chartData.equityCurve
             })
           }
 
@@ -268,7 +268,7 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
       const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
         dailyLogs: snapshot.filteredDailyLogs,
         staticDatasets: staticDatasetsWithRows,
-        dailyExposure: snapshot.chartData.dailyExposure
+        equityCurve: snapshot.chartData.equityCurve
       })
 
       set({
@@ -323,7 +323,7 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
     const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
       dailyLogs: snapshot.filteredDailyLogs,
       staticDatasets: staticDatasetsWithRows,
-      dailyExposure: snapshot.chartData.dailyExposure
+      equityCurve: snapshot.chartData.equityCurve
     })
 
     set(state => ({

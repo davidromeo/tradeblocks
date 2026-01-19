@@ -300,3 +300,161 @@ export function calculateDailyExposure(
 
   return { dailyExposure, peakDailyExposure, peakDailyExposurePercent }
 }
+
+/**
+ * Exposure at the moment a trade opens
+ */
+export interface ExposureAtOpen {
+  /** Trade index in the original array */
+  tradeIndex: number
+  /** Exposure in dollars at the moment this trade opened (before adding this trade's margin) */
+  exposureBefore: number
+  /** Exposure in dollars at the moment this trade opened (after adding this trade's margin) */
+  exposureAfter: number
+  /** Exposure as % of equity at the moment this trade opened (before adding this trade's margin) */
+  exposurePercentBefore: number
+  /** Exposure as % of equity at the moment this trade opened (after adding this trade's margin) */
+  exposurePercentAfter: number
+}
+
+/**
+ * Calculate the portfolio exposure at the exact moment each trade opens.
+ *
+ * This uses a sweep-line algorithm to track running exposure through time,
+ * then queries the exposure state at each trade's specific open timestamp.
+ *
+ * @param trades - Array of trades to analyze
+ * @param equityCurve - Array of equity curve points for percentage calculations
+ * @returns Map from trade index to exposure data at that trade's open time
+ */
+export function calculateExposureAtTradeOpen(
+  trades: Trade[],
+  equityCurve: EquityCurvePoint[]
+): Map<number, ExposureAtOpen> {
+  const result = new Map<number, ExposureAtOpen>()
+
+  if (trades.length === 0) {
+    return result
+  }
+
+  // Build equity lookup by date
+  const equityByDate = new Map<string, number>()
+  for (const point of equityCurve) {
+    const dateKey = point.date.slice(0, 10)
+    equityByDate.set(dateKey, point.equity)
+  }
+
+  // Create timestamped events for all trades
+  // Each event has: timestamp (ms), type, margin, and optionally tradeIndex for opens
+  interface TimestampedEvent {
+    timestamp: number
+    dateKey: string
+    timeMinutes: number
+    type: 'open' | 'close'
+    margin: number
+    tradeIndex?: number // Only set for 'open' events
+  }
+
+  const events: TimestampedEvent[] = []
+
+  for (let i = 0; i < trades.length; i++) {
+    const trade = trades[i]
+    const margin = getFiniteNumber(trade.marginReq) ?? 0
+    if (margin <= 0) continue
+
+    const openDate = new Date(trade.dateOpened)
+    if (isNaN(openDate.getTime())) continue
+
+    const openDateKey = formatDateKey(openDate)
+    const openTimeMinutes = parseTimeToMinutes(trade.timeOpened)
+
+    // Create full timestamp for sorting
+    const openTimestamp = openDate.getTime() + openTimeMinutes * 60 * 1000
+
+    // Add open event with trade index
+    events.push({
+      timestamp: openTimestamp,
+      dateKey: openDateKey,
+      timeMinutes: openTimeMinutes,
+      type: 'open',
+      margin,
+      tradeIndex: i
+    })
+
+    // Add close event if trade is closed
+    if (trade.dateClosed) {
+      const closeDate = new Date(trade.dateClosed)
+      if (!isNaN(closeDate.getTime())) {
+        const closeDateKey = formatDateKey(closeDate)
+        const closeTimeMinutes = trade.timeClosed
+          ? parseTimeToMinutes(trade.timeClosed)
+          : 23 * 60 + 59
+
+        const closeTimestamp = closeDate.getTime() + closeTimeMinutes * 60 * 1000
+
+        events.push({
+          timestamp: closeTimestamp,
+          dateKey: closeDateKey,
+          timeMinutes: closeTimeMinutes,
+          type: 'close',
+          margin
+        })
+      }
+    }
+  }
+
+  if (events.length === 0) {
+    return result
+  }
+
+  // Sort events by timestamp, with opens before closes at same time
+  // This ensures we see the state before adding the new trade
+  events.sort((a, b) => {
+    if (a.timestamp !== b.timestamp) {
+      return a.timestamp - b.timestamp
+    }
+    // At same timestamp: closes before opens
+    // This way when we process an open, all prior closes have been applied
+    if (a.type !== b.type) {
+      return a.type === 'close' ? -1 : 1
+    }
+    return 0
+  })
+
+  // Sweep through events tracking running exposure
+  let runningExposure = 0
+  let lastKnownEquity = 0
+
+  for (const event of events) {
+    // Get equity for this date
+    const equity = equityByDate.get(event.dateKey) ?? lastKnownEquity
+    if (equity > 0) lastKnownEquity = equity
+
+    if (event.type === 'open' && event.tradeIndex !== undefined) {
+      // Record exposure BEFORE and AFTER adding this trade
+      const exposureBefore = runningExposure
+      const exposureAfter = runningExposure + event.margin
+
+      const exposurePercentBefore = equity > 0 ? (exposureBefore / equity) * 100 : 0
+      const exposurePercentAfter = equity > 0 ? (exposureAfter / equity) * 100 : 0
+
+      result.set(event.tradeIndex, {
+        tradeIndex: event.tradeIndex,
+        exposureBefore,
+        exposureAfter,
+        exposurePercentBefore,
+        exposurePercentAfter
+      })
+
+      // Update running exposure
+      runningExposure = exposureAfter
+    } else if (event.type === 'close') {
+      runningExposure -= event.margin
+    } else if (event.type === 'open') {
+      // Open event without tradeIndex (shouldn't happen, but handle gracefully)
+      runningExposure += event.margin
+    }
+  }
+
+  return result
+}

@@ -12,6 +12,7 @@
 
 import {
   calculateDailyExposure,
+  calculateExposureAtTradeOpen,
   DailyExposurePoint,
   EquityCurvePoint,
 } from '@/lib/calculations/daily-exposure'
@@ -820,6 +821,220 @@ describe('calculateDailyExposure', () => {
 
       // 01-04: Only trade 2 (2000)
       expect(exposureByDate.get('2024-01-04')?.exposure).toBe(2000)
+    })
+  })
+})
+
+describe('calculateExposureAtTradeOpen', () => {
+  describe('basic functionality', () => {
+    it('should return empty map for empty trades array', () => {
+      const result = calculateExposureAtTradeOpen([], [])
+      expect(result.size).toBe(0)
+    })
+
+    it('should calculate exposure for first trade as 0 before, margin after', () => {
+      const trades = [
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-15'),
+          timeClosed: '15:00:00',
+          marginReq: 5000,
+        }),
+      ]
+
+      const equityCurve = [{ date: '2024-01-15', equity: 100000 }]
+      const result = calculateExposureAtTradeOpen(trades, equityCurve)
+
+      const exposure = result.get(0)
+      expect(exposure).toBeDefined()
+      expect(exposure!.exposureBefore).toBe(0)
+      expect(exposure!.exposureAfter).toBe(5000)
+      expect(exposure!.exposurePercentBefore).toBe(0)
+      expect(exposure!.exposurePercentAfter).toBe(5) // 5000 / 100000 * 100
+    })
+
+    it('should calculate exposure for sequential same-day trades correctly', () => {
+      // Trade 1: 09:30 open, 10:00 close
+      // Trade 2: 10:30 open, 11:00 close
+      // Trade 2 should see 0 exposure before (trade 1 already closed)
+      const trades = [
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-15'),
+          timeClosed: '10:00:00',
+          marginReq: 5000,
+        }),
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '10:30:00',
+          dateClosed: etDate('2024-01-15'),
+          timeClosed: '11:00:00',
+          marginReq: 3000,
+        }),
+      ]
+
+      const equityCurve = [{ date: '2024-01-15', equity: 100000 }]
+      const result = calculateExposureAtTradeOpen(trades, equityCurve)
+
+      // Trade 1: first trade, no prior exposure
+      const exp1 = result.get(0)
+      expect(exp1!.exposureBefore).toBe(0)
+      expect(exp1!.exposureAfter).toBe(5000)
+
+      // Trade 2: trade 1 already closed, no prior exposure
+      const exp2 = result.get(1)
+      expect(exp2!.exposureBefore).toBe(0)
+      expect(exp2!.exposureAfter).toBe(3000)
+    })
+
+    it('should calculate exposure for concurrent trades correctly', () => {
+      // Trade 1: 09:30 open, multi-day
+      // Trade 2: 10:30 open - should see trade 1's margin
+      const trades = [
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-16'),
+          timeClosed: '15:00:00',
+          marginReq: 5000,
+        }),
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '10:30:00',
+          dateClosed: etDate('2024-01-15'),
+          timeClosed: '11:00:00',
+          marginReq: 3000,
+        }),
+      ]
+
+      const equityCurve = [{ date: '2024-01-15', equity: 100000 }]
+      const result = calculateExposureAtTradeOpen(trades, equityCurve)
+
+      // Trade 1: first trade, no prior exposure
+      const exp1 = result.get(0)
+      expect(exp1!.exposureBefore).toBe(0)
+      expect(exp1!.exposureAfter).toBe(5000)
+
+      // Trade 2: trade 1 is still open, should see 5000 before
+      const exp2 = result.get(1)
+      expect(exp2!.exposureBefore).toBe(5000)
+      expect(exp2!.exposureAfter).toBe(8000) // 5000 + 3000
+      expect(exp2!.exposurePercentBefore).toBe(5)
+      expect(exp2!.exposurePercentAfter).toBe(8)
+    })
+
+    it('should handle trades opening at exact same time', () => {
+      // Two trades open at exactly the same time
+      const trades = [
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-15'),
+          timeClosed: '15:00:00',
+          marginReq: 5000,
+        }),
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-15'),
+          timeClosed: '15:00:00',
+          marginReq: 3000,
+        }),
+      ]
+
+      const equityCurve = [{ date: '2024-01-15', equity: 100000 }]
+      const result = calculateExposureAtTradeOpen(trades, equityCurve)
+
+      // Both trades should have results
+      expect(result.size).toBe(2)
+      expect(result.get(0)).toBeDefined()
+      expect(result.get(1)).toBeDefined()
+
+      // The order depends on processing, but total exposure after both = 8000
+      const exp1 = result.get(0)!
+      const exp2 = result.get(1)!
+      expect(exp1.exposureAfter + exp2.exposureAfter - exp2.exposureBefore).toBe(8000)
+    })
+
+    it('should skip trades with zero or negative margin', () => {
+      const trades = [
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          marginReq: 0,
+        }),
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '10:00:00',
+          marginReq: -100,
+        }),
+      ]
+
+      const result = calculateExposureAtTradeOpen(trades, [])
+      expect(result.size).toBe(0)
+    })
+
+    it('should use last known equity when date not in curve', () => {
+      const trades = [
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-15'),
+          timeClosed: '15:00:00',
+          marginReq: 5000,
+        }),
+        createTrade({
+          dateOpened: etDate('2024-01-20'), // No equity for this date
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-20'),
+          timeClosed: '15:00:00',
+          marginReq: 3000,
+        }),
+      ]
+
+      // Only have equity for 01-15
+      const equityCurve = [{ date: '2024-01-15', equity: 100000 }]
+      const result = calculateExposureAtTradeOpen(trades, equityCurve)
+
+      // Trade 2 should use last known equity (100000)
+      const exp2 = result.get(1)
+      expect(exp2!.exposurePercentAfter).toBe(3) // 3000 / 100000 * 100
+    })
+  })
+
+  describe('multi-day positions', () => {
+    it('should account for positions carried over from previous days', () => {
+      // Trade 1: Opens day 1, closes day 3
+      // Trade 2: Opens day 2 - should see trade 1's margin
+      const trades = [
+        createTrade({
+          dateOpened: etDate('2024-01-15'),
+          timeOpened: '09:30:00',
+          dateClosed: etDate('2024-01-17'),
+          timeClosed: '15:00:00',
+          marginReq: 5000,
+        }),
+        createTrade({
+          dateOpened: etDate('2024-01-16'),
+          timeOpened: '10:00:00',
+          dateClosed: etDate('2024-01-16'),
+          timeClosed: '15:00:00',
+          marginReq: 3000,
+        }),
+      ]
+
+      const equityCurve = [
+        { date: '2024-01-15', equity: 100000 },
+        { date: '2024-01-16', equity: 100000 },
+      ]
+      const result = calculateExposureAtTradeOpen(trades, equityCurve)
+
+      // Trade 2 on day 2 should see trade 1 still open
+      const exp2 = result.get(1)
+      expect(exp2!.exposureBefore).toBe(5000)
+      expect(exp2!.exposureAfter).toBe(8000)
     })
   })
 })
