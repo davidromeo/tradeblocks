@@ -5,56 +5,38 @@
 See: .planning/PROJECT.md (updated 2026-01-18)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** v2.2 Historical Risk-Free Rates
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v2.2 Historical Risk-Free Rates
-Phase: 28 of 28 (MCP & Tests)
-Plan: 1 of 1 complete
-Status: Milestone complete
-Last activity: 2026-01-19 — Completed 28-01-PLAN.md (test fixes)
+Milestone: v2.2 Historical Risk-Free Rates — SHIPPED
+Phase: All complete
+Plan: All complete
+Status: Ready to plan next milestone
+Last activity: 2026-01-18 — v2.2 milestone complete
 
 Progress: ██████████ 100%
 
 ## Historical Context
 
-See [v2.1 archive](milestones/v2.1-portfolio-comparison.md) for full phase details and decisions.
+See [v2.2 archive](milestones/v2.2-historical-risk-free-rates.md) for risk-free rate implementation details.
+See [v2.1 archive](milestones/v2.1-portfolio-comparison.md) for portfolio comparison tools.
 See [v2.0 archive](milestones/v2.0-claude-integration.md) for Claude integration history.
 See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement history.
 
 ## Accumulated Decisions
 
-Key decisions from v2.1 milestone now captured in PROJECT.md Key Decisions table:
-- Trade-based calculations only for comparison tools
-- Composite similarity scoring (50% corr, 30% tail, 20% overlap)
-- 4-layer health check response
-- ngrok tunnel for web platforms
-
-## v2.2 Context
-
-**Feature Request:** Amy's suggestion to use variable/actual risk-free rates for portfolio analysis instead of fixed 2%.
-
-**Problem:** Sharpe ratio gets distorted when rates move meaningfully - using a constant rate when actual rates varied (0% in 2020 vs 5%+ in 2023) skews results.
-
-**Solution:** Embed historical Treasury 3-month T-bill rates (2013-2025) as static data, lookup by trade date, remove manual input.
-
-**Key Decisions:**
-- Data range: 2013-01-01 to present (~3,000 trading days)
-- Fallback: Last known rate for dates outside range
-- No override: Remove manual input entirely
-- Local-only: No external API calls (maintains TradeBlocks principle)
-
-### Roadmap Evolution
-
-- Milestone v2.2 created: Historical risk-free rates, 4 phases (Phase 25-28)
+Key decisions from v2.2 milestone now captured in PROJECT.md Key Decisions table:
+- Embedded Treasury rates (no API calls) — maintains 100% local data principle
+- Date-based risk-free rates over fixed rate — accurate Sharpe/Sortino reflecting market conditions
+- Rolling metrics Sharpe uses fixed 2.0% — visualization simplification for MCP charts
 
 ## Session Continuity
 
-Last session: 2026-01-19
-Stopped at: Completed 28-01-PLAN.md (test fixes) - Milestone complete
+Last session: 2026-01-18
+Stopped at: Completed v2.2 milestone
 Resume file: None
-Next: /gsd:complete-milestone to archive v2.2 and prepare for next version
+Next: `/gsd:discuss-milestone` to plan next version
 
 ## Testing Infrastructure
 

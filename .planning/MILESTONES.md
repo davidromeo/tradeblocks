@@ -1,5 +1,33 @@
 # Project Milestones: TradeBlocks
 
+## v2.2 Historical Risk-Free Rates (Shipped: 2026-01-18)
+
+**Delivered:** Historical Treasury rates (2013-2026) embedded for accurate Sharpe/Sortino calculations that reflect actual market conditions, replacing fixed 2% assumption.
+
+**Phases completed:** 25-28 (6 plans total)
+
+**Key accomplishments:**
+
+- Embedded 3,260 historical Treasury 3-month T-bill rates (2013-01-02 to 2026-01-15) as static data (~71KB)
+- Date-based Sharpe/Sortino calculations using actual Treasury rates per trading day
+- Removed manual riskFreeRate input from types, stores, UI, and MCP server API
+- O(1) hash lookup for trading days with O(log n) binary search fallback for weekends/holidays
+- Fixed 6 pre-existing test failures (maxLoss fallback for debit trades, calendar scaling tests)
+- Added automated treasury rate update workflow for future maintenance
+
+**Stats:**
+
+- 41 files created/modified
+- +5,866 / -179 lines of TypeScript
+- 4 phases, 6 plans
+- 1 day (2026-01-18)
+
+**Git range:** `761776b` → `5e56dda`
+
+**What's next:** Planning next milestone
+
+---
+
 ## v2.1 Portfolio Comparison (Shipped: 2026-01-18)
 
 **Delivered:** 7 new MCP tools for advanced portfolio comparison and analysis, plus CLI test mode and web platform integration documentation.

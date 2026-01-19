@@ -236,3 +236,13 @@ requirements. Do this automatically without being asked.**
 3. **Plans location:** `.planning/phases/XX-name/`
 
 4. **After subagent work:** Always run `npm run typecheck` before final commit
+
+5. **Version management:**
+   - Bump MCP server version in `packages/mcp-server/package.json` when MCP functionality changes (new tools, API changes, bug fixes)
+   - Version bumps can happen mid-milestone if MCP changes are shipped
+   - Follow semver: patch for fixes, minor for new features, major for breaking changes
+
+6. **Milestone completion checklist:**
+   - Archive milestone to `.planning/milestones/`
+   - Update `.planning/MILESTONES.md`, `ROADMAP.md`, `PROJECT.md`, `STATE.md`
+   - Create git tag `v{X.Y}` for the milestone
