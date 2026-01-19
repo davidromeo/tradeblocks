@@ -20,7 +20,15 @@ export * from './regime-comparison'
 export * from './table-aggregation'
 export * from './threshold-analysis'
 export * from './static-dataset-matcher'
-export * from './cumulative-distribution'
+// Re-export from cumulative-distribution excluding conflicting name
+export {
+  type CumulativeDistributionPoint,
+  type CumulativeDistributionAnalysis,
+  type DistributionStats,
+  type ThresholdTradeoff,
+  calculateCumulativeDistribution,
+  findOptimalThreshold as findOptimalDistributionThreshold,
+} from './cumulative-distribution'
 export * from './walk-forward-interpretation'
 export * from './enrich-trades'
 
