@@ -16,6 +16,7 @@ import {
   type DistributionBucket,
   type NormalizationBasis
 } from '@/lib/calculations/mfe-mae'
+import { calculateDailyExposure as calculateDailyExposureShared } from '@/lib/calculations/daily-exposure'
 import { normalizeTradesToOneLot } from '@/lib/utils/trade-normalization'
 import { yieldToMain, checkCancelled } from '@/lib/utils/async-helpers'
 import { calculateRunsTest } from '@/lib/calculations/streak-analysis'
@@ -1234,8 +1235,8 @@ function calculateHoldingPeriods(trades: Trade[]) {
 }
 
 /**
- * Calculate daily exposure by reconstructing which trades were open on each calendar day.
- * For each day, sums the margin requirements of all open positions.
+ * Wrapper around the shared daily exposure calculation.
+ * Maps between local types and the shared function.
  */
 function calculateDailyExposure(
   trades: Trade[],
@@ -1245,118 +1246,6 @@ function calculateDailyExposure(
   peakDailyExposure: SnapshotChartData['peakDailyExposure']
   peakDailyExposurePercent: SnapshotChartData['peakDailyExposurePercent']
 } {
-  if (trades.length === 0) {
-    return { dailyExposure: [], peakDailyExposure: null, peakDailyExposurePercent: null }
-  }
-
-  // Build a map of equity by date for percentage calculations
-  const equityByDate = new Map<string, number>()
-  for (const point of equityCurve) {
-    // Extract just the date portion (YYYY-MM-DD)
-    const dateKey = point.date.slice(0, 10)
-    equityByDate.set(dateKey, point.equity)
-  }
-
-  // Find the date range
-  let minDate: Date | null = null
-  let maxDate: Date | null = null
-
-  for (const trade of trades) {
-    const openDate = new Date(trade.dateOpened)
-    if (isNaN(openDate.getTime())) continue
-
-    if (!minDate || openDate < minDate) minDate = openDate
-    if (!maxDate || openDate > maxDate) maxDate = openDate
-
-    if (trade.dateClosed) {
-      const closeDate = new Date(trade.dateClosed)
-      if (!isNaN(closeDate.getTime()) && closeDate > maxDate) {
-        maxDate = closeDate
-      }
-    }
-  }
-
-  if (!minDate || !maxDate) {
-    return { dailyExposure: [], peakDailyExposure: null, peakDailyExposurePercent: null }
-  }
-
-  // Iterate through each day in the range
-  const dailyExposure: SnapshotChartData['dailyExposure'] = []
-  let peakDailyExposure: SnapshotChartData['peakDailyExposure'] = null
-  let peakDailyExposurePercent: SnapshotChartData['peakDailyExposurePercent'] = null
-  let lastKnownEquity = 0
-
-  const currentDate = new Date(minDate)
-  currentDate.setHours(0, 0, 0, 0)
-  const endDate = new Date(maxDate)
-  endDate.setHours(23, 59, 59, 999)
-
-  while (currentDate <= endDate) {
-    const dateKey = currentDate.toISOString().slice(0, 10)
-
-    // Find all trades open on this day
-    let totalExposure = 0
-    let openPositions = 0
-
-    for (const trade of trades) {
-      const openDate = new Date(trade.dateOpened)
-      openDate.setHours(0, 0, 0, 0)
-
-      // Trade must be opened on or before this day
-      if (openDate > currentDate) continue
-
-      // If trade has a close date, it must be on or after this day
-      if (trade.dateClosed) {
-        const closeDate = new Date(trade.dateClosed)
-        closeDate.setHours(23, 59, 59, 999)
-        if (closeDate < currentDate) continue
-      }
-
-      // Trade is open on this day
-      const margin = getFiniteNumber(trade.marginReq) ?? 0
-      if (margin > 0) {
-        totalExposure += margin
-        openPositions++
-      }
-    }
-
-    // Get equity for percentage calculation
-    const equity = equityByDate.get(dateKey) ?? lastKnownEquity
-    if (equity > 0) lastKnownEquity = equity
-
-    const exposurePercent = equity > 0 ? (totalExposure / equity) * 100 : 0
-
-    // Only include days with open positions
-    if (openPositions > 0) {
-      dailyExposure.push({
-        date: currentDate.toISOString(),
-        exposure: totalExposure,
-        exposurePercent,
-        openPositions
-      })
-
-      // Track peak exposure (by dollar amount)
-      if (!peakDailyExposure || totalExposure > peakDailyExposure.exposure) {
-        peakDailyExposure = {
-          date: currentDate.toISOString(),
-          exposure: totalExposure,
-          exposurePercent
-        }
-      }
-
-      // Track peak exposure (by percentage)
-      if (!peakDailyExposurePercent || exposurePercent > peakDailyExposurePercent.exposurePercent) {
-        peakDailyExposurePercent = {
-          date: currentDate.toISOString(),
-          exposure: totalExposure,
-          exposurePercent
-        }
-      }
-    }
-
-    // Move to next day
-    currentDate.setDate(currentDate.getDate() + 1)
-  }
-
-  return { dailyExposure, peakDailyExposure, peakDailyExposurePercent }
+  // Use the shared calculation from lib/calculations/daily-exposure.ts
+  return calculateDailyExposureShared(trades, equityCurve)
 }
