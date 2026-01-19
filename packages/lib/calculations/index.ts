@@ -31,6 +31,8 @@ export {
 } from './cumulative-distribution'
 export * from './walk-forward-interpretation'
 export * from './enrich-trades'
+export * from './statistical-utils'
+export * from './mfe-mae'
 
 // Re-export types for convenience
 export * from '../models/portfolio-stats'

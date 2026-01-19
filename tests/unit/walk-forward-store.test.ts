@@ -20,18 +20,20 @@ import { WalkForwardAnalyzer } from '@tradeblocks/lib'
 import { mockTrades } from '../data/mock-trades'
 import { mockDailyLogs } from '../data/mock-daily-logs'
 
-// Mock the DB functions
-const mockGetTradesByBlock = jest.fn()
-const mockGetDailyLogsByBlock = jest.fn()
-const mockSaveWalkForwardAnalysis = jest.fn()
-const mockGetWalkForwardAnalysesByBlock = jest.fn()
-
+// Mock the DB functions - using inline jest.fn() to avoid hoisting issues
 jest.mock('../../packages/lib/db', () => ({
-  getTradesByBlock: mockGetTradesByBlock,
-  getDailyLogsByBlock: mockGetDailyLogsByBlock,
-  saveWalkForwardAnalysis: mockSaveWalkForwardAnalysis,
-  getWalkForwardAnalysesByBlock: mockGetWalkForwardAnalysesByBlock,
+  getTradesByBlock: jest.fn(),
+  getDailyLogsByBlock: jest.fn(),
+  saveWalkForwardAnalysis: jest.fn(),
+  getWalkForwardAnalysesByBlock: jest.fn(),
 }))
+
+// Get references to the mocked functions after the mock is set up
+import * as db from '../../packages/lib/db'
+const mockGetTradesByBlock = db.getTradesByBlock as jest.MockedFunction<typeof db.getTradesByBlock>
+const mockGetDailyLogsByBlock = db.getDailyLogsByBlock as jest.MockedFunction<typeof db.getDailyLogsByBlock>
+const mockSaveWalkForwardAnalysis = db.saveWalkForwardAnalysis as jest.MockedFunction<typeof db.saveWalkForwardAnalysis>
+const mockGetWalkForwardAnalysesByBlock = db.getWalkForwardAnalysesByBlock as jest.MockedFunction<typeof db.getWalkForwardAnalysesByBlock>
 
 const analyzeSpy = jest.spyOn(WalkForwardAnalyzer.prototype, 'analyze')
 
