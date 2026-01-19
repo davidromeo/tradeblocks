@@ -133,3 +133,46 @@ export function getRateDataRange(): { start: Date; end: Date } {
 export function getRateEntryCount(): number {
   return getSortedKeys().length;
 }
+
+/**
+ * Get the risk-free rate for a date specified as a YYYY-MM-DD string key.
+ * Avoids Date parsing issues by working directly with string keys.
+ *
+ * @param dateKey - The date as YYYY-MM-DD string
+ * @returns Annual risk-free rate as a percentage (e.g., 4.32 for 4.32%)
+ */
+export function getRiskFreeRateByKey(dateKey: string): number {
+  const keys = getSortedKeys();
+
+  // Direct lookup first (most common case for trading days)
+  if (TREASURY_RATES[dateKey] !== undefined) {
+    return TREASURY_RATES[dateKey];
+  }
+
+  // Date is before our data range - return earliest rate
+  if (dateKey < keys[0]) {
+    return TREASURY_RATES[keys[0]];
+  }
+
+  // Date is after our data range - return latest rate
+  if (dateKey > keys[keys.length - 1]) {
+    return TREASURY_RATES[keys[keys.length - 1]];
+  }
+
+  // Date is within range but not found (weekend/holiday)
+  // Binary search to find the nearest prior trading day
+  let left = 0;
+  let right = keys.length - 1;
+
+  while (left < right) {
+    const mid = Math.floor((left + right + 1) / 2);
+    if (keys[mid] <= dateKey) {
+      left = mid;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  // Return the rate from the most recent prior trading day
+  return TREASURY_RATES[keys[left]];
+}

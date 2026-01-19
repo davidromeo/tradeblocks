@@ -8,7 +8,7 @@
 import { Trade } from '../models/trade'
 import { DailyLogEntry } from '../models/daily-log'
 import { PerformanceMetrics, TimePeriod } from '../models/portfolio-stats'
-import { getRiskFreeRate } from '../utils/risk-free-rate'
+import { getRiskFreeRateByKey } from '../utils/risk-free-rate'
 
 /**
  * Performance calculator for chart data and visualizations
@@ -229,16 +229,18 @@ export class PerformanceCalculator {
       const windowReturns = windowDates.map(date => dailyPl[date])
 
       // Calculate average excess returns using date-based Treasury rates
+      // Use getRiskFreeRateByKey to avoid UTC parsing issues with YYYY-MM-DD strings
       const excessReturns = windowDates.map((date, idx) => {
-        const annualRate = getRiskFreeRate(new Date(date)) // Returns annual % (e.g., 4.32)
+        const annualRate = getRiskFreeRateByKey(date) // Returns annual % (e.g., 4.32)
         const dailyRiskFreeRate = annualRate / 100 / 252
         return windowReturns[idx] - dailyRiskFreeRate
       })
 
       const avgExcessReturn = excessReturns.reduce((sum, ret) => sum + ret, 0) / excessReturns.length
-      const avgReturn = windowReturns.reduce((sum, ret) => sum + ret, 0) / windowReturns.length
-      const variance = windowReturns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / (windowReturns.length - 1)
-      const stdDev = Math.sqrt(variance)
+      // Use std of excess returns (not raw returns) for consistency with date-varying rates
+      const avgExcess = avgExcessReturn
+      const excessVariance = excessReturns.reduce((sum, ret) => sum + Math.pow(ret - avgExcess, 2), 0) / (excessReturns.length - 1)
+      const stdDev = Math.sqrt(excessVariance)
 
       const sharpe = stdDev > 0 ? (avgExcessReturn / stdDev) * Math.sqrt(252) : 0
 

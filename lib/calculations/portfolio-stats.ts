@@ -371,7 +371,6 @@ export class PortfolioStatsCalculator {
 
     // Calculate excess returns using per-day Treasury rates
     const excessReturns: number[] = []
-    const rawReturns: number[] = []
 
     for (const { date, return: dailyReturn } of dailyReturnsWithDates) {
       // Get the actual Treasury rate for this specific date
@@ -379,12 +378,13 @@ export class PortfolioStatsCalculator {
       const dailyRiskFreeRate = annualRate / 100 / this.config.annualizationFactor
 
       excessReturns.push(dailyReturn - dailyRiskFreeRate)
-      rawReturns.push(dailyReturn)
     }
 
     // Calculate Sharpe ratio using math.js for statistical consistency
+    // With date-varying risk-free rates, we must use std of excess returns (not raw returns)
+    // because std(rawReturns) != std(excessReturns) when rates change materially
     const avgExcessReturn = mean(excessReturns) as number
-    const stdDev = std(rawReturns, 'uncorrected') as number // Use sample std (N-1) for Sharpe
+    const stdDev = std(excessReturns, 'uncorrected') as number // Use sample std (N-1) of excess returns
 
     if (stdDev === 0) return undefined
 
