@@ -12,7 +12,8 @@
     "declaration": true,
     "resolveJsonModule": true,
     "paths": {
-      "@lib/*": ["../../lib/*"]
+      "@lib/*": ["../../lib/*"],
+      "@/*": ["../../*"]
     }
   },
   "include": ["src/**/*"],

@@ -5,9 +5,25 @@
 - ✅ [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
 - ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
 - ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
-- 📋 **Next milestone** — To be planned
+- ✅ [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
 
 ## Completed Milestones
+
+<details>
+<summary>✅ v2.2 Historical Risk-Free Rates (Phases 25-28) — SHIPPED 2026-01-18</summary>
+
+Embedded 3,260 historical Treasury rates (2013-2026) for accurate Sharpe/Sortino calculations that reflect actual market conditions.
+
+- [x] Phase 25: Treasury Data (1/1 plan) — completed 2026-01-18
+- [x] Phase 26: Core Calculations (1/1 plan) — completed 2026-01-18
+- [x] Phase 27: Remove Manual Input (3/3 plans) — completed 2026-01-19
+- [x] Phase 28: MCP & Tests (1/1 plan) — completed 2026-01-19
+
+**Stats:** 4 phases, 6 plans, 1 day execution time
+
+See [v2.2 archive](milestones/v2.2-historical-risk-free-rates.md) for full details.
+
+</details>
 
 <details>
 <summary>✅ v2.1 Portfolio Comparison (Phases 17-24) — SHIPPED 2026-01-18</summary>
@@ -77,6 +93,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v1.0 WFA Enhancement | 1-10 | 17 | Complete | 2026-01-11 |
 | v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
+| v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 
 ## Audit Notes
 

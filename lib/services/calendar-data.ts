@@ -1280,7 +1280,7 @@ export function calculateDayMetrics(
   }
 
   // Use PortfolioStatsCalculator for max drawdown - same as block stats
-  const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 })
+  const calculator = new PortfolioStatsCalculator()
   const portfolioStats = calculator.calculatePortfolioStats(trades)
 
   // Max drawdown from portfolio stats

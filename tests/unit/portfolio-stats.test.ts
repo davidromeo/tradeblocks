@@ -20,9 +20,7 @@ describe('PortfolioStatsCalculator', () => {
   let calculator: PortfolioStatsCalculator;
 
   beforeEach(() => {
-    calculator = new PortfolioStatsCalculator({
-      riskFreeRate: 2.0,
-    });
+    calculator = new PortfolioStatsCalculator();
   });
 
   describe('Basic Calculations with Mock Data', () => {

@@ -173,7 +173,6 @@ export const strategyStatsSchema = z.object({
  * Zod schema for analysis configuration
  */
 export const analysisConfigSchema = z.object({
-  riskFreeRate: z.number().finite().min(0).max(20),
   useBusinessDaysOnly: z.boolean(),
   annualizationFactor: z.number().int().min(200).max(365),
   confidenceLevel: z.number().min(0.8).max(0.99),

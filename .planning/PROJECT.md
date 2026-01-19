@@ -37,6 +37,12 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ CLI test mode (--call flag) for direct tool invocation — v2.1
 - ✓ Web platform integration guide (ngrok tunnel setup) — v2.1
 
+**v2.2 Historical Risk-Free Rates:**
+- ✓ Historical Treasury rates embedded (3,260 daily rates 2013-2026) — v2.2
+- ✓ Date-based Sharpe/Sortino using actual Treasury rates per trading day — v2.2
+- ✓ Removed manual riskFreeRate input from types, stores, UI, MCP API — v2.2
+- ✓ Automated treasury rate update workflow (.github/workflows) — v2.2
+
 ### Active
 
 (None — planning next milestone)
@@ -49,12 +55,13 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.1):**
+**Current state (v2.2):**
 - Next.js 15 web application with client-side computation
 - MCP server (`tradeblocks-mcp`) with 26 tools at packages/mcp-server/
 - 6 agent skills at packages/agent-skills/
 - ~16,600 LOC in packages/, ~12,500 LOC in WFA-related files
-- 179 walk-forward tests + ~150 MCP integration tests
+- 989 tests (179 WFA + MCP integration + risk-free rate tests)
+- Embedded historical Treasury rates (2013-2026) for accurate risk metrics
 
 **Architecture:**
 - Monorepo with npm workspaces
@@ -84,6 +91,8 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Composite similarity scoring (50% corr, 30% tail, 20% overlap) | Balance correlation and tail risk signals | ✓ Good |
 | 4-layer health check response | Progressive detail from quick verdict to actionable flags | ✓ Good |
 | ngrok tunnel for web platforms | Keeps data local while enabling remote MCP URLs | ✓ Good |
+| Embedded Treasury rates (no API calls) | Maintains 100% local data principle, ~71KB bundled | ✓ Good |
+| Date-based risk-free rates over fixed rate | Accurate Sharpe/Sortino reflecting actual market conditions | ✓ Good |
 
 ---
-*Last updated: 2026-01-18 after v2.1 milestone*
+*Last updated: 2026-01-18 after v2.2 milestone*

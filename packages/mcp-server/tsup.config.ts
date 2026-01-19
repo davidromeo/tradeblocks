@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import path from 'path';
 
 export default defineConfig([
   // Main MCP server entry (executable) - outputs to server/ for MCPB
@@ -14,7 +15,13 @@ export default defineConfig([
       js: '#!/usr/bin/env node'
     },
     // Bundle ALL dependencies for standalone MCPB distribution
-    noExternal: [/.*/]
+    noExternal: [/.*/],
+    esbuildOptions(options) {
+      options.alias = {
+        '@lib': path.resolve(__dirname, '../../lib'),
+        '@': path.resolve(__dirname, '../..'),
+      };
+    },
   },
   // Skill installer module (library, no shebang) - stays in dist/
   {
@@ -24,7 +31,13 @@ export default defineConfig([
     target: 'node18',
     dts: true,
     sourcemap: true,
-    noExternal: [/^@lib\//]
+    noExternal: [/^@lib\//, /^@\//],
+    esbuildOptions(options) {
+      options.alias = {
+        '@lib': path.resolve(__dirname, '../../lib'),
+        '@': path.resolve(__dirname, '../..'),
+      };
+    },
   },
   // Test exports module - bundle utilities for testing
   {
@@ -34,6 +47,12 @@ export default defineConfig([
     target: 'node18',
     dts: false,  // Skip DTS for test exports
     sourcemap: true,
-    noExternal: [/^@lib\//]
+    noExternal: [/^@lib\//, /^@\//],
+    esbuildOptions(options) {
+      options.alias = {
+        '@lib': path.resolve(__dirname, '../../lib'),
+        '@': path.resolve(__dirname, '../..'),
+      };
+    },
   }
 ]);

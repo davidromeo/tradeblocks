@@ -78,7 +78,6 @@ export interface ProcessedBlock {
 
   // Analysis configuration
   analysisConfig: {
-    riskFreeRate: number;
     useBusinessDaysOnly: boolean;
     annualizationFactor: number;
     confidenceLevel: number;

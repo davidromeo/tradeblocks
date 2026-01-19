@@ -110,14 +110,13 @@ export default function AssistantPage() {
           const snapshot = await buildPerformanceSnapshot({
             trades: blockTrades,
             dailyLogs: blockDailyLogs,
-            riskFreeRate: 2.0,
             normalizeTo1Lot: false,
           });
           setPortfolioStats(snapshot.portfolioStats);
           setChartData(snapshot.chartData);
           setTrades(snapshot.filteredTrades);
 
-          const calculator = new PortfolioStatsCalculator({ riskFreeRate: 2.0 });
+          const calculator = new PortfolioStatsCalculator();
           const strategies = calculator.calculateStrategyStats(
             snapshot.filteredTrades
           );
