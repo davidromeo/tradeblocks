@@ -11,6 +11,7 @@ import { DailyLogEntry } from '../models/daily-log'
 import { calculateMFEMAEData, MFEMAEDataPoint } from './mfe-mae'
 import type { StaticDataset, StaticDatasetRow } from '../models/static-dataset'
 import { getMatchedValuesForTrade } from './static-dataset-matcher'
+import { calculateExposureAtTradeOpen, EquityCurvePoint, ExposureAtOpen } from './daily-exposure'
 
 /**
  * Static dataset with its rows for matching
@@ -28,6 +29,8 @@ export interface EnrichTradesOptions {
   dailyLogs?: DailyLogEntry[]
   /** Static datasets with their rows for timestamp-based matching */
   staticDatasets?: StaticDatasetWithRows[]
+  /** Equity curve for calculating exposure at trade open time */
+  equityCurve?: EquityCurvePoint[]
 }
 
 /**
@@ -52,6 +55,7 @@ function buildDailyCustomFieldsMap(dailyLogs: DailyLogEntry[]): Map<string, Reco
   }
   return map
 }
+
 
 /**
  * Computes the duration of a trade in hours
@@ -137,7 +141,8 @@ function enrichSingleTrade(
   index: number,
   mfeMaePoint?: MFEMAEDataPoint,
   dailyCustomFields?: Record<string, number | string>,
-  staticDatasetFields?: Record<string, Record<string, number | string>>
+  staticDatasetFields?: Record<string, Record<string, number | string>>,
+  exposureAtOpen?: ExposureAtOpen
 ): EnrichedTrade {
   const totalFees = trade.openingCommissionsFees + (trade.closingCommissionsFees ?? 0)
   const netPl = trade.pl - totalFees
@@ -209,6 +214,10 @@ function enrichSingleTrade(
     // Sequential
     tradeNumber: index + 1,
 
+    // Portfolio exposure at exact moment trade opened (after adding this trade's margin)
+    exposureOnOpen: exposureAtOpen?.exposurePercentAfter,
+    exposureOnOpenDollars: exposureAtOpen?.exposureAfter,
+
     // Daily custom fields (joined by trade date)
     dailyCustomFields,
 
@@ -240,6 +249,11 @@ export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): En
     ? buildDailyCustomFieldsMap(options.dailyLogs)
     : undefined
 
+  // Calculate exposure at exact open time for each trade if equity curve is provided
+  const exposureAtOpenMap = options?.equityCurve
+    ? calculateExposureAtTradeOpen(trades, options.equityCurve)
+    : undefined
+
   // Enrich each trade
   return trades.map((trade, index) => {
     const mfeMaePoint = mfeMaeMap.get(index)
@@ -251,6 +265,9 @@ export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): En
       dailyCustomFields = dailyCustomFieldsMap.get(dateKey)
     }
 
+    // Look up exposure at exact open time for this trade
+    const exposureAtOpen = exposureAtOpenMap?.get(index)
+
     // Match static dataset values by timestamp
     let staticDatasetFields: Record<string, Record<string, number | string>> | undefined
     if (options?.staticDatasets && options.staticDatasets.length > 0) {
@@ -261,7 +278,7 @@ export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): En
       }
     }
 
-    return enrichSingleTrade(trade, index, mfeMaePoint, dailyCustomFields, staticDatasetFields)
+    return enrichSingleTrade(trade, index, mfeMaePoint, dailyCustomFields, staticDatasetFields, exposureAtOpen)
   })
 }
 

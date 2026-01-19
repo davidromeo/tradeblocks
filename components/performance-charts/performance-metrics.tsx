@@ -90,7 +90,7 @@ export function PerformanceMetrics({ className }: PerformanceMetricsProps) {
     )
   }
 
-  const { portfolioStats, trades, peakDailyExposure } = data
+  const { portfolioStats, trades, peakDailyExposurePercent } = data
 
   // Calculate additional metrics
   const dateRange = trades.length > 0 ? {
@@ -201,16 +201,16 @@ export function PerformanceMetrics({ className }: PerformanceMetricsProps) {
               <Shield className="h-3 w-3" />
               Peak Exposure
             </div>
-            {peakDailyExposure ? (
+            {peakDailyExposurePercent ? (
               <div className="font-semibold text-amber-600 dark:text-amber-400">
                 {new Intl.NumberFormat('en-US', {
                   style: 'currency',
                   currency: 'USD',
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0
-                }).format(peakDailyExposure.exposure)}
+                }).format(peakDailyExposurePercent.exposure)}
                 <span className="text-xs ml-1">
-                  ({peakDailyExposure.exposurePercent.toFixed(1)}%)
+                  ({peakDailyExposurePercent.exposurePercent.toFixed(1)}%)
                 </span>
               </div>
             ) : (
