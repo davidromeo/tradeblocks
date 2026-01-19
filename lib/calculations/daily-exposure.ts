@@ -60,21 +60,43 @@ function getFiniteNumber(value: unknown): number | undefined {
 }
 
 /**
- * Format a date to YYYY-MM-DD string
+ * Format a date to YYYY-MM-DD string using local time
+ *
+ * Trade dates in TradeBlocks are Eastern Time and parsed at local midnight.
+ * Using local time methods (not toISOString/UTC) ensures dates match correctly.
  */
 function formatDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 /**
  * Parse a time string (HH:mm:ss or HH:mm) to minutes since midnight
+ * Returns 0 (midnight) for missing or malformed time strings
  */
 function parseTimeToMinutes(timeStr: string | undefined): number {
+  // Default to midnight when time is missing
   if (!timeStr) return 0
+
   const parts = timeStr.split(':')
-  const hours = parseInt(parts[0], 10) || 0
-  const minutes = parseInt(parts[1], 10) || 0
-  return hours * 60 + minutes
+  // Require at least HH:mm format
+  if (parts.length < 2) return 0
+
+  const hours = Number(parts[0])
+  const minutes = Number(parts[1])
+
+  // Validate parsed values; fall back to midnight on malformed input
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return 0
+  }
+
+  // Clamp to valid time range
+  const safeHours = Math.max(0, Math.min(23, hours))
+  const safeMinutes = Math.max(0, Math.min(59, minutes))
+
+  return safeHours * 60 + safeMinutes
 }
 
 /**
@@ -185,13 +207,13 @@ export function calculateDailyExposure(
   let peakDailyExposurePercent: PeakExposure | null = null
   let lastKnownEquity = 0
 
-  // Track positions that are still open from previous days
-  // Map of margin values for open positions
+  // Track total exposure and position count carried over from previous days
   let carryOverExposure = 0
   let carryOverPositions = 0
 
-  const currentDate = new Date(minDateKey + 'T00:00:00.000Z')
-  const endDate = new Date(maxDateKey + 'T00:00:00.000Z')
+  // Parse date keys at local midnight (matching how trade dates are parsed)
+  const currentDate = new Date(minDateKey + 'T00:00:00')
+  const endDate = new Date(maxDateKey + 'T00:00:00')
 
   while (currentDate <= endDate) {
     const dateKey = formatDateKey(currentDate)

@@ -278,8 +278,8 @@ export const REPORT_FIELDS: FieldInfo[] = [
   { field: 'weekOfYear', label: 'Week of Year', category: 'timing', description: 'ISO week number when opened (1-52)' },
 
   // Portfolio context
-  { field: 'exposureOnOpen', label: 'Portfolio Exposure %', category: 'risk', unit: '%', description: 'Total portfolio margin exposure as % of equity on the day this trade opened - shows how much risk was deployed when entering' },
-  { field: 'exposureOnOpenDollars', label: 'Portfolio Exposure $', category: 'risk', unit: '$', description: 'Total portfolio margin exposure in dollars on the day this trade opened' }
+  { field: 'exposureOnOpen', label: 'Portfolio Exposure %', category: 'risk', unit: '%', description: 'Peak portfolio margin exposure as % of equity on the day this trade opened - shows the maximum risk deployed during that trading day' },
+  { field: 'exposureOnOpenDollars', label: 'Portfolio Exposure $', category: 'risk', unit: '$', description: 'Peak portfolio margin exposure in dollars on the day this trade opened - shows the maximum risk deployed during that trading day' }
 ]
 
 /**
