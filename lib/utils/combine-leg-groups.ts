@@ -195,6 +195,10 @@ export function combineLegGroup(trades: Trade[]): CombinedTrade {
     // Single trade: preserve original values (percentages from CSV)
     maxProfit = firstTrade.maxProfit
     maxLoss = firstTrade.maxLoss
+    // For debit trades without explicit maxLoss, use premium paid as max loss
+    if (maxLoss === undefined && firstTrade.premium < 0) {
+      maxLoss = firstTrade.premium
+    }
   } else {
     // Combined trades: sum maxProfit, use margin for maxLoss
     if (trades.every(t => t.maxProfit !== undefined)) {
