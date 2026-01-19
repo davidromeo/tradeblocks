@@ -21,12 +21,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useBlockStore, type Block } from "@/lib/stores/block-store";
+import { useBlockStore, type Block } from "@tradeblocks/lib/stores";
 import { Activity, AlertTriangle, Calendar, ChevronDown, Download, Grid3X3, Info, List, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
 import React, { useCallback, useState } from "react";
 import { ProgressDialog } from "@/components/progress-dialog";
-import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
-import { waitForRender } from "@/lib/utils/async-helpers";
+import type { SnapshotProgress } from "@tradeblocks/lib";
+import { waitForRender } from "@tradeblocks/lib";
 import { useProgressDialog } from "@/hooks/use-progress-dialog";
 import { ImportGuideDialog } from "@/components/import-guide-dialog";
 

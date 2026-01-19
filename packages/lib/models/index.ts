@@ -7,6 +7,8 @@ export * from './block'
 export * from './walk-forward'
 export * from './reporting-trade'
 export * from './report-config'
+export * from './tail-risk'
+export * from './static-dataset'
 
 // Type utilities
 export type ProcessingStage = 'uploading' | 'parsing' | 'processing' | 'calculating' | 'storing'

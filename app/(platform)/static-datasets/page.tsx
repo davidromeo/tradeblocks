@@ -5,14 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Plus, Search, Database, Info } from "lucide-react"
-import { useStaticDatasetsStore } from "@/lib/stores/static-datasets-store"
-import { useBlockStore } from "@/lib/stores/block-store"
+import { useStaticDatasetsStore, useBlockStore } from "@tradeblocks/lib/stores"
 import { DatasetCard } from "@/components/static-datasets/dataset-card"
 import { UploadDialog } from "@/components/static-datasets/upload-dialog"
 import { PreviewModal } from "@/components/static-datasets/preview-modal"
-import type { StaticDataset } from "@/lib/models/static-dataset"
-import type { Trade } from "@/lib/models/trade"
-import { getTradesByBlock } from "@/lib/db"
+import type { StaticDataset, Trade } from "@tradeblocks/lib"
+import { getTradesByBlock } from "@tradeblocks/lib"
 
 export default function StaticDatasetsPage() {
   const [searchQuery, setSearchQuery] = useState("")

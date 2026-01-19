@@ -1,7 +1,6 @@
 "use client";
 
-import { useBlockStore } from "@/lib/stores/block-store";
-import { usePerformanceStore } from "@/lib/stores/performance-store";
+import { useBlockStore, usePerformanceStore } from "@tradeblocks/lib/stores";
 import { format } from "date-fns";
 import {
   AlertTriangle,
@@ -52,7 +51,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { cn } from "@tradeblocks/lib";
 
 const PERFORMANCE_STORAGE_KEY_PREFIX = "performance:normalizeTo1Lot:";
 

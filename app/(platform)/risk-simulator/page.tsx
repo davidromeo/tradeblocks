@@ -34,31 +34,27 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
   runMonteCarloSimulation,
-  type MonteCarloParams,
-  type MonteCarloResult,
-} from "@/lib/calculations/monte-carlo";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
-import {
+  PortfolioStatsCalculator,
   getBlock,
   getDailyLogsByBlock,
   getTradesByBlockWithOptions,
-} from "@/lib/db";
-import { DailyLogEntry } from "@/lib/models/daily-log";
-import { Trade } from "@/lib/models/trade";
-import { useBlockStore } from "@/lib/stores/block-store";
-import {
   getDefaultSimulationPeriod,
   percentageToTrades,
   timeToTrades,
-  type TimeUnit,
-} from "@/lib/utils/time-conversions";
-import {
   downloadCsv,
   downloadJson,
   generateExportFilename,
   toCsvRow,
-} from "@/lib/utils/export-helpers";
-import { estimateTradesPerYear } from "@/lib/utils/trade-frequency";
+  estimateTradesPerYear,
+} from "@tradeblocks/lib";
+import type {
+  MonteCarloParams,
+  MonteCarloResult,
+  DailyLogEntry,
+  Trade,
+  TimeUnit,
+} from "@tradeblocks/lib";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 import { Download, HelpCircle, Loader2, Play, RotateCcw } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";

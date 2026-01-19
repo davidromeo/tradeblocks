@@ -13,6 +13,7 @@ export * from './monte-carlo'
 export * from './tail-risk-analysis'
 export * from './kelly'
 export * from './daily-exposure'
+export * from './margin-timeline'
 
 // Re-export types for convenience
 export * from '../models/portfolio-stats'

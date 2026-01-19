@@ -9,8 +9,7 @@ import { MatchStrategiesDialog } from "@/components/trading-calendar/match-strat
 import { StatsHeader } from "@/components/trading-calendar/stats-header";
 import { TradeDetailView } from "@/components/trading-calendar/trade-detail-view";
 import { Card, CardContent } from "@/components/ui/card";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { useTradingCalendarStore, NavigationView } from "@/lib/stores/trading-calendar-store";
+import { useBlockStore, useTradingCalendarStore, type NavigationView } from "@tradeblocks/lib/stores";
 import { Loader2 } from "lucide-react";
 import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";

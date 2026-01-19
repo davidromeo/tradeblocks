@@ -59,16 +59,13 @@ import { WalkForwardSummary } from "@/components/walk-forward/walk-forward-summa
 import {
   getRecommendedParameters,
   formatParameterName,
-} from "@/lib/calculations/walk-forward-verdict";
-import { WalkForwardOptimizationTarget } from "@/lib/models/walk-forward";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { useWalkForwardStore } from "@/lib/stores/walk-forward-store";
-import { cn } from "@/lib/utils";
-import {
+  cn,
   downloadCsv,
   downloadFile,
   generateExportFilename,
-} from "@/lib/utils/export-helpers";
+} from "@tradeblocks/lib";
+import type { WalkForwardOptimizationTarget } from "@tradeblocks/lib";
+import { useBlockStore, useWalkForwardStore } from "@tradeblocks/lib/stores";
 
 const TARGET_LABELS: Record<WalkForwardOptimizationTarget, string> = {
   netPl: "Net Profit",

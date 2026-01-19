@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { DatabaseResetHandler } from "@/components/database-reset-handler";
-import { cn } from "@/lib/utils";
+import { cn } from "@tradeblocks/lib";
 
 import "./globals.css";
 

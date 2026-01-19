@@ -20,26 +20,21 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
 import {
+  PortfolioStatsCalculator,
   getBlock,
   getDailyLogsByBlock,
   getTradesByBlockWithOptions,
-} from "@/lib/db";
-import { PortfolioStats, StrategyStats } from "@/lib/models/portfolio-stats";
-import {
   buildPerformanceSnapshot,
-  SnapshotChartData,
-} from "@/lib/services/performance-snapshot";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { downloadJson, generateExportFilename } from "@/lib/utils/export-helpers";
-import {
+  downloadJson,
+  generateExportFilename,
   CHART_EXPORTS,
   getChartExportsByTab,
   getMultipleChartsJson,
   TAB_ORDER,
-} from "@/lib/utils/performance-export";
-import { Trade } from "@/lib/models/trade";
+} from "@tradeblocks/lib";
+import type { PortfolioStats, StrategyStats, SnapshotChartData, Trade } from "@tradeblocks/lib";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 
 const GPT_URL =
   "https://chatgpt.com/g/g-6919e4fab91c8191a77967240ab4f3e8-tradeblocks-assistant";
