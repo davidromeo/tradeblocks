@@ -444,9 +444,9 @@ describe("Portfolio Stats - Date-Based Risk-Free Rates", () => {
       expect(singleStats.sortinoRatio).toBeUndefined();
     });
 
-    it("should ignore config.riskFreeRate when calculating ratios (date-based always)", () => {
-      // Even when config specifies a riskFreeRate, the calculation should
-      // use date-based rates from Treasury data
+    it("should use date-based rates for all calculator instances", () => {
+      // Verify that PortfolioStatsCalculator always uses date-based rates
+      // regardless of how it's instantiated
       const startDate = new Date(2023, 5, 5); // High-rate period
       const trades = createMockTradesForPeriod(startDate, 10, standardDailyPls);
       const dailyLogs = createMockDailyLogsForPeriod(
@@ -455,29 +455,20 @@ describe("Portfolio Stats - Date-Based Risk-Free Rates", () => {
         standardDailyPls
       );
 
-      // Create calculators with wildly different config rates
-      const calcLowConfig = new PortfolioStatsCalculator({ riskFreeRate: 0 });
-      const calcHighConfig = new PortfolioStatsCalculator({ riskFreeRate: 10 });
-      const calcDefaultConfig = new PortfolioStatsCalculator();
+      // Create multiple calculator instances
+      const calc1 = new PortfolioStatsCalculator();
+      const calc2 = new PortfolioStatsCalculator();
 
-      const statsLow = calcLowConfig.calculatePortfolioStats(trades, dailyLogs);
-      const statsHigh = calcHighConfig.calculatePortfolioStats(trades, dailyLogs);
-      const statsDefault = calcDefaultConfig.calculatePortfolioStats(
-        trades,
-        dailyLogs
-      );
+      const stats1 = calc1.calculatePortfolioStats(trades, dailyLogs);
+      const stats2 = calc2.calculatePortfolioStats(trades, dailyLogs);
 
-      // All should produce the SAME Sharpe/Sortino because they use date-based rates
-      expect(statsLow.sharpeRatio).toBeDefined();
-      expect(statsHigh.sharpeRatio).toBeDefined();
-      expect(statsDefault.sharpeRatio).toBeDefined();
+      // Both should produce the SAME Sharpe/Sortino because they use date-based rates
+      expect(stats1.sharpeRatio).toBeDefined();
+      expect(stats2.sharpeRatio).toBeDefined();
 
-      // These should all be equal (date-based rates are used, not config)
-      expect(statsLow.sharpeRatio).toBeCloseTo(statsHigh.sharpeRatio!, 6);
-      expect(statsLow.sharpeRatio).toBeCloseTo(statsDefault.sharpeRatio!, 6);
-
-      // Same for Sortino
-      expect(statsLow.sortinoRatio).toBeCloseTo(statsHigh.sortinoRatio!, 6);
+      // These should be equal (both use date-based rates)
+      expect(stats1.sharpeRatio).toBeCloseTo(stats2.sharpeRatio!, 6);
+      expect(stats1.sortinoRatio).toBeCloseTo(stats2.sortinoRatio!, 6);
     });
   });
 

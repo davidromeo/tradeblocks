@@ -79,7 +79,6 @@ describe("Performance Snapshot Cache", () => {
       const snapshot = await buildPerformanceSnapshot({
         trades,
         dailyLogs,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
 
@@ -104,7 +103,6 @@ describe("Performance Snapshot Cache", () => {
 
       const snapshot = await buildPerformanceSnapshot({
         trades,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
 
@@ -127,7 +125,6 @@ describe("Performance Snapshot Cache", () => {
 
       const snapshot = await buildPerformanceSnapshot({
         trades,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
 
@@ -148,7 +145,6 @@ describe("Performance Snapshot Cache", () => {
 
       const snapshot = await buildPerformanceSnapshot({
         trades,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
 
@@ -173,7 +169,6 @@ describe("Performance Snapshot Cache", () => {
 
       const snapshot = await buildPerformanceSnapshot({
         trades,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
 
@@ -219,7 +214,6 @@ describe("Performance Snapshot Cache", () => {
       const snapshot = await buildPerformanceSnapshot({
         trades,
         dailyLogs,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
 
@@ -243,7 +237,6 @@ describe("Performance Snapshot Cache", () => {
       const firstTrades = [createMockTrade({ pl: 100 })];
       const firstSnapshot = await buildPerformanceSnapshot({
         trades: firstTrades,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
       await storePerformanceSnapshotCache(blockId, firstSnapshot);
@@ -260,7 +253,6 @@ describe("Performance Snapshot Cache", () => {
       ];
       const secondSnapshot = await buildPerformanceSnapshot({
         trades: secondTrades,
-        riskFreeRate: 2.0,
         normalizeTo1Lot: false,
       });
       await storePerformanceSnapshotCache(blockId, secondSnapshot);
