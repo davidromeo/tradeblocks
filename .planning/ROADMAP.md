@@ -6,9 +6,24 @@
 - ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
 - ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
 - ✅ [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
-- 🚧 **v2.3 Workspace Packages** - Phases 29-31 (in progress)
+- ✅ [v2.3 Workspace Packages](milestones/v2.3-workspace-packages.md) (Phases 29-31) — SHIPPED 2026-01-19
 
 ## Completed Milestones
+
+<details>
+<summary>✅ v2.3 Workspace Packages (Phases 29-31) — SHIPPED 2026-01-19</summary>
+
+Convert lib/ to @tradeblocks/lib workspace package for clean imports across the monorepo.
+
+- [x] Phase 29: workspace-setup (1/1 plan) — completed 2026-01-19
+- [x] Phase 30: import-migration (2/2 plans) — completed 2026-01-19
+- [x] Phase 31: cleanup-verification (1/1 plan) — completed 2026-01-19
+
+**Stats:** 3 phases, 4 plans, ~7 hours execution time
+
+See [v2.3 archive](milestones/v2.3-workspace-packages.md) for full details.
+
+</details>
 
 <details>
 <summary>✅ v2.2 Historical Risk-Free Rates (Phases 25-28) — SHIPPED 2026-01-18</summary>
@@ -87,40 +102,9 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
-### 🚧 v2.3 Workspace Packages (In Progress)
+### Planning Next Milestone
 
-**Milestone Goal:** Convert `lib/` to a proper workspace package (`@tradeblocks/lib`) to fix TypeScript path resolution issues and enable clean imports across the monorepo.
-
-#### Phase 29: workspace-setup — Complete
-
-**Goal**: Create `@tradeblocks/lib` package with workspace config
-**Depends on**: Previous milestone complete
-**Research**: Unlikely (npm workspaces are well-documented)
-**Plans**: 1/1 complete
-
-Plans:
-- [x] 29-01: Create package structure, move lib/, verify workspace resolution
-
-#### Phase 30: import-migration
-
-**Goal**: Update all imports in Next.js app and MCP server to use package imports
-**Depends on**: Phase 29
-**Research**: Unlikely (mechanical find/replace)
-**Plans**: 2
-
-Plans:
-- [x] 30-01: MCP server imports (6 files + config cleanup)
-- [x] 30-02: Next.js app imports (127 files in app/ + components/)
-
-#### Phase 31: cleanup-verification — Complete
-
-**Goal**: Remove old path alias configs, verify type checking/build/tests pass
-**Depends on**: Phase 30
-**Research**: Unlikely (internal cleanup)
-**Plans**: 1/1 complete
-
-Plans:
-- [x] 31-01: Migrate remaining imports, remove @/lib/* alias, verify builds
+No active milestone. Ready to plan next features.
 
 ## Progress
 
@@ -130,7 +114,7 @@ Plans:
 | v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
-| v2.3 Workspace Packages | 29-31 | 4/4 | Complete | - |
+| v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 
 ## Audit Notes
 
