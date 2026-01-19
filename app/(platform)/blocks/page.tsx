@@ -72,7 +72,7 @@ function BlockCard({
 
       // If this block is active, also refresh the performance store
       if (block.isActive) {
-        const { usePerformanceStore } = await import('@/lib/stores/performance-store');
+        const { usePerformanceStore } = await import('@tradeblocks/lib/stores');
         await usePerformanceStore.getState().fetchPerformanceData(block.id);
       }
     } catch (error) {
@@ -229,7 +229,7 @@ function BlockRow({
       );
 
       if (block.isActive) {
-        const { usePerformanceStore } = await import('@/lib/stores/performance-store');
+        const { usePerformanceStore } = await import('@tradeblocks/lib/stores');
         await usePerformanceStore.getState().fetchPerformanceData(block.id);
       }
     } catch (error) {

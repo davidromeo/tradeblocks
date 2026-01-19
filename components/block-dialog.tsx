@@ -278,7 +278,7 @@ export function BlockDialog({
 
       // Load combineLegGroups setting from ProcessedBlock
       (async () => {
-        const { getBlock } = await import("@/lib/db");
+        const { getBlock } = await import("@tradeblocks/lib");
         const processedBlock = await getBlock(block.id);
         if (processedBlock?.analysisConfig) {
           setCombineLegGroups(
@@ -1324,7 +1324,7 @@ export function BlockDialog({
           calculationOrchestrator.clearCache(block.id);
 
           // Handle combined trades cache based on new setting
-          const { getTradesByBlock, getDailyLogsByBlock } = await import("@/lib/db");
+          const { getTradesByBlock, getDailyLogsByBlock } = await import("@tradeblocks/lib");
           const existingTrades = await getTradesByBlock(block.id);
 
           if (combineLegGroups) {
@@ -1624,7 +1624,7 @@ export function BlockDialog({
           // Rebuild performance snapshot cache with updated data
           // Skip if we already rebuilt due to combineLegGroups change
           if (combineLegGroups === currentCombineLegGroups) {
-            const { getTradesByBlockWithOptions, getDailyLogsByBlock } = await import("@/lib/db");
+            const { getTradesByBlockWithOptions, getDailyLogsByBlock } = await import("@tradeblocks/lib");
 
             const trades = await getTradesByBlockWithOptions(block.id, { combineLegGroups });
             const dailyLogs = await getDailyLogsByBlock(block.id);
