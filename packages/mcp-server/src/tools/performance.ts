@@ -902,10 +902,13 @@ function buildPremiumEfficiency(
  * Note: When filtering by strategy, uses the rebuilt equity curve for fundsAtClose
  * values to provide accurate context. The original trade.fundsAtClose includes P&L
  * from all strategies, which would be misleading when viewing a single strategy.
+ *
+ * The equity curve is indexed by tradeNumber (0 = initial, 1 = after trade 1, etc.)
+ * We use the equity AFTER the trade (i.e., at trade's close) for the fundsAtClose value.
  */
 function buildMarginUtilization(
   trades: Trade[],
-  equityCurve?: Array<{ date: string; equity: number }>
+  equityCurve?: Array<{ date: string; equity: number; tradeNumber: number }>
 ): Array<{
   tradeNumber: number;
   date: string;
@@ -915,16 +918,15 @@ function buildMarginUtilization(
   numContracts: number;
   pl: number;
 }> {
-  // Build equity lookup by date if curve provided
-  const equityByDate = new Map<string, number>();
+  // Build equity lookup by trade number if curve provided
+  // This is more reliable than date-based lookup since equity curve points are
+  // keyed by close date and may have offset timestamps for uniqueness
+  const equityByTradeNumber = new Map<number, number>();
   if (equityCurve) {
     for (const point of equityCurve) {
-      const dateKey = point.date.slice(0, 10);
-      equityByDate.set(dateKey, point.equity);
+      equityByTradeNumber.set(point.tradeNumber, point.equity);
     }
   }
-
-  let lastKnownEquity = 0;
 
   return trades
     .map((trade, index) => {
@@ -938,12 +940,15 @@ function buildMarginUtilization(
           : 0;
 
       // Use equity curve value if available, otherwise fall back to trade's fundsAtClose
+      // The equity after this trade = equityCurve[tradeNumber] where tradeNumber = index + 1
       let fundsAtClose: number;
       if (equityCurve && equityCurve.length > 0) {
-        const tradeDateKey = formatDateKey(new Date(trade.dateOpened));
-        const equityValue = equityByDate.get(tradeDateKey) ?? lastKnownEquity;
-        if (equityValue > 0) lastKnownEquity = equityValue;
-        fundsAtClose = equityValue;
+        const tradeNumber = index + 1;
+        const equityValue = equityByTradeNumber.get(tradeNumber);
+        fundsAtClose = equityValue ??
+          (typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
+            ? trade.fundsAtClose
+            : 0);
       } else {
         fundsAtClose =
           typeof trade.fundsAtClose === "number" && isFinite(trade.fundsAtClose)
@@ -1518,10 +1523,12 @@ export function registerPerformanceTools(
 
         if (charts.includes("margin_utilization")) {
           // Pass equity curve to use rebuilt equity for fundsAtClose when filtering
+          // Equity curve includes tradeNumber for accurate lookup by trade index
           const equityCurve =
             (chartData.equityCurve as Array<{
               date: string;
               equity: number;
+              tradeNumber: number;
             }>) || buildEquityCurve(trades);
           chartData.marginUtilization = buildMarginUtilization(trades, equityCurve);
           dataPoints += (chartData.marginUtilization as unknown[]).length;

@@ -1123,6 +1123,9 @@ function calculatePremiumEfficiency(trades: Trade[]) {
  * Calculate margin utilization data for each trade.
  * When an equity curve is provided, uses it to look up equity values instead of
  * the raw fundsAtClose (which may include P&L from other strategies when filtering).
+ *
+ * Note: The equity curve is indexed by tradeNumber (0 = initial, 1 = after trade 1, etc.)
+ * We use the equity AFTER the trade (i.e., at trade's close) for the fundsAtClose value.
  */
 function calculateMarginUtilization(
   trades: Trade[],
@@ -1130,28 +1133,26 @@ function calculateMarginUtilization(
 ) {
   const utilization: SnapshotChartData['marginUtilization'] = []
 
-  // Build equity lookup by date if curve provided
-  const equityByDate = new Map<string, number>()
+  // Build equity lookup by trade number if curve provided
+  // This is more reliable than date-based lookup since equity curve points are
+  // keyed by close date and may have offset timestamps for uniqueness
+  const equityByTradeNumber = new Map<number, number>()
   if (equityCurve) {
     for (const point of equityCurve) {
-      const dateKey = point.date.slice(0, 10)
-      equityByDate.set(dateKey, point.equity)
+      equityByTradeNumber.set(point.tradeNumber, point.equity)
     }
   }
 
-  let lastKnownEquity = 0
-
-  trades.forEach(trade => {
+  trades.forEach((trade, index) => {
     const marginReq = getFiniteNumber(trade.marginReq) ?? 0
     const numContracts = getFiniteNumber(trade.numContracts) ?? 0
 
     // Use equity curve value if available, otherwise fall back to trade's fundsAtClose
+    // The equity after this trade = equityCurve[tradeNumber] where tradeNumber = index + 1
     let fundsAtClose: number
     if (equityCurve && equityCurve.length > 0) {
-      const tradeDateKey = new Date(trade.dateOpened).toISOString().slice(0, 10)
-      const equityValue = equityByDate.get(tradeDateKey) ?? lastKnownEquity
-      if (equityValue > 0) lastKnownEquity = equityValue
-      fundsAtClose = equityValue
+      const tradeNumber = index + 1
+      fundsAtClose = equityByTradeNumber.get(tradeNumber) ?? (getFiniteNumber(trade.fundsAtClose) ?? 0)
     } else {
       fundsAtClose = getFiniteNumber(trade.fundsAtClose) ?? 0
     }

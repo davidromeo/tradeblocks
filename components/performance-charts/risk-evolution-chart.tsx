@@ -21,10 +21,18 @@ interface TradeData {
   marginReq?: number;
 }
 
+interface EquityCurvePoint {
+  date: string;
+  equity: number;
+  highWaterMark: number;
+  tradeNumber: number;
+}
+
 function calculateRollingVolatility(
   trades: TradeData[],
   windowSize: number,
   viewMode: ViewMode,
+  equityCurve?: EquityCurvePoint[],
 ): Array<{ date: string; volatility: number }> {
   if (trades.length < windowSize) {
     return [];
@@ -32,15 +40,13 @@ function calculateRollingVolatility(
 
   const results: Array<{ date: string; volatility: number }> = [];
 
-  // For percent-portfolio mode, track cumulative equity
-  let runningEquity = 0;
-  const equityAtTrade: number[] = [];
-
-  if (viewMode === "percent-portfolio") {
-    // Calculate running equity for each trade
-    for (const trade of trades) {
-      runningEquity += trade.pl;
-      equityAtTrade.push(runningEquity);
+  // For percent-portfolio mode, use the actual equity curve (initial capital + cumulative P&L)
+  // The equity curve is indexed by tradeNumber (0 = initial, 1 = after trade 1, etc.)
+  // Build a lookup by trade number for quick access
+  const equityByTradeNumber = new Map<number, number>();
+  if (viewMode === "percent-portfolio" && equityCurve) {
+    for (const point of equityCurve) {
+      equityByTradeNumber.set(point.tradeNumber, point.equity);
     }
   }
 
@@ -61,11 +67,12 @@ function calculateRollingVolatility(
         return (t.pl / margin) * 100;
       });
     } else {
-      // percent-portfolio: P&L as percentage of portfolio value at that point
-      values = windowTrades.map((t, idx) => {
-        const tradeIndex = i - windowSize + 1 + idx;
-        // Use equity from previous trade as denominator, or skip if <= 0
-        const prevEquity = tradeIndex > 0 ? equityAtTrade[tradeIndex - 1] : 0;
+      // percent-portfolio: P&L as percentage of portfolio value BEFORE the trade
+      // Use equity curve which includes initial capital, not just cumulative P&L
+      values = windowTrades.map((t) => {
+        // Equity BEFORE this trade = equity after the previous trade
+        const prevTradeNumber = t.tradeNumber - 1;
+        const prevEquity = equityByTradeNumber.get(prevTradeNumber) ?? 0;
         if (prevEquity <= 0) return 0;
         return (t.pl / prevEquity) * 100;
       });
@@ -117,6 +124,7 @@ export function RiskEvolutionChart({ className }: RiskEvolutionChartProps) {
       data.tradeSequence,
       windowSize,
       viewMode,
+      data.equityCurve,
     );
 
     if (volatilityData.length === 0) {
