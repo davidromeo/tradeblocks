@@ -669,11 +669,12 @@ function buildRomTimeline(
 
 /**
  * Build rolling metrics (30-trade rolling window)
+ * Note: Uses fixed 2.0% risk-free rate for Sharpe as a simplification for visualization.
+ * The accurate date-based Sharpe is computed by portfolio-stats.ts for actual statistics.
  */
 function buildRollingMetrics(
   trades: Trade[],
-  windowSize: number = 30,
-  riskFreeRate: number = 2.0
+  windowSize: number = 30
 ): Array<{
   date: string;
   tradeNumber: number;
@@ -734,8 +735,9 @@ function buildRollingMetrics(
           ? 999
           : 0;
 
-    // Sharpe uses daily risk-free rate approximation
-    const dailyRfr = riskFreeRate / 100 / 252;
+    // Sharpe uses fixed 2.0% risk-free rate approximation for visualization
+    // The accurate date-based rate is used in portfolio-stats.ts calculations
+    const dailyRfr = 2.0 / 100 / 252;
     const excessReturn = avgReturn - dailyRfr;
     const sharpeRatio = volatility > 0 ? excessReturn / volatility : 0;
 
@@ -1153,12 +1155,6 @@ export function registerPerformanceTools(
           })
           .optional()
           .describe("Filter trades to date range"),
-        riskFreeRate: z
-          .number()
-          .default(2.0)
-          .describe(
-            "Annual risk-free rate % for Sharpe calculations in rolling_metrics (default: 2.0)"
-          ),
         normalizeTo1Lot: z
           .boolean()
           .default(false)
@@ -1196,7 +1192,6 @@ export function registerPerformanceTools(
       strategy,
       charts,
       dateRange,
-      riskFreeRate,
       normalizeTo1Lot,
       bucketCount,
       rollingWindowSize,
@@ -1317,8 +1312,7 @@ export function registerPerformanceTools(
         if (charts.includes("rolling_metrics")) {
           chartData.rollingMetrics = buildRollingMetrics(
             trades,
-            rollingWindowSize,
-            riskFreeRate
+            rollingWindowSize
           );
           dataPoints += (chartData.rollingMetrics as unknown[]).length;
         }
@@ -1434,7 +1428,6 @@ export function registerPerformanceTools(
           strategy: strategy ?? null,
           dateRange: dateRange ?? null,
           normalizeTo1Lot,
-          riskFreeRate,
           bucketCount,
           rollingWindowSize,
           mfeMaeBucketSize,
