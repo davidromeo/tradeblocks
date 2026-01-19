@@ -110,6 +110,25 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 2. Add entries in format `"YYYY-MM-DD": X.XX,`
 3. Run tests: `npm test -- tests/unit/risk-free-rate.test.ts`
 
+### MCP Server Considerations
+
+When adding new metrics, calculations, or chart data to the UI, **consider whether it should also be exposed via the MCP server** (`packages/mcp-server/`). The MCP server allows Claude to programmatically access portfolio data and statistics.
+
+**Key MCP tools to consider updating:**
+- `get_statistics` (in `src/tools/blocks.ts`) - Add new summary metrics here (e.g., peak exposure alongside max drawdown)
+- `get_performance_charts` (in `src/tools/performance.ts`) - Add new chart data types here (e.g., daily_exposure alongside equity_curve)
+
+**When to add to MCP:**
+- New summary statistics that would be useful for AI analysis
+- New time series data that could answer user questions
+- New risk metrics or portfolio health indicators
+
+**MCP server structure:**
+- `src/tools/blocks.ts` - Core stats, block listing, comparisons
+- `src/tools/performance.ts` - Chart data, period returns, backtest vs actual
+- `src/tools/analysis.ts` - Monte Carlo, walk-forward, correlations
+- `src/tools/reports.ts` - Custom queries, field statistics
+
 ### Trading Calendar Data Model
 
 The Trading Calendar feature compares **backtest** (theoretical) results against **actual** (reported/live) trades. **CRITICAL**: The variable names map as follows:
