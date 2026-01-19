@@ -107,15 +107,15 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 **Milestone Goal:** Add MCP tools that help users identify which entry conditions predict trade success, enabling data-driven filter optimization for backtests.
 
-#### Phase 32: find-predictive-fields
+#### Phase 32: find-predictive-fields ✅
 
 **Goal**: Tool that scans all numeric fields, calculates correlation with P/L, and returns ranked list of predictive factors
 **Depends on**: Previous milestone complete
 **Research**: Unlikely (internal patterns, builds on existing field infrastructure)
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 32-01: TBD (run /gsd:plan-phase 32 to break down)
+- [x] 32-01: find_predictive_fields MCP tool — completed 2026-01-19
 
 #### Phase 33: filter-curve
 
