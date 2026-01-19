@@ -64,6 +64,142 @@ function filterByDateRange(
 }
 
 /**
+ * Helper to get a finite number or undefined
+ */
+function getFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && isFinite(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+/**
+ * Format date key to YYYY-MM-DD
+ */
+function formatDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Peak exposure data
+ */
+interface PeakExposure {
+  date: string;
+  exposure: number;
+  exposurePercent: number;
+}
+
+/**
+ * Calculate peak daily exposure by finding the day with highest total margin requirement.
+ * Reconstructs which trades were open on each calendar day.
+ */
+function calculatePeakExposure(
+  trades: Trade[],
+  initialCapital: number
+): {
+  peakByDollars: PeakExposure | null;
+  peakByPercent: PeakExposure | null;
+} {
+  if (trades.length === 0) {
+    return { peakByDollars: null, peakByPercent: null };
+  }
+
+  // Build equity map from trades
+  const sortedTrades = [...trades].sort(
+    (a, b) => new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+  );
+
+  const equityByDate = new Map<string, number>();
+  let runningEquity = initialCapital;
+
+  for (const trade of sortedTrades) {
+    runningEquity += trade.pl;
+    const dateKey = formatDateKey(new Date(trade.dateOpened));
+    equityByDate.set(dateKey, runningEquity);
+  }
+
+  // Find date range
+  let minDate: Date | null = null;
+  let maxDate: Date | null = null;
+
+  for (const trade of trades) {
+    const openDate = new Date(trade.dateOpened);
+    if (isNaN(openDate.getTime())) continue;
+
+    if (!minDate || openDate < minDate) minDate = openDate;
+    if (!maxDate || openDate > maxDate) maxDate = openDate;
+
+    if (trade.dateClosed) {
+      const closeDate = new Date(trade.dateClosed);
+      if (!isNaN(closeDate.getTime()) && closeDate > maxDate) {
+        maxDate = closeDate;
+      }
+    }
+  }
+
+  if (!minDate || !maxDate) {
+    return { peakByDollars: null, peakByPercent: null };
+  }
+
+  // Iterate through each day
+  let peakByDollars: PeakExposure | null = null;
+  let peakByPercent: PeakExposure | null = null;
+  let lastKnownEquity = initialCapital;
+
+  const currentDate = new Date(minDate);
+  currentDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(maxDate);
+  endDate.setHours(23, 59, 59, 999);
+
+  while (currentDate <= endDate) {
+    const dateKey = formatDateKey(currentDate);
+
+    let totalExposure = 0;
+    let openPositions = 0;
+
+    for (const trade of trades) {
+      const openDate = new Date(trade.dateOpened);
+      openDate.setHours(0, 0, 0, 0);
+
+      if (openDate > currentDate) continue;
+
+      if (trade.dateClosed) {
+        const closeDate = new Date(trade.dateClosed);
+        closeDate.setHours(23, 59, 59, 999);
+        if (closeDate < currentDate) continue;
+      }
+
+      const margin = getFiniteNumber(trade.marginReq) ?? 0;
+      if (margin > 0) {
+        totalExposure += margin;
+        openPositions++;
+      }
+    }
+
+    const equity = equityByDate.get(dateKey) ?? lastKnownEquity;
+    if (equity > 0) lastKnownEquity = equity;
+
+    const exposurePercent = equity > 0 ? (totalExposure / equity) * 100 : 0;
+
+    if (openPositions > 0) {
+      if (!peakByDollars || totalExposure > peakByDollars.exposure) {
+        peakByDollars = { date: dateKey, exposure: totalExposure, exposurePercent };
+      }
+      if (!peakByPercent || exposurePercent > peakByPercent.exposurePercent) {
+        peakByPercent = { date: dateKey, exposure: totalExposure, exposurePercent };
+      }
+    }
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return { peakByDollars, peakByPercent };
+}
+
+/**
  * Register all block-related MCP tools
  */
 export function registerBlockTools(server: McpServer, baseDir: string): void {
@@ -313,6 +449,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           isStrategyFiltered
         );
 
+        // Calculate peak daily exposure
+        const peakExposure = calculatePeakExposure(trades, stats.initialCapital);
+
         // Brief summary for user display
         const summary = `Stats: ${blockId}${strategy ? ` (${strategy})` : ""} | ${stats.totalTrades} trades | Win: ${formatPercent(stats.winRate * 100)} | Net P&L: ${formatCurrency(stats.netPl)} | Sharpe: ${formatRatio(stats.sharpeRatio)}`;
 
@@ -383,6 +522,10 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             currentStreak: stats.currentStreak,
             monthlyWinRate: stats.monthlyWinRate,
             weeklyWinRate: stats.weeklyWinRate,
+          },
+          peakExposure: {
+            byDollars: peakExposure.peakByDollars,
+            byPercent: peakExposure.peakByPercent,
           },
         };
 

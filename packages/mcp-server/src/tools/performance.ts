@@ -1099,6 +1099,163 @@ function filterByDateRange(
 // of recalculating based on cumulative scaled P&L.
 
 /**
+ * Helper to get a finite number or undefined
+ */
+function getFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && isFinite(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+/**
+ * Daily exposure data point
+ */
+interface DailyExposurePoint {
+  date: string;
+  exposure: number;
+  exposurePercent: number;
+  openPositions: number;
+}
+
+/**
+ * Peak exposure data
+ */
+interface PeakExposure {
+  date: string;
+  exposure: number;
+  exposurePercent: number;
+}
+
+/**
+ * Calculate daily exposure by reconstructing which trades were open on each calendar day.
+ * For each day, sums the margin requirements of all open positions.
+ */
+function buildDailyExposure(
+  trades: Trade[],
+  equityCurve: Array<{ date: string; equity: number }>
+): {
+  dailyExposure: DailyExposurePoint[];
+  peakDailyExposure: PeakExposure | null;
+  peakDailyExposurePercent: PeakExposure | null;
+} {
+  if (trades.length === 0) {
+    return { dailyExposure: [], peakDailyExposure: null, peakDailyExposurePercent: null };
+  }
+
+  // Build a map of equity by date for percentage calculations
+  const equityByDate = new Map<string, number>();
+  for (const point of equityCurve) {
+    // Extract just the date portion (YYYY-MM-DD)
+    const dateKey = point.date.slice(0, 10);
+    equityByDate.set(dateKey, point.equity);
+  }
+
+  // Find the date range
+  let minDate: Date | null = null;
+  let maxDate: Date | null = null;
+
+  for (const trade of trades) {
+    const openDate = new Date(trade.dateOpened);
+    if (isNaN(openDate.getTime())) continue;
+
+    if (!minDate || openDate < minDate) minDate = openDate;
+    if (!maxDate || openDate > maxDate) maxDate = openDate;
+
+    if (trade.dateClosed) {
+      const closeDate = new Date(trade.dateClosed);
+      if (!isNaN(closeDate.getTime()) && closeDate > maxDate) {
+        maxDate = closeDate;
+      }
+    }
+  }
+
+  if (!minDate || !maxDate) {
+    return { dailyExposure: [], peakDailyExposure: null, peakDailyExposurePercent: null };
+  }
+
+  // Iterate through each day in the range
+  const dailyExposure: DailyExposurePoint[] = [];
+  let peakDailyExposure: PeakExposure | null = null;
+  let peakDailyExposurePercent: PeakExposure | null = null;
+  let lastKnownEquity = 0;
+
+  const currentDate = new Date(minDate);
+  currentDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(maxDate);
+  endDate.setHours(23, 59, 59, 999);
+
+  while (currentDate <= endDate) {
+    const dateKey = formatDateKey(currentDate);
+
+    // Find all trades open on this day
+    let totalExposure = 0;
+    let openPositions = 0;
+
+    for (const trade of trades) {
+      const openDate = new Date(trade.dateOpened);
+      openDate.setHours(0, 0, 0, 0);
+
+      // Trade must be opened on or before this day
+      if (openDate > currentDate) continue;
+
+      // If trade has a close date, it must be on or after this day
+      if (trade.dateClosed) {
+        const closeDate = new Date(trade.dateClosed);
+        closeDate.setHours(23, 59, 59, 999);
+        if (closeDate < currentDate) continue;
+      }
+
+      // Trade is open on this day
+      const margin = getFiniteNumber(trade.marginReq) ?? 0;
+      if (margin > 0) {
+        totalExposure += margin;
+        openPositions++;
+      }
+    }
+
+    // Get equity for percentage calculation
+    const equity = equityByDate.get(dateKey) ?? lastKnownEquity;
+    if (equity > 0) lastKnownEquity = equity;
+
+    const exposurePercent = equity > 0 ? (totalExposure / equity) * 100 : 0;
+
+    // Only include days with open positions
+    if (openPositions > 0) {
+      dailyExposure.push({
+        date: dateKey,
+        exposure: totalExposure,
+        exposurePercent,
+        openPositions,
+      });
+
+      // Track peak exposure (by dollar amount)
+      if (!peakDailyExposure || totalExposure > peakDailyExposure.exposure) {
+        peakDailyExposure = {
+          date: dateKey,
+          exposure: totalExposure,
+          exposurePercent,
+        };
+      }
+
+      // Track peak exposure (by percentage)
+      if (!peakDailyExposurePercent || exposurePercent > peakDailyExposurePercent.exposurePercent) {
+        peakDailyExposurePercent = {
+          date: dateKey,
+          exposure: totalExposure,
+          exposurePercent,
+        };
+      }
+    }
+
+    // Move to next day
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return { dailyExposure, peakDailyExposure, peakDailyExposurePercent };
+}
+
+/**
  * Register all performance MCP tools
  */
 export function registerPerformanceTools(
@@ -1136,11 +1293,12 @@ export function registerPerformanceTools(
               "margin_utilization",
               "volatility_regimes",
               "mfe_mae",
+              "daily_exposure",
             ])
           )
           .default(["equity_curve", "drawdown", "monthly_returns"])
           .describe(
-            "Which charts to include. Options: equity_curve, drawdown, monthly_returns, monthly_returns_percent, return_distribution, day_of_week, streak_data (win/loss streaks + runs test), trade_sequence (P&L by trade #), rom_timeline (Return on Margin over time), rolling_metrics (30-trade rolling sharpe/win rate), exit_reason_breakdown, holding_periods, premium_efficiency, margin_utilization, volatility_regimes (VIX-correlated), mfe_mae (Maximum Favorable/Adverse Excursion for stop loss/take profit optimization)"
+            "Which charts to include. Options: equity_curve, drawdown, monthly_returns, monthly_returns_percent, return_distribution, day_of_week, streak_data (win/loss streaks + runs test), trade_sequence (P&L by trade #), rom_timeline (Return on Margin over time), rolling_metrics (30-trade rolling sharpe/win rate), exit_reason_breakdown, holding_periods, premium_efficiency, margin_utilization, volatility_regimes (VIX-correlated), mfe_mae (Maximum Favorable/Adverse Excursion for stop loss/take profit optimization), daily_exposure (daily margin exposure with peak tracking)"
           ),
         dateRange: z
           .object({
@@ -1407,6 +1565,42 @@ export function registerPerformanceTools(
             },
           };
           dataPoints += simplifiedData.length + distribution.length;
+        }
+
+        if (charts.includes("daily_exposure")) {
+          // Need equity curve for percentage calculations
+          const equityCurve =
+            (chartData.equityCurve as Array<{
+              date: string;
+              equity: number;
+              highWaterMark: number;
+            }>) || buildEquityCurve(trades);
+
+          const exposureData = buildDailyExposure(trades, equityCurve);
+          chartData.dailyExposure = {
+            timeSeries: exposureData.dailyExposure,
+            peakByDollars: exposureData.peakDailyExposure,
+            peakByPercent: exposureData.peakDailyExposurePercent,
+            statistics: {
+              totalDays: exposureData.dailyExposure.length,
+              avgExposure:
+                exposureData.dailyExposure.length > 0
+                  ? exposureData.dailyExposure.reduce((sum, d) => sum + d.exposure, 0) /
+                    exposureData.dailyExposure.length
+                  : 0,
+              avgExposurePercent:
+                exposureData.dailyExposure.length > 0
+                  ? exposureData.dailyExposure.reduce((sum, d) => sum + d.exposurePercent, 0) /
+                    exposureData.dailyExposure.length
+                  : 0,
+              avgOpenPositions:
+                exposureData.dailyExposure.length > 0
+                  ? exposureData.dailyExposure.reduce((sum, d) => sum + d.openPositions, 0) /
+                    exposureData.dailyExposure.length
+                  : 0,
+            },
+          };
+          dataPoints += exposureData.dailyExposure.length;
         }
 
         // Brief summary for user display

@@ -926,7 +926,7 @@ export default function BlockStatsPage() {
         icon={<AlertTriangle className="w-4 h-4" />}
         badge="POSITION-SIZE DEPENDENT"
         badgeVariant="secondary"
-        gridCols={5}
+        gridCols={6}
       >
         <MetricCard
           title="Max Drawdown"
