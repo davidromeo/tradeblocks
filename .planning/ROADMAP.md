@@ -113,7 +113,7 @@ Plans:
 Plans:
 - [x] 26-01: Date-based risk-free rates for Sharpe/Sortino (TDD) — completed 2026-01-18
 
-### Phase 27: Remove Manual Input 🚧
+### Phase 27: Remove Manual Input ✅
 
 **Goal**: Remove riskFreeRate from types, stores, UI, and services
 **Depends on**: Phase 26
@@ -123,7 +123,7 @@ Plans:
 Plans:
 - [x] 27-01: Remove riskFreeRate from types/models — completed 2026-01-18
 - [x] 27-02: Remove from stores/services/UI — completed 2026-01-18
-- [ ] 27-03: Remove from MCP/tests
+- [x] 27-03: Remove from MCP/tests — completed 2026-01-19
 
 ### Phase 28: MCP & Tests
 
@@ -143,7 +143,7 @@ Plans:
 |-------|-----------|-------|--------|-----------|
 | 25. Treasury Data | v2.2 | 1/1 | Complete | 2026-01-18 |
 | 26. Core Calculations | v2.2 | 1/1 | Complete | 2026-01-18 |
-| 27. Remove Manual Input | v2.2 | 2/3 | In progress | - |
+| 27. Remove Manual Input | v2.2 | 3/3 | Complete | 2026-01-19 |
 | 28. MCP & Tests | v2.2 | 0/? | Not started | - |
 
 ## Audit Notes
