@@ -109,7 +109,7 @@ Plans:
 **Plans**: 2
 
 Plans:
-- [ ] 30-01: MCP server imports (6 files + config cleanup)
+- [x] 30-01: MCP server imports (6 files + config cleanup)
 - [ ] 30-02: Next.js app imports (127 files in app/ + components/)
 
 #### Phase 31: cleanup-verification
@@ -130,7 +130,7 @@ Plans:
 | v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
-| v2.3 Workspace Packages | 29-31 | 0/? | In progress | - |
+| v2.3 Workspace Packages | 29-31 | 2/? | In progress | - |
 
 ## Audit Notes
 
