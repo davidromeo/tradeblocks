@@ -7,8 +7,8 @@
  * - test_performance_metrics.py
  */
 
-import { PortfolioStatsCalculator } from '../../lib/calculations/portfolio-stats';
-import { Trade } from '../../lib/models/trade';
+import { PortfolioStatsCalculator } from '../../packages/lib/calculations/portfolio-stats';
+import { Trade } from '../../packages/lib/models/trade';
 // import { DailyLogEntry } from '../../lib/models/daily-log';
 import { CsvTestDataLoader } from '../data/csv-loader';
 

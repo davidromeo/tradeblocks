@@ -1,4 +1,4 @@
-import { TradeProcessor } from '../../lib/processing/trade-processor'
+import { TradeProcessor } from '../../packages/lib/processing/trade-processor'
 
 describe('TradeProcessor validateRawTradeData', () => {
   it('normalizes blank strategy values to Unknown', () => {
