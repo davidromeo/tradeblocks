@@ -1,10 +1,12 @@
 /**
- * Daily exposure calculation using a sweep-line algorithm.
+ * Daily exposure calculation using a time-aware sweep-line algorithm.
  *
- * Instead of O(N×M) checking all trades for each day, we use O(N+M) by:
- * 1. Pre-computing exposure change events (opens add margin, closes remove it)
- * 2. Sorting events chronologically
- * 3. Sweeping through dates and accumulating exposure changes
+ * Calculates the peak concurrent margin exposure for each day by tracking
+ * when trades actually open and close (using timeOpened/timeClosed), not
+ * just which calendar day they were active.
+ *
+ * This correctly handles intraday trading where trades open and close
+ * sequentially - 7 sequential trades = 1× margin, not 7×.
  */
 
 import type { Trade } from '@/lib/models/trade'
@@ -17,6 +19,8 @@ export interface DailyExposurePoint {
   exposure: number
   exposurePercent: number
   openPositions: number
+  /** Time of day when peak exposure occurred (HH:mm:ss) */
+  peakTime?: string
 }
 
 /**
@@ -63,7 +67,38 @@ function formatDateKey(date: Date): string {
 }
 
 /**
- * Calculate daily exposure using a sweep-line algorithm.
+ * Parse a time string (HH:mm:ss or HH:mm) to minutes since midnight
+ */
+function parseTimeToMinutes(timeStr: string | undefined): number {
+  if (!timeStr) return 0
+  const parts = timeStr.split(':')
+  const hours = parseInt(parts[0], 10) || 0
+  const minutes = parseInt(parts[1], 10) || 0
+  return hours * 60 + minutes
+}
+
+/**
+ * Format minutes since midnight to HH:mm:ss
+ */
+function formatMinutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`
+}
+
+/** Internal event for tracking margin changes at specific times */
+interface TimedEvent {
+  dateKey: string
+  timeMinutes: number // minutes since midnight
+  type: 'open' | 'close'
+  margin: number
+}
+
+/**
+ * Calculate daily exposure using a time-aware sweep-line algorithm.
+ *
+ * For each day, we track when trades open and close to find the peak
+ * concurrent margin exposure at any moment during that day.
  *
  * @param trades - Array of trades to analyze
  * @param equityCurve - Array of equity curve points for percentage calculations
@@ -84,9 +119,8 @@ export function calculateDailyExposure(
     equityByDate.set(dateKey, point.equity)
   }
 
-  // Build exposure change events: +margin on open day, -margin on day AFTER close
-  type ExposureEvent = { dateKey: string; marginDelta: number; positionDelta: number }
-  const events: ExposureEvent[] = []
+  // Build timed events for each trade
+  const events: TimedEvent[] = []
 
   for (const trade of trades) {
     const margin = getFiniteNumber(trade.marginReq) ?? 0
@@ -94,97 +128,145 @@ export function calculateDailyExposure(
 
     const openDate = new Date(trade.dateOpened)
     if (isNaN(openDate.getTime())) continue
-    openDate.setHours(0, 0, 0, 0)
-    const openKey = formatDateKey(openDate)
+    const openDateKey = formatDateKey(openDate)
+    const openTimeMinutes = parseTimeToMinutes(trade.timeOpened)
 
-    // Add margin on open date
-    events.push({ dateKey: openKey, marginDelta: margin, positionDelta: 1 })
+    // Add open event
+    events.push({
+      dateKey: openDateKey,
+      timeMinutes: openTimeMinutes,
+      type: 'open',
+      margin
+    })
 
-    // Remove margin on day AFTER close (so close day still shows as open)
+    // Add close event if trade is closed
     if (trade.dateClosed) {
       const closeDate = new Date(trade.dateClosed)
       if (!isNaN(closeDate.getTime())) {
-        closeDate.setHours(0, 0, 0, 0)
-        closeDate.setDate(closeDate.getDate() + 1) // Day after close
-        const closeKey = formatDateKey(closeDate)
-        events.push({ dateKey: closeKey, marginDelta: -margin, positionDelta: -1 })
+        const closeDateKey = formatDateKey(closeDate)
+        // Use timeClosed, default to end of day if not provided
+        const closeTimeMinutes = trade.timeClosed
+          ? parseTimeToMinutes(trade.timeClosed)
+          : 23 * 60 + 59 // 23:59
+
+        events.push({
+          dateKey: closeDateKey,
+          timeMinutes: closeTimeMinutes,
+          type: 'close',
+          margin
+        })
       }
     }
-    // If no close date, position stays open indefinitely (no removal event)
+    // If no close date, position stays open indefinitely (no close event)
   }
 
   if (events.length === 0) {
     return { dailyExposure: [], peakDailyExposure: null, peakDailyExposurePercent: null }
   }
 
-  // Sort events by date
-  events.sort((a, b) => a.dateKey.localeCompare(b.dateKey))
-
-  // Aggregate events by date into a map of daily deltas
-  const dailyDeltas = new Map<string, { marginDelta: number; positionDelta: number }>()
+  // Group events by date
+  const eventsByDate = new Map<string, TimedEvent[]>()
   for (const event of events) {
-    const existing = dailyDeltas.get(event.dateKey) ?? { marginDelta: 0, positionDelta: 0 }
-    existing.marginDelta += event.marginDelta
-    existing.positionDelta += event.positionDelta
-    dailyDeltas.set(event.dateKey, existing)
+    const existing = eventsByDate.get(event.dateKey) ?? []
+    existing.push(event)
+    eventsByDate.set(event.dateKey, existing)
   }
 
-  // Find date range from events
-  const sortedDates = Array.from(dailyDeltas.keys()).sort()
-  const minDateKey = sortedDates[0]
-  const maxDateKey = sortedDates[sortedDates.length - 1]
+  // Track running exposure across days (for multi-day positions)
+  // We need to process days in order to carry forward open positions
+  const allDates = Array.from(eventsByDate.keys()).sort()
 
-  // Sweep through dates, accumulating exposure
+  // Find the full date range including days between events
+  const minDateKey = allDates[0]
+  const maxDateKey = allDates[allDates.length - 1]
+
   const dailyExposure: DailyExposurePoint[] = []
   let peakDailyExposure: PeakExposure | null = null
   let peakDailyExposurePercent: PeakExposure | null = null
   let lastKnownEquity = 0
 
-  let runningExposure = 0
-  let runningPositions = 0
+  // Track positions that are still open from previous days
+  // Map of margin values for open positions
+  let carryOverExposure = 0
+  let carryOverPositions = 0
 
   const currentDate = new Date(minDateKey + 'T00:00:00.000Z')
   const endDate = new Date(maxDateKey + 'T00:00:00.000Z')
 
   while (currentDate <= endDate) {
     const dateKey = formatDateKey(currentDate)
+    const dayEvents = eventsByDate.get(dateKey) ?? []
 
-    // Apply any deltas for this day
-    const delta = dailyDeltas.get(dateKey)
-    if (delta) {
-      runningExposure += delta.marginDelta
-      runningPositions += delta.positionDelta
+    // Sort events by time, with opens before closes at same time
+    // This ensures if a trade opens and closes at the exact same time,
+    // we see the exposure momentarily
+    dayEvents.sort((a, b) => {
+      if (a.timeMinutes !== b.timeMinutes) {
+        return a.timeMinutes - b.timeMinutes
+      }
+      // At same time: opens before closes
+      return a.type === 'open' ? -1 : 1
+    })
+
+    // Sweep through the day to find peak exposure
+    let runningExposure = carryOverExposure
+    let runningPositions = carryOverPositions
+    let dayPeakExposure = runningExposure
+    let dayPeakPositions = runningPositions
+    let dayPeakTimeMinutes = 0
+
+    for (const event of dayEvents) {
+      if (event.type === 'open') {
+        runningExposure += event.margin
+        runningPositions += 1
+      } else {
+        runningExposure -= event.margin
+        runningPositions -= 1
+      }
+
+      // Track peak
+      if (runningExposure > dayPeakExposure) {
+        dayPeakExposure = runningExposure
+        dayPeakPositions = runningPositions
+        dayPeakTimeMinutes = event.timeMinutes
+      }
     }
+
+    // Update carry-over for next day
+    carryOverExposure = runningExposure
+    carryOverPositions = runningPositions
 
     // Get equity for percentage calculation
     const equity = equityByDate.get(dateKey) ?? lastKnownEquity
     if (equity > 0) lastKnownEquity = equity
 
-    const exposurePercent = equity > 0 ? (runningExposure / equity) * 100 : 0
+    const exposurePercent = equity > 0 ? (dayPeakExposure / equity) * 100 : 0
 
-    // Only include days with open positions
-    if (runningPositions > 0 && runningExposure > 0) {
-      dailyExposure.push({
+    // Only include days with exposure
+    if (dayPeakExposure > 0) {
+      const point: DailyExposurePoint = {
         date: currentDate.toISOString(),
-        exposure: runningExposure,
+        exposure: dayPeakExposure,
         exposurePercent,
-        openPositions: runningPositions
-      })
+        openPositions: dayPeakPositions,
+        peakTime: formatMinutesToTime(dayPeakTimeMinutes)
+      }
+      dailyExposure.push(point)
 
-      // Track peak exposure (by dollar amount)
-      if (!peakDailyExposure || runningExposure > peakDailyExposure.exposure) {
+      // Track overall peak exposure (by dollar amount)
+      if (!peakDailyExposure || dayPeakExposure > peakDailyExposure.exposure) {
         peakDailyExposure = {
           date: currentDate.toISOString(),
-          exposure: runningExposure,
+          exposure: dayPeakExposure,
           exposurePercent
         }
       }
 
-      // Track peak exposure (by percentage)
+      // Track overall peak exposure (by percentage)
       if (!peakDailyExposurePercent || exposurePercent > peakDailyExposurePercent.exposurePercent) {
         peakDailyExposurePercent = {
           date: currentDate.toISOString(),
-          exposure: runningExposure,
+          exposure: dayPeakExposure,
           exposurePercent
         }
       }
