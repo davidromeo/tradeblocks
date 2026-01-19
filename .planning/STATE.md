@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Planning next milestone
+**Current focus:** Backtest optimization tools for MCP server
 
 ## Current Position
 
-Milestone: None active
-Phase: -
-Plan: -
-Status: Ready to plan next milestone
-Last activity: 2026-01-19 — v2.3 milestone complete
+Milestone: v2.4 Backtest Optimization Tools
+Phase: 32 of 34 (find-predictive-fields)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-01-19 — Milestone v2.4 created
 
-Progress: Ready for next milestone
+Progress: ░░░░░░░░░░ 0%
 
 ## Historical Context
 
@@ -32,9 +32,9 @@ All decisions now captured in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-01-19
-Stopped at: v2.3 milestone shipped
+Stopped at: Milestone v2.4 initialization
 Resume file: None
-Next: Plan next milestone (/gsd:discuss-milestone)
+Next: Plan Phase 32 (/gsd:plan-phase 32)
 
 ## Testing Infrastructure
 

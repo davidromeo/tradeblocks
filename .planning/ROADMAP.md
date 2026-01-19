@@ -7,6 +7,7 @@
 - ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
 - ✅ [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
 - ✅ [v2.3 Workspace Packages](milestones/v2.3-workspace-packages.md) (Phases 29-31) — SHIPPED 2026-01-19
+- 🚧 **v2.4 Backtest Optimization Tools** — Phases 32-34 (in progress)
 
 ## Completed Milestones
 
@@ -102,9 +103,39 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
-### Planning Next Milestone
+### 🚧 v2.4 Backtest Optimization Tools (In Progress)
 
-No active milestone. Ready to plan next features.
+**Milestone Goal:** Add MCP tools that help users identify which entry conditions predict trade success, enabling data-driven filter optimization for backtests.
+
+#### Phase 32: find-predictive-fields
+
+**Goal**: Tool that scans all numeric fields, calculates correlation with P/L, and returns ranked list of predictive factors
+**Depends on**: Previous milestone complete
+**Research**: Unlikely (internal patterns, builds on existing field infrastructure)
+**Plans**: TBD
+
+Plans:
+- [ ] 32-01: TBD (run /gsd:plan-phase 32 to break down)
+
+#### Phase 33: filter-curve
+
+**Goal**: Tool that sweeps thresholds for a field with bidirectional analysis (lt/gt/both modes), returns full outcome curve, and surfaces sweet spots
+**Depends on**: Phase 32
+**Research**: Unlikely (builds on existing query infrastructure)
+**Plans**: TBD
+
+Plans:
+- [ ] 33-01: TBD
+
+#### Phase 34: report-tools-fixes
+
+**Goal**: Fix `aggregate_by_field` bug and any related issues discovered during exploration
+**Depends on**: Phase 33
+**Research**: Unlikely (bug fixes)
+**Plans**: TBD
+
+Plans:
+- [ ] 34-01: TBD
 
 ## Progress
 
@@ -115,6 +146,7 @@ No active milestone. Ready to plan next features.
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
+| v2.4 Backtest Optimization Tools | 32-34 | TBD | In progress | - |
 
 ## Audit Notes
 
