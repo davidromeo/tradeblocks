@@ -721,8 +721,11 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
           .describe("Number of histogram buckets (default: 10)"),
       }),
     },
-    async ({ blockId, field, strategy, startDate, endDate, histogramBuckets }) => {
+    async ({ blockId, field, strategy, startDate, endDate, histogramBuckets: rawHistogramBuckets }) => {
       try {
+        // Apply runtime default (Zod defaults don't always apply in MCP SDK)
+        const histogramBuckets = rawHistogramBuckets ?? 10;
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
