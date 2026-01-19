@@ -14,9 +14,9 @@
 import { useMemo, useState, useCallback } from "react";
 import type { Layout, PlotData, Shape } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
-import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
-import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
-import { formatMinutesToTime, generateTimeAxisTicksFromData } from "@/lib/utils/time-formatting";
+import { EnrichedTrade, getEnrichedTradeValue } from "@tradeblocks/lib";
+import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@tradeblocks/lib";
+import { formatMinutesToTime, generateTimeAxisTicksFromData } from "@tradeblocks/lib";
 import { WhatIfExplorer2D, YAxisConfig, YAxisRange } from "./what-if-explorer-2d";
 
 /**

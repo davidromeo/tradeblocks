@@ -5,7 +5,7 @@
  * are correctly parsed into UTC dates that can be matched against trades.
  */
 
-import { processStaticDatasetContent } from '@/lib/processing/static-dataset-processor'
+import { processStaticDatasetContent } from '@tradeblocks/lib'
 
 /**
  * Format a date in Eastern Time for verification

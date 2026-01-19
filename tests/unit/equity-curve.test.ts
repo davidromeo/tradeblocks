@@ -13,8 +13,8 @@ import {
   rebuildEquityCurve,
   scaleTradesWithEquityCurve,
   normalizeToOneLot,
-} from '@/lib/utils/equity-curve'
-import { Trade } from '@/lib/models/trade'
+  Trade,
+} from '@tradeblocks/lib'
 
 // Helper to create a minimal valid trade
 function createTrade(overrides: Partial<Trade>): Trade {

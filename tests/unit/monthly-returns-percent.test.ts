@@ -1,7 +1,5 @@
 import { describe, it, expect } from '@jest/globals'
-import { processChartData } from '@/lib/services/performance-snapshot'
-import { Trade } from '@/lib/models/trade'
-import { DailyLogEntry } from '@/lib/models/daily-log'
+import { processChartData, Trade, DailyLogEntry } from '@tradeblocks/lib'
 
 /**
  * Helper to create a date at local midnight (same as parseDatePreservingCalendarDay)

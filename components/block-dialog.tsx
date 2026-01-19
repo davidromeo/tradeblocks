@@ -31,8 +31,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { calculationOrchestrator } from "@/lib/calculations";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+import { calculationOrchestrator } from "@tradeblocks/lib";
+import { PortfolioStatsCalculator } from "@tradeblocks/lib";
 import {
   addDailyLogEntries,
   addReportingTrades,
@@ -44,55 +44,55 @@ import {
   updateBlock as updateProcessedBlock,
   updateReportingTradesForBlock,
   updateTradesForBlock,
-} from "@/lib/db";
+} from "@tradeblocks/lib";
 import {
   storeCombinedTradesCache,
   deleteCombinedTradesCache,
-} from "@/lib/db/combined-trades-cache";
+} from "@tradeblocks/lib";
 import {
   storePerformanceSnapshotCache,
   deletePerformanceSnapshotCache,
-} from "@/lib/db/performance-snapshot-cache";
+} from "@tradeblocks/lib";
 import {
   storeEnrichedTradesCache,
   deleteEnrichedTradesCache,
-} from "@/lib/db/enriched-trades-cache";
-import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
-import { enrichTrades } from "@/lib/calculations/enrich-trades";
-import { combineAllLegGroupsAsync } from "@/lib/utils/combine-leg-groups";
-import { REQUIRED_DAILY_LOG_COLUMNS } from "@/lib/models/daily-log";
+} from "@tradeblocks/lib";
+import { buildPerformanceSnapshot } from "@tradeblocks/lib";
+import { enrichTrades } from "@tradeblocks/lib";
+import { combineAllLegGroupsAsync } from "@tradeblocks/lib";
+import { REQUIRED_DAILY_LOG_COLUMNS } from "@tradeblocks/lib";
 import {
   REPORTING_TRADE_COLUMN_ALIASES,
   REQUIRED_REPORTING_TRADE_COLUMNS,
-} from "@/lib/models/reporting-trade";
-import type { StrategyAlignment } from "@/lib/models/strategy-alignment";
+} from "@tradeblocks/lib";
+import type { StrategyAlignment } from "@tradeblocks/lib";
 import {
   REQUIRED_TRADE_COLUMNS,
   TRADE_COLUMN_ALIASES,
   type Trade,
-} from "@/lib/models/trade";
+} from "@tradeblocks/lib";
 import {
   DailyLogProcessingProgress,
   DailyLogProcessingResult,
   DailyLogProcessor,
-} from "@/lib/processing/daily-log-processor";
+} from "@tradeblocks/lib";
 import {
   ReportingTradeProcessingProgress,
   ReportingTradeProcessingResult,
   ReportingTradeProcessor,
-} from "@/lib/processing/reporting-trade-processor";
+} from "@tradeblocks/lib";
 import {
   TradeProcessingProgress,
   TradeProcessingResult,
   TradeProcessor,
-} from "@/lib/processing/trade-processor";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { cn } from "@/lib/utils";
+} from "@tradeblocks/lib";
+import { useBlockStore } from "@tradeblocks/lib/stores";
+import { cn } from "@tradeblocks/lib";
 import {
   findMissingHeaders,
   normalizeHeaders,
   parseCsvLine,
-} from "@/lib/utils/csv-headers";
+} from "@tradeblocks/lib";
 import {
   Activity,
   AlertCircle,
@@ -111,8 +111,8 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ProgressDialog } from "@/components/progress-dialog";
-import type { SnapshotProgress } from "@/lib/services/performance-snapshot";
-import { waitForRender } from "@/lib/utils/async-helpers";
+import type { SnapshotProgress } from "@tradeblocks/lib";
+import { waitForRender } from "@tradeblocks/lib";
 import { useProgressDialog } from "@/hooks/use-progress-dialog";
 
 interface Block {
@@ -278,7 +278,7 @@ export function BlockDialog({
 
       // Load combineLegGroups setting from ProcessedBlock
       (async () => {
-        const { getBlock } = await import("@/lib/db");
+        const { getBlock } = await import("@tradeblocks/lib");
         const processedBlock = await getBlock(block.id);
         if (processedBlock?.analysisConfig) {
           setCombineLegGroups(
@@ -1324,7 +1324,7 @@ export function BlockDialog({
           calculationOrchestrator.clearCache(block.id);
 
           // Handle combined trades cache based on new setting
-          const { getTradesByBlock, getDailyLogsByBlock } = await import("@/lib/db");
+          const { getTradesByBlock, getDailyLogsByBlock } = await import("@tradeblocks/lib");
           const existingTrades = await getTradesByBlock(block.id);
 
           if (combineLegGroups) {
@@ -1624,7 +1624,7 @@ export function BlockDialog({
           // Rebuild performance snapshot cache with updated data
           // Skip if we already rebuilt due to combineLegGroups change
           if (combineLegGroups === currentCombineLegGroups) {
-            const { getTradesByBlockWithOptions, getDailyLogsByBlock } = await import("@/lib/db");
+            const { getTradesByBlockWithOptions, getDailyLogsByBlock } = await import("@tradeblocks/lib");
 
             const trades = await getTradesByBlockWithOptions(block.id, { combineLegGroups });
             const dailyLogs = await getDailyLogsByBlock(block.id);

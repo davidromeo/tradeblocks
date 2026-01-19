@@ -14,8 +14,8 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import { RegimeBreakdownStats } from '@/lib/calculations/regime-comparison'
-import { cn } from '@/lib/utils'
+import { RegimeBreakdownStats } from '@tradeblocks/lib'
+import { cn } from '@tradeblocks/lib'
 
 interface RegimeBreakdownTableProps {
   stats: RegimeBreakdownStats

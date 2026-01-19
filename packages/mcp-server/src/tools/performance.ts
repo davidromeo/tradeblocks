@@ -12,10 +12,8 @@ import {
   formatPercent,
   formatCurrency,
 } from "../utils/output-formatter.js";
-import type { Trade } from "@lib/models/trade";
-import type { ReportingTrade } from "@lib/models/reporting-trade";
-import { normalizeToOneLot } from "@lib/utils/equity-curve";
-import { calculateDailyExposure as calculateDailyExposureShared } from "@lib/calculations/daily-exposure";
+import type { Trade, ReportingTrade } from "@tradeblocks/lib";
+import { normalizeToOneLot, calculateDailyExposure as calculateDailyExposureShared } from "@tradeblocks/lib";
 
 /**
  * MFE/MAE data point for a single trade's excursion metrics

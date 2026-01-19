@@ -12,9 +12,9 @@ import type { Layout, PlotData } from "plotly.js";
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
-import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@/lib/models/report-config";
-import { formatMinutesToTime, generateTimeAxisTicks } from "@/lib/utils/time-formatting";
+import { EnrichedTrade, getEnrichedTradeValue } from "@tradeblocks/lib";
+import { ChartAxisConfig, getFieldInfo, ThresholdMetric } from "@tradeblocks/lib";
+import { formatMinutesToTime, generateTimeAxisTicks } from "@tradeblocks/lib";
 import { WhatIfExplorer } from "./what-if-explorer";
 
 interface HistogramChartProps {

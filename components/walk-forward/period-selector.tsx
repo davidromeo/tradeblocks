@@ -26,14 +26,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { MultiSelect } from "@/components/multi-select"
-import type { CorrelationMethodOption, WalkForwardOptimizationTarget } from "@/lib/models/walk-forward"
-import { validatePreRunConfiguration } from "@/lib/calculations/walk-forward-interpretation"
+import type { CorrelationMethodOption, WalkForwardOptimizationTarget } from "@tradeblocks/lib"
+import { validatePreRunConfiguration } from "@tradeblocks/lib"
 import {
   PARAMETER_METADATA,
   suggestStepForRange,
   useWalkForwardStore,
-} from "@/lib/stores/walk-forward-store"
-import { cn } from "@/lib/utils"
+} from "@tradeblocks/lib/stores"
+import { cn } from "@tradeblocks/lib"
 
 interface PeriodSelectorProps {
   blockId?: string | null

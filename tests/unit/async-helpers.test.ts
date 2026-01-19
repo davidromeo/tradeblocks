@@ -6,7 +6,7 @@ import {
   checkCancelled,
   waitForRender,
   RENDER_DELAY_MS,
-} from "@/lib/utils/async-helpers";
+} from "@tradeblocks/lib";
 
 describe("async-helpers", () => {
   describe("yieldToMain", () => {

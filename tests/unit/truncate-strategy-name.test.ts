@@ -1,4 +1,4 @@
-import { truncateStrategyName } from "@/lib/utils";
+import { truncateStrategyName } from "@tradeblocks/lib";
 
 describe("truncateStrategyName", () => {
   it("should not truncate short strategy names", () => {

@@ -1,4 +1,4 @@
-import { Trade } from '@/lib/models/trade';
+import { Trade } from '@tradeblocks/lib';
 
 /**
  * Mock trade data for testing portfolio calculations

@@ -25,8 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { RegimeComparisonStats } from "@/lib/calculations/regime-comparison";
-import { EnrichedTrade } from "@/lib/models/enriched-trade";
+import { RegimeComparisonStats } from "@tradeblocks/lib";
+import { EnrichedTrade } from "@tradeblocks/lib";
 import {
   CHART_TYPE_LABELS,
   ChartAxisConfig,
@@ -35,8 +35,8 @@ import {
   TABLE_COLUMN_OPTIONS,
   THRESHOLD_METRIC_LABELS,
   ThresholdMetric,
-} from "@/lib/models/report-config";
-import { isDiscreteTimingField } from "@/lib/utils/time-formatting";
+} from "@tradeblocks/lib";
+import { isDiscreteTimingField } from "@tradeblocks/lib";
 import { HelpCircle } from "lucide-react";
 import { BucketEditor } from "./bucket-editor";
 import { ChartAxisSelector } from "./chart-axis-selector";

@@ -6,13 +6,13 @@
  */
 
 import { describe, it, expect } from '@jest/globals'
-import { Trade } from '../../lib/models/trade'
+import { Trade } from '../../packages/lib/models/trade'
 import {
   groupTradesByEntry,
   combineLegGroup,
   combineAllLegGroups,
   analyzeLegGroups,
-} from '../../lib/utils/combine-leg-groups'
+} from '../../packages/lib/utils/combine-leg-groups'
 
 describe('combine-leg-groups', () => {
   // Helper to create a test trade

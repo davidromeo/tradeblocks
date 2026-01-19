@@ -3,7 +3,7 @@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { usePerformanceStore } from "@/lib/stores/performance-store";
+import { usePerformanceStore } from "@tradeblocks/lib/stores";
 import type { Layout, PlotData } from "plotly.js";
 import { useMemo } from "react";
 import { ChartWrapper, createLineChartLayout } from "./chart-wrapper";

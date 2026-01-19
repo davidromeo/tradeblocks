@@ -24,8 +24,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { EnrichedTrade, getEnrichedTradeValue } from "@/lib/models/enriched-trade";
-import { ThresholdMetric, getFieldInfo } from "@/lib/models/report-config";
+import { EnrichedTrade, getEnrichedTradeValue } from "@tradeblocks/lib";
+import { ThresholdMetric, getFieldInfo } from "@tradeblocks/lib";
 import { Sparkles, ChevronDown, RotateCcw, Check } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 

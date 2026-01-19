@@ -7,10 +7,8 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { Trade } from "@lib/models/trade";
-import type { DailyLogEntry } from "@lib/models/daily-log";
-import type { ReportingTrade } from "@lib/models/reporting-trade";
-import { REPORTING_TRADE_COLUMN_ALIASES } from "@lib/models/reporting-trade";
+import type { Trade, DailyLogEntry, ReportingTrade } from "@tradeblocks/lib";
+import { REPORTING_TRADE_COLUMN_ALIASES } from "@tradeblocks/lib";
 
 /**
  * CSV file mappings for flexible discovery

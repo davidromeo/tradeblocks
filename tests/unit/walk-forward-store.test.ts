@@ -9,26 +9,32 @@ import {
   calculateTradeFrequency,
   calculateAutoConfig,
   TradeFrequencyInfo,
-} from '@/lib/stores/walk-forward-store'
+} from '@tradeblocks/lib/stores'
 import type {
   WalkForwardExtendedParameterRanges,
   StrategyWeightSweepConfig,
-} from '@/lib/models/walk-forward'
+  PortfolioStats,
+  WalkForwardAnalysis,
+} from '@tradeblocks/lib'
+import { WalkForwardAnalyzer } from '@tradeblocks/lib'
 import { mockTrades } from '../data/mock-trades'
 import { mockDailyLogs } from '../data/mock-daily-logs'
-import { PortfolioStats } from '@/lib/models/portfolio-stats'
-import type { WalkForwardAnalysis } from '@/lib/models/walk-forward'
-import * as db from '@/lib/db'
-import { WalkForwardAnalyzer } from '@/lib/calculations/walk-forward-analyzer'
 
-jest.mock('@/lib/db', () => ({
+// Mock the DB functions - using inline jest.fn() to avoid hoisting issues
+jest.mock('../../packages/lib/db', () => ({
   getTradesByBlock: jest.fn(),
   getDailyLogsByBlock: jest.fn(),
   saveWalkForwardAnalysis: jest.fn(),
   getWalkForwardAnalysesByBlock: jest.fn(),
 }))
 
-const mockedDb = db as jest.Mocked<typeof db>
+// Get references to the mocked functions after the mock is set up
+import * as db from '../../packages/lib/db'
+const mockGetTradesByBlock = db.getTradesByBlock as jest.MockedFunction<typeof db.getTradesByBlock>
+const mockGetDailyLogsByBlock = db.getDailyLogsByBlock as jest.MockedFunction<typeof db.getDailyLogsByBlock>
+const mockSaveWalkForwardAnalysis = db.saveWalkForwardAnalysis as jest.MockedFunction<typeof db.saveWalkForwardAnalysis>
+const mockGetWalkForwardAnalysesByBlock = db.getWalkForwardAnalysesByBlock as jest.MockedFunction<typeof db.getWalkForwardAnalysesByBlock>
+
 const analyzeSpy = jest.spyOn(WalkForwardAnalyzer.prototype, 'analyze')
 
 const baseStats: PortfolioStats = {
@@ -135,10 +141,10 @@ function resetStoreState(): void {
 beforeEach(() => {
   resetStoreState()
   jest.clearAllMocks()
-  mockedDb.getTradesByBlock.mockResolvedValue(mockTrades)
-  mockedDb.getDailyLogsByBlock.mockResolvedValue(mockDailyLogs)
-  mockedDb.saveWalkForwardAnalysis.mockResolvedValue()
-  mockedDb.getWalkForwardAnalysesByBlock.mockResolvedValue([])
+  mockGetTradesByBlock.mockResolvedValue(mockTrades)
+  mockGetDailyLogsByBlock.mockResolvedValue(mockDailyLogs)
+  mockSaveWalkForwardAnalysis.mockResolvedValue()
+  mockGetWalkForwardAnalysesByBlock.mockResolvedValue([])
   analyzeSpy.mockResolvedValue({
     config: DEFAULT_WALK_FORWARD_CONFIG,
     results: createMockAnalysis().results,
@@ -174,7 +180,7 @@ describe('walk-forward store analysis workflow', () => {
     const state = useWalkForwardStore.getState()
 
     expect(analyzeSpy).toHaveBeenCalled()
-    expect(mockedDb.saveWalkForwardAnalysis).toHaveBeenCalledTimes(1)
+    expect(mockSaveWalkForwardAnalysis).toHaveBeenCalledTimes(1)
     expect(state.results).not.toBeNull()
     expect(state.history.length).toBe(1)
     expect(state.isRunning).toBe(false)
@@ -187,7 +193,7 @@ describe('walk-forward store analysis workflow', () => {
 
   it('loads history from IndexedDB', async () => {
     const mockAnalysis = createMockAnalysis()
-    mockedDb.getWalkForwardAnalysesByBlock.mockResolvedValue([mockAnalysis])
+    mockGetWalkForwardAnalysesByBlock.mockResolvedValue([mockAnalysis])
 
     await useWalkForwardStore.getState().loadHistory('block-1')
     const state = useWalkForwardStore.getState()
@@ -424,7 +430,7 @@ describe('extended parameter ranges store actions', () => {
 describe('strategy filter and normalization', () => {
   it('loads available strategies from trades', async () => {
     // Mock trades have different strategies
-    mockedDb.getTradesByBlock.mockResolvedValue([
+    mockGetTradesByBlock.mockResolvedValue([
       { ...mockTrades[0], strategy: 'Iron Condor' },
       { ...mockTrades[1], strategy: 'Put Spread' },
       { ...mockTrades[2], strategy: 'Iron Condor' },
@@ -563,7 +569,7 @@ describe('strategy weight sweep config', () => {
 
   it('toggles strategy weight and recalculates combinations', async () => {
     // First load strategies
-    mockedDb.getTradesByBlock.mockResolvedValue([
+    mockGetTradesByBlock.mockResolvedValue([
       { ...mockTrades[0], strategy: 'Iron Condor' },
       { ...mockTrades[1], strategy: 'Put Spread' },
     ])
@@ -581,7 +587,7 @@ describe('strategy weight sweep config', () => {
 
   it('updates strategy weight config', async () => {
     // Load strategies first
-    mockedDb.getTradesByBlock.mockResolvedValue([
+    mockGetTradesByBlock.mockResolvedValue([
       { ...mockTrades[0], strategy: 'Straddle' },
     ])
 
@@ -602,7 +608,7 @@ describe('strategy weight sweep config', () => {
 
   it('limits strategies in fullRange mode to 3', async () => {
     // Load 4 strategies
-    mockedDb.getTradesByBlock.mockResolvedValue([
+    mockGetTradesByBlock.mockResolvedValue([
       { ...mockTrades[0], strategy: 'A' },
       { ...mockTrades[1], strategy: 'B' },
       { ...mockTrades[2], strategy: 'C' },
@@ -851,7 +857,7 @@ describe('autoConfigureFromBlock action', () => {
       dateClosed: new Date(new Date('2024-01-02').getTime() + idx * 3 * DAY_MS),
     }))
 
-    mockedDb.getTradesByBlock.mockResolvedValue(trades)
+    mockGetTradesByBlock.mockResolvedValue(trades)
 
     await useWalkForwardStore.getState().autoConfigureFromBlock('block-1')
     const state = useWalkForwardStore.getState()
@@ -866,7 +872,7 @@ describe('autoConfigureFromBlock action', () => {
   })
 
   it('handles block with insufficient trades', async () => {
-    mockedDb.getTradesByBlock.mockResolvedValue([mockTrades[0]])
+    mockGetTradesByBlock.mockResolvedValue([mockTrades[0]])
 
     await useWalkForwardStore.getState().autoConfigureFromBlock('block-1')
     const state = useWalkForwardStore.getState()
@@ -876,7 +882,7 @@ describe('autoConfigureFromBlock action', () => {
   })
 
   it('handles empty block', async () => {
-    mockedDb.getTradesByBlock.mockResolvedValue([])
+    mockGetTradesByBlock.mockResolvedValue([])
 
     await useWalkForwardStore.getState().autoConfigureFromBlock('block-1')
     const state = useWalkForwardStore.getState()

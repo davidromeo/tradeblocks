@@ -31,20 +31,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { performTailRiskAnalysis } from "@/lib/calculations/tail-risk-analysis";
-import { getBlock, getTradesByBlockWithOptions } from "@/lib/db";
 import {
-  TailRiskAnalysisOptions,
-  TailRiskAnalysisResult,
-} from "@/lib/models/tail-risk";
-import { Trade } from "@/lib/models/trade";
-import { useBlockStore } from "@/lib/stores/block-store";
-import {
+  performTailRiskAnalysis,
+  getBlock,
+  getTradesByBlockWithOptions,
   downloadCsv,
   downloadJson,
   generateExportFilename,
   toCsvRow,
-} from "@/lib/utils/export-helpers";
+} from "@tradeblocks/lib";
+import type { TailRiskAnalysisOptions, TailRiskAnalysisResult, Trade } from "@tradeblocks/lib";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 import {
   Collapsible,
   CollapsibleContent,
@@ -58,7 +55,7 @@ import {
   HelpCircle,
   TrendingDown,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@tradeblocks/lib";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useTheme } from "next-themes";

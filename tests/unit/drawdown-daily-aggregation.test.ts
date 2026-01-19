@@ -1,8 +1,6 @@
 import { describe, it, expect } from '@jest/globals'
 
-import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
-import { processChartData } from '@/lib/services/performance-snapshot'
-import { Trade } from '@/lib/models/trade'
+import { PortfolioStatsCalculator, processChartData, Trade } from '@tradeblocks/lib'
 
 describe('drawdown daily aggregation fallback', () => {
   const sameDayTrades: Trade[] = [

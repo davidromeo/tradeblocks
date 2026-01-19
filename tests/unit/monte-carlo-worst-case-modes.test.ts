@@ -4,9 +4,9 @@
 
 import {
   runMonteCarloSimulation,
-  type MonteCarloParams,
-} from "@/lib/calculations/monte-carlo";
-import { Trade } from "@/lib/models/trade";
+  MonteCarloParams,
+  Trade,
+} from "@tradeblocks/lib";
 
 function createTrade(overrides: Partial<Trade> = {}): Trade {
   const baseDate = new Date("2024-01-01");

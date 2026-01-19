@@ -10,9 +10,11 @@ import {
   getMatchedValuesForTrade,
   getMatchedFieldValue,
   formatTimeDifference,
-} from '@/lib/calculations/static-dataset-matcher'
-import type { Trade } from '@/lib/models/trade'
-import type { StaticDataset, StaticDatasetRow, MatchStrategy } from '@/lib/models/static-dataset'
+  Trade,
+  StaticDataset,
+  StaticDatasetRow,
+  MatchStrategy,
+} from '@tradeblocks/lib'
 
 /**
  * Get Eastern Time offset in minutes for a given date

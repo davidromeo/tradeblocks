@@ -9,8 +9,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { calculateStreakDistributions, calculateRunsTest } from '@/lib/calculations/streak-analysis';
-import { Trade } from '@/lib/models/trade';
+import { calculateStreakDistributions, calculateRunsTest, Trade } from '@tradeblocks/lib';
 
 describe('Streak Analysis', () => {
   // Helper function to create a mock trade with specific P&L

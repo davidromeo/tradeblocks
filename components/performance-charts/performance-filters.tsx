@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePerformanceStore } from "@/lib/stores/performance-store";
+import { usePerformanceStore } from "@tradeblocks/lib/stores";
 import { Calendar, Filter } from "lucide-react";
 import { useMemo } from "react";
 

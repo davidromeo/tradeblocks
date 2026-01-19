@@ -23,9 +23,9 @@ import {
   FilterCondition,
   StaticDatasetFieldInfo,
   createFilterCondition
-} from '@/lib/models/report-config'
-import { FlexibleFilterResult } from '@/lib/calculations/flexible-filter'
-import { EnrichedTrade } from '@/lib/models/enriched-trade'
+} from '@tradeblocks/lib'
+import { FlexibleFilterResult } from '@tradeblocks/lib'
+import { EnrichedTrade } from '@tradeblocks/lib'
 import { FilterConditionRow } from './filter-condition-row'
 
 interface FilterPanelProps {

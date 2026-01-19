@@ -43,6 +43,13 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ Removed manual riskFreeRate input from types, stores, UI, MCP API — v2.2
 - ✓ Automated treasury rate update workflow (.github/workflows) — v2.2
 
+**v2.3 Workspace Packages:**
+- ✓ @tradeblocks/lib workspace package with barrel exports — v2.3
+- ✓ MCP server imports from workspace package (bundler moduleResolution) — v2.3
+- ✓ Next.js app imports migrated (127+ files) — v2.3
+- ✓ Test imports migrated with Jest moduleNameMapper (62 files) — v2.3
+- ✓ Removed legacy @/lib/* path alias — v2.3
+
 ### Active
 
 (None — planning next milestone)
@@ -55,17 +62,19 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.2):**
+**Current state (v2.3):**
 - Next.js 15 web application with client-side computation
 - MCP server (`tradeblocks-mcp`) with 26 tools at packages/mcp-server/
 - 6 agent skills at packages/agent-skills/
+- Shared library at packages/lib/ (81 files, barrel exports)
 - ~16,600 LOC in packages/, ~12,500 LOC in WFA-related files
-- 989 tests (179 WFA + MCP integration + risk-free rate tests)
+- 1024 tests (65 test suites)
 - Embedded historical Treasury rates (2013-2026) for accurate risk metrics
 
 **Architecture:**
 - Monorepo with npm workspaces
 - Root: Next.js web app
+- packages/lib/: Shared library (@tradeblocks/lib workspace package)
 - packages/mcp-server/: MCP server (npm: tradeblocks-mcp)
 - packages/agent-skills/: Agent skill definitions
 
@@ -93,6 +102,9 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | ngrok tunnel for web platforms | Keeps data local while enabling remote MCP URLs | ✓ Good |
 | Embedded Treasury rates (no API calls) | Maintains 100% local data principle, ~71KB bundled | ✓ Good |
 | Date-based risk-free rates over fixed rate | Accurate Sharpe/Sortino reflecting actual market conditions | ✓ Good |
+| Direct TS source consumption for workspace packages | No build step needed, all consumers handle compilation | ✓ Good |
+| Bundler moduleResolution for MCP server | Enables workspace package resolution without .js extensions | ✓ Good |
+| Stores excluded from main lib export | Avoids browser/Node dependency conflicts | ✓ Good |
 
 ---
-*Last updated: 2026-01-18 after v2.2 milestone*
+*Last updated: 2026-01-19 after v2.3 milestone*

@@ -15,10 +15,10 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, FileText, AlertCircle, Loader2 } from "lucide-react"
-import { CSVParser } from "@/lib/processing/csv-parser"
-import { suggestDatasetName } from "@/lib/processing/static-dataset-processor"
-import { useStaticDatasetsStore } from "@/lib/stores/static-datasets-store"
-import type { ParseProgress } from "@/lib/processing/csv-parser"
+import { CSVParser } from "@tradeblocks/lib"
+import { suggestDatasetName } from "@tradeblocks/lib"
+import { useStaticDatasetsStore } from "@tradeblocks/lib/stores"
+import type { ParseProgress } from "@tradeblocks/lib"
 
 interface UploadDialogProps {
   open: boolean

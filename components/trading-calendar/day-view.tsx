@@ -4,13 +4,13 @@ import { useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ChevronRight } from 'lucide-react'
-import { useTradingCalendarStore } from '@/lib/stores/trading-calendar-store'
+import { useTradingCalendarStore } from '@tradeblocks/lib/stores'
 import {
   formatCurrency,
   aggregateTradesByStrategy,
   scaleStrategyComparison
-} from '@/lib/services/calendar-data'
-import { cn } from '@/lib/utils'
+} from '@tradeblocks/lib'
+import { cn } from '@tradeblocks/lib'
 
 interface TradeCardProps {
   strategy: string

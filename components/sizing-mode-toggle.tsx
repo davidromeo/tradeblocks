@@ -1,7 +1,7 @@
 "use client"
 
 import { Switch } from "@/components/ui/switch"
-import { cn } from "@/lib/utils"
+import { cn } from "@tradeblocks/lib"
 
 interface SizingModeToggleProps {
   id: string

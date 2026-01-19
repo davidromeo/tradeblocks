@@ -27,10 +27,11 @@ import {
   getScaledDayActualPl,
   getScaledDayMargin,
   ScalingContext,
-} from '@/lib/services/calendar-data'
-import { Trade } from '@/lib/models/trade'
-import { ReportingTrade } from '@/lib/models/reporting-trade'
-import { CalendarDayData, StrategyMatch } from '@/lib/stores/trading-calendar-store'
+  Trade,
+  ReportingTrade,
+  CalendarDayData,
+  StrategyMatch,
+} from '@tradeblocks/lib'
 
 // Helper to create a backtest trade (Trade from tradelog.csv)
 function createBacktestTrade(overrides: Partial<Trade> = {}): Trade {

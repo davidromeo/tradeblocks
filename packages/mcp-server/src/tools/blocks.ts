@@ -14,20 +14,15 @@ import {
   formatPercent,
   formatRatio,
 } from "../utils/output-formatter.js";
-import { PortfolioStatsCalculator } from "@lib/calculations/portfolio-stats";
-import { calculateCorrelationMatrix } from "@lib/calculations/correlation";
-import { performTailRiskAnalysis } from "@lib/calculations/tail-risk-analysis";
 import {
+  PortfolioStatsCalculator,
+  calculateCorrelationMatrix,
+  performTailRiskAnalysis,
   runMonteCarloSimulation,
-  type MonteCarloParams,
-} from "@lib/calculations/monte-carlo";
-import { WalkForwardAnalyzer } from "@lib/calculations/walk-forward-analyzer";
-import {
+  WalkForwardAnalyzer,
   calculateDailyExposure,
-  type PeakExposure,
-  type EquityCurvePoint,
-} from "@lib/calculations/daily-exposure";
-import type { Trade } from "@lib/models/trade";
+} from "@tradeblocks/lib";
+import type { Trade, MonteCarloParams, PeakExposure, EquityCurvePoint } from "@tradeblocks/lib";
 
 /**
  * Filter trades by strategy

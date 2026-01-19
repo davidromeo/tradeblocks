@@ -14,7 +14,7 @@ import {
   formatPercentage,
   looksLikeDecimal,
   looksLikePercentage,
-} from '@/lib/types/percentage'
+} from '@tradeblocks/lib'
 
 describe('percentage branded types', () => {
   describe('toPercentage', () => {

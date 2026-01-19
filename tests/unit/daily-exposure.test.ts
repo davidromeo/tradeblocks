@@ -15,8 +15,8 @@ import {
   calculateExposureAtTradeOpen,
   DailyExposurePoint,
   EquityCurvePoint,
-} from '@/lib/calculations/daily-exposure'
-import { Trade } from '@/lib/models/trade'
+  Trade,
+} from '@tradeblocks/lib'
 
 // Helper to create a date at noon Eastern Time (avoids timezone boundary issues)
 // The algorithm converts to UTC via toISOString(), so we need dates that won't shift

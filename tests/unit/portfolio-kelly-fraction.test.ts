@@ -1,5 +1,4 @@
-import { calculateKellyMetrics } from '@/lib/calculations/kelly';
-import { Trade } from '@/lib/models/trade';
+import { calculateKellyMetrics, Trade } from '@tradeblocks/lib';
 
 describe('Portfolio Kelly Fraction Two-Layer System', () => {
   // Create sample trades that will result in predictable Kelly metrics

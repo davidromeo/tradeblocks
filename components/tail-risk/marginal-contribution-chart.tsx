@@ -1,8 +1,8 @@
 "use client";
 
 import { ChartWrapper } from "@/components/performance-charts/chart-wrapper";
-import { TailRiskAnalysisResult } from "@/lib/models/tail-risk";
-import { truncateStrategyName } from "@/lib/utils";
+import { TailRiskAnalysisResult } from "@tradeblocks/lib";
+import { truncateStrategyName } from "@tradeblocks/lib";
 import { useTheme } from "next-themes";
 import type { Data, Layout } from "plotly.js";
 import { useMemo } from "react";

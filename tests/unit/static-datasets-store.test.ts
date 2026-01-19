@@ -2,12 +2,11 @@
  * Tests for Static Datasets Store - caching and state management
  */
 
-import { useStaticDatasetsStore, makeMatchStatsCacheKey } from '@/lib/stores/static-datasets-store'
-import type { StaticDataset, DatasetMatchStats } from '@/lib/models/static-dataset'
-import type { Trade } from '@/lib/models/trade'
+import { useStaticDatasetsStore, makeMatchStatsCacheKey } from '@tradeblocks/lib/stores'
+import type { StaticDataset, DatasetMatchStats, Trade } from '@tradeblocks/lib'
 
-// Mock the database modules
-jest.mock('@/lib/db/static-datasets-store', () => ({
+// Mock the database modules used by the store
+jest.mock('../../packages/lib/db/static-datasets-store', () => ({
   getAllStaticDatasets: jest.fn().mockResolvedValue([]),
   createStaticDataset: jest.fn().mockResolvedValue(undefined),
   updateStaticDatasetMatchStrategy: jest.fn().mockResolvedValue(undefined),
@@ -15,13 +14,13 @@ jest.mock('@/lib/db/static-datasets-store', () => ({
   isDatasetNameTaken: jest.fn().mockResolvedValue(false),
 }))
 
-jest.mock('@/lib/db/static-dataset-rows-store', () => ({
+jest.mock('../../packages/lib/db/static-dataset-rows-store', () => ({
   addStaticDatasetRows: jest.fn().mockResolvedValue(undefined),
   getStaticDatasetRows: jest.fn().mockResolvedValue([]),
   deleteStaticDatasetWithRows: jest.fn().mockResolvedValue(undefined),
 }))
 
-jest.mock('@/lib/calculations/static-dataset-matcher', () => ({
+jest.mock('../../packages/lib/calculations/static-dataset-matcher', () => ({
   calculateMatchStats: jest.fn().mockReturnValue({
     totalTrades: 10,
     matchedTrades: 8,

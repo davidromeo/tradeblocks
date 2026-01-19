@@ -7,11 +7,11 @@
  */
 
 import 'fake-indexeddb/auto';
-import { DataLoader, IndexedDBAdapter } from '../../lib/processing/data-loader';
-import { initializeDatabase, deleteDatabase, STORES } from '../../lib/db/index';
-import * as tradesStore from '../../lib/db/trades-store';
-import * as dailyLogsStore from '../../lib/db/daily-logs-store';
-import { Trade } from '../../lib/models/trade';
+import { DataLoader, IndexedDBAdapter } from '../../packages/lib/processing/data-loader';
+import { initializeDatabase, deleteDatabase, STORES } from '../../packages/lib/db/index';
+import * as tradesStore from '../../packages/lib/db/trades-store';
+import * as dailyLogsStore from '../../packages/lib/db/daily-logs-store';
+import { Trade } from '../../packages/lib/models/trade';
 // import { DailyLogEntry } from '../../lib/models/daily-log';
 
 describe('IndexedDB Integration with Data Loader', () => {
@@ -180,7 +180,7 @@ describe('IndexedDB Integration with Data Loader', () => {
     test('should load and store data using IndexedDB adapter', async () => {
       const adapter = new IndexedDBAdapter();
       const loader = new DataLoader({
-        environmentAdapter: new (await import('../../lib/processing/data-loader')).NodeAdapter(),
+        environmentAdapter: new (await import('../../packages/lib/processing/data-loader')).NodeAdapter(),
         storageAdapter: adapter,
       });
 
@@ -214,7 +214,7 @@ describe('IndexedDB Integration with Data Loader', () => {
     test('should handle concurrent operations', async () => {
       const adapter = new IndexedDBAdapter();
       const loader = new DataLoader({
-        environmentAdapter: new (await import('../../lib/processing/data-loader')).NodeAdapter(),
+        environmentAdapter: new (await import('../../packages/lib/processing/data-loader')).NodeAdapter(),
         storageAdapter: adapter,
       });
 

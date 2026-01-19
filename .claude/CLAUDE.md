@@ -168,11 +168,18 @@ Tests use `fake-indexeddb` for IndexedDB simulation. When writing tests:
 
 ## Path Aliases
 
-TypeScript is configured with `@/*` pointing to repository root, allowing imports like:
+TypeScript is configured with path aliases for clean imports:
+
 ```typescript
-import { Trade } from '@/lib/models/trade'
+// Library imports use the workspace package
+import { Trade, PortfolioStatsCalculator } from '@tradeblocks/lib'
+import { useBlockStore } from '@tradeblocks/lib/stores'
+
+// Component imports use root-relative paths
 import { Button } from '@/components/ui/button'
 ```
+
+The `@tradeblocks/lib` workspace package (in `packages/lib/`) exports all models, calculations, processing, db, and utility functions. Stores are exported separately from `@tradeblocks/lib/stores`.
 
 ## UI Component Library
 

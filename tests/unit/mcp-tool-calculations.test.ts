@@ -7,9 +7,7 @@
  * Created in response to bugs found in portfolio_health_check and what_if_scaling.
  */
 
-import { PortfolioStatsCalculator } from '@/lib/calculations/portfolio-stats'
-import { runMonteCarloSimulation } from '@/lib/calculations/monte-carlo'
-import { Trade } from '@/lib/models/trade'
+import { PortfolioStatsCalculator, runMonteCarloSimulation, Trade } from '@tradeblocks/lib'
 
 // Helper to create a minimal valid trade
 function createTrade(overrides: Partial<Trade>): Trade {

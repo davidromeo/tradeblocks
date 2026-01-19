@@ -14,25 +14,18 @@ import {
   formatRatio,
   formatCurrency,
 } from "../utils/output-formatter.js";
-import { WalkForwardAnalyzer } from "@lib/calculations/walk-forward-analyzer";
 import {
+  WalkForwardAnalyzer,
   assessResults,
   getRecommendedParameters,
-} from "@lib/calculations/walk-forward-verdict";
-import {
   runMonteCarloSimulation,
-  type MonteCarloParams,
-} from "@lib/calculations/monte-carlo";
-import {
   calculateCorrelationMatrix,
   calculateCorrelationAnalytics,
-} from "@lib/calculations/correlation";
-import { performTailRiskAnalysis } from "@lib/calculations/tail-risk-analysis";
-import {
+  performTailRiskAnalysis,
   calculateKellyMetrics,
   calculateStrategyKellyMetrics,
-} from "@lib/calculations/kelly";
-import type { Trade } from "@lib/models/trade";
+} from "@tradeblocks/lib";
+import type { Trade, MonteCarloParams } from "@tradeblocks/lib";
 
 /**
  * Filter trades by strategy

@@ -13,9 +13,7 @@
  * place that reads field values, add it to this test.
  */
 
-import { EnrichedTrade, getEnrichedTradeValue } from '@/lib/models/enriched-trade'
-import { applyFilters, getFieldRange } from '@/lib/calculations/flexible-filter'
-import { createFilterCondition, FilterConfig } from '@/lib/models/report-config'
+import { EnrichedTrade, getEnrichedTradeValue, applyFilters, getFieldRange, createFilterCondition, FilterConfig } from '@tradeblocks/lib'
 
 // Create a mock enriched trade with all field types populated
 function createMockEnrichedTrade(): EnrichedTrade {

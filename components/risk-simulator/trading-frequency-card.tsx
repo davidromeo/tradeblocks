@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { TrendingUp, Calendar, Activity } from "lucide-react";
 import { useMemo } from "react";
-import type { Trade } from "@/lib/models/trade";
+import type { Trade } from "@tradeblocks/lib";
 
 interface TradingFrequencyCardProps {
   trades: Trade[];

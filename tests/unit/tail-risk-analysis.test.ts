@@ -1,5 +1,4 @@
-import { performTailRiskAnalysis } from "@/lib/calculations/tail-risk-analysis";
-import { Trade } from "@/lib/models/trade";
+import { performTailRiskAnalysis, Trade } from "@tradeblocks/lib";
 
 // Helper to create test trades
 function createTrade(

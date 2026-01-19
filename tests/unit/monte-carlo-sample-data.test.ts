@@ -1,8 +1,8 @@
 import {
   runMonteCarloSimulation,
-  type MonteCarloParams,
-} from "@/lib/calculations/monte-carlo";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
+  MonteCarloParams,
+  PortfolioStatsCalculator,
+} from "@tradeblocks/lib";
 import { CsvTestDataLoader } from "../data/csv-loader";
 
 /**

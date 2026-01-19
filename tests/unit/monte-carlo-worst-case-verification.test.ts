@@ -4,9 +4,9 @@
 
 import {
   runMonteCarloSimulation,
-  type MonteCarloParams,
-} from "@/lib/calculations/monte-carlo";
-import { Trade } from "@/lib/models/trade";
+  MonteCarloParams,
+  Trade,
+} from "@tradeblocks/lib";
 
 /**
  * Helper to create a trade with specific properties

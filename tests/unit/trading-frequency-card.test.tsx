@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { TradingFrequencyCard } from "@/components/risk-simulator/trading-frequency-card";
-import { Trade } from "@/lib/models/trade";
+import { Trade } from "@tradeblocks/lib";
 
 const SUMMARY_TEST_ID = "frequency-summary";
 const RATE_TEST_ID = "frequency-rate";

@@ -31,27 +31,19 @@ import { Slider } from "@/components/ui/slider";
 import {
   calculateKellyMetrics,
   calculateStrategyKellyMetrics,
-} from "@/lib/calculations/kelly";
-import {
   buildMarginTimeline,
   calculateMaxMarginPct,
-  type MarginMode,
-} from "@/lib/calculations/margin-timeline";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
-import {
+  PortfolioStatsCalculator,
   getBlock,
   getDailyLogsByBlock,
   getTradesByBlockWithOptions,
-} from "@/lib/db";
-import { DailyLogEntry } from "@/lib/models/daily-log";
-import { Trade } from "@/lib/models/trade";
-import { useBlockStore } from "@/lib/stores/block-store";
-import {
   downloadCsv,
   downloadJson,
   generateExportFilename,
   toCsvRow,
-} from "@/lib/utils/export-helpers";
+} from "@tradeblocks/lib";
+import type { MarginMode, DailyLogEntry, Trade } from "@tradeblocks/lib";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 import { AlertCircle, Download, HelpCircle, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 

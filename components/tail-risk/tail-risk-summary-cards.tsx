@@ -1,7 +1,7 @@
 "use client";
 
 import { MetricCard } from "@/components/metric-card";
-import { TailRiskAnalysisResult } from "@/lib/models/tail-risk";
+import { TailRiskAnalysisResult } from "@tradeblocks/lib";
 
 interface TailRiskSummaryCardsProps {
   result: TailRiskAnalysisResult;

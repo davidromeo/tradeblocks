@@ -6,9 +6,9 @@
  * Tests for Data Loader
  */
 
-import { DataLoader, MemoryAdapter, NodeAdapter, BrowserAdapter } from '../../lib/processing/data-loader';
+import { DataLoader, MemoryAdapter, NodeAdapter, BrowserAdapter } from '../../packages/lib/processing/data-loader';
 import { CsvTestDataLoader } from '../data/csv-loader';
-import { PortfolioStatsCalculator } from '../../lib/calculations/portfolio-stats';
+import { PortfolioStatsCalculator } from '../../packages/lib/calculations/portfolio-stats';
 
 describe('Data Loader', () => {
   describe('Environment Adapters', () => {

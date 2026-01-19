@@ -2,14 +2,14 @@
  * Unit tests for Monte Carlo simulation
  */
 
-import { Trade } from "@/lib/models/trade";
 import {
+  Trade,
   runMonteCarloSimulation,
   getTradeResamplePool,
   calculateDailyReturns,
   getDailyResamplePool,
-  type MonteCarloParams,
-} from "@/lib/calculations/monte-carlo";
+  MonteCarloParams,
+} from "@tradeblocks/lib";
 
 /**
  * Helper function to create mock trades

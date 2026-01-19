@@ -8,28 +8,22 @@ import { StrategyBreakdownTable } from "@/components/strategy-breakdown-table";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { SizingModeToggle } from "@/components/sizing-mode-toggle";
-import { PortfolioStatsCalculator } from "@/lib/calculations/portfolio-stats";
 import {
+  PortfolioStatsCalculator,
   getBlock,
   getDailyLogsByBlock,
   getTradesByBlockWithOptions,
   getPerformanceSnapshotCache,
-} from "@/lib/db";
-import {
   calculatePremiumEfficiencyPercent,
   computeTotalPremium,
-} from "@/lib/metrics/trade-efficiency";
-import { DailyLogEntry } from "@/lib/models/daily-log";
-import { PortfolioStats, StrategyStats } from "@/lib/models/portfolio-stats";
-import { Trade } from "@/lib/models/trade";
-import { buildPerformanceSnapshot } from "@/lib/services/performance-snapshot";
-import { useBlockStore } from "@/lib/stores/block-store";
-import {
+  buildPerformanceSnapshot,
   downloadCsv,
   downloadJson,
   generateExportFilename,
   toCsvRow,
-} from "@/lib/utils/export-helpers";
+} from "@tradeblocks/lib";
+import type { DailyLogEntry, PortfolioStats, StrategyStats, Trade } from "@tradeblocks/lib";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 import {
   AlertTriangle,
   BarChart3,
@@ -47,7 +41,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn } from "@tradeblocks/lib";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { DateRange } from "react-day-picker";

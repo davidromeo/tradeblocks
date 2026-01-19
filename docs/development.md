@@ -22,10 +22,10 @@ This document explains how TradeBlocks is structured and how to work effectively
 
 ### High-Level Flow
 1. **Block creation** – Users import CSV files through `/blocks` using `BlockDialog`.
-2. **Parsing** – Files are parsed via `lib/processing/csv-parser.ts`, converted into domain models in `lib/models/*`.
-3. **Storage** – Raw rows live in IndexedDB (`lib/db/`). Metadata (names, timestamps, counts) persists alongside references to stored records.
-4. **State management** – Zustand stores (`lib/stores/`) expose application state to React components. Active block selection is cached in `localStorage` for reload persistence.
-5. **Calculations** – Portfolio statistics, drawdowns, and Monte Carlo inputs are computed inside `lib/calculations/*`, primarily `portfolio-stats.ts`.
+2. **Parsing** – Files are parsed via `packages/lib/processing/csv-parser.ts`, converted into domain models in `packages/lib/models/*`.
+3. **Storage** – Raw rows live in IndexedDB (`packages/lib/db/`). Metadata (names, timestamps, counts) persists alongside references to stored records.
+4. **State management** – Zustand stores (`packages/lib/stores/`) expose application state to React components. Active block selection is cached in `localStorage` for reload persistence.
+5. **Calculations** – Portfolio statistics, drawdowns, and Monte Carlo inputs are computed inside `packages/lib/calculations/*`, primarily `portfolio-stats.ts`.
 6. **Presentation** – App Router routes under `app/(platform)/` render dashboard experiences powered by the stores and calculations.
 
 ### Routing & Layout
@@ -41,19 +41,19 @@ This document explains how TradeBlocks is structured and how to work effectively
 
 ### State & Persistence
 - **Zustand stores**
-  - `lib/stores/block-store.ts` – block metadata, activation, CRUD, recalculation.
-  - `lib/stores/performance-store.ts` – derived performance datasets and caching.
+  - `packages/lib/stores/block-store.ts` – block metadata, activation, CRUD, recalculation.
+  - `packages/lib/stores/performance-store.ts` – derived performance datasets and caching.
   - Additional feature-specific stores live alongside their modules.
 - **IndexedDB adapters**
-  - `lib/db/index.ts` centralizes database initialization.
-  - `lib/db/trade-store.ts`, `lib/db/daily-log-store.ts`, etc. manage raw data collections.
-- **Data references** – `ProcessedBlock` keeps keys to related data for lazy retrieval (`lib/models/block.ts`). When you fetch a block, load trades/daily logs explicitly via the store helpers.
+  - `packages/lib/db/index.ts` centralizes database initialization.
+  - `packages/lib/db/trade-store.ts`, `packages/lib/db/daily-log-store.ts`, etc. manage raw data collections.
+- **Data references** – `ProcessedBlock` keeps keys to related data for lazy retrieval (`packages/lib/models/block.ts`). When you fetch a block, load trades/daily logs explicitly via the store helpers.
 
 ### Calculations & Utilities
-- `lib/calculations/portfolio-stats.ts` – Computes win rates, drawdowns, expectancy, and normalized metrics. Uses Math.js to mirror the legacy Python implementation (sample standard deviation on Sharpe, population on Sortino).
-- `lib/calculations/risk/` – Monte Carlo simulation helpers powering the risk simulator.
-- `lib/processing/trade-processor.ts` & `daily-log-processor.ts` – Convert raw CSV strings into typed models, handling alias headers and data validation (`lib/models/validators.ts`).
-- `lib/utils/date.ts`, `lib/utils/number.ts` – Reusable formatting helpers.
+- `packages/lib/calculations/portfolio-stats.ts` – Computes win rates, drawdowns, expectancy, and normalized metrics. Uses Math.js to mirror the legacy Python implementation (sample standard deviation on Sharpe, population on Sortino).
+- `packages/lib/calculations/risk/` – Monte Carlo simulation helpers powering the risk simulator.
+- `packages/lib/processing/trade-processor.ts` & `daily-log-processor.ts` – Convert raw CSV strings into typed models, handling alias headers and data validation (`packages/lib/models/validators.ts`).
+- `packages/lib/utils/date.ts`, `packages/lib/utils/number.ts` – Reusable formatting helpers.
 
 ### UI Components
 - `components/ui/` – shadcn/ui primitives configured with Tailwind CSS.
@@ -63,14 +63,14 @@ This document explains how TradeBlocks is structured and how to work effectively
 ## CSV Schema Reference
 
 ### Trade Logs (required)
-- Expected headers match OptionOmega exports (`lib/models/trade.ts`). Key columns:
+- Expected headers match OptionOmega exports (`packages/lib/models/trade.ts`). Key columns:
   - `Date Opened`, `Time Opened`, `Legs`, `P/L`, `Strategy`
   - `Opening Commissions + Fees`, `Closing Commissions + Fees`
   - Ratio columns such as `Opening Short/Long Ratio` are optional but supported.
 - Aliases in `TRADE_COLUMN_ALIASES` normalize variants (e.g., `Opening comms & fees`).
 
 ### Daily Logs (optional)
-- `Date`, `Net Liquidity`, `P/L`, `P/L %`, `Drawdown %` are required (`lib/models/daily-log.ts`).
+- `Date`, `Net Liquidity`, `P/L`, `P/L %`, `Drawdown %` are required (`packages/lib/models/daily-log.ts`).
 - When absent, drawdown calculations fall back to trade-based equity curves.
 
 ## Testing
@@ -160,11 +160,22 @@ tradeblocks/
 ├── package.json           # Root package with workspaces config
 ├── app/                   # Next.js web application (root)
 ├── components/
-├── lib/
 ├── tests/
 └── packages/
+    ├── lib/               # Core business logic (@tradeblocks/lib)
     ├── mcp-server/        # MCP server (npm: tradeblocks-mcp)
     └── agent-skills/      # AI agent skill definitions
+```
+
+### Import Patterns
+
+```typescript
+// Library imports use the workspace package
+import { Trade, PortfolioStatsCalculator } from '@tradeblocks/lib'
+import { useBlockStore } from '@tradeblocks/lib/stores'
+
+// Component imports use root-relative paths
+import { Button } from '@/components/ui/button'
 ```
 
 ### Running Workspace Commands

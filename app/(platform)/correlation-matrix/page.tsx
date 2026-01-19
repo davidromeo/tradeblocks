@@ -22,23 +22,24 @@ import {
 import {
   calculateCorrelationAnalytics,
   calculateCorrelationMatrix,
+  getBlock,
+  getTradesByBlockWithOptions,
+  truncateStrategyName,
+  downloadCsv,
+  downloadJson,
+  generateExportFilename,
+  toCsvRow,
+} from "@tradeblocks/lib";
+import type {
   CorrelationAlignment,
   CorrelationDateBasis,
   CorrelationMethod,
   CorrelationMatrix,
   CorrelationNormalization,
   CorrelationTimePeriod,
-} from "@/lib/calculations/correlation";
-import { getBlock, getTradesByBlockWithOptions } from "@/lib/db";
-import { Trade } from "@/lib/models/trade";
-import { useBlockStore } from "@/lib/stores/block-store";
-import { truncateStrategyName } from "@/lib/utils";
-import {
-  downloadCsv,
-  downloadJson,
-  generateExportFilename,
-  toCsvRow,
-} from "@/lib/utils/export-helpers";
+  Trade,
+} from "@tradeblocks/lib";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 import { AlertTriangle, Download, HelpCircle, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { Data, Layout } from "plotly.js";

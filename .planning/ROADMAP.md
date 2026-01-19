@@ -6,8 +6,24 @@
 - ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
 - ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
 - ✅ [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
+- ✅ [v2.3 Workspace Packages](milestones/v2.3-workspace-packages.md) (Phases 29-31) — SHIPPED 2026-01-19
 
 ## Completed Milestones
+
+<details>
+<summary>✅ v2.3 Workspace Packages (Phases 29-31) — SHIPPED 2026-01-19</summary>
+
+Convert lib/ to @tradeblocks/lib workspace package for clean imports across the monorepo.
+
+- [x] Phase 29: workspace-setup (1/1 plan) — completed 2026-01-19
+- [x] Phase 30: import-migration (2/2 plans) — completed 2026-01-19
+- [x] Phase 31: cleanup-verification (1/1 plan) — completed 2026-01-19
+
+**Stats:** 3 phases, 4 plans, ~7 hours execution time
+
+See [v2.3 archive](milestones/v2.3-workspace-packages.md) for full details.
+
+</details>
 
 <details>
 <summary>✅ v2.2 Historical Risk-Free Rates (Phases 25-28) — SHIPPED 2026-01-18</summary>
@@ -86,6 +102,10 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
+### Planning Next Milestone
+
+No active milestone. Ready to plan next features.
+
 ## Progress
 
 | Milestone | Phases | Plans | Status | Shipped |
@@ -94,6 +114,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.0 Claude Integration | 11-16 | 15 | Complete | 2026-01-17 |
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
+| v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 
 ## Audit Notes
 

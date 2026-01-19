@@ -8,16 +8,16 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
-import type { WalkForwardAnalysis as WalkForwardAnalysisType } from "@/lib/models/walk-forward"
+import { cn } from "@tradeblocks/lib"
+import type { WalkForwardAnalysis as WalkForwardAnalysisType } from "@tradeblocks/lib"
 import { CheckCircle2, AlertTriangle, XCircle, HelpCircle, Lightbulb, Settings2 } from "lucide-react"
-import { assessResults, type Assessment } from "@/lib/calculations/walk-forward-verdict"
+import { assessResults, type Assessment } from "@tradeblocks/lib"
 import {
   generateVerdictExplanation,
   detectRedFlags,
   generateInsights,
   detectConfigurationObservations,
-} from "@/lib/calculations/walk-forward-interpretation"
+} from "@tradeblocks/lib"
 
 interface WalkForwardAnalysisProps {
   analysis: WalkForwardAnalysisType

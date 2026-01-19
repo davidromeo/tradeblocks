@@ -5,12 +5,15 @@
  * and joining daily custom fields to trades during enrichment.
  */
 
-import { TradeProcessor } from '@/lib/processing/trade-processor'
-import { DailyLogProcessor } from '@/lib/processing/daily-log-processor'
-import { enrichTrades } from '@/lib/calculations/enrich-trades'
-import { extractCustomFieldNames, getFieldsByCategoryWithCustom } from '@/lib/models/report-config'
-import { Trade } from '@/lib/models/trade'
-import { DailyLogEntry } from '@/lib/models/daily-log'
+import {
+  TradeProcessor,
+  DailyLogProcessor,
+  enrichTrades,
+  extractCustomFieldNames,
+  getFieldsByCategoryWithCustom,
+  Trade,
+  DailyLogEntry,
+} from '@tradeblocks/lib'
 
 describe('Custom Fields', () => {
   describe('Trade Processor - Custom Columns', () => {

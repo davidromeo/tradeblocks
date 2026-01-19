@@ -8,11 +8,11 @@ Options trading analytics platform with a web dashboard and AI-powered analysis 
 tradeblocks/
 ├── app/                      # Next.js web application
 ├── components/               # React components (shadcn/ui + Plotly charts)
-├── lib/                      # Core business logic (calculations, processing, stores)
 ├── tests/                    # Jest test suites
 ├── docs/                     # Documentation
 │   └── development.md        # Architecture and local dev guide
 └── packages/
+    ├── lib/                  # Core business logic (@tradeblocks/lib)
     ├── mcp-server/           # MCP server (npm: tradeblocks-mcp)
     └── agent-skills/         # AI agent skill definitions
 ```

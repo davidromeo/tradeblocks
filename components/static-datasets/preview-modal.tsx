@@ -19,18 +19,18 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Loader2, CheckCircle2, AlertTriangle, Filter } from "lucide-react"
-import type { StaticDataset, StaticDatasetRow, DatasetMatchResult, MatchStrategy } from "@/lib/models/static-dataset"
-import { MATCH_STRATEGY_LABELS, MATCH_STRATEGY_DESCRIPTIONS } from "@/lib/models/static-dataset"
-import type { Trade } from "@/lib/models/trade"
+import type { StaticDataset, StaticDatasetRow, DatasetMatchResult, MatchStrategy } from "@tradeblocks/lib"
+import { MATCH_STRATEGY_LABELS, MATCH_STRATEGY_DESCRIPTIONS } from "@tradeblocks/lib"
+import type { Trade } from "@tradeblocks/lib"
 import {
   matchTradesToDataset,
   calculateMatchStats,
   formatTimeDifference,
   combineDateAndTime,
-} from "@/lib/calculations/static-dataset-matcher"
-import { useStaticDatasetsStore } from "@/lib/stores/static-datasets-store"
-import { useBlockStore } from "@/lib/stores/block-store"
-import { getTradesByBlock } from "@/lib/db"
+} from "@tradeblocks/lib"
+import { useStaticDatasetsStore } from "@tradeblocks/lib/stores"
+import { useBlockStore } from "@tradeblocks/lib/stores"
+import { getTradesByBlock } from "@tradeblocks/lib"
 
 interface PreviewModalProps {
   open: boolean

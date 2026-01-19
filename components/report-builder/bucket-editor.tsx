@@ -9,7 +9,7 @@
 
 import { Label } from '@/components/ui/label'
 import { NumericTagInput } from '@/components/ui/numeric-tag-input'
-import { getDefaultBucketEdges } from '@/lib/calculations/table-aggregation'
+import { getDefaultBucketEdges } from '@tradeblocks/lib'
 
 interface BucketEditorProps {
   field: string

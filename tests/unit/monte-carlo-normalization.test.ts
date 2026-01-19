@@ -7,8 +7,8 @@ import {
   getTradeResamplePool,
   calculateDailyReturns,
   runMonteCarloSimulation,
-} from "@/lib/calculations/monte-carlo";
-import { Trade } from "@/lib/models/trade";
+  Trade,
+} from "@tradeblocks/lib";
 
 // Helper to create mock trades
 function createMockTrade(

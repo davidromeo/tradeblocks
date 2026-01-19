@@ -20,8 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { cn } from "@/lib/utils"
-import type { WalkForwardAnalysis, WalkForwardOptimizationTarget } from "@/lib/models/walk-forward"
+import { cn } from "@tradeblocks/lib"
+import type { WalkForwardAnalysis, WalkForwardOptimizationTarget } from "@tradeblocks/lib"
 
 interface RunSwitcherProps {
   history: WalkForwardAnalysis[]

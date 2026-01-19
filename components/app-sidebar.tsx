@@ -17,7 +17,7 @@ import { Blocks } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
-import { useBlockStore } from "@/lib/stores/block-store";
+import { useBlockStore } from "@tradeblocks/lib/stores";
 
 import { NavMain } from "@/components/nav-main";
 import { SidebarActiveBlocks } from "@/components/sidebar-active-blocks";

@@ -1,5 +1,4 @@
-import { estimateTradesPerYear, MIN_TRADES_PER_YEAR } from "@/lib/utils/trade-frequency";
-import { Trade } from "@/lib/models/trade";
+import { estimateTradesPerYear, MIN_TRADES_PER_YEAR, Trade } from "@tradeblocks/lib";
 
 function createTrade(date: Date): Trade {
   return {

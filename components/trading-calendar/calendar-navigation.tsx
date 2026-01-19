@@ -26,8 +26,8 @@ import {
   DataDisplayMode,
   DateDisplayMode,
   useTradingCalendarStore,
-} from "@/lib/stores/trading-calendar-store";
-import { cn } from "@/lib/utils";
+} from "@tradeblocks/lib/stores";
+import { cn } from "@tradeblocks/lib";
 import { format } from "date-fns";
 import {
   CalendarIcon,

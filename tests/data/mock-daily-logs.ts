@@ -1,4 +1,4 @@
-import { DailyLogEntry } from '@/lib/models/daily-log';
+import { DailyLogEntry } from '@tradeblocks/lib';
 
 /**
  * Mock daily log data corresponding to the mock trades

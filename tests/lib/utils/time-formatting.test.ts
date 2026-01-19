@@ -7,7 +7,7 @@ import {
   generateTimeAxisTicks,
   generateTimeAxisTicksFromData,
   generateTimeAxisTicksWithInterval,
-} from '@/lib/utils/time-formatting'
+} from '@tradeblocks/lib'
 
 describe('formatMinutesToTime', () => {
   describe('normal values', () => {

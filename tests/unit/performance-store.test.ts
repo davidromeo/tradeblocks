@@ -1,10 +1,8 @@
 import { describe, it, expect } from '@jest/globals'
 
-import { processChartData, buildPerformanceSnapshot } from '../../lib/services/performance-snapshot'
-import { calculateInitialCapital } from '../../lib/processing/capital-calculator'
+import { processChartData, buildPerformanceSnapshot, calculateInitialCapital, Trade } from '@tradeblocks/lib'
 import { mockTrades } from '../data/mock-trades'
 import { mockDailyLogs } from '../data/mock-daily-logs'
-import { Trade } from '@/lib/models/trade'
 
 describe('performance-store chart data', () => {
   it('uses daily logs to drive drawdown when available', async () => {

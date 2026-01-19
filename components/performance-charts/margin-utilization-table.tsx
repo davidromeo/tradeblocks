@@ -11,8 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { usePerformanceStore } from "@/lib/stores/performance-store";
-import { cn } from "@/lib/utils";
+import { usePerformanceStore } from "@tradeblocks/lib/stores";
+import { cn } from "@tradeblocks/lib";
 import { format } from "date-fns";
 import type { Layout, PlotData } from "plotly.js";
 import { useMemo, useState } from "react";
