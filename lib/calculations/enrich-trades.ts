@@ -21,6 +21,15 @@ export interface StaticDatasetWithRows {
 }
 
 /**
+ * Daily exposure point for enrichment
+ */
+export interface DailyExposureForEnrichment {
+  date: string  // ISO date string
+  exposure: number
+  exposurePercent: number
+}
+
+/**
  * Options for enriching trades
  */
 export interface EnrichTradesOptions {
@@ -28,6 +37,8 @@ export interface EnrichTradesOptions {
   dailyLogs?: DailyLogEntry[]
   /** Static datasets with their rows for timestamp-based matching */
   staticDatasets?: StaticDatasetWithRows[]
+  /** Daily exposure data for portfolio context enrichment */
+  dailyExposure?: DailyExposureForEnrichment[]
 }
 
 /**
@@ -49,6 +60,19 @@ function buildDailyCustomFieldsMap(dailyLogs: DailyLogEntry[]): Map<string, Reco
       const key = getDateKey(entry.date)
       map.set(key, entry.customFields)
     }
+  }
+  return map
+}
+
+/**
+ * Builds a lookup map from date key to daily exposure data
+ */
+function buildDailyExposureMap(dailyExposure: DailyExposureForEnrichment[]): Map<string, DailyExposureForEnrichment> {
+  const map = new Map<string, DailyExposureForEnrichment>()
+  for (const point of dailyExposure) {
+    // Extract date key from ISO string (YYYY-MM-DD)
+    const key = point.date.slice(0, 10)
+    map.set(key, point)
   }
   return map
 }
@@ -137,7 +161,8 @@ function enrichSingleTrade(
   index: number,
   mfeMaePoint?: MFEMAEDataPoint,
   dailyCustomFields?: Record<string, number | string>,
-  staticDatasetFields?: Record<string, Record<string, number | string>>
+  staticDatasetFields?: Record<string, Record<string, number | string>>,
+  exposureOnOpenData?: DailyExposureForEnrichment
 ): EnrichedTrade {
   const totalFees = trade.openingCommissionsFees + (trade.closingCommissionsFees ?? 0)
   const netPl = trade.pl - totalFees
@@ -209,6 +234,10 @@ function enrichSingleTrade(
     // Sequential
     tradeNumber: index + 1,
 
+    // Portfolio exposure on trade date
+    exposureOnOpen: exposureOnOpenData?.exposurePercent,
+    exposureOnOpenDollars: exposureOnOpenData?.exposure,
+
     // Daily custom fields (joined by trade date)
     dailyCustomFields,
 
@@ -240,6 +269,11 @@ export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): En
     ? buildDailyCustomFieldsMap(options.dailyLogs)
     : undefined
 
+  // Build daily exposure lookup map if provided
+  const dailyExposureMap = options?.dailyExposure
+    ? buildDailyExposureMap(options.dailyExposure)
+    : undefined
+
   // Enrich each trade
   return trades.map((trade, index) => {
     const mfeMaePoint = mfeMaeMap.get(index)
@@ -249,6 +283,13 @@ export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): En
     if (dailyCustomFieldsMap) {
       const dateKey = getDateKey(trade.dateOpened)
       dailyCustomFields = dailyCustomFieldsMap.get(dateKey)
+    }
+
+    // Look up daily exposure for this trade's date
+    let exposureOnOpenData: DailyExposureForEnrichment | undefined
+    if (dailyExposureMap) {
+      const dateKey = getDateKey(trade.dateOpened)
+      exposureOnOpenData = dailyExposureMap.get(dateKey)
     }
 
     // Match static dataset values by timestamp
@@ -261,7 +302,7 @@ export function enrichTrades(trades: Trade[], options?: EnrichTradesOptions): En
       }
     }
 
-    return enrichSingleTrade(trade, index, mfeMaePoint, dailyCustomFields, staticDatasetFields)
+    return enrichSingleTrade(trade, index, mfeMaePoint, dailyCustomFields, staticDatasetFields, exposureOnOpenData)
   })
 }
 

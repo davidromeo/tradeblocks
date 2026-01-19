@@ -50,6 +50,10 @@ export interface EnrichedTrade extends Trade {
   // Sequential
   tradeNumber?: number          // 1-indexed trade sequence
 
+  // Portfolio exposure on trade date
+  exposureOnOpen?: number       // Daily portfolio exposure % when this trade was opened
+  exposureOnOpenDollars?: number // Daily portfolio exposure $ when this trade was opened
+
   // Custom fields from trade CSV (inherited from Trade.customFields)
   // customFields?: Record<string, number | string> - already inherited from Trade
 

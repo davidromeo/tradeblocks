@@ -213,12 +213,15 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
 
           // Try to get cached enriched trades, fall back to computing them
           // Note: Static datasets aren't cached - always compute fresh to pick up new datasets
+          // Also recompute if we have daily exposure data (for exposureOnOpen field)
           let enrichedTradesData = await getEnrichedTradesCache(blockId)
-          if (!enrichedTradesData || staticDatasetsWithRows.length > 0) {
-            // Cache miss or static datasets present - compute enriched trades
+          const hasDailyExposure = cachedSnapshot.chartData.dailyExposure && cachedSnapshot.chartData.dailyExposure.length > 0
+          if (!enrichedTradesData || staticDatasetsWithRows.length > 0 || hasDailyExposure) {
+            // Cache miss, static datasets present, or daily exposure available - compute enriched trades
             enrichedTradesData = enrichTrades(cachedSnapshot.filteredTrades, {
               dailyLogs: cachedSnapshot.filteredDailyLogs,
-              staticDatasets: staticDatasetsWithRows
+              staticDatasets: staticDatasetsWithRows,
+              dailyExposure: cachedSnapshot.chartData.dailyExposure
             })
           }
 
@@ -264,7 +267,8 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
       // Compute enriched trades for filtered result (smaller set = faster)
       const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
         dailyLogs: snapshot.filteredDailyLogs,
-        staticDatasets: staticDatasetsWithRows
+        staticDatasets: staticDatasetsWithRows,
+        dailyExposure: snapshot.chartData.dailyExposure
       })
 
       set({
@@ -318,7 +322,8 @@ export const usePerformanceStore = create<PerformanceStore>((set, get) => ({
     // Compute enriched trades for the filtered result
     const enrichedTradesData = enrichTrades(snapshot.filteredTrades, {
       dailyLogs: snapshot.filteredDailyLogs,
-      staticDatasets: staticDatasetsWithRows
+      staticDatasets: staticDatasetsWithRows,
+      dailyExposure: snapshot.chartData.dailyExposure
     })
 
     set(state => ({

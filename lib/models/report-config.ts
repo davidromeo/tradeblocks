@@ -179,6 +179,9 @@ export type ReportField =
   | 'isWinner'
   // Derived: Sequential
   | 'tradeNumber'
+  // Derived: Portfolio context
+  | 'exposureOnOpen'
+  | 'exposureOnOpenDollars'
 
 /**
  * Field category for organizing fields in UI
@@ -272,7 +275,11 @@ export const REPORT_FIELDS: FieldInfo[] = [
   { field: 'timeOfDayMinutes', label: 'Time of Day', category: 'timing', description: 'Exact time when opened as minutes since midnight (e.g., 11:45 = 705). Useful for scatter plots to analyze floating-time or multiple-entry trades' },
   { field: 'dayOfMonth', label: 'Day of Month', category: 'timing', description: 'Day of month when opened (1-31)' },
   { field: 'monthOfYear', label: 'Month of Year', category: 'timing', description: 'Month when opened (1=January through 12=December)' },
-  { field: 'weekOfYear', label: 'Week of Year', category: 'timing', description: 'ISO week number when opened (1-52)' }
+  { field: 'weekOfYear', label: 'Week of Year', category: 'timing', description: 'ISO week number when opened (1-52)' },
+
+  // Portfolio context
+  { field: 'exposureOnOpen', label: 'Portfolio Exposure %', category: 'risk', unit: '%', description: 'Total portfolio margin exposure as % of equity on the day this trade opened - shows how much risk was deployed when entering' },
+  { field: 'exposureOnOpenDollars', label: 'Portfolio Exposure $', category: 'risk', unit: '$', description: 'Total portfolio margin exposure in dollars on the day this trade opened' }
 ]
 
 /**
