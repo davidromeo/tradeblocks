@@ -91,15 +91,15 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 **Milestone Goal:** Convert `lib/` to a proper workspace package (`@tradeblocks/lib`) to fix TypeScript path resolution issues and enable clean imports across the monorepo.
 
-#### Phase 29: workspace-setup
+#### Phase 29: workspace-setup — Complete
 
 **Goal**: Create `@tradeblocks/lib` package with workspace config
 **Depends on**: Previous milestone complete
 **Research**: Unlikely (npm workspaces are well-documented)
-**Plans**: 1
+**Plans**: 1/1 complete
 
 Plans:
-- [ ] 29-01: Create package structure, move lib/, verify workspace resolution
+- [x] 29-01: Create package structure, move lib/, verify workspace resolution
 
 #### Phase 30: import-migration
 
