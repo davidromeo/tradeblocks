@@ -1,0 +1,22 @@
+{
+  "name": "@tradeblocks/lib",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./calculations": "./calculations/index.ts",
+    "./models": "./models/index.ts",
+    "./processing": "./processing/index.ts",
+    "./db": "./db/index.ts",
+    "./stores": "./stores/index.ts",
+    "./utils": "./utils/index.ts",
+    "./data": "./data/index.ts",
+    "./services": "./services/index.ts",
+    "./metrics": "./metrics/index.ts",
+    "./types": "./types/index.ts"
+  },
+  "dependencies": {}
+}
