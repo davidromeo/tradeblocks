@@ -7,8 +7,24 @@
 - ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
 - ✅ [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
 - ✅ [v2.3 Workspace Packages](milestones/v2.3-workspace-packages.md) (Phases 29-31) — SHIPPED 2026-01-19
+- ✅ [v2.4 Backtest Optimization Tools](milestones/v2.4-backtest-optimization-tools.md) (Phases 32-34) — SHIPPED 2026-01-19
 
 ## Completed Milestones
+
+<details>
+<summary>✅ v2.4 Backtest Optimization Tools (Phases 32-34) — SHIPPED 2026-01-19</summary>
+
+MCP tools for data-driven filter optimization: find_predictive_fields for correlation analysis and filter_curve for threshold sweeping with sweet spot detection.
+
+- [x] Phase 32: find-predictive-fields (1/1 plan) — completed 2026-01-19
+- [x] Phase 33: filter-curve (1/1 plan) — completed 2026-01-19
+- [x] Phase 34: report-tools-fixes (1/1 plan) — completed 2026-01-19
+
+**Stats:** 3 phases, 3 plans, 1 day execution time
+
+See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for full details.
+
+</details>
 
 <details>
 <summary>✅ v2.3 Workspace Packages (Phases 29-31) — SHIPPED 2026-01-19</summary>
@@ -102,10 +118,6 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 
 </details>
 
-### Planning Next Milestone
-
-No active milestone. Ready to plan next features.
-
 ## Progress
 
 | Milestone | Phases | Plans | Status | Shipped |
@@ -115,6 +127,7 @@ No active milestone. Ready to plan next features.
 | v2.1 Portfolio Comparison | 17-24 | 9 | Complete | 2026-01-18 |
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
+| v2.4 Backtest Optimization Tools | 32-34 | 3 | Complete | 2026-01-19 |
 
 ## Audit Notes
 

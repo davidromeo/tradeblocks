@@ -9,16 +9,17 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 
 ## Current Position
 
-Milestone: None active
-Phase: -
-Plan: -
-Status: Ready to plan next milestone
-Last activity: 2026-01-19 — v2.3 milestone complete
+Milestone: None active (v2.4 shipped)
+Phase: Ready to plan
+Plan: N/A
+Status: Between milestones
+Last activity: 2026-01-19 — Completed v2.4 Backtest Optimization Tools
 
-Progress: Ready for next milestone
+Progress: All milestones complete through v2.4
 
 ## Historical Context
 
+See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for backtest optimization tools.
 See [v2.3 archive](milestones/v2.3-workspace-packages.md) for workspace package migration details.
 See [v2.2 archive](milestones/v2.2-historical-risk-free-rates.md) for risk-free rate implementation details.
 See [v2.1 archive](milestones/v2.1-portfolio-comparison.md) for portfolio comparison tools.
@@ -32,9 +33,9 @@ All decisions now captured in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-01-19
-Stopped at: v2.3 milestone shipped
+Stopped at: v2.4 milestone complete
 Resume file: None
-Next: Plan next milestone (/gsd:discuss-milestone)
+Next: `/gsd:discuss-milestone` to plan next milestone
 
 ## Testing Infrastructure
 
