@@ -34,7 +34,20 @@ import { handleDirectCall } from "./cli-handler.js";
 function printUsage(): void {
   console.log(`TradeBlocks MCP Server
 
-Usage: tradeblocks-mcp <command|backtests-folder>
+Usage: tradeblocks-mcp [options] <backtests-folder>
+       tradeblocks-mcp <command> [command-options]
+
+MCP Server Modes:
+  tradeblocks-mcp <folder>                    stdio transport (Claude Desktop, Codex CLI)
+  tradeblocks-mcp --http <folder>             HTTP transport on port 3100
+  tradeblocks-mcp --http --port 8080 <folder> HTTP transport on custom port
+
+Options:
+  --http           Start HTTP server instead of stdio (for web platforms)
+  --port <number>  HTTP server port (default: 3100, requires --http)
+
+Environment:
+  BLOCKS_DIRECTORY  Default backtests folder if not specified
 
 Commands:
   install-skills    Install TradeBlocks skills to AI platform
@@ -42,23 +55,18 @@ Commands:
   check-skills      Check skill installation status
   --call <tool> '<args>'  Directly invoke an MCP tool (for testing)
 
-Options for skill commands:
+Skill Command Options:
   --platform <name>  Target platform: claude, codex, gemini (default: claude)
   --force            Reinstall even if skills exist (install only)
 
-MCP Server:
-  tradeblocks-mcp <backtests-folder>
-  BLOCKS_DIRECTORY=/path tradeblocks-mcp
-
 Direct Tool Invocation:
   TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call list_backtests '{}'
-  TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call block_diff '{"blockIdA":"block1","blockIdB":"block2"}'
 
 Examples:
-  tradeblocks-mcp install-skills
-  tradeblocks-mcp install-skills --platform codex
-  tradeblocks-mcp check-skills
   tradeblocks-mcp ~/backtests
+  tradeblocks-mcp --http ~/backtests
+  tradeblocks-mcp --http --port 8080 ~/Trading/backtests
+  tradeblocks-mcp install-skills --platform codex
 `);
 }
 
@@ -88,6 +96,42 @@ function parseSkillArgs(): { platform: Platform; force: boolean } {
   }
 
   return { platform, force };
+}
+
+// Parse CLI arguments for MCP server mode
+function parseServerArgs(): {
+  http: boolean;
+  port: number;
+  directory: string | undefined;
+} {
+  const args = process.argv.slice(2);
+  let http = false;
+  let port = 3100;
+  let directory: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg === "--http") {
+      http = true;
+    } else if (arg === "--port" && args[i + 1]) {
+      const parsedPort = parseInt(args[i + 1], 10);
+      if (!isNaN(parsedPort) && parsedPort > 0 && parsedPort < 65536) {
+        port = parsedPort;
+      }
+      i++; // Skip next arg (the port value)
+    } else if (!arg.startsWith("-") && !arg.startsWith("--")) {
+      // Non-flag argument is the directory
+      directory = arg;
+    }
+  }
+
+  // Also check environment variable
+  if (!directory) {
+    directory = process.env.BLOCKS_DIRECTORY;
+  }
+
+  return { http, port, directory };
 }
 
 // Handle skill CLI commands
@@ -200,8 +244,9 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // MCP Server mode - get backtest directory from environment variable or command line
-  const backtestDir = process.env.BLOCKS_DIRECTORY || process.argv[2];
+  // MCP Server mode - parse arguments
+  const { http, port, directory: backtestDir } = parseServerArgs();
+
   if (!backtestDir) {
     printUsage();
     process.exit(1);
@@ -219,7 +264,7 @@ async function main(): Promise<void> {
 
   // Create server instance
   const server = new McpServer(
-    { name: "tradeblocks-mcp", version: "0.1.0" },
+    { name: "tradeblocks-mcp", version: "0.4.0" },
     { capabilities: { tools: {}, resources: {} } }
   );
 
@@ -231,10 +276,17 @@ async function main(): Promise<void> {
   registerImportTools(server, resolvedDir);
   registerResources(server);
 
-  // Connect to stdio transport
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error(`TradeBlocks MCP ready. Watching: ${resolvedDir}`);
+  if (http) {
+    // HTTP transport for web platforms - dynamically import to avoid bundling
+    // CommonJS deps (express, raw-body) that don't work in MCPB bundle
+    const { startHttpServer } = await import("./http-server.js");
+    await startHttpServer(server, { port });
+  } else {
+    // Stdio transport for Claude Desktop, Codex CLI, etc.
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error(`TradeBlocks MCP ready (stdio). Watching: ${resolvedDir}`);
+  }
 }
 
 main().catch((error) => {

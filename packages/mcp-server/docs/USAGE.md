@@ -195,7 +195,7 @@ The server detects CSV types by column headers, not just filenames. This means:
 
 - `my-strategy-export.csv` will work if it has the expected columns
 - Files are auto-detected as tradelog, dailylog, or reportinglog
-- Detected mappings are cached in `.block.json` for faster loading
+- Detected mappings are cached in `block.json` for faster loading
 
 ---
 

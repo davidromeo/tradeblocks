@@ -35,7 +35,12 @@ Before setting up any web platform:
 
 **Terminal 1:** Start MCP server with HTTP transport:
 ```bash
-npx tradeblocks-mcp --http --port 3100 ~/Trading/backtests
+tradeblocks-mcp --http ~/Trading/backtests
+```
+
+Or with a custom port:
+```bash
+tradeblocks-mcp --http --port 8080 ~/Trading/backtests
 ```
 
 **Terminal 2:** Expose via ngrok:
@@ -44,6 +49,8 @@ ngrok http 3100
 ```
 
 Note the ngrok URL (e.g., `https://abc123.ngrok.io`) - you'll need this for platform setup.
+
+> **Note:** The `--http` flag enables HTTP transport mode. Without it, the server runs in stdio mode (for Claude Desktop and CLI tools).
 
 ---
 
@@ -149,7 +156,7 @@ For extended sessions, consider:
 
 - **Paid ngrok**: Stable URLs that don't change between restarts
 - **Screen/tmux**: Keep terminal sessions alive when you disconnect
-- **PM2**: Process manager for Node.js (`pm2 start tradeblocks-mcp -- --http --port 3100 ~/backtests`)
+- **PM2**: Process manager for Node.js (`pm2 start tradeblocks-mcp -- --http ~/backtests`)
 
 ### Security Considerations
 

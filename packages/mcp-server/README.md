@@ -1,14 +1,14 @@
 # TradeBlocks MCP Server
 
-Model Context Protocol (MCP) server for options trading analysis. Provides programmatic access to backtest statistics, walk-forward analysis, Monte Carlo simulations, and risk metrics.
+Model Context Protocol (MCP) server for options trading analysis. Works with Claude Desktop, Claude Code, Codex CLI, Gemini CLI, ChatGPT, Google AI Studio, and any MCP-compatible client.
 
 ## Features
 
-- **19 MCP tools** for comprehensive trading analysis
+- **21 MCP tools** for comprehensive trading analysis
+- **Two transport modes**: stdio (CLI tools) and HTTP (web platforms)
 - **Block-based data organization** - each folder is a trading strategy
-- **Automatic caching** - statistics cached in `.block.json` for fast access
+- **Automatic caching** - statistics cached in `block.json` for fast access
 - **Flexible CSV detection** - auto-detects file types by column headers
-- **Cross-platform** - works with Claude, Codex CLI, Gemini CLI, and any MCP client
 
 ## Installation
 
@@ -18,26 +18,19 @@ Download the latest `.mcpb` file from [GitHub Releases](https://github.com/david
 
 The installer will prompt you to select your Trading Data Directory.
 
-### Option 2: npx (Claude Desktop / Claude Code)
+### Option 2: npx (All Platforms)
 
 Run directly without installation:
 
 ```bash
+# stdio mode (Claude Desktop, Claude Code, Codex CLI, Gemini CLI)
 npx tradeblocks-mcp ~/Trading/backtests
+
+# HTTP mode (ChatGPT, Google AI Studio, Julius AI)
+npx tradeblocks-mcp --http ~/Trading/backtests
 ```
 
-For Claude Desktop, add to your config file:
-
-```json
-{
-  "mcpServers": {
-    "tradeblocks": {
-      "command": "npx",
-      "args": ["tradeblocks-mcp", "/path/to/your/backtests"]
-    }
-  }
-}
-```
+See [Configuration by Platform](#configuration-by-platform) below for platform-specific setup.
 
 ### Option 3: From Source
 
@@ -54,8 +47,8 @@ node packages/mcp-server/server/index.js ~/Trading/backtests
 ## Quick Start
 
 1. **Set up your data** - Create folders for each strategy with CSV files
-2. **Connect Claude** - Install via MCPB or configure manually
-3. **Start analyzing** - Ask Claude to "list my backtests" or "run a health check on iron-condor"
+2. **Connect your AI platform** - See [Configuration by Platform](#configuration-by-platform) below
+3. **Start analyzing** - Ask your AI to "list my backtests" or "run a health check on iron-condor"
 
 For detailed usage examples, see [docs/USAGE.md](docs/USAGE.md).
 
@@ -126,6 +119,40 @@ Add to `~/.gemini/settings.json`:
 
 See [Gemini CLI MCP documentation](https://geminicli.com/docs/tools/mcp-server/) for more options.
 
+### Web Platforms (ChatGPT, Google AI Studio, Julius)
+
+Web AI platforms require HTTP transport with an ngrok tunnel:
+
+**Terminal 1:** Start HTTP server
+```bash
+tradeblocks-mcp --http ~/Trading/backtests
+```
+
+**Terminal 2:** Expose via ngrok
+```bash
+ngrok http 3100
+```
+
+Then add the ngrok URL (`https://xxx.ngrok.io/mcp`) to your platform's MCP settings.
+
+See [Web Platforms Guide](docs/WEB-PLATFORMS.md) for detailed setup instructions.
+
+## Transport Modes
+
+| Mode | Flag | Use Case | Platforms |
+|------|------|----------|-----------|
+| stdio | (default) | Local CLI tools | Claude Desktop, Claude Code, Codex CLI, Gemini CLI |
+| HTTP | `--http` | Web platforms via ngrok | ChatGPT, Google AI Studio, Julius AI |
+
+```bash
+# stdio mode (default)
+tradeblocks-mcp ~/backtests
+
+# HTTP mode
+tradeblocks-mcp --http ~/backtests
+tradeblocks-mcp --http --port 8080 ~/backtests
+```
+
 ## Agent Skills
 
 For guided conversational workflows, install the bundled agent skills:
@@ -163,7 +190,7 @@ backtests/
     tradelog.csv      # Required - trade history
     dailylog.csv      # Optional - daily portfolio values
     reportinglog.csv  # Optional - live/reported trades
-    .block.json       # Auto-generated - cached metadata
+    block.json        # Auto-generated - cached metadata
   NDX-Put-Spread/
     my-export.csv     # Works! Auto-detected by columns
     ...

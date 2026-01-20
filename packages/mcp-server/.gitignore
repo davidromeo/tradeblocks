@@ -6,4 +6,5 @@ agent-skills/
 *.tgz
 
 # Test-generated cache files
+tests/fixtures/**/block.json
 tests/fixtures/**/.block.json
