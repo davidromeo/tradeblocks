@@ -108,7 +108,7 @@ export async function handleDirectCall(args: string[]): Promise<void> {
     console.log(JSON.stringify({
       availableTools: tools,
       usage: "tradeblocks-mcp --call <tool-name> '<json-args>'",
-      example: "TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call list_backtests '{}'",
+      example: "TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call list_blocks '{}'",
     }, null, 2));
     process.exit(0);
   }

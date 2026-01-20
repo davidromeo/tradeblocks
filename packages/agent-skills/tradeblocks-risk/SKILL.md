@@ -27,7 +27,7 @@ Risk analysis serves different purposes. Ask what the user wants to understand:
 
 Ask: "What aspect of risk would you like to explore?"
 
-Then use `list_backtests` to identify the target block.
+Then use `list_blocks` to identify the target block.
 
 ### Step 2: Run Appropriate Analysis
 

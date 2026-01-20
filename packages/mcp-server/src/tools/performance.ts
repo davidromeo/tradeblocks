@@ -1195,9 +1195,9 @@ export function registerPerformanceTools(
     "get_performance_charts",
     {
       description:
-        "Get data for performance visualizations. Returns multiple chart datasets for equity analysis, return distributions, rolling metrics, and trade patterns.",
+        "Get chart data for performance visualizations: equity curves, drawdowns, return distributions, rolling metrics, and trade patterns. Use blockId from list_blocks.",
       inputSchema: z.object({
-        blockId: z.string().describe("Block folder name"),
+        blockId: z.string().describe("Block ID from list_blocks (e.g., 'main-port')"),
         strategy: z
           .string()
           .optional()

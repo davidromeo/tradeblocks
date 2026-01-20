@@ -60,7 +60,7 @@ Skill Command Options:
   --force            Reinstall even if skills exist (install only)
 
 Direct Tool Invocation:
-  TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call list_backtests '{}'
+  TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call list_blocks '{}'
 
 Examples:
   tradeblocks-mcp ~/backtests
@@ -262,27 +262,30 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Create server instance
-  const server = new McpServer(
-    { name: "tradeblocks-mcp", version: "0.4.0" },
-    { capabilities: { tools: {}, resources: {} } }
-  );
-
-  // Register all tools and resources
-  registerBlockTools(server, resolvedDir);
-  registerAnalysisTools(server, resolvedDir);
-  registerPerformanceTools(server, resolvedDir);
-  registerReportTools(server, resolvedDir);
-  registerImportTools(server, resolvedDir);
-  registerResources(server);
+  // Factory function to create configured MCP server instances
+  // Used by HTTP transport which needs fresh instances per request (stateless mode)
+  const createServer = (): McpServer => {
+    const server = new McpServer(
+      { name: "tradeblocks-mcp", version: "0.4.1" },
+      { capabilities: { tools: {}, resources: {} } }
+    );
+    registerBlockTools(server, resolvedDir);
+    registerAnalysisTools(server, resolvedDir);
+    registerPerformanceTools(server, resolvedDir);
+    registerReportTools(server, resolvedDir);
+    registerImportTools(server, resolvedDir);
+    registerResources(server);
+    return server;
+  };
 
   if (http) {
     // HTTP transport for web platforms - dynamically import to avoid bundling
     // CommonJS deps (express, raw-body) that don't work in MCPB bundle
     const { startHttpServer } = await import("./http-server.js");
-    await startHttpServer(server, { port });
+    await startHttpServer(createServer, { port });
   } else {
     // Stdio transport for Claude Desktop, Codex CLI, etc.
+    const server = createServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(`TradeBlocks MCP ready (stdio). Watching: ${resolvedDir}`);

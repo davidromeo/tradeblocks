@@ -29,7 +29,7 @@ Ask:
 - "Which strategies would you like to analyze together?"
 - "What aspect of portfolio composition interests you?"
 
-Use `list_backtests` to show available blocks.
+Use `list_blocks` to show available blocks.
 
 ### Step 2: Correlation Analysis
 

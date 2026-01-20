@@ -33,7 +33,7 @@ If OOS performance is close to IS performance, the parameters may be capturing r
 
 ### Step 1: Select Strategy
 
-Use `list_backtests` to show available blocks.
+Use `list_blocks` to show available blocks.
 
 Ask:
 - "Which backtest contains the strategy you want to analyze?"

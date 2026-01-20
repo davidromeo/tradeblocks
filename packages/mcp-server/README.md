@@ -216,7 +216,7 @@ backtests/
 ### Core Tools
 | Tool | Description |
 |------|-------------|
-| `list_backtests` | List all available blocks with summary stats |
+| `list_blocks` | List all available blocks with summary stats |
 | `get_block_info` | Detailed info for a specific block |
 | `get_statistics` | Performance metrics (Sharpe, Sortino, drawdown, etc.) |
 | `get_strategy_comparison` | Compare strategies within a block |

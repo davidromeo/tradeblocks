@@ -39,7 +39,7 @@ Ask what the user wants to explore:
 
 Ask: "What aspect of your strategy would you like to explore?"
 
-Use `list_backtests` to identify the target block.
+Use `list_blocks` to identify the target block.
 
 ### Step 2: Explore Available Fields
 
