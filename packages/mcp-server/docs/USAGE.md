@@ -49,7 +49,7 @@ See [README.md](../README.md) for desktop/CLI configuration, or [WEB-PLATFORMS.m
 "Run a health check on my iron-condor strategy"
 
 Your AI assistant will:
-1. `list_backtests` - Find available blocks
+1. `list_blocks` - Find available blocks
 2. `get_statistics` - Get performance metrics
 3. `run_walk_forward` - Check for overfitting
 4. `get_tail_risk` - Assess worst-case scenarios
@@ -91,7 +91,7 @@ Your AI assistant will:
 ### Core Tools
 | Tool | Purpose |
 |------|---------|
-| `list_backtests` | List all available blocks with summary stats |
+| `list_blocks` | List all available blocks with summary stats |
 | `get_block_info` | Detailed info for a specific block |
 | `get_statistics` | Performance metrics for a block |
 | `get_strategy_comparison` | Compare strategies within a block |
@@ -205,7 +205,7 @@ The server detects CSV types by column headers, not just filenames. This means:
 
 1. Check folder exists in your backtests directory
 2. Ensure it contains a valid CSV (tradelog.csv or detected by content)
-3. Run `list_backtests` to see what's available
+3. Run `list_blocks` to see what's available
 
 ### "No trades after filtering"
 

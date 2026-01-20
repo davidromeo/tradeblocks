@@ -19,7 +19,7 @@ Surface key performance metrics and stress test results to help understand a str
 List available blocks and help the user choose what to analyze.
 
 ```
-Use list_backtests to show available options.
+Use list_blocks to show available options.
 ```
 
 Ask clarifying questions:

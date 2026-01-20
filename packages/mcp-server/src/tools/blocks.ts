@@ -106,12 +106,12 @@ function calculatePeakExposure(
 export function registerBlockTools(server: McpServer, baseDir: string): void {
   const calculator = new PortfolioStatsCalculator();
 
-  // Tool 1: list_backtests
+  // Tool 1: list_blocks (formerly list_backtests)
   server.registerTool(
-    "list_backtests",
+    "list_blocks",
     {
       description:
-        "List all available backtest blocks with summary stats (trade count, date range, P&L)",
+        "START HERE: List all available portfolio blocks. Returns blockId values needed for all other tools (get_statistics, get_block_info, get_performance_charts, etc.). Each block contains trade history and optional daily logs.",
       inputSchema: z.object({
         sortBy: z
           .enum(["name", "tradeCount", "netPl", "dateRange"])
@@ -235,9 +235,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     "get_block_info",
     {
       description:
-        "Get detailed info for a specific block (trade count, date range, strategies, daily log status)",
+        "Get detailed metadata for a block including available strategies, date range, and daily log status. Use blockId from list_blocks.",
       inputSchema: z.object({
-        blockId: z.string().describe("Block folder name"),
+        blockId: z.string().describe("Block ID from list_blocks (e.g., 'main-port')"),
       }),
     },
     async ({ blockId }) => {
@@ -290,9 +290,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     "get_statistics",
     {
       description:
-        "Get full portfolio statistics with optional strategy, ticker, and date filters",
+        "Get comprehensive portfolio statistics: win rate, Sharpe ratio, max drawdown, P&L metrics, and more. Use blockId from list_blocks. Optionally filter by strategy, ticker, or date range.",
       inputSchema: z.object({
-        blockId: z.string().describe("Block folder name"),
+        blockId: z.string().describe("Block ID from list_blocks (e.g., 'main-port')"),
         strategy: z
           .string()
           .optional()
@@ -590,13 +590,13 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
   server.registerTool(
     "compare_blocks",
     {
-      description: "Compare statistics across multiple blocks (max 5)",
+      description: "Compare performance statistics across multiple portfolios side-by-side. Use blockIds from list_blocks.",
       inputSchema: z.object({
         blockIds: z
           .array(z.string())
           .min(1)
           .max(5)
-          .describe("Array of block folder names to compare (max 5)"),
+          .describe("Array of block IDs from list_blocks (max 5)"),
         metrics: z
           .array(
             z.enum([

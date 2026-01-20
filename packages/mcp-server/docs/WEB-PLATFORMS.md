@@ -76,7 +76,7 @@ Note the ngrok URL (e.g., `https://abc123.ngrok.io`) - you'll need this for plat
 3. **Test the connection:**
    - Start a new chat
    - Ask: "List my backtests using TradeBlocks"
-   - ChatGPT should call `list_backtests` and show your strategies
+   - ChatGPT should call `list_blocks` and show your strategies
 
 ### Limitations
 

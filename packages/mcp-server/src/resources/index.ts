@@ -86,7 +86,7 @@ SPY, SPX (afternoon expirations only), QQQ, IWM, AAPL, TSLA
 3. Click Export/Download CSV
 4. Create a new folder in your Trading Data Directory (e.g., \`my-strategy-2024\`)
 5. Save the CSV as \`tradelog.csv\` in that folder
-6. Run \`list_backtests\` to see your new block
+6. Run \`list_blocks\` to see your new block
 
 TradeBlocks expects these columns (Option Omega exports them automatically):
 - Date Opened, Time Opened
