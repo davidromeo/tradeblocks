@@ -76,24 +76,19 @@ describe('CSV type detection', () => {
   });
 
   describe('CSV mappings caching', () => {
-    it('should create .block.json with csvMappings for non-standard files', async () => {
+    it('should create block.json with csvMappings for non-standard files', async () => {
       // First call listBlocks to trigger metadata creation
       await listBlocks(FIXTURES_DIR);
 
       // Check if metadata was created for nonstandard-name block
-      const metadataPath = path.join(FIXTURES_DIR, 'nonstandard-name', '.block.json');
+      const metadataPath = path.join(FIXTURES_DIR, 'nonstandard-name', 'block.json');
 
-      try {
-        const content = await fs.readFile(metadataPath, 'utf-8');
-        const metadata = JSON.parse(content);
+      const content = await fs.readFile(metadataPath, 'utf-8');
+      const metadata = JSON.parse(content);
 
-        // Verify csvMappings exists and has the non-standard filename
-        expect(metadata.csvMappings).toBeDefined();
-        expect(metadata.csvMappings.tradelog).toBe('my-custom-trades.csv');
-      } catch {
-        // Metadata file should exist after listBlocks
-        fail('Metadata file should exist after listBlocks call');
-      }
+      // Verify csvMappings exists and has the non-standard filename
+      expect(metadata.csvMappings).toBeDefined();
+      expect(metadata.csvMappings.tradelog).toBe('my-custom-trades.csv');
     });
   });
 });

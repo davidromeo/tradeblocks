@@ -13,9 +13,10 @@ export default defineConfig([
     banner: {
       js: '#!/usr/bin/env node'
     },
-    // Bundle ALL dependencies for standalone MCPB distribution
-    // @tradeblocks/lib is resolved through npm workspace symlink
+    // Bundle ALL deps for standalone MCPB distribution
+    // http-server.ts is dynamically imported - built separately below
     noExternal: [/.*/],
+    external: ['./http-server.js'],
   },
   // Skill installer module (library, no shebang) - stays in dist/
   {

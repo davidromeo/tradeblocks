@@ -20,7 +20,7 @@ export interface CsvMappings {
 }
 
 /**
- * Block metadata stored in .block.json
+ * Block metadata stored in block.json
  */
 export interface BlockMetadata {
   blockId: string;
@@ -581,12 +581,12 @@ async function loadDailyLogs(
 }
 
 /**
- * Load block metadata from .block.json
+ * Load block metadata from block.json
  */
 export async function loadMetadata(
   blockPath: string
 ): Promise<BlockMetadata | undefined> {
-  const metadataPath = path.join(blockPath, ".block.json");
+  const metadataPath = path.join(blockPath, "block.json");
 
   try {
     const content = await fs.readFile(metadataPath, "utf-8");
@@ -597,13 +597,13 @@ export async function loadMetadata(
 }
 
 /**
- * Save block metadata to .block.json
+ * Save block metadata to block.json
  */
 export async function saveMetadata(
   blockPath: string,
   metadata: BlockMetadata
 ): Promise<void> {
-  const metadataPath = path.join(blockPath, ".block.json");
+  const metadataPath = path.join(blockPath, "block.json");
   await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), "utf-8");
 }
 
@@ -739,10 +739,20 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
       let needsMetadataUpdate = false;
 
       if (metadata?.csvMappings?.tradelog) {
-        // Use cached mappings from metadata
-        tradelogFilename = metadata.csvMappings.tradelog;
-        dailylogFilename = metadata.csvMappings.dailylog;
-      } else {
+        // Verify cached tradelog file still exists before trusting metadata
+        const cachedTradelogPath = path.join(blockPath, metadata.csvMappings.tradelog);
+        try {
+          await fs.access(cachedTradelogPath);
+          // File exists - use cached mappings from metadata
+          tradelogFilename = metadata.csvMappings.tradelog;
+          dailylogFilename = metadata.csvMappings.dailylog;
+        } catch {
+          // Cached file no longer exists - fall through to rediscovery
+          needsMetadataUpdate = true;
+        }
+      }
+
+      if (!tradelogFilename) {
         // Check for exact standard names first
         const standardTradelogPath = path.join(blockPath, "tradelog.csv");
         const standardDailylogPath = path.join(blockPath, "dailylog.csv");
@@ -1226,7 +1236,7 @@ export async function importCsv(
         end: new Date(Math.max(...dates)).toISOString(),
       };
     }
-    // Note: dailylog-only blocks won't have a .block.json created here
+    // Note: dailylog-only blocks won't have a block.json created here
     // They would typically be added to an existing tradelog block
   } else if (csvType === "reportinglog") {
     // Parse reporting trades to extract metadata

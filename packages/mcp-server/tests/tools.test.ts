@@ -95,7 +95,7 @@ describe('block-loader', () => {
 
   describe('loadMetadata', () => {
     it('should return undefined for block without metadata', async () => {
-      // Initially mock-block won't have .block.json until listBlocks is called
+      // Initially mock-block won't have block.json until listBlocks is called
       // After listBlocks is called, metadata should exist
       const metadata = await loadMetadata(path.join(FIXTURES_DIR, 'mock-block'));
       // Metadata may or may not exist depending on test order

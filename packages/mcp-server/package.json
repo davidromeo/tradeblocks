@@ -1,6 +1,6 @@
 {
   "name": "tradeblocks-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server for options trade analysis - works with Claude Desktop/Cowork",
   "author": "David Romeo <davidmromeo@gmail.com>",
   "type": "module",
@@ -9,7 +9,9 @@
     "tradeblocks-mcp": "server/index.js"
   },
   "scripts": {
-    "build": "tsup && npm run copy-skills",
+    "build": "tsup && npm run build:http-server && npm run fix-http-import && npm run copy-skills",
+    "build:http-server": "esbuild src/http-server.ts --outfile=server/http-server.js --format=esm --platform=node --target=node18 --packages=external",
+    "fix-http-import": "node -e \"const fs=require('fs');const f='server/index.js';let c=fs.readFileSync(f,'utf8');c=c.replace(/\\.\\/http-server-[A-Z0-9]+\\.js/g,'./http-server.js');fs.writeFileSync(f,c);\" && rm -f server/http-server-*.js server/http-server-*.map",
     "copy-skills": "node -e \"const fs=require('fs');fs.cpSync('../agent-skills','./agent-skills',{recursive:true,filter:(s)=>!s.includes('.git')})\"",
     "dev": "tsup --watch",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
@@ -18,9 +20,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",
+    "express": "^5.2.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
     "archiver": "^7.0.1",
