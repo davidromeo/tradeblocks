@@ -1,0 +1,175 @@
+//@version=6
+indicator("SPX 30-Minute Checkpoints", overlay=true)
+
+// =============================================================================
+// SPX 30-MINUTE CHECKPOINT EXPORT
+// =============================================================================
+// Purpose: Export 30-minute interval prices for intraday session analysis
+//
+// Usage:
+//   1. Apply to SPX 5-minute or 15-minute chart
+//   2. Set date range in TradingView (2020-01-01 to present recommended)
+//   3. Right-click indicator pane -> "Export chart data..."
+//   4. Save as spx_30min.csv to ~/backtests/_marketdata/
+//
+// Captures prices at 30-min intervals from 9:30 AM to 4:00 PM ET:
+//   09:30, 10:00, 10:30, 11:00, 11:30, 12:00, 12:30, 13:00, 13:30, 14:00,
+//   14:30, 15:00, 15:30, 16:00 (close)
+//
+// Best for: Session analysis, morning vs afternoon patterns
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// TIME DETECTION
+// -----------------------------------------------------------------------------
+int barHour = hour(time, "America/New_York")
+int barMinute = minute(time, "America/New_York")
+
+// 30-minute checkpoint detection
+bool is_0930 = barHour == 9 and barMinute == 30
+bool is_1000 = barHour == 10 and barMinute == 0
+bool is_1030 = barHour == 10 and barMinute == 30
+bool is_1100 = barHour == 11 and barMinute == 0
+bool is_1130 = barHour == 11 and barMinute == 30
+bool is_1200 = barHour == 12 and barMinute == 0
+bool is_1230 = barHour == 12 and barMinute == 30
+bool is_1300 = barHour == 13 and barMinute == 0
+bool is_1330 = barHour == 13 and barMinute == 30
+bool is_1400 = barHour == 14 and barMinute == 0
+bool is_1430 = barHour == 14 and barMinute == 30
+bool is_1500 = barHour == 15 and barMinute == 0
+bool is_1530 = barHour == 15 and barMinute == 30
+
+// -----------------------------------------------------------------------------
+// CHECKPOINT PRICES
+// -----------------------------------------------------------------------------
+var float p_0930 = na
+var float p_1000 = na
+var float p_1030 = na
+var float p_1100 = na
+var float p_1130 = na
+var float p_1200 = na
+var float p_1230 = na
+var float p_1300 = na
+var float p_1330 = na
+var float p_1400 = na
+var float p_1430 = na
+var float p_1500 = na
+var float p_1530 = na
+
+var int currentDay = na
+
+// Detect new day and reset
+int today = dayofmonth(time, "America/New_York")
+bool isNewDay = today != currentDay
+
+if isNewDay
+    currentDay := today
+    p_0930 := na
+    p_1000 := na
+    p_1030 := na
+    p_1100 := na
+    p_1130 := na
+    p_1200 := na
+    p_1230 := na
+    p_1300 := na
+    p_1330 := na
+    p_1400 := na
+    p_1430 := na
+    p_1500 := na
+    p_1530 := na
+
+// Capture checkpoint prices
+if is_0930
+    p_0930 := close
+if is_1000
+    p_1000 := close
+if is_1030
+    p_1030 := close
+if is_1100
+    p_1100 := close
+if is_1130
+    p_1130 := close
+if is_1200
+    p_1200 := close
+if is_1230
+    p_1230 := close
+if is_1300
+    p_1300 := close
+if is_1330
+    p_1330 := close
+if is_1400
+    p_1400 := close
+if is_1430
+    p_1430 := close
+if is_1500
+    p_1500 := close
+if is_1530
+    p_1530 := close
+
+// -----------------------------------------------------------------------------
+// SESSION METRICS
+// -----------------------------------------------------------------------------
+// Morning session (9:30 - 12:00)
+float morning_move = p_0930 > 0 and p_1200 > 0 ? ((p_1200 - p_0930) / p_0930) * 100 : na
+
+// Midday session (12:00 - 14:00)
+float midday_move = p_1200 > 0 and p_1400 > 0 ? ((p_1400 - p_1200) / p_1200) * 100 : na
+
+// Afternoon session (14:00 - close)
+float afternoon_move = p_1400 > 0 ? ((close - p_1400) / p_1400) * 100 : na
+
+// Power hour (15:00 - close)
+float power_hour = p_1500 > 0 ? ((close - p_1500) / p_1500) * 100 : na
+
+// MOC (last 30 min)
+float moc_30min = p_1530 > 0 ? ((close - p_1530) / p_1530) * 100 : na
+
+// Full day from open
+float full_day = p_0930 > 0 ? ((close - p_0930) / p_0930) * 100 : na
+
+// First hour (9:30 - 10:30)
+float first_hour = p_0930 > 0 and p_1030 > 0 ? ((p_1030 - p_0930) / p_0930) * 100 : na
+
+// Last hour (15:00 - close)
+float last_hour = p_1500 > 0 ? ((close - p_1500) / p_1500) * 100 : na
+
+// Morning vs Afternoon comparison
+float am_vs_pm = morning_move - afternoon_move
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Checkpoint Prices
+// -----------------------------------------------------------------------------
+plot(p_0930, "P_0930", display=display.data_window)
+plot(p_1000, "P_1000", display=display.data_window)
+plot(p_1030, "P_1030", display=display.data_window)
+plot(p_1100, "P_1100", display=display.data_window)
+plot(p_1130, "P_1130", display=display.data_window)
+plot(p_1200, "P_1200", display=display.data_window)
+plot(p_1230, "P_1230", display=display.data_window)
+plot(p_1300, "P_1300", display=display.data_window)
+plot(p_1330, "P_1330", display=display.data_window)
+plot(p_1400, "P_1400", display=display.data_window)
+plot(p_1430, "P_1430", display=display.data_window)
+plot(p_1500, "P_1500", display=display.data_window)
+plot(p_1530, "P_1530", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Session Metrics
+// -----------------------------------------------------------------------------
+plot(morning_move, "Morning_Move", display=display.data_window)
+plot(midday_move, "Midday_Move", display=display.data_window)
+plot(afternoon_move, "Afternoon_Move", display=display.data_window)
+plot(power_hour, "Power_Hour", display=display.data_window)
+plot(moc_30min, "MOC_30min", display=display.data_window)
+plot(full_day, "Full_Day", display=display.data_window)
+plot(first_hour, "First_Hour", display=display.data_window)
+plot(last_hour, "Last_Hour", display=display.data_window)
+plot(am_vs_pm, "AM_vs_PM", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// VISUAL MARKERS
+// -----------------------------------------------------------------------------
+plotshape(is_0930, "Open", shape.circle, location.belowbar, color.blue, size=size.tiny)
+plotshape(is_1200, "Noon", shape.circle, location.belowbar, color.gray, size=size.tiny)
+plotshape(is_1500, "3PM", shape.circle, location.belowbar, color.orange, size=size.tiny)

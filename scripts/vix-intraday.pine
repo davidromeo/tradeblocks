@@ -1,0 +1,201 @@
+//@version=6
+indicator("VIX Intraday Checkpoints", overlay=false)
+
+// =============================================================================
+// VIX INTRADAY CHECKPOINT EXPORT
+// =============================================================================
+// Purpose: Export VIX prices at key intraday times for volatility analysis
+//
+// Usage:
+//   1. Apply to VIX 5-minute chart (CBOE:VIX)
+//   2. Set date range in TradingView
+//   3. Right-click indicator pane -> "Export chart data..."
+//   4. Save as vix_intraday.csv to ~/backtests/_marketdata/
+//
+// Note: Apply directly to VIX chart (not SPX with security request)
+//       for most accurate data
+//
+// Metrics exported:
+//   - VIX prices at 30-min intervals
+//   - Session moves (morning, afternoon, power hour)
+//   - VIX spike detection
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// TIME DETECTION
+// -----------------------------------------------------------------------------
+int barHour = hour(time, "America/New_York")
+int barMinute = minute(time, "America/New_York")
+
+// 30-minute checkpoint detection (VIX doesn't need 15-min granularity usually)
+bool is_0930 = barHour == 9 and barMinute == 30
+bool is_1000 = barHour == 10 and barMinute == 0
+bool is_1030 = barHour == 10 and barMinute == 30
+bool is_1100 = barHour == 11 and barMinute == 0
+bool is_1130 = barHour == 11 and barMinute == 30
+bool is_1200 = barHour == 12 and barMinute == 0
+bool is_1230 = barHour == 12 and barMinute == 30
+bool is_1300 = barHour == 13 and barMinute == 0
+bool is_1330 = barHour == 13 and barMinute == 30
+bool is_1400 = barHour == 14 and barMinute == 0
+bool is_1430 = barHour == 14 and barMinute == 30
+bool is_1500 = barHour == 15 and barMinute == 0
+bool is_1530 = barHour == 15 and barMinute == 30
+bool is_1545 = barHour == 15 and barMinute == 45
+
+// -----------------------------------------------------------------------------
+// CHECKPOINT PRICES
+// -----------------------------------------------------------------------------
+var float v_0930 = na
+var float v_1000 = na
+var float v_1030 = na
+var float v_1100 = na
+var float v_1130 = na
+var float v_1200 = na
+var float v_1230 = na
+var float v_1300 = na
+var float v_1330 = na
+var float v_1400 = na
+var float v_1430 = na
+var float v_1500 = na
+var float v_1530 = na
+var float v_1545 = na
+
+var float dayHigh = na
+var float dayLow = na
+var int currentDay = na
+
+// Detect new day
+int today = dayofmonth(time, "America/New_York")
+bool isNewDay = today != currentDay
+
+if isNewDay
+    currentDay := today
+    v_0930 := na
+    v_1000 := na
+    v_1030 := na
+    v_1100 := na
+    v_1130 := na
+    v_1200 := na
+    v_1230 := na
+    v_1300 := na
+    v_1330 := na
+    v_1400 := na
+    v_1430 := na
+    v_1500 := na
+    v_1530 := na
+    v_1545 := na
+    dayHigh := na
+    dayLow := na
+
+// Capture checkpoint prices
+if is_0930
+    v_0930 := close
+if is_1000
+    v_1000 := close
+if is_1030
+    v_1030 := close
+if is_1100
+    v_1100 := close
+if is_1130
+    v_1130 := close
+if is_1200
+    v_1200 := close
+if is_1230
+    v_1230 := close
+if is_1300
+    v_1300 := close
+if is_1330
+    v_1330 := close
+if is_1400
+    v_1400 := close
+if is_1430
+    v_1430 := close
+if is_1500
+    v_1500 := close
+if is_1530
+    v_1530 := close
+if is_1545
+    v_1545 := close
+
+// Track daily high/low
+dayHigh := na(dayHigh) ? high : math.max(dayHigh, high)
+dayLow := na(dayLow) ? low : math.min(dayLow, low)
+
+// -----------------------------------------------------------------------------
+// CALCULATED METRICS
+// -----------------------------------------------------------------------------
+// Session moves (percentage)
+float morning_move = v_0930 > 0 and v_1200 > 0 ? ((v_1200 - v_0930) / v_0930) * 100 : na
+float afternoon_move = v_1200 > 0 ? ((close - v_1200) / v_1200) * 100 : na
+float power_hour_move = v_1500 > 0 ? ((close - v_1500) / v_1500) * 100 : na
+float last_30min_move = v_1530 > 0 ? ((close - v_1530) / v_1530) * 100 : na
+float full_day_move = v_0930 > 0 ? ((close - v_0930) / v_0930) * 100 : na
+
+// First hour move
+float first_hour_move = v_0930 > 0 and v_1030 > 0 ? ((v_1030 - v_0930) / v_0930) * 100 : na
+
+// Intraday range
+float intraday_range = dayHigh - dayLow
+float intraday_range_pct = dayLow > 0 ? (intraday_range / dayLow) * 100 : na
+
+// VIX spike detection (>10% intraday move from open)
+float spike_from_open = v_0930 > 0 ? ((dayHigh - v_0930) / v_0930) * 100 : na
+bool vix_spike = spike_from_open > 10
+
+// VIX crush detection (>10% drop from open)
+float crush_from_open = v_0930 > 0 ? ((v_0930 - dayLow) / v_0930) * 100 : na
+bool vix_crush = crush_from_open > 10
+
+// Where did VIX close in its daily range?
+float close_in_range = intraday_range > 0 ? (close - dayLow) / intraday_range : na
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Checkpoint Prices
+// -----------------------------------------------------------------------------
+plot(v_0930, "VIX_0930", display=display.data_window)
+plot(v_1000, "VIX_1000", display=display.data_window)
+plot(v_1030, "VIX_1030", display=display.data_window)
+plot(v_1100, "VIX_1100", display=display.data_window)
+plot(v_1130, "VIX_1130", display=display.data_window)
+plot(v_1200, "VIX_1200", display=display.data_window)
+plot(v_1230, "VIX_1230", display=display.data_window)
+plot(v_1300, "VIX_1300", display=display.data_window)
+plot(v_1330, "VIX_1330", display=display.data_window)
+plot(v_1400, "VIX_1400", display=display.data_window)
+plot(v_1430, "VIX_1430", display=display.data_window)
+plot(v_1500, "VIX_1500", display=display.data_window)
+plot(v_1530, "VIX_1530", display=display.data_window)
+plot(v_1545, "VIX_1545", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Daily Extremes
+// -----------------------------------------------------------------------------
+plot(dayHigh, "VIX_Day_High", display=display.data_window)
+plot(dayLow, "VIX_Day_Low", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Session Moves
+// -----------------------------------------------------------------------------
+plot(morning_move, "VIX_Morning_Move", display=display.data_window)
+plot(afternoon_move, "VIX_Afternoon_Move", display=display.data_window)
+plot(power_hour_move, "VIX_Power_Hour_Move", display=display.data_window)
+plot(last_30min_move, "VIX_Last_30min_Move", display=display.data_window)
+plot(full_day_move, "VIX_Full_Day_Move", display=display.data_window)
+plot(first_hour_move, "VIX_First_Hour_Move", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Derived Metrics
+// -----------------------------------------------------------------------------
+plot(intraday_range_pct, "VIX_Intraday_Range_Pct", display=display.data_window)
+plot(spike_from_open, "VIX_Spike_From_Open", display=display.data_window)
+plot(vix_spike ? 1 : 0, "VIX_Spike_Flag", display=display.data_window)
+plot(crush_from_open, "VIX_Crush_From_Open", display=display.data_window)
+plot(vix_crush ? 1 : 0, "VIX_Crush_Flag", display=display.data_window)
+plot(close_in_range, "VIX_Close_In_Range", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// VISUAL
+// -----------------------------------------------------------------------------
+plot(close, "VIX", color=color.purple, linewidth=2)
+bgcolor(vix_spike ? color.new(color.red, 80) : vix_crush ? color.new(color.green, 80) : na)

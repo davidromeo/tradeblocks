@@ -1,0 +1,157 @@
+//@version=6
+indicator("SPX Hourly Checkpoints", overlay=true)
+
+// =============================================================================
+// SPX HOURLY CHECKPOINT EXPORT
+// =============================================================================
+// Purpose: Export hourly prices for broad session analysis
+//
+// Usage:
+//   1. Apply to SPX 15-minute or 30-minute chart
+//   2. Set date range in TradingView (2018-01-01 to present for deep history)
+//   3. Right-click indicator pane -> "Export chart data..."
+//   4. Save as spx_hourly.csv to ~/backtests/_marketdata/
+//
+// Captures prices at hourly intervals from 9:30 AM to 4:00 PM ET:
+//   09:30 (open), 10:00, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00 (close)
+//
+// Best for: Long-term session patterns, efficient storage for multi-year analysis
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// TIME DETECTION
+// -----------------------------------------------------------------------------
+int barHour = hour(time, "America/New_York")
+int barMinute = minute(time, "America/New_York")
+
+// Hourly checkpoint detection
+bool is_0930 = barHour == 9 and barMinute == 30
+bool is_1000 = barHour == 10 and barMinute == 0
+bool is_1100 = barHour == 11 and barMinute == 0
+bool is_1200 = barHour == 12 and barMinute == 0
+bool is_1300 = barHour == 13 and barMinute == 0
+bool is_1400 = barHour == 14 and barMinute == 0
+bool is_1500 = barHour == 15 and barMinute == 0
+
+// -----------------------------------------------------------------------------
+// CHECKPOINT PRICES
+// -----------------------------------------------------------------------------
+var float p_0930 = na
+var float p_1000 = na
+var float p_1100 = na
+var float p_1200 = na
+var float p_1300 = na
+var float p_1400 = na
+var float p_1500 = na
+
+var int currentDay = na
+
+// Detect new day and reset
+int today = dayofmonth(time, "America/New_York")
+bool isNewDay = today != currentDay
+
+if isNewDay
+    currentDay := today
+    p_0930 := na
+    p_1000 := na
+    p_1100 := na
+    p_1200 := na
+    p_1300 := na
+    p_1400 := na
+    p_1500 := na
+
+// Capture checkpoint prices
+if is_0930
+    p_0930 := close
+if is_1000
+    p_1000 := close
+if is_1100
+    p_1100 := close
+if is_1200
+    p_1200 := close
+if is_1300
+    p_1300 := close
+if is_1400
+    p_1400 := close
+if is_1500
+    p_1500 := close
+
+// -----------------------------------------------------------------------------
+// HOURLY RETURNS
+// -----------------------------------------------------------------------------
+// Each hour's return
+float hour1_return = p_0930 > 0 and p_1000 > 0 ? ((p_1000 - p_0930) / p_0930) * 100 : na  // 9:30-10:00
+float hour2_return = p_1000 > 0 and p_1100 > 0 ? ((p_1100 - p_1000) / p_1000) * 100 : na  // 10:00-11:00
+float hour3_return = p_1100 > 0 and p_1200 > 0 ? ((p_1200 - p_1100) / p_1100) * 100 : na  // 11:00-12:00
+float hour4_return = p_1200 > 0 and p_1300 > 0 ? ((p_1300 - p_1200) / p_1200) * 100 : na  // 12:00-13:00
+float hour5_return = p_1300 > 0 and p_1400 > 0 ? ((p_1400 - p_1300) / p_1300) * 100 : na  // 13:00-14:00
+float hour6_return = p_1400 > 0 and p_1500 > 0 ? ((p_1500 - p_1400) / p_1400) * 100 : na  // 14:00-15:00
+float hour7_return = p_1500 > 0 ? ((close - p_1500) / p_1500) * 100 : na                   // 15:00-16:00 (power hour)
+
+// -----------------------------------------------------------------------------
+// SESSION METRICS
+// -----------------------------------------------------------------------------
+// Morning (9:30 - 12:00)
+float morning = p_0930 > 0 and p_1200 > 0 ? ((p_1200 - p_0930) / p_0930) * 100 : na
+
+// Midday (12:00 - 14:00)
+float midday = p_1200 > 0 and p_1400 > 0 ? ((p_1400 - p_1200) / p_1200) * 100 : na
+
+// Afternoon (14:00 - 16:00)
+float afternoon = p_1400 > 0 ? ((close - p_1400) / p_1400) * 100 : na
+
+// Power hour (15:00 - 16:00)
+float power_hour = p_1500 > 0 ? ((close - p_1500) / p_1500) * 100 : na
+
+// Full day
+float full_day = p_0930 > 0 ? ((close - p_0930) / p_0930) * 100 : na
+
+// First half (9:30 - 12:30 approx via 13:00)
+float first_half = p_0930 > 0 and p_1300 > 0 ? ((p_1300 - p_0930) / p_0930) * 100 : na
+
+// Second half (13:00 - 16:00)
+float second_half = p_1300 > 0 ? ((close - p_1300) / p_1300) * 100 : na
+
+// Reversal detection: morning vs afternoon
+float reversal_score = morning - afternoon  // Positive = morning up, afternoon down
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Checkpoint Prices
+// -----------------------------------------------------------------------------
+plot(p_0930, "P_0930", display=display.data_window)
+plot(p_1000, "P_1000", display=display.data_window)
+plot(p_1100, "P_1100", display=display.data_window)
+plot(p_1200, "P_1200", display=display.data_window)
+plot(p_1300, "P_1300", display=display.data_window)
+plot(p_1400, "P_1400", display=display.data_window)
+plot(p_1500, "P_1500", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Hourly Returns
+// -----------------------------------------------------------------------------
+plot(hour1_return, "Hour1_Return", display=display.data_window)
+plot(hour2_return, "Hour2_Return", display=display.data_window)
+plot(hour3_return, "Hour3_Return", display=display.data_window)
+plot(hour4_return, "Hour4_Return", display=display.data_window)
+plot(hour5_return, "Hour5_Return", display=display.data_window)
+plot(hour6_return, "Hour6_Return", display=display.data_window)
+plot(hour7_return, "Hour7_Return", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Session Metrics
+// -----------------------------------------------------------------------------
+plot(morning, "Morning", display=display.data_window)
+plot(midday, "Midday", display=display.data_window)
+plot(afternoon, "Afternoon", display=display.data_window)
+plot(power_hour, "Power_Hour", display=display.data_window)
+plot(full_day, "Full_Day", display=display.data_window)
+plot(first_half, "First_Half", display=display.data_window)
+plot(second_half, "Second_Half", display=display.data_window)
+plot(reversal_score, "Reversal_Score", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// VISUAL MARKERS
+// -----------------------------------------------------------------------------
+plotshape(is_0930, "Open", shape.circle, location.belowbar, color.blue, size=size.tiny)
+plotshape(is_1200, "Noon", shape.circle, location.belowbar, color.gray, size=size.tiny)
+plotshape(is_1500, "3PM", shape.circle, location.belowbar, color.orange, size=size.tiny)

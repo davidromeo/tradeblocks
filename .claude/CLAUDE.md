@@ -128,6 +128,39 @@ When adding new metrics, calculations, or chart data to the UI, **consider wheth
 - `src/tools/performance.ts` - Chart data, period returns, backtest vs actual
 - `src/tools/analysis.ts` - Monte Carlo, walk-forward, correlations
 - `src/tools/reports.ts` - Custom queries, field statistics
+- `src/tools/market-data.ts` - Market context, intraday checkpoints, ORB calculation
+
+### MCP CLI Usage
+
+The MCP server can be called directly from command line for quick queries:
+
+```bash
+# Basic syntax (run from project root)
+TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call <tool-name> '<json-args>'
+
+# List available tools
+TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call --list
+
+# Examples
+TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call list_blocks '{}'
+TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call get_market_context '{"startDate":"2024-10-01","endDate":"2025-01-27","includeIntraday":true,"limit":500}'
+```
+
+**Common pitfalls:**
+- Use `server/index.js` NOT `dist/index.js` (dist is for test exports)
+- Use `--call <tool> '<json>'` NOT `cli <tool> --arg value`
+- Arguments must be valid JSON with double quotes
+- For market data with intraday fields (MOC_*, P_*, etc.), pass `"includeIntraday":true`
+- Use `"flatten":true` to merge intraday/highlow/vix fields into main record (easier for analysis)
+- Without `flatten`, data is nested under `intraday`, `highlow`, `vix` keys
+- Redirect stderr when piping to Python: `2>/dev/null | python3 -c "..."`
+
+**Recommended query for analysis:**
+```bash
+TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call get_market_context \
+  '{"startDate":"2024-10-01","endDate":"2025-01-27","includeIntraday":true,"flatten":true,"limit":500}' \
+  2>/dev/null | python3 -c "import json,sys; data=json.load(sys.stdin); print(len(data['days']))"
+```
 
 ### Trading Calendar Data Model
 

@@ -1,0 +1,136 @@
+//@version=6
+indicator("SPX High/Low Timing", overlay=true)
+
+// =============================================================================
+// SPX HIGH/LOW TIMING EXPORT
+// =============================================================================
+// Purpose: Export when daily high and low occurred for reversal analysis
+//
+// Usage:
+//   1. Apply to SPX 5-minute chart (or 1-min for accuracy)
+//   2. Set date range in TradingView
+//   3. Right-click indicator pane -> "Export chart data..."
+//   4. Save as spx_highlow.csv to ~/backtests/_marketdata/
+//
+// Key insight: Days where high comes first often end down (and vice versa)
+//
+// Metrics exported:
+//   - High_Time, Low_Time: Decimal hours (15.5 = 3:30 PM)
+//   - High_Before_Low: 1 if high came first, 0 if low came first
+//   - High_In_First_Hour: 1 if high was 9:30-10:30
+//   - Low_In_First_Hour: 1 if low was 9:30-10:30
+//   - High_In_Last_Hour: 1 if high was 15:00-16:00
+//   - Low_In_Last_Hour: 1 if low was 15:00-16:00
+//   - Reversal_Type: 1=morning high/afternoon low, -1=opposite, 0=neither
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// TIME DETECTION
+// -----------------------------------------------------------------------------
+int barHour = hour(time, "America/New_York")
+int barMinute = minute(time, "America/New_York")
+
+// -----------------------------------------------------------------------------
+// HIGH/LOW TRACKING
+// -----------------------------------------------------------------------------
+var float intradayHigh = na
+var float intradayLow = na
+var int highHour = na
+var int highMinute = na
+var int lowHour = na
+var int lowMinute = na
+var int currentDay = na
+
+// Detect new day
+int today = dayofmonth(time, "America/New_York")
+bool isNewDay = today != currentDay
+
+if isNewDay
+    currentDay := today
+    intradayHigh := na
+    intradayLow := na
+    highHour := na
+    highMinute := na
+    lowHour := na
+    lowMinute := na
+
+// Track high
+if na(intradayHigh) or high > intradayHigh
+    intradayHigh := high
+    highHour := barHour
+    highMinute := barMinute
+
+// Track low
+if na(intradayLow) or low < intradayLow
+    intradayLow := low
+    lowHour := barHour
+    lowMinute := barMinute
+
+// -----------------------------------------------------------------------------
+// CALCULATED METRICS
+// -----------------------------------------------------------------------------
+// Time as decimal hours
+float highTime = highHour + highMinute / 60.0
+float lowTime = lowHour + lowMinute / 60.0
+
+// High before low?
+bool highBeforeLow = highTime < lowTime
+
+// Session detection
+bool highInFirstHour = highHour == 9 or (highHour == 10 and highMinute <= 30)
+bool lowInFirstHour = lowHour == 9 or (lowHour == 10 and lowMinute <= 30)
+bool highInLastHour = highHour >= 15
+bool lowInLastHour = lowHour >= 15
+
+// Morning high (before noon)
+bool highInMorning = highHour < 12
+bool lowInMorning = lowHour < 12
+
+// Afternoon high (after noon)
+bool highInAfternoon = highHour >= 12
+bool lowInAfternoon = lowHour >= 12
+
+// Reversal type classification
+// 1 = Morning high, afternoon low (bearish reversal pattern)
+// -1 = Morning low, afternoon high (bullish reversal pattern)
+// 0 = Both in same session
+int reversalType = 0
+if highInMorning and lowInAfternoon
+    reversalType := 1
+else if lowInMorning and highInAfternoon
+    reversalType := -1
+
+// Time spread between high and low (hours)
+float highLowSpread = math.abs(highTime - lowTime)
+
+// Early extreme: did high OR low occur in first 30 min?
+bool earlyExtreme = (highHour == 9) or (lowHour == 9) or (highHour == 10 and highMinute == 0) or (lowHour == 10 and lowMinute == 0)
+
+// Late extreme: did high OR low occur in last 30 min?
+bool lateExtreme = (highHour == 15 and highMinute >= 30) or (lowHour == 15 and lowMinute >= 30)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS
+// -----------------------------------------------------------------------------
+plot(highTime, "High_Time", display=display.data_window)
+plot(lowTime, "Low_Time", display=display.data_window)
+plot(highBeforeLow ? 1 : 0, "High_Before_Low", display=display.data_window)
+plot(highInFirstHour ? 1 : 0, "High_In_First_Hour", display=display.data_window)
+plot(lowInFirstHour ? 1 : 0, "Low_In_First_Hour", display=display.data_window)
+plot(highInLastHour ? 1 : 0, "High_In_Last_Hour", display=display.data_window)
+plot(lowInLastHour ? 1 : 0, "Low_In_Last_Hour", display=display.data_window)
+plot(reversalType, "Reversal_Type", display=display.data_window)
+plot(highLowSpread, "High_Low_Spread", display=display.data_window)
+plot(earlyExtreme ? 1 : 0, "Early_Extreme", display=display.data_window)
+plot(lateExtreme ? 1 : 0, "Late_Extreme", display=display.data_window)
+
+// Also export the actual prices
+plot(intradayHigh, "Intraday_High", display=display.data_window)
+plot(intradayLow, "Intraday_Low", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// VISUAL MARKERS
+// -----------------------------------------------------------------------------
+// Mark when new high/low is made
+plotshape(high == intradayHigh and not isNewDay, "New High", shape.triangleup, location.abovebar, color.green, size=size.tiny)
+plotshape(low == intradayLow and not isNewDay, "New Low", shape.triangledown, location.belowbar, color.red, size=size.tiny)
