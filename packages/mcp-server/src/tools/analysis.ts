@@ -193,6 +193,27 @@ export function registerAnalysisTools(
           .enum(["opened", "closed"])
           .default("opened")
           .describe("Which trade date to use for diversification calculations (default: opened)."),
+        // Parameter ranges for position sizing sweeps
+        parameterRanges: z
+          .record(
+            z.string(),
+            z.tuple([z.number(), z.number(), z.number()])
+          )
+          .optional()
+          .describe(
+            "Parameter ranges for optimization sweep. Format: {paramName: [min, max, step]}. " +
+            "POSITION SIZING: " +
+            "'kellyMultiplier' scales P&L by multiplier (e.g., {\"kellyMultiplier\": [0.25, 1.0, 0.25]} tests quarter/half/3-quarter/full Kelly); " +
+            "'fixedFractionPct' scales relative to 2% baseline (e.g., [1, 4, 1] tests 1-4%); " +
+            "'fixedContracts' scales relative to avg contracts (e.g., [1, 5, 1] tests 1-5 contracts). " +
+            "RISK CONSTRAINTS (reject combinations exceeding threshold): " +
+            "'maxDrawdownPct' max drawdown % (e.g., [15, 25, 5] allows 15-25%); " +
+            "'maxDailyLossPct' max single-day loss %; " +
+            "'consecutiveLossLimit' max consecutive losing trades. " +
+            "STRATEGY WEIGHTS: " +
+            "'strategy:StrategyName' weight multiplier per strategy (e.g., {\"strategy:IronCondor\": [0, 1, 0.5], \"strategy:Straddle\": [0, 1, 0.5]} tests include/exclude combinations). " +
+            "Multiple parameters create a grid search across all combinations."
+          ),
       }),
     },
     async ({
@@ -222,6 +243,7 @@ export function registerAnalysisTools(
       tailThreshold,
       diversificationNormalization,
       diversificationDateBasis,
+      parameterRanges,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -338,7 +360,7 @@ export function registerAnalysisTools(
             outOfSampleDays,
             stepSizeDays,
             optimizationTarget,
-            parameterRanges: {},
+            parameterRanges: parameterRanges ?? {},
             minInSampleTrades,
             minOutOfSampleTrades,
             normalizeTo1Lot,
@@ -375,6 +397,7 @@ export function registerAnalysisTools(
             minInSampleTrades,
             minOutOfSampleTrades,
             normalizeTo1Lot,
+            parameterRanges: parameterRanges ?? null,
           },
           performanceFloor: hasPerformanceFloor
             ? {
