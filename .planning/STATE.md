@@ -37,6 +37,12 @@ Stopped at: Completed quick task 001 (expose parameterRanges in run_walk_forward
 Resume file: None
 Next: `/gsd:discuss-milestone` to plan next milestone
 
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 001 | Expose parameterRanges in run_walk_forward MCP tool | 2026-01-30 | d1de196 | [001-expose-parameterranges-in-run-walk-forwa](./quick/001-expose-parameterranges-in-run-walk-forwa/) |
+
 ## Testing Infrastructure
 
 CLI test mode available for MCP tool verification:
