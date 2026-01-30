@@ -193,6 +193,20 @@ export function registerAnalysisTools(
           .enum(["opened", "closed"])
           .default("opened")
           .describe("Which trade date to use for diversification calculations (default: opened)."),
+        // Parameter ranges for position sizing sweeps
+        parameterRanges: z
+          .record(
+            z.string(),
+            z.tuple([z.number(), z.number(), z.number()])
+          )
+          .optional()
+          .describe(
+            "Parameter ranges for optimization sweep. Each key maps to [min, max, step]. " +
+            "Supported keys: 'kellyMultiplier' (position scaling, e.g. [0.25, 1.0, 0.25] for quarter/half/full Kelly), " +
+            "'fixedFractionPct' (fixed fraction %), 'fixedContracts' (contract count), " +
+            "'maxDrawdownPct'/'maxDailyLossPct'/'consecutiveLossLimit' (risk constraints), " +
+            "'strategy:StrategyName' (per-strategy weights)."
+          ),
       }),
     },
     async ({
@@ -222,6 +236,7 @@ export function registerAnalysisTools(
       tailThreshold,
       diversificationNormalization,
       diversificationDateBasis,
+      parameterRanges,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -338,7 +353,7 @@ export function registerAnalysisTools(
             outOfSampleDays,
             stepSizeDays,
             optimizationTarget,
-            parameterRanges: {},
+            parameterRanges: parameterRanges ?? {},
             minInSampleTrades,
             minOutOfSampleTrades,
             normalizeTo1Lot,
@@ -375,6 +390,7 @@ export function registerAnalysisTools(
             minInSampleTrades,
             minOutOfSampleTrades,
             normalizeTo1Lot,
+            parameterRanges: parameterRanges ?? null,
           },
           performanceFloor: hasPerformanceFloor
             ? {
