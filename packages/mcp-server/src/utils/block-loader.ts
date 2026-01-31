@@ -322,13 +322,30 @@ async function discoverCsvFiles(
       mappings.reportinglog = "reportinglog.csv";
     }
 
+    // Second, check for filename patterns (before content detection)
+    // This helps with Option Omega exports where strategy-trade-log has same columns as tradelog
+    if (!mappings.reportinglog) {
+      const strategyLogFile = csvFiles.find((f) => {
+        const lower = f.toLowerCase();
+        return (
+          lower.includes("strategy-trade-log") ||
+          lower.includes("strategylog") ||
+          lower.startsWith("strategy-log")
+        );
+      });
+      if (strategyLogFile) {
+        mappings.reportinglog = strategyLogFile;
+      }
+    }
+
     // For any remaining CSVs, detect by content
     for (const csvFile of csvFiles) {
-      // Skip if already mapped via exact name
+      // Skip if already mapped via exact name or filename pattern
       if (
         csvFile === "tradelog.csv" ||
         csvFile === "dailylog.csv" ||
-        csvFile === "reportinglog.csv"
+        csvFile === "reportinglog.csv" ||
+        csvFile === mappings.reportinglog
       ) {
         continue;
       }
