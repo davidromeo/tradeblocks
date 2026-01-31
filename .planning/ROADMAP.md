@@ -48,14 +48,14 @@ Plans:
 **Depends on**: Phase 36
 **Requirements**: DSC-01, DSC-02, DSC-03, DSC-04
 **Success Criteria** (what must be TRUE):
-  1. Model can classify slippage into categories (execution quality, entry/exit timing, contract count, fees)
-  2. Model can identify strategies with systematic slippage patterns
-  3. Model receives risk assessment flags for strategies with consistent slippage issues
+  1. Model can classify slippage into categories (entry price, exit price, size, timing, unexplained)
+  2. Model can identify strategies with systematic slippage patterns (direction bias, category concentration)
+  3. Model can detect patterns via configurable thresholds (not risk flags - insights for user interpretation)
   4. Model can correlate slippage with market conditions (VIX levels, time-of-day)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 37-01: Implement analyze_discrepancies MCP tool
+- [ ] 37-01-PLAN.md - Implement analyze_discrepancies MCP tool with slippage attribution, pattern detection, and market correlations
 
 ### Phase 38: Strategy Matching
 
