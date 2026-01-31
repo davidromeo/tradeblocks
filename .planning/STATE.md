@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Planning next milestone
+**Current focus:** v2.5 Reporting Log Integration & Discrepancy Analysis
 
 ## Current Position
 
-Milestone: None active (v2.4 shipped)
-Phase: Ready to plan
-Plan: N/A
-Status: Between milestones
-Last activity: 2026-01-30 — Completed quick task 001 (expose parameterRanges in MCP)
+Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-01-31 — Milestone v2.5 started
 
-Progress: All milestones complete through v2.4
+Progress: Defining requirements for v2.5
 
 ## Historical Context
 
@@ -35,7 +35,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 Last session: 2026-01-30
 Stopped at: Completed quick task 001 (expose parameterRanges in run_walk_forward MCP tool)
 Resume file: None
-Next: `/gsd:discuss-milestone` to plan next milestone
+Next: Define requirements and create roadmap for v2.5
 
 ## Quick Tasks Completed
 

@@ -58,7 +58,13 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ### Active
 
-(None — planning next milestone)
+**v2.5 Reporting Log Integration & Discrepancy Analysis:**
+- [ ] MCP server can ingest reporting logs (strategylog.csv) for a block
+- [ ] Models can compare backtest vs actual with trade-level detail
+- [ ] Models can analyze discrepancy patterns (slippage sources, execution quality)
+- [ ] Models can detect strategy matching issues and suggest fixes
+- [ ] Models can track slippage trends over time
+- [ ] Models can score backtest quality vs actual results
 
 ### Out of Scope
 
@@ -117,4 +123,4 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Fix CLI handler instead of per-tool workarounds | Single fix ensures all tools work correctly | ✓ Good |
 
 ---
-*Last updated: 2026-01-19 after v2.4 milestone*
+*Last updated: 2026-01-31 after v2.5 milestone started*
