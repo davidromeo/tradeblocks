@@ -11,6 +11,7 @@ export {
   loadMetadata,
   saveMetadata,
   loadReportingLog,
+  loadReportingLogStats,
   importCsv,
   type BlockInfo,
   type LoadedBlock,
