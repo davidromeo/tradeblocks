@@ -33,9 +33,9 @@ All decisions now captured in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-01-31
-Stopped at: Completed 35-01-PLAN.md (Reporting Log Ingestion)
+Stopped at: Phase 35 complete, verified ✓
 Resume file: None
-Next: `/gsd:plan-phase 36` to plan Backtest-Reporting Alignment
+Next: `/gsd:discuss-phase 36` to plan Enhanced Comparison
 
 ## Quick Tasks Completed
 

@@ -14,7 +14,7 @@
 
 **Milestone Goal:** Enable AI models to ingest reporting logs, compare backtest vs actual results at trade level, analyze discrepancy patterns, and score backtest quality — all via MCP.
 
-### Phase 35: Reporting Log Ingestion
+### Phase 35: Reporting Log Ingestion ✓
 
 **Goal**: Model can load and parse reporting logs (strategylog.csv) for a block via MCP
 **Depends on**: Nothing (foundation for v2.5)
@@ -23,10 +23,10 @@
   1. Model can call MCP tool to load strategylog.csv for a block
   2. Model receives parsing statistics (strategy count, date range, total P/L)
   3. Loaded reporting log is available for subsequent comparison operations
-**Plans**: 1 plan
+**Plans**: 1 plan — completed 2026-01-31
 
 Plans:
-- [ ] 35-01-PLAN.md — Enhance list_blocks with hasReportingLog flag, add get_reporting_log_stats tool with caching
+- [x] 35-01-PLAN.md — Enhance list_blocks with hasReportingLog flag, add get_reporting_log_stats tool with caching
 
 ### Phase 36: Enhanced Comparison
 
@@ -218,7 +218,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 | v2.4 Backtest Optimization Tools | 32-34 | 3 | Complete | 2026-01-19 |
-| v2.5 Reporting Log Integration | 35-40 | TBD | In Progress | - |
+| v2.5 Reporting Log Integration | 35-40 | 1+ | In Progress | - |
 
 ## Audit Notes
 
