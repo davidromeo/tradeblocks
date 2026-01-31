@@ -71,9 +71,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ING-01 | Phase 35 | Complete |
 | ING-02 | Phase 35 | Complete |
-| CMP-01 | Phase 36 | Pending |
-| CMP-02 | Phase 36 | Pending |
-| CMP-03 | Phase 36 | Pending |
+| CMP-01 | Phase 36 | Complete |
+| CMP-02 | Phase 36 | Complete |
+| CMP-03 | Phase 36 | Complete |
 | DSC-01 | Phase 37 | Pending |
 | DSC-02 | Phase 37 | Pending |
 | DSC-03 | Phase 37 | Pending |

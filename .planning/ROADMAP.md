@@ -28,7 +28,7 @@
 Plans:
 - [x] 35-01-PLAN.md — Enhance list_blocks with hasReportingLog flag, add get_reporting_log_stats tool with caching
 
-### Phase 36: Enhanced Comparison
+### Phase 36: Enhanced Comparison ✓
 
 **Goal**: Model can get detailed trade-level comparison between backtest and actual results
 **Depends on**: Phase 35
@@ -37,10 +37,10 @@ Plans:
   1. Model can get trade-level comparison with entry/exit prices, contracts, and reasons for differences
   2. Model can identify high-slippage outliers automatically (trades with unusual deviation)
   3. Model can group comparison results by strategy name or by date
-**Plans**: 1 plan
+**Plans**: 1 plan — completed 2026-01-31
 
 Plans:
-- [ ] 36-01-PLAN.md — Enhance compare_backtest_to_actual with detailLevel, outlier detection, and groupBy parameters
+- [x] 36-01-PLAN.md — Enhance compare_backtest_to_actual with detailLevel, outlier detection, and groupBy parameters
 
 ### Phase 37: Discrepancy Analysis
 
