@@ -23,10 +23,10 @@
   1. Model can call MCP tool to load strategylog.csv for a block
   2. Model receives parsing statistics (strategy count, date range, total P/L)
   3. Loaded reporting log is available for subsequent comparison operations
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 35-01: Implement load_reporting_log MCP tool
+- [ ] 35-01-PLAN.md — Enhance list_blocks with hasReportingLog flag, add get_reporting_log_stats tool with caching
 
 ### Phase 36: Enhanced Comparison
 
