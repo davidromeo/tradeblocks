@@ -69,30 +69,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ING-01 | TBD | Pending |
-| ING-02 | TBD | Pending |
-| CMP-01 | TBD | Pending |
-| CMP-02 | TBD | Pending |
-| CMP-03 | TBD | Pending |
-| DSC-01 | TBD | Pending |
-| DSC-02 | TBD | Pending |
-| DSC-03 | TBD | Pending |
-| DSC-04 | TBD | Pending |
-| MTH-01 | TBD | Pending |
-| MTH-02 | TBD | Pending |
-| MTH-03 | TBD | Pending |
-| TRD-01 | TBD | Pending |
-| TRD-02 | TBD | Pending |
-| TRD-03 | TBD | Pending |
-| QTY-01 | TBD | Pending |
-| QTY-02 | TBD | Pending |
-| QTY-03 | TBD | Pending |
+| ING-01 | Phase 35 | Pending |
+| ING-02 | Phase 35 | Pending |
+| CMP-01 | Phase 36 | Pending |
+| CMP-02 | Phase 36 | Pending |
+| CMP-03 | Phase 36 | Pending |
+| DSC-01 | Phase 37 | Pending |
+| DSC-02 | Phase 37 | Pending |
+| DSC-03 | Phase 37 | Pending |
+| DSC-04 | Phase 37 | Pending |
+| MTH-01 | Phase 38 | Pending |
+| MTH-02 | Phase 38 | Pending |
+| MTH-03 | Phase 38 | Pending |
+| TRD-01 | Phase 39 | Pending |
+| TRD-02 | Phase 39 | Pending |
+| TRD-03 | Phase 39 | Pending |
+| QTY-01 | Phase 40 | Pending |
+| QTY-02 | Phase 40 | Pending |
+| QTY-03 | Phase 40 | Pending |
 
 **Coverage:**
 - v2.5 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-01-31 after initial definition*
+*Last updated: 2026-01-31 after roadmap creation*

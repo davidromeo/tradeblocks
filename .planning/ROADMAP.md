@@ -2,17 +2,107 @@
 
 ## Milestones
 
-- ✅ [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
-- ✅ [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
-- ✅ [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
-- ✅ [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
-- ✅ [v2.3 Workspace Packages](milestones/v2.3-workspace-packages.md) (Phases 29-31) — SHIPPED 2026-01-19
-- ✅ [v2.4 Backtest Optimization Tools](milestones/v2.4-backtest-optimization-tools.md) (Phases 32-34) — SHIPPED 2026-01-19
+- [v1.0 WFA Enhancement](milestones/v1.0-wfa-enhancement.md) (Phases 1-10) — SHIPPED 2026-01-11
+- [v2.0 Claude Integration](milestones/v2.0-claude-integration.md) (Phases 11-16) — SHIPPED 2026-01-17
+- [v2.1 Portfolio Comparison](milestones/v2.1-portfolio-comparison.md) (Phases 17-24) — SHIPPED 2026-01-18
+- [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
+- [v2.3 Workspace Packages](milestones/v2.3-workspace-packages.md) (Phases 29-31) — SHIPPED 2026-01-19
+- [v2.4 Backtest Optimization Tools](milestones/v2.4-backtest-optimization-tools.md) (Phases 32-34) — SHIPPED 2026-01-19
+- **v2.5 Reporting Log Integration & Discrepancy Analysis** (Phases 35-40) — IN PROGRESS
+
+## v2.5 Reporting Log Integration & Discrepancy Analysis
+
+**Milestone Goal:** Enable AI models to ingest reporting logs, compare backtest vs actual results at trade level, analyze discrepancy patterns, and score backtest quality — all via MCP.
+
+### Phase 35: Reporting Log Ingestion
+
+**Goal**: Model can load and parse reporting logs (strategylog.csv) for a block via MCP
+**Depends on**: Nothing (foundation for v2.5)
+**Requirements**: ING-01, ING-02
+**Success Criteria** (what must be TRUE):
+  1. Model can call MCP tool to load strategylog.csv for a block
+  2. Model receives parsing statistics (strategy count, date range, total P/L)
+  3. Loaded reporting log is available for subsequent comparison operations
+**Plans**: TBD
+
+Plans:
+- [ ] 35-01: Implement load_reporting_log MCP tool
+
+### Phase 36: Enhanced Comparison
+
+**Goal**: Model can get detailed trade-level comparison between backtest and actual results
+**Depends on**: Phase 35
+**Requirements**: CMP-01, CMP-02, CMP-03
+**Success Criteria** (what must be TRUE):
+  1. Model can get trade-level comparison with entry/exit prices, contracts, and reasons for differences
+  2. Model can identify high-slippage outliers automatically (trades with unusual deviation)
+  3. Model can group comparison results by strategy name or by date
+**Plans**: TBD
+
+Plans:
+- [ ] 36-01: Enhance compare_backtest_to_actual with trade-level detail and grouping
+
+### Phase 37: Discrepancy Analysis
+
+**Goal**: Model can classify slippage sources and identify systematic patterns
+**Depends on**: Phase 36
+**Requirements**: DSC-01, DSC-02, DSC-03, DSC-04
+**Success Criteria** (what must be TRUE):
+  1. Model can classify slippage into categories (execution quality, entry/exit timing, contract count, fees)
+  2. Model can identify strategies with systematic slippage patterns
+  3. Model receives risk assessment flags for strategies with consistent slippage issues
+  4. Model can correlate slippage with market conditions (VIX levels, time-of-day)
+**Plans**: TBD
+
+Plans:
+- [ ] 37-01: Implement analyze_discrepancies MCP tool
+
+### Phase 38: Strategy Matching
+
+**Goal**: Model can get suggested strategy matches and detect unmatchable divergence
+**Depends on**: Phase 36
+**Requirements**: MTH-01, MTH-02, MTH-03
+**Success Criteria** (what must be TRUE):
+  1. Model can get suggested strategy matches based on P/L correlation
+  2. Model receives confidence scores for each match suggestion
+  3. Model can detect when backtest and actual are systematically different (unmatchable divergence)
+**Plans**: TBD
+
+Plans:
+- [ ] 38-01: Implement strategy_match_analysis MCP tool
+
+### Phase 39: Trend Analysis
+
+**Goal**: Model can analyze slippage trends over time and detect improvement/degradation
+**Depends on**: Phase 37
+**Requirements**: TRD-01, TRD-02, TRD-03
+**Success Criteria** (what must be TRUE):
+  1. Model can get time-series slippage data by strategy
+  2. Model can detect if slippage is trending better or worse over time
+  3. Model can correlate slippage trends with external factors (market volatility, execution venue changes)
+**Plans**: TBD
+
+Plans:
+- [ ] 39-01: Implement slippage_trend_analysis MCP tool
+
+### Phase 40: Quality Scoring
+
+**Goal**: Model can score backtest quality and receive improvement suggestions
+**Depends on**: Phase 37, Phase 38, Phase 39
+**Requirements**: QTY-01, QTY-02, QTY-03
+**Success Criteria** (what must be TRUE):
+  1. Model can get overall backtest quality score (0-100) based on accuracy vs actual
+  2. Model receives component scores (accuracy, consistency, coverage)
+  3. Model receives actionable improvement suggestions based on score breakdown
+**Plans**: TBD
+
+Plans:
+- [ ] 40-01: Implement backtest_quality_score MCP tool
 
 ## Completed Milestones
 
 <details>
-<summary>✅ v2.4 Backtest Optimization Tools (Phases 32-34) — SHIPPED 2026-01-19</summary>
+<summary>v2.4 Backtest Optimization Tools (Phases 32-34) — SHIPPED 2026-01-19</summary>
 
 MCP tools for data-driven filter optimization: find_predictive_fields for correlation analysis and filter_curve for threshold sweeping with sweet spot detection.
 
@@ -27,7 +117,7 @@ See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for full deta
 </details>
 
 <details>
-<summary>✅ v2.3 Workspace Packages (Phases 29-31) — SHIPPED 2026-01-19</summary>
+<summary>v2.3 Workspace Packages (Phases 29-31) — SHIPPED 2026-01-19</summary>
 
 Convert lib/ to @tradeblocks/lib workspace package for clean imports across the monorepo.
 
@@ -42,7 +132,7 @@ See [v2.3 archive](milestones/v2.3-workspace-packages.md) for full details.
 </details>
 
 <details>
-<summary>✅ v2.2 Historical Risk-Free Rates (Phases 25-28) — SHIPPED 2026-01-18</summary>
+<summary>v2.2 Historical Risk-Free Rates (Phases 25-28) — SHIPPED 2026-01-18</summary>
 
 Embedded 3,260 historical Treasury rates (2013-2026) for accurate Sharpe/Sortino calculations that reflect actual market conditions.
 
@@ -58,7 +148,7 @@ See [v2.2 archive](milestones/v2.2-historical-risk-free-rates.md) for full detai
 </details>
 
 <details>
-<summary>✅ v2.1 Portfolio Comparison (Phases 17-24) — SHIPPED 2026-01-18</summary>
+<summary>v2.1 Portfolio Comparison (Phases 17-24) — SHIPPED 2026-01-18</summary>
 
 7 new MCP tools for advanced portfolio comparison and analysis, plus CLI test mode and web platform integration documentation.
 
@@ -79,7 +169,7 @@ See [v2.1 archive](milestones/v2.1-portfolio-comparison.md) for full details.
 </details>
 
 <details>
-<summary>✅ v2.0 Claude Integration (Phases 11-16) — SHIPPED 2026-01-17</summary>
+<summary>v2.0 Claude Integration (Phases 11-16) — SHIPPED 2026-01-17</summary>
 
 MCP server with 19 tools for AI-powered trading analytics, plus 6 agent skills for guided analysis workflows across Claude, Codex, and Gemini platforms.
 
@@ -98,7 +188,7 @@ See [v2.0 archive](milestones/v2.0-claude-integration.md) for full details.
 </details>
 
 <details>
-<summary>✅ v1.0 WFA Enhancement (Phases 1-10) — SHIPPED 2026-01-11</summary>
+<summary>v1.0 WFA Enhancement (Phases 1-10) — SHIPPED 2026-01-11</summary>
 
 Transform TradeBlocks' walk-forward analysis from a rigid automatic tool into a user-controlled system with clear, understandable results.
 
@@ -128,6 +218,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 | v2.4 Backtest Optimization Tools | 32-34 | 3 | Complete | 2026-01-19 |
+| v2.5 Reporting Log Integration | 35-40 | TBD | In Progress | - |
 
 ## Audit Notes
 
