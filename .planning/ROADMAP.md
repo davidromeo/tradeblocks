@@ -37,10 +37,10 @@ Plans:
   1. Model can get trade-level comparison with entry/exit prices, contracts, and reasons for differences
   2. Model can identify high-slippage outliers automatically (trades with unusual deviation)
   3. Model can group comparison results by strategy name or by date
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 36-01: Enhance compare_backtest_to_actual with trade-level detail and grouping
+- [ ] 36-01-PLAN.md — Enhance compare_backtest_to_actual with detailLevel, outlier detection, and groupBy parameters
 
 ### Phase 37: Discrepancy Analysis
 
@@ -218,7 +218,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 | v2.4 Backtest Optimization Tools | 32-34 | 3 | Complete | 2026-01-19 |
-| v2.5 Reporting Log Integration | 35-40 | 1+ | In Progress | - |
+| v2.5 Reporting Log Integration | 35-40 | 2+ | In Progress | - |
 
 ## Audit Notes
 
