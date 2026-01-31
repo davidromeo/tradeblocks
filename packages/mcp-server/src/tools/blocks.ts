@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadBlock, listBlocks, saveMetadata, buildBlockMetadata } from "../utils/block-loader.js";
+import { loadBlock, listBlocks, saveMetadata, buildBlockMetadata, loadReportingLogStats } from "../utils/block-loader.js";
 import type { CsvMappings } from "../utils/block-loader.js";
 import {
   createToolOutput,
@@ -111,7 +111,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     "list_blocks",
     {
       description:
-        "START HERE: List all available portfolio blocks. Returns blockId values needed for all other tools (get_statistics, get_block_info, get_performance_charts, etc.). Each block contains trade history and optional daily logs.",
+        "START HERE: List all available portfolio blocks. Returns blockId values needed for all other tools (get_statistics, get_block_info, get_performance_charts, etc.). Each block contains trade history, optional daily logs, and optional reporting logs (actual trade execution data).",
       inputSchema: z.object({
         sortBy: z
           .enum(["name", "tradeCount", "netPl", "dateRange"])
@@ -134,6 +134,10 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .boolean()
           .optional()
           .describe("Filter to blocks with (true) or without (false) daily log data"),
+        hasReportingLog: z
+          .boolean()
+          .optional()
+          .describe("Filter to blocks with (true) or without (false) reporting log data (actual trade execution)"),
         limit: z
           .number()
           .min(1)
@@ -142,7 +146,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           .describe("Limit number of results returned (default: all)"),
       }),
     },
-    async ({ sortBy, sortOrder, containsStrategy, minTrades, hasDailyLog, limit }) => {
+    async ({ sortBy, sortOrder, containsStrategy, minTrades, hasDailyLog, hasReportingLog, limit }) => {
       try {
         let blocks = await listBlocks(baseDir);
 
@@ -158,6 +162,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         }
         if (hasDailyLog !== undefined) {
           blocks = blocks.filter((b) => b.hasDailyLog === hasDailyLog);
+        }
+        if (hasReportingLog !== undefined) {
+          blocks = blocks.filter((b) => b.hasReportingLog === hasReportingLog);
         }
 
         // Sort blocks based on parameters
@@ -186,7 +193,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         }
 
         // Brief summary for user display
-        const summary = `Found ${blocks.length} backtest(s)${totalBeforeLimit > blocks.length ? ` (showing ${blocks.length} of ${totalBeforeLimit})` : ""}`;
+        const blocksWithReporting = blocks.filter(b => b.hasReportingLog).length;
+        const summary = `Found ${blocks.length} block(s)${totalBeforeLimit > blocks.length ? ` (showing ${blocks.length} of ${totalBeforeLimit})` : ""}${blocksWithReporting > 0 ? `, ${blocksWithReporting} with reporting logs` : ""}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -196,6 +204,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             containsStrategy: containsStrategy ?? null,
             minTrades: minTrades ?? null,
             hasDailyLog: hasDailyLog ?? null,
+            hasReportingLog: hasReportingLog ?? null,
             limit: limit ?? null,
           },
           totalMatching: totalBeforeLimit,
@@ -211,6 +220,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             totalPl: b.totalPl,
             netPl: b.netPl,
             hasDailyLog: b.hasDailyLog,
+            hasReportingLog: b.hasReportingLog,
+            reportingLog: b.reportingLog ?? null,
           })),
           count: blocks.length,
         };
@@ -221,7 +232,7 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           content: [
             {
               type: "text",
-              text: `Error listing backtests: ${(error as Error).message}`,
+              text: `Error listing blocks: ${(error as Error).message}`,
             },
           ],
           isError: true,
@@ -277,6 +288,65 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             {
               type: "text",
               text: `Error loading block: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 2b: get_reporting_log_stats
+  server.registerTool(
+    "get_reporting_log_stats",
+    {
+      description:
+        "Get detailed statistics about actual trade execution from reporting log. Returns per-strategy breakdown with trade counts, win rates, P&L, and contract counts. Use blockId from list_blocks. Returns null if no reporting log exists for the block.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block ID from list_blocks"),
+      }),
+    },
+    async ({ blockId }) => {
+      try {
+        const result = await loadReportingLogStats(baseDir, blockId);
+
+        if (!result) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No reporting log found for block: ${blockId}. Use list_blocks with hasReportingLog filter to find blocks with reporting data.`,
+              },
+            ],
+          };
+        }
+
+        const { stats, stale } = result;
+
+        // Brief summary for user display
+        const summary = `Reporting Log: ${blockId} | ${stats.totalTrades} trades | ${stats.strategies.length} strategies | Total P&L: ${formatCurrency(stats.totalPL)}${stale ? " (stale - file modified since last calculation)" : ""}${stats.invalidTrades > 0 ? ` | ${stats.invalidTrades} invalid trades skipped` : ""}`;
+
+        // Build structured data for Claude reasoning
+        const structuredData = {
+          blockId,
+          totalTrades: stats.totalTrades,
+          invalidTrades: stats.invalidTrades,
+          totalPL: stats.totalPL,
+          dateRange: stats.dateRange,
+          strategyCount: stats.strategies.length,
+          strategies: stats.strategies,
+          byStrategy: stats.byStrategy,
+          calculatedAt: stats.calculatedAt,
+          stale,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error loading reporting log stats: ${(error as Error).message}`,
             },
           ],
           isError: true,
