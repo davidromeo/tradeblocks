@@ -49,6 +49,9 @@ interface EnrichedTrade extends Trade {
   // Other
   isWinner?: number;
   tradeNumber?: number;
+  // Extended field access (for advanced queries)
+  dailyCustomFields?: Record<string, number | string>;
+  staticDatasetFields?: Record<string, Record<string, number | string>>;
 }
 
 /**

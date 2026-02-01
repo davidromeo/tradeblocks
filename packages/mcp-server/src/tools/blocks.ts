@@ -392,12 +392,13 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         trades = filterByStrategy(trades, strategy);
         trades = filterByDateRange(trades, startDate, endDate);
 
-        // Apply ticker filter
+        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter(
-            (t) => t.ticker?.toLowerCase() === tickerLower
-          );
+          trades = trades.filter((t) => {
+            const ticker = t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
+            return typeof ticker === "string" && ticker.toLowerCase() === tickerLower;
+          });
         }
 
         if (trades.length === 0) {
@@ -563,12 +564,13 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         // Apply date filter
         trades = filterByDateRange(trades, startDate, endDate);
 
-        // Apply ticker filter
+        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter(
-            (t) => t.ticker?.toLowerCase() === tickerLower
-          );
+          trades = trades.filter((t) => {
+            const ticker = t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
+            return typeof ticker === "string" && ticker.toLowerCase() === tickerLower;
+          });
         }
 
         if (trades.length === 0) {
@@ -797,11 +799,11 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             if (requestedMetrics.totalTrades) filteredStats.totalTrades = stats.totalTrades;
             if (requestedMetrics.winRate) filteredStats.winRate = stats.winRate;
             if (requestedMetrics.netPl) filteredStats.netPl = stats.netPl;
-            if (requestedMetrics.sharpeRatio) filteredStats.sharpeRatio = stats.sharpeRatio;
-            if (requestedMetrics.sortinoRatio) filteredStats.sortinoRatio = stats.sortinoRatio;
+            if (requestedMetrics.sharpeRatio) filteredStats.sharpeRatio = stats.sharpeRatio ?? null;
+            if (requestedMetrics.sortinoRatio) filteredStats.sortinoRatio = stats.sortinoRatio ?? null;
             if (requestedMetrics.maxDrawdown) filteredStats.maxDrawdown = stats.maxDrawdown;
             if (requestedMetrics.profitFactor) filteredStats.profitFactor = stats.profitFactor;
-            if (requestedMetrics.calmarRatio) filteredStats.calmarRatio = stats.calmarRatio;
+            if (requestedMetrics.calmarRatio) filteredStats.calmarRatio = stats.calmarRatio ?? null;
             return {
               blockId,
               stats: filteredStats,
@@ -1250,11 +1252,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const portfolioStartDate = sortedTrades[0]?.dateOpened
           ? new Date(sortedTrades[0].dateOpened).toISOString().split("T")[0]
           : null;
-        const portfolioEndDate = sortedTrades[sortedTrades.length - 1]
-          ?.dateClosed
-          ? new Date(sortedTrades[sortedTrades.length - 1].dateClosed)
-              .toISOString()
-              .split("T")[0]
+        const lastTrade = sortedTrades[sortedTrades.length - 1];
+        const portfolioEndDate = lastTrade?.dateClosed
+          ? new Date(lastTrade.dateClosed).toISOString().split("T")[0]
           : null;
 
         for (const scenario of scenariosToRun) {
@@ -2340,8 +2340,8 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         };
 
         const comparison = {
-          sharpeRatio: calcDelta(baselineStats.sharpeRatio, scaledStats.sharpeRatio),
-          sortinoRatio: calcDelta(baselineStats.sortinoRatio, scaledStats.sortinoRatio),
+          sharpeRatio: calcDelta(baselineStats.sharpeRatio ?? null, scaledStats.sharpeRatio ?? null),
+          sortinoRatio: calcDelta(baselineStats.sortinoRatio ?? null, scaledStats.sortinoRatio ?? null),
           maxDrawdown: calcDelta(baselineStats.maxDrawdown, scaledStats.maxDrawdown),
           netPl: calcDelta(baselineStats.netPl, scaledStats.netPl),
           totalTrades: {
@@ -2546,12 +2546,13 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         trades = filterByStrategy(trades, strategy);
         trades = filterByDateRange(trades, startDate, endDate);
 
-        // Apply ticker filter
+        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter(
-            (t) => t.ticker?.toLowerCase() === tickerLower
-          );
+          trades = trades.filter((t) => {
+            const ticker = t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
+            return typeof ticker === "string" && ticker.toLowerCase() === tickerLower;
+          });
         }
 
         // Apply P&L filters
@@ -2585,8 +2586,11 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
               return (a.pl - b.pl) * multiplier;
             case "strategy":
               return a.strategy.localeCompare(b.strategy) * multiplier;
-            case "ticker":
-              return (a.ticker ?? "").localeCompare(b.ticker ?? "") * multiplier;
+            case "ticker": {
+              const aTicker = (a.customFields?.["ticker"] ?? a.customFields?.["Ticker"] ?? "") as string;
+              const bTicker = (b.customFields?.["ticker"] ?? b.customFields?.["Ticker"] ?? "") as string;
+              return aTicker.localeCompare(bTicker) * multiplier;
+            }
             case "date":
             default:
               return (
