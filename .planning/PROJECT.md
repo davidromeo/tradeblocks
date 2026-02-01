@@ -56,15 +56,17 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ Sweet spot detection with combined improvement scoring (winRateDelta * avgPlDelta) — v2.4
 - ✓ CLI --call mode fixed to apply Zod schema parsing for proper defaults — v2.4
 
+**v2.5 Reporting Log Integration & Discrepancy Analysis:**
+- ✓ MCP server can ingest reporting logs (strategylog.csv) for a block — v2.5
+- ✓ Models can compare backtest vs actual with trade-level detail — v2.5
+- ✓ Models can analyze discrepancy patterns (slippage sources, execution quality) — v2.5
+- ✓ Models can detect strategy matching issues and suggest fixes — v2.5
+- ✓ Models can track slippage trends over time — v2.5
+- ✓ Quality scoring dropped (existing tools provide metrics, AI synthesizes) — v2.5
+
 ### Active
 
-**v2.5 Reporting Log Integration & Discrepancy Analysis:**
-- [ ] MCP server can ingest reporting logs (strategylog.csv) for a block
-- [ ] Models can compare backtest vs actual with trade-level detail
-- [ ] Models can analyze discrepancy patterns (slippage sources, execution quality)
-- [ ] Models can detect strategy matching issues and suggest fixes
-- [ ] Models can track slippage trends over time
-- [ ] Models can score backtest quality vs actual results
+None currently — planning next milestone.
 
 ### Out of Scope
 
@@ -74,15 +76,16 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.4):**
+**Current state (v2.5):**
 - Next.js 15 web application with client-side computation
-- MCP server (`tradeblocks-mcp`) with 28 tools at packages/mcp-server/
+- MCP server (`tradeblocks-mcp` v0.4.8) with 33 tools at packages/mcp-server/
 - 6 agent skills at packages/agent-skills/
 - Shared library at packages/lib/ (81 files, barrel exports)
-- ~18,200 LOC in packages/, ~12,500 LOC in WFA-related files
+- ~20,800 LOC in packages/, ~12,500 LOC in WFA-related files
 - 1024 tests (65 test suites)
 - Embedded historical Treasury rates (2013-2026) for accurate risk metrics
 - Backtest optimization tools for data-driven filter development
+- Reporting log analysis tools for backtest vs actual comparison
 
 **Architecture:**
 - Monorepo with npm workspaces
@@ -121,6 +124,12 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Pearson correlation for field predictiveness | Simple, interpretable, identifies linear relationships | ✓ Good |
 | Sweet spot criteria (winRateDelta > 0, avgPlDelta > 0, ≥20% trades) | Ensures actionable filters that improve both metrics | ✓ Good |
 | Fix CLI handler instead of per-tool workarounds | Single fix ensures all tools work correctly | ✓ Good |
+| Per-contract P/L normalization for strategy matching | Fair comparison across different position sizes | ✓ Good |
+| Z-score threshold of 2 for outlier detection | ~95% confidence interval, reasonable default | ✓ Good |
+| Confidence scoring: 70% correlation + 30% timing overlap | Balance P/L correlation and trading frequency alignment | ✓ Good |
+| Linear regression with normal approximation for p-value | Simple, uses existing normalCDF from lib | ✓ Good |
+| Drop Quality Scoring (Phase 40) | Existing tools provide metrics; AI synthesizes rather than prescriptive scores | ✓ Good |
+| Trade matching by date\|strategy\|time (minute precision) | Handles fractional seconds in actual trades | ✓ Good |
 
 ---
-*Last updated: 2026-01-31 after v2.5 milestone started*
+*Last updated: 2026-02-01 after v2.5 milestone complete*

@@ -2,23 +2,24 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-31)
+See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** v2.5 complete — ready for next milestone
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis — COMPLETE
-Phase: 39 of 39 (Trend Analysis)
-Plan: 01 of 01 - Complete
-Status: Milestone complete
-Last activity: 2026-02-01 - Phase 40 dropped (redundant with existing tools)
+Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis — SHIPPED
+Phase: N/A (milestone complete)
+Plan: N/A
+Status: Ready to plan next milestone
+Last activity: 2026-02-01 — v2.5 milestone archived and tagged
 
-Progress: [##########] 100% (5/5 phases)
+Progress: [##########] 100% (milestone complete)
 
 ## Historical Context
 
+See [v2.5 archive](milestones/v2.5-reporting-log-integration.md) for reporting log integration details.
 See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for backtest optimization tools.
 See [v2.3 archive](milestones/v2.3-workspace-packages.md) for workspace package migration details.
 See [v2.2 archive](milestones/v2.2-historical-risk-free-rates.md) for risk-free rate implementation details.
@@ -30,18 +31,20 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 
 All decisions now captured in PROJECT.md Key Decisions table.
 
-Recent decisions (v2.5):
-- Phase 40 (Quality Scoring) dropped — existing tools provide metrics, AI synthesizes
-- "Insights, not recommendations" — tools provide data, not prescriptive scores
-- Linear regression uses normal approximation for p-value (normalCDF from lib)
-- Trend interpretation threshold: p < 0.05 for significance
+v2.5 decisions:
+- Per-contract P/L normalization for strategy matching
+- Z-score threshold of 2 for outlier detection
+- Confidence scoring: 70% correlation + 30% timing overlap
+- Linear regression with normal approximation for p-value
+- Trade matching by date|strategy|time (minute precision)
+- Phase 40 (Quality Scoring) dropped — AI synthesizes from existing tools
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: v2.5 milestone complete
+Stopped at: v2.5 milestone archived and tagged
 Resume file: None
-Next: `/gsd:audit-milestone` or `/gsd:complete-milestone` to archive and tag
+Next: `/gsd:new-milestone` to start next milestone
 
 ## Quick Tasks Completed
 
