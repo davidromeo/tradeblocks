@@ -40,7 +40,7 @@ export interface StrategyDayComparison {
     totalPl: number
     totalPremium: number
     totalContracts: number
-    /** First trade's contract count - used for scaling (strategy unit size) */
+    /** Sum of all contracts - used for scaling (equals totalContracts) */
     unitContracts: number
     tradeCount: number
     totalCommissions: number
@@ -50,7 +50,7 @@ export interface StrategyDayComparison {
     totalPl: number
     totalPremium: number
     totalContracts: number
-    /** First trade's contract count - used for scaling (strategy unit size) */
+    /** Sum of all contracts - used for scaling (equals totalContracts) */
     unitContracts: number
     tradeCount: number
   } | null
@@ -103,20 +103,18 @@ export function getBacktestPlPerContract(trade: Trade): number {
  * Scaling context for a day or trade comparison
  * Extracts contract counts once to ensure consistency across all scaling calculations
  *
- * CRITICAL: Uses first trade's numContracts as "unit size", NOT the sum of all trades.
- * This is because numContracts represents the strategy's standard position size,
- * not the total across multiple legs/trades.
+ * Uses sum of all contracts for accurate scaling when trades have different sizes.
  */
 export interface ScalingContext {
-  btContracts: number      // First backtest trade's numContracts (unit size)
-  actualContracts: number  // First actual trade's numContracts (unit size)
+  btContracts: number      // Sum of all backtest trade contracts
+  actualContracts: number  // Sum of all actual trade contracts
   hasBacktest: boolean
   hasActual: boolean
 }
 
 /**
  * Create scaling context from trades
- * Uses FIRST trade's contract count as "unit size" (not sum)
+ * Uses sum of all contracts for accurate scaling
  *
  * @param backtestTrades Array of backtest trades (Trade from tradelog.csv)
  * @param actualTrades Array of actual trades (ReportingTrade from strategylog.csv)
@@ -126,8 +124,8 @@ export function createScalingContext(
   actualTrades: ReportingTrade[]
 ): ScalingContext {
   return {
-    btContracts: backtestTrades[0]?.numContracts ?? 0,
-    actualContracts: actualTrades[0]?.numContracts ?? 0,
+    btContracts: backtestTrades.reduce((sum, t) => sum + t.numContracts, 0),
+    actualContracts: actualTrades.reduce((sum, t) => sum + t.numContracts, 0),
     hasBacktest: backtestTrades.length > 0,
     hasActual: actualTrades.length > 0
   }
@@ -247,7 +245,7 @@ export function getScaledDayBacktestPl(
 
   for (const [btStrategy, btTrades] of btByStrategy) {
     const strategyPl = btTrades.reduce((sum, t) => sum + t.pl, 0)
-    const btContracts = btTrades[0]?.numContracts ?? 0
+    const btContracts = btTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
     if (scalingMode === 'perContract') {
       // Scale by own contract count
@@ -256,7 +254,7 @@ export function getScaledDayBacktestPl(
       // Look up the ACTUAL strategy name that corresponds to this backtest strategy
       const actualStrategyName = backtestToActualStrategy.get(btStrategy)
       const actualTrades = actualStrategyName ? actualByStrategy.get(actualStrategyName) ?? [] : []
-      const actualContracts = actualTrades[0]?.numContracts ?? 0
+      const actualContracts = actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
       if (btContracts > 0 && actualContracts > 0) {
         totalScaledPl += strategyPl * (actualContracts / btContracts)
@@ -292,7 +290,7 @@ export function getScaledDayActualPl(
 
   for (const [, actualTrades] of actualByStrategy) {
     const strategyPl = actualTrades.reduce((sum, t) => sum + t.pl, 0)
-    const contracts = actualTrades[0]?.numContracts ?? 0
+    const contracts = actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
     totalScaledPl += contracts > 0 ? strategyPl / contracts : strategyPl
   }
@@ -323,13 +321,13 @@ export function getScaledDayMargin(
 
   for (const [strategy, btTrades] of btByStrategy) {
     const strategyMargin = btTrades.reduce((sum, t) => sum + (t.marginReq ?? 0), 0)
-    const btContracts = btTrades[0]?.numContracts ?? 0
+    const btContracts = btTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
     if (scalingMode === 'perContract') {
       totalScaledMargin += btContracts > 0 ? strategyMargin / btContracts : strategyMargin
     } else if (scalingMode === 'toReported') {
       const actualTrades = actualByStrategy.get(strategy) ?? []
-      const actualContracts = actualTrades[0]?.numContracts ?? 0
+      const actualContracts = actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
       if (btContracts > 0 && actualContracts > 0) {
         totalScaledMargin += strategyMargin * (actualContracts / btContracts)
@@ -403,7 +401,7 @@ export function getFilteredScaledDayBacktestPl(
 
   for (const [btStrategy, btTrades] of btByStrategy) {
     const strategyPl = btTrades.reduce((sum, t) => sum + t.pl, 0)
-    const btContracts = btTrades[0]?.numContracts ?? 0
+    const btContracts = btTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
     if (scalingMode === 'perContract') {
       totalScaledPl += btContracts > 0 ? strategyPl / btContracts : strategyPl
@@ -411,7 +409,7 @@ export function getFilteredScaledDayBacktestPl(
       // Look up the ACTUAL strategy name that corresponds to this backtest strategy
       const actualStrategyName = backtestToActualStrategy.get(btStrategy)
       const actualTrades = actualStrategyName ? actualByStrategy.get(actualStrategyName) ?? [] : []
-      const actualContracts = actualTrades[0]?.numContracts ?? 0
+      const actualContracts = actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
       if (btContracts > 0 && actualContracts > 0) {
         totalScaledPl += strategyPl * (actualContracts / btContracts)
@@ -480,7 +478,7 @@ export function getFilteredScaledDayActualPl(
 
   for (const [, actualTrades] of actualByStrategy) {
     const strategyPl = actualTrades.reduce((sum, t) => sum + t.pl, 0)
-    const contracts = actualTrades[0]?.numContracts ?? 0
+    const contracts = actualTrades.reduce((sum, t) => sum + t.numContracts, 0)
 
     totalScaledPl += contracts > 0 ? strategyPl / contracts : strategyPl
   }
@@ -734,13 +732,14 @@ export function aggregateTradesByStrategy(
  * Aggregate backtest trades (Trade from tradelog.csv)
  */
 function aggregateBacktestTrades(trades: Trade[]) {
+  const totalContracts = trades.reduce((sum, t) => sum + t.numContracts, 0)
   return {
     trades,
     totalPl: trades.reduce((sum, t) => sum + t.pl, 0),
     totalPremium: trades.reduce((sum, t) => sum + t.premium, 0),
-    totalContracts: trades.reduce((sum, t) => sum + t.numContracts, 0),
-    // Unit size = first trade's contract count (for scaling), NOT the sum
-    unitContracts: trades[0]?.numContracts ?? 0,
+    totalContracts,
+    // unitContracts now equals totalContracts for accurate scaling with variable sizes
+    unitContracts: totalContracts,
     tradeCount: trades.length,
     totalCommissions: trades.reduce((sum, t) =>
       sum + (t.openingCommissionsFees ?? 0) + (t.closingCommissionsFees ?? 0), 0)
@@ -751,13 +750,14 @@ function aggregateBacktestTrades(trades: Trade[]) {
  * Aggregate actual trades (ReportingTrade from strategylog.csv)
  */
 function aggregateActualTrades(trades: ReportingTrade[]) {
+  const totalContracts = trades.reduce((sum, t) => sum + t.numContracts, 0)
   return {
     trades,
     totalPl: trades.reduce((sum, t) => sum + t.pl, 0),
     totalPremium: trades.reduce((sum, t) => sum + t.initialPremium, 0),
-    totalContracts: trades.reduce((sum, t) => sum + t.numContracts, 0),
-    // Unit size = first trade's contract count (for scaling), NOT the sum
-    unitContracts: trades[0]?.numContracts ?? 0,
+    totalContracts,
+    // unitContracts now equals totalContracts for accurate scaling with variable sizes
+    unitContracts: totalContracts,
     tradeCount: trades.length
   }
 }
@@ -765,7 +765,7 @@ function aggregateActualTrades(trades: ReportingTrade[]) {
 /**
  * Scale aggregated strategy comparison values
  *
- * IMPORTANT: Uses unitContracts (first trade's count) for scaling, NOT totalContracts.
+ * Uses unitContracts (sum of all contracts) for scaling.
  * This is consistent with the centralized scaling functions.
  */
 export function scaleStrategyComparison(
@@ -776,7 +776,7 @@ export function scaleStrategyComparison(
     return comparison
   }
 
-  // Use unitContracts (first trade's count) for scaling, falling back to totalContracts for backward compat
+  // Use unitContracts (sum of all contracts) for scaling, falling back to totalContracts for backward compat
   const btUnitContracts = comparison.backtest?.unitContracts ?? comparison.backtest?.totalContracts ?? 0
   const actualUnitContracts = comparison.actual?.unitContracts ?? comparison.actual?.totalContracts ?? 0
 
