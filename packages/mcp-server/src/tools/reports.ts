@@ -7,10 +7,10 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadBlock } from "../utils/block-loader.js";
-import { createToolOutput, formatPercent } from "../utils/output-formatter.js";
-import type { Trade, FieldInfo, FieldCategory, FilterOperator } from "@tradeblocks/lib";
-import { REPORT_FIELDS, FIELD_CATEGORY_ORDER, pearsonCorrelation } from "@tradeblocks/lib";
+import { loadBlock, loadReportingLog } from "../utils/block-loader.js";
+import { createToolOutput, formatPercent, formatCurrency } from "../utils/output-formatter.js";
+import type { Trade, FieldInfo, FieldCategory, FilterOperator, ReportingTrade } from "@tradeblocks/lib";
+import { REPORT_FIELDS, FIELD_CATEGORY_ORDER, pearsonCorrelation, kendallTau } from "@tradeblocks/lib";
 
 // =============================================================================
 // Inline Trade Enrichment (can't import enrichTrades due to browser deps)
@@ -1644,6 +1644,808 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
             {
               type: "text",
               text: `Error generating filter curve: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool 7: analyze_discrepancies
+  server.registerTool(
+    "analyze_discrepancies",
+    {
+      description:
+        "Analyze slippage between backtest and actual trades by decomposing into sources (entry price, exit price, size, timing, unexplained), detecting systematic patterns, and correlating with market conditions. Requires both tradelog.csv (backtest) and reportinglog.csv (actual).",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter to specific strategy name"),
+        dateRange: z
+          .object({
+            from: z.string().optional().describe("Start date YYYY-MM-DD"),
+            to: z.string().optional().describe("End date YYYY-MM-DD"),
+          })
+          .optional()
+          .describe("Filter trades to date range"),
+        scaling: z
+          .enum(["raw", "perContract", "toReported"])
+          .default("toReported")
+          .describe("Scaling mode for P/L comparison (default: toReported)"),
+        correlationMethod: z
+          .enum(["pearson", "kendall"])
+          .default("pearson")
+          .describe("Correlation method for market condition analysis"),
+        minSamples: z
+          .number()
+          .min(5)
+          .default(10)
+          .describe("Minimum samples required for pattern detection"),
+        patternThreshold: z
+          .number()
+          .min(0.5)
+          .max(0.95)
+          .default(0.7)
+          .describe(
+            "Threshold for detecting systematic patterns (0.7 = 70% consistency)"
+          ),
+        includePerStrategy: z
+          .boolean()
+          .default(true)
+          .describe("Include per-strategy breakdown in output"),
+      }),
+    },
+    async ({
+      blockId,
+      strategy,
+      dateRange,
+      scaling,
+      correlationMethod,
+      minSamples,
+      patternThreshold,
+      includePerStrategy,
+    }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let backtestTrades = block.trades;
+
+        // Load reporting log (actual trades)
+        let actualTrades: ReportingTrade[];
+        try {
+          actualTrades = await loadReportingLog(baseDir, blockId);
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No reportinglog.csv found in block "${blockId}". This tool requires both tradelog.csv (backtest) and reportinglog.csv (actual).`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Apply strategy filter to both
+        if (strategy) {
+          backtestTrades = backtestTrades.filter(
+            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
+          );
+          actualTrades = actualTrades.filter(
+            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
+          );
+        }
+
+        // Apply date range filter to both
+        if (dateRange) {
+          if (dateRange.from || dateRange.to) {
+            const formatDateKeyLocal = (d: Date): string => {
+              const year = d.getFullYear();
+              const month = String(d.getMonth() + 1).padStart(2, "0");
+              const day = String(d.getDate()).padStart(2, "0");
+              return `${year}-${month}-${day}`;
+            };
+
+            backtestTrades = backtestTrades.filter((t) => {
+              const tradeDate = formatDateKeyLocal(new Date(t.dateOpened));
+              if (dateRange.from && tradeDate < dateRange.from) return false;
+              if (dateRange.to && tradeDate > dateRange.to) return false;
+              return true;
+            });
+            actualTrades = actualTrades.filter((t) => {
+              const tradeDate = formatDateKeyLocal(new Date(t.dateOpened));
+              if (dateRange.from && tradeDate < dateRange.from) return false;
+              if (dateRange.to && tradeDate > dateRange.to) return false;
+              return true;
+            });
+          }
+        }
+
+        if (backtestTrades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No backtest trades found in tradelog.csv matching filters.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (actualTrades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No actual trades found in reportinglog.csv matching filters.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Helper to format date key
+        const formatDateKey = (d: Date): string => {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          return `${year}-${month}-${day}`;
+        };
+
+        // Helper to truncate time to minute precision for matching
+        const truncateTimeToMinute = (time: string | undefined): string => {
+          if (!time) return "00:00";
+          const parts = time.split(":");
+          if (parts.length >= 2) {
+            return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+          }
+          return "00:00";
+        };
+
+        // Helper to parse hour from time string
+        const parseHourFromTime = (
+          timeOpened: string | undefined
+        ): number | null => {
+          if (!timeOpened || typeof timeOpened !== "string") return null;
+          const parts = timeOpened.split(":");
+          if (parts.length < 1) return null;
+          const hour = parseInt(parts[0], 10);
+          if (isNaN(hour) || hour < 0 || hour > 23) return null;
+          return hour;
+        };
+
+        // Standard option contract multiplier
+        const OPTION_MULTIPLIER = 100;
+
+        // Slippage attribution interface
+        interface SlippageAttribution {
+          date: string;
+          strategy: string;
+          timeOpened: string;
+          totalSlippage: number;
+          // Category breakdown (all in dollars)
+          entryPriceSlippage: number;
+          exitPriceSlippage: number;
+          sizeSlippage: number;
+          timingDiffers: boolean; // Flag only - set to 0 but note reasonForClose differences
+          unexplainedResidual: number;
+          // Context for correlation
+          openingVix?: number;
+          closingVix?: number;
+          gap?: number;
+          movement?: number;
+          hourOfDay: number | null;
+          contracts: number;
+        }
+
+        // Pattern insight interface
+        interface PatternInsight {
+          pattern: string;
+          metric: string;
+          value: number;
+          sampleSize: number;
+          confidence: "low" | "moderate" | "high";
+        }
+
+        // Build lookup for actual trades
+        const actualByKey = new Map<string, ReportingTrade[]>();
+        actualTrades.forEach((trade) => {
+          const dateKey = formatDateKey(new Date(trade.dateOpened));
+          const timeKey = truncateTimeToMinute(trade.timeOpened);
+          const key = `${dateKey}|${trade.strategy}|${timeKey}`;
+          const existing = actualByKey.get(key) || [];
+          existing.push(trade);
+          actualByKey.set(key, existing);
+        });
+
+        const attributions: SlippageAttribution[] = [];
+        let unmatchedBacktestCount = 0;
+        let unmatchedActualCount = actualTrades.length; // Will decrement as we match
+
+        // Match backtest trades to actual trades and compute attribution
+        for (const btTrade of backtestTrades) {
+          const dateKey = formatDateKey(new Date(btTrade.dateOpened));
+          const timeKey = truncateTimeToMinute(btTrade.timeOpened);
+          const key = `${dateKey}|${btTrade.strategy}|${timeKey}`;
+
+          const actualMatches = actualByKey.get(key);
+          const actualTrade = actualMatches?.[0];
+
+          if (actualTrade) {
+            unmatchedActualCount--;
+            // Remove the matched trade from the list
+            if (actualMatches && actualMatches.length > 1) {
+              actualByKey.set(key, actualMatches.slice(1));
+            } else {
+              actualByKey.delete(key);
+            }
+
+            // Calculate scaling
+            const btContracts = btTrade.numContracts;
+            const actualContracts = actualTrade.numContracts;
+            let scalingFactor = 1;
+            let scaledBtPl = btTrade.pl;
+            let scaledActualPl = actualTrade.pl;
+
+            if (scaling === "perContract") {
+              scaledBtPl = btContracts > 0 ? btTrade.pl / btContracts : 0;
+              scaledActualPl =
+                actualContracts > 0 ? actualTrade.pl / actualContracts : 0;
+            } else if (scaling === "toReported") {
+              if (btContracts > 0 && actualContracts > 0) {
+                scalingFactor = actualContracts / btContracts;
+                scaledBtPl = btTrade.pl * scalingFactor;
+              } else if (btContracts === 0) {
+                scalingFactor = 0;
+                scaledBtPl = 0;
+              }
+            }
+
+            const totalSlippage = scaledActualPl - scaledBtPl;
+
+            // Sequential attribution:
+            // 1. Entry price slippage: (actual.openingPrice - bt.openingPrice) * actualContracts * multiplier
+            const entryPriceDelta =
+              actualTrade.openingPrice - btTrade.openingPrice;
+            const entryPriceSlippage =
+              entryPriceDelta * actualContracts * OPTION_MULTIPLIER;
+
+            // 2. Exit price slippage: (actual.closingPrice - bt.closingPrice) * actualContracts * multiplier
+            const exitPriceDelta =
+              (actualTrade.closingPrice ?? 0) - (btTrade.closingPrice ?? 0);
+            const exitPriceSlippage =
+              exitPriceDelta * actualContracts * OPTION_MULTIPLIER;
+
+            // 3. Size slippage: P/L difference due to contract count difference
+            // Calculate what the backtest P/L would be at actual contracts vs backtest contracts
+            let sizeSlippage = 0;
+            if (scaling === "toReported") {
+              // Already accounted for in the scaling
+              sizeSlippage = 0;
+            } else if (scaling === "raw") {
+              // In raw mode, size difference = bt.pl * (actualContracts/btContracts - 1)
+              if (btContracts > 0 && actualContracts !== btContracts) {
+                const btPlPerContract = btTrade.pl / btContracts;
+                sizeSlippage =
+                  btPlPerContract * (actualContracts - btContracts);
+              }
+            }
+            // perContract mode: size is normalized out
+
+            // 4. Timing: flag if reasonForClose differs
+            const btReason = btTrade.reasonForClose ?? null;
+            const actualReason = actualTrade.reasonForClose ?? null;
+            const timingDiffers = btReason !== actualReason;
+
+            // 5. Unexplained: whatever remains after entry, exit, size
+            const explainedSlippage =
+              entryPriceSlippage + exitPriceSlippage + sizeSlippage;
+            const unexplainedResidual = totalSlippage - explainedSlippage;
+
+            attributions.push({
+              date: dateKey,
+              strategy: btTrade.strategy,
+              timeOpened: timeKey,
+              totalSlippage,
+              entryPriceSlippage,
+              exitPriceSlippage,
+              sizeSlippage,
+              timingDiffers,
+              unexplainedResidual,
+              openingVix: btTrade.openingVix,
+              closingVix: btTrade.closingVix,
+              gap: btTrade.gap,
+              movement: btTrade.movement,
+              hourOfDay: parseHourFromTime(btTrade.timeOpened),
+              contracts: actualContracts,
+            });
+          } else {
+            unmatchedBacktestCount++;
+          }
+        }
+
+        if (attributions.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No matching trades found between backtest and actual data. Cannot perform slippage analysis.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Calculate date range from attributions
+        const dates = attributions.map((a) => a.date).sort();
+        const dateRangeResult = {
+          from: dates[0],
+          to: dates[dates.length - 1],
+        };
+
+        // Calculate summary statistics
+        const slippages = attributions.map((a) => a.totalSlippage);
+        const totalSlippage = slippages.reduce((sum, s) => sum + s, 0);
+        const avgSlippagePerTrade = totalSlippage / attributions.length;
+
+        // Attribution totals
+        const totalEntrySlippage = attributions.reduce(
+          (sum, a) => sum + a.entryPriceSlippage,
+          0
+        );
+        const totalExitSlippage = attributions.reduce(
+          (sum, a) => sum + a.exitPriceSlippage,
+          0
+        );
+        const totalSizeSlippage = attributions.reduce(
+          (sum, a) => sum + a.sizeSlippage,
+          0
+        );
+        const totalUnexplained = attributions.reduce(
+          (sum, a) => sum + a.unexplainedResidual,
+          0
+        );
+        const timingDiffersCount = attributions.filter(
+          (a) => a.timingDiffers
+        ).length;
+
+        // Calculate percentage of total absolute slippage for each category
+        const totalAbsSlippage = attributions.reduce(
+          (sum, a) => sum + Math.abs(a.totalSlippage),
+          0
+        );
+        const calculatePct = (value: number): number =>
+          totalAbsSlippage > 0
+            ? (Math.abs(value) / totalAbsSlippage) * 100
+            : 0;
+
+        // Attribution breakdown
+        const attribution = {
+          byCategory: {
+            entryPrice: {
+              total: totalEntrySlippage,
+              pctOfTotal: calculatePct(totalEntrySlippage),
+              avgPerTrade:
+                attributions.length > 0
+                  ? totalEntrySlippage / attributions.length
+                  : 0,
+            },
+            exitPrice: {
+              total: totalExitSlippage,
+              pctOfTotal: calculatePct(totalExitSlippage),
+              avgPerTrade:
+                attributions.length > 0
+                  ? totalExitSlippage / attributions.length
+                  : 0,
+            },
+            size: {
+              total: totalSizeSlippage,
+              pctOfTotal: calculatePct(totalSizeSlippage),
+              avgPerTrade:
+                attributions.length > 0
+                  ? totalSizeSlippage / attributions.length
+                  : 0,
+            },
+            timing: {
+              flaggedCount: timingDiffersCount,
+              pctWithTimingDifference:
+                attributions.length > 0
+                  ? (timingDiffersCount / attributions.length) * 100
+                  : 0,
+            },
+            unexplained: {
+              total: totalUnexplained,
+              pctOfTotal: calculatePct(totalUnexplained),
+              avgPerTrade:
+                attributions.length > 0
+                  ? totalUnexplained / attributions.length
+                  : 0,
+            },
+          },
+        };
+
+        // Pattern detection functions
+        const detectPatterns = (
+          attrs: SlippageAttribution[]
+        ): PatternInsight[] => {
+          const patterns: PatternInsight[] = [];
+
+          if (attrs.length < minSamples) {
+            return patterns;
+          }
+
+          const getConfidence = (
+            n: number
+          ): "low" | "moderate" | "high" => {
+            if (n < 10) return "low";
+            if (n < 30) return "moderate";
+            return "high";
+          };
+
+          // 1. Direction bias - if >patternThreshold of slippages are same sign
+          const slippages = attrs.map((a) => a.totalSlippage);
+          const positiveCount = slippages.filter((s) => s > 0).length;
+          const negativeCount = slippages.filter((s) => s < 0).length;
+          const positiveRate = positiveCount / slippages.length;
+          const negativeRate = negativeCount / slippages.length;
+
+          if (positiveRate >= patternThreshold) {
+            patterns.push({
+              pattern: `Direction bias: ${formatPercent(positiveRate * 100)} of trades have positive slippage (actual > backtest)`,
+              metric: "positive_slippage_rate",
+              value: positiveRate,
+              sampleSize: slippages.length,
+              confidence: getConfidence(slippages.length),
+            });
+          } else if (negativeRate >= patternThreshold) {
+            patterns.push({
+              pattern: `Direction bias: ${formatPercent(negativeRate * 100)} of trades have negative slippage (actual < backtest)`,
+              metric: "negative_slippage_rate",
+              value: negativeRate,
+              sampleSize: slippages.length,
+              confidence: getConfidence(slippages.length),
+            });
+          }
+
+          // 2. Category concentration - if one category accounts for >patternThreshold of total absolute slippage
+          const localTotalAbs = attrs.reduce(
+            (sum, a) => sum + Math.abs(a.totalSlippage),
+            0
+          );
+          if (localTotalAbs > 0) {
+            const categories = [
+              {
+                name: "entryPrice",
+                total: attrs.reduce(
+                  (s, a) => s + Math.abs(a.entryPriceSlippage),
+                  0
+                ),
+              },
+              {
+                name: "exitPrice",
+                total: attrs.reduce(
+                  (s, a) => s + Math.abs(a.exitPriceSlippage),
+                  0
+                ),
+              },
+              {
+                name: "size",
+                total: attrs.reduce((s, a) => s + Math.abs(a.sizeSlippage), 0),
+              },
+              {
+                name: "unexplained",
+                total: attrs.reduce(
+                  (s, a) => s + Math.abs(a.unexplainedResidual),
+                  0
+                ),
+              },
+            ];
+
+            const dominant = categories.reduce((max, c) =>
+              c.total > max.total ? c : max
+            );
+            const dominantPercent = dominant.total / localTotalAbs;
+
+            if (dominantPercent >= patternThreshold) {
+              patterns.push({
+                pattern: `Category concentration: ${formatPercent(dominantPercent * 100)} of slippage attributed to ${dominant.name.replace(/([A-Z])/g, " $1").toLowerCase().trim()}`,
+                metric: "dominant_category_percent",
+                value: dominantPercent,
+                sampleSize: attrs.length,
+                confidence: getConfidence(attrs.length),
+              });
+            }
+          }
+
+          // 3. Time-of-day clustering - if >patternThreshold of outlier trades occur in same time bucket
+          const tradesWithHour = attrs.filter((a) => a.hourOfDay !== null);
+          if (tradesWithHour.length >= minSamples) {
+            // Define time buckets: morning (9-11), midday (11-14), afternoon (14-16)
+            const buckets = {
+              morning: tradesWithHour.filter(
+                (a) => a.hourOfDay !== null && a.hourOfDay >= 9 && a.hourOfDay < 11
+              ),
+              midday: tradesWithHour.filter(
+                (a) => a.hourOfDay !== null && a.hourOfDay >= 11 && a.hourOfDay < 14
+              ),
+              afternoon: tradesWithHour.filter(
+                (a) => a.hourOfDay !== null && a.hourOfDay >= 14 && a.hourOfDay <= 16
+              ),
+            };
+
+            // Find outliers (beyond 1.5 * IQR)
+            const sorted = [...slippages].sort((a, b) => a - b);
+            const q1 = sorted[Math.floor(sorted.length * 0.25)];
+            const q3 = sorted[Math.floor(sorted.length * 0.75)];
+            const iqr = q3 - q1;
+            const outlierThresholdLow = q1 - 1.5 * iqr;
+            const outlierThresholdHigh = q3 + 1.5 * iqr;
+
+            const outlierTrades = tradesWithHour.filter(
+              (a) =>
+                a.totalSlippage < outlierThresholdLow ||
+                a.totalSlippage > outlierThresholdHigh
+            );
+
+            if (outlierTrades.length >= 3) {
+              for (const [bucketName, bucketTrades] of Object.entries(buckets)) {
+                const outlierInBucket = outlierTrades.filter((o) =>
+                  bucketTrades.includes(o)
+                );
+                const bucketRate = outlierInBucket.length / outlierTrades.length;
+
+                if (bucketRate >= patternThreshold && outlierInBucket.length >= 3) {
+                  patterns.push({
+                    pattern: `Time clustering: ${formatPercent(bucketRate * 100)} of outlier trades occur during ${bucketName} hours`,
+                    metric: "time_clustering_rate",
+                    value: bucketRate,
+                    sampleSize: outlierTrades.length,
+                    confidence: getConfidence(outlierTrades.length),
+                  });
+                  break; // Only report strongest time pattern
+                }
+              }
+            }
+          }
+
+          // 4. VIX sensitivity - correlation with openingVix if available
+          const vixTrades = attrs.filter(
+            (a) => a.openingVix !== undefined && a.openingVix !== null
+          );
+          if (vixTrades.length >= minSamples) {
+            const vixValues = vixTrades.map((a) => a.openingVix!);
+            const vixSlippages = vixTrades.map((a) => a.totalSlippage);
+
+            const correlation =
+              correlationMethod === "pearson"
+                ? pearsonCorrelation(vixSlippages, vixValues)
+                : kendallTau(vixSlippages, vixValues);
+
+            const absCorr = Math.abs(correlation);
+            if (absCorr >= 0.3) {
+              // Only report if moderate or stronger
+              const direction = correlation > 0 ? "positive" : "negative";
+              patterns.push({
+                pattern: `VIX sensitivity: ${direction} correlation (${correlation.toFixed(3)}) between slippage and opening VIX`,
+                metric: "vix_correlation",
+                value: correlation,
+                sampleSize: vixTrades.length,
+                confidence: getConfidence(vixTrades.length),
+              });
+            }
+          }
+
+          return patterns;
+        };
+
+        // Calculate correlations
+        const calculateCorrelations = (
+          attrs: SlippageAttribution[]
+        ): Array<{
+          field: string;
+          coefficient: number;
+          sampleSize: number;
+          interpretation: string;
+        }> => {
+          const results: Array<{
+            field: string;
+            coefficient: number;
+            sampleSize: number;
+            interpretation: string;
+          }> = [];
+
+          const correlationFields: Array<{
+            name: string;
+            getValue: (a: SlippageAttribution) => number | undefined | null;
+          }> = [
+            { name: "openingVix", getValue: (a) => a.openingVix },
+            { name: "closingVix", getValue: (a) => a.closingVix },
+            { name: "gap", getValue: (a) => a.gap },
+            { name: "movement", getValue: (a) => a.movement },
+            { name: "hourOfDay", getValue: (a) => a.hourOfDay },
+            { name: "contracts", getValue: (a) => a.contracts },
+          ];
+
+          const getInterpretation = (coeff: number): string => {
+            const abs = Math.abs(coeff);
+            const direction = coeff >= 0 ? "positive" : "negative";
+            if (abs >= 0.7) return `strong ${direction}`;
+            if (abs >= 0.4) return `moderate ${direction}`;
+            if (abs >= 0.2) return `weak ${direction}`;
+            return "negligible";
+          };
+
+          for (const { name, getValue } of correlationFields) {
+            const validPairs: Array<{ slippage: number; field: number }> = [];
+
+            for (const attr of attrs) {
+              const fieldValue = getValue(attr);
+              if (
+                fieldValue !== undefined &&
+                fieldValue !== null &&
+                isFinite(fieldValue)
+              ) {
+                validPairs.push({
+                  slippage: attr.totalSlippage,
+                  field: fieldValue,
+                });
+              }
+            }
+
+            if (validPairs.length >= minSamples) {
+              const slippages = validPairs.map((p) => p.slippage);
+              const fieldValues = validPairs.map((p) => p.field);
+
+              const coefficient =
+                correlationMethod === "pearson"
+                  ? pearsonCorrelation(slippages, fieldValues)
+                  : kendallTau(slippages, fieldValues);
+
+              results.push({
+                field: name,
+                coefficient: Math.round(coefficient * 10000) / 10000,
+                sampleSize: validPairs.length,
+                interpretation: getInterpretation(coefficient),
+              });
+            }
+          }
+
+          // Sort by absolute coefficient descending
+          results.sort(
+            (a, b) => Math.abs(b.coefficient) - Math.abs(a.coefficient)
+          );
+
+          return results;
+        };
+
+        // Portfolio-wide patterns and correlations
+        const portfolioPatterns = detectPatterns(attributions);
+        const portfolioCorrelations = calculateCorrelations(attributions);
+
+        // Per-strategy breakdown if requested
+        let perStrategy: Array<{
+          strategy: string;
+          tradeCount: number;
+          totalSlippage: number;
+          avgSlippage: number;
+          dominantCategory: string;
+          patterns: PatternInsight[];
+        }> | null = null;
+
+        if (includePerStrategy) {
+          const byStrategy = new Map<string, SlippageAttribution[]>();
+          for (const attr of attributions) {
+            const existing = byStrategy.get(attr.strategy) ?? [];
+            existing.push(attr);
+            byStrategy.set(attr.strategy, existing);
+          }
+
+          perStrategy = [];
+          for (const [strategyName, attrs] of byStrategy) {
+            const stratSlippages = attrs.map((a) => a.totalSlippage);
+            const stratTotal = stratSlippages.reduce((sum, s) => sum + s, 0);
+            const stratAvg =
+              attrs.length > 0 ? stratTotal / attrs.length : 0;
+
+            // Determine dominant category for this strategy
+            const stratTotalAbs = attrs.reduce(
+              (sum, a) => sum + Math.abs(a.totalSlippage),
+              0
+            );
+            let dominantCategory = "unexplained";
+            if (stratTotalAbs > 0) {
+              const categories = [
+                {
+                  name: "entryPrice",
+                  total: attrs.reduce(
+                    (s, a) => s + Math.abs(a.entryPriceSlippage),
+                    0
+                  ),
+                },
+                {
+                  name: "exitPrice",
+                  total: attrs.reduce(
+                    (s, a) => s + Math.abs(a.exitPriceSlippage),
+                    0
+                  ),
+                },
+                {
+                  name: "size",
+                  total: attrs.reduce((s, a) => s + Math.abs(a.sizeSlippage), 0),
+                },
+                {
+                  name: "unexplained",
+                  total: attrs.reduce(
+                    (s, a) => s + Math.abs(a.unexplainedResidual),
+                    0
+                  ),
+                },
+              ];
+              const dominant = categories.reduce((max, c) =>
+                c.total > max.total ? c : max
+              );
+              dominantCategory = dominant.name;
+            }
+
+            const strategyPatterns = detectPatterns(attrs);
+
+            perStrategy.push({
+              strategy: strategyName,
+              tradeCount: attrs.length,
+              totalSlippage: stratTotal,
+              avgSlippage: stratAvg,
+              dominantCategory,
+              patterns: strategyPatterns,
+            });
+          }
+
+          // Sort by absolute total slippage descending
+          perStrategy.sort(
+            (a, b) => Math.abs(b.totalSlippage) - Math.abs(a.totalSlippage)
+          );
+        }
+
+        // Build summary string
+        const summaryParts = [
+          `Slippage analysis: ${attributions.length} matched trades`,
+          `Total slippage: ${formatCurrency(totalSlippage)}`,
+          `Avg per trade: ${formatCurrency(avgSlippagePerTrade)}`,
+        ];
+
+        if (portfolioPatterns.length > 0) {
+          summaryParts.push(`${portfolioPatterns.length} patterns detected`);
+        }
+
+        const summary = summaryParts.join(" | ");
+
+        const structuredData = {
+          summary: {
+            matchedTrades: attributions.length,
+            unmatchedBacktest: unmatchedBacktestCount,
+            unmatchedActual: unmatchedActualCount,
+            totalSlippage,
+            avgSlippagePerTrade,
+            dateRange: dateRangeResult,
+          },
+          attribution,
+          patterns: portfolioPatterns,
+          correlations: {
+            method: correlationMethod,
+            results: portfolioCorrelations,
+          },
+          perStrategy,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error analyzing discrepancies: ${(error as Error).message}`,
             },
           ],
           isError: true,
