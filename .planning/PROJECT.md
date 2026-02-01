@@ -66,7 +66,23 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ### Active
 
-None currently — planning next milestone.
+**v2.6 DuckDB Analytics Layer:**
+- [ ] Central `market.duckdb` for all market data (SPX daily, intraday, VIX, extensible)
+- [ ] Auto-synced `trades.duckdb` caching all blocks with mtime-based refresh
+- [ ] `run_sql` MCP tool for arbitrary SQL queries joining trades ↔ market data
+- [ ] Cross-block queries (e.g., "all Iron Condors across all portfolios")
+- [ ] Deprecate redundant query tools (SQL replaces filter/aggregate tools)
+
+## Current Milestone: v2.6 DuckDB Analytics Layer
+
+**Goal:** Enable Claude to write arbitrary SQL against trades and market data for hypothesis generation and backtest research.
+
+**Target features:**
+- Central market data store (`market.duckdb`) with existing + extensible data sources
+- Auto-synced trade cache (`trades.duckdb`) that stays fresh with CSV changes
+- `run_sql` tool as primary query interface for AI-driven exploration
+- Support for cross-block analysis and market data joins
+- Preserve block portability (folder delete/update/add still works)
 
 ### Out of Scope
 
@@ -132,4 +148,4 @@ None currently — planning next milestone.
 | Trade matching by date\|strategy\|time (minute precision) | Handles fractional seconds in actual trades | ✓ Good |
 
 ---
-*Last updated: 2026-02-01 after v2.5 milestone complete*
+*Last updated: 2026-02-01 after v2.6 milestone started*

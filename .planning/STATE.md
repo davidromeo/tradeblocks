@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Planning next milestone
+**Current focus:** v2.6 DuckDB Analytics Layer
 
 ## Current Position
 
-Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis — SHIPPED
-Phase: N/A (milestone complete)
-Plan: N/A
-Status: Ready to plan next milestone
-Last activity: 2026-02-01 — v2.5 milestone archived and tagged
+Milestone: v2.6 DuckDB Analytics Layer
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-01 — Milestone v2.6 started
 
-Progress: [##########] 100% (milestone complete)
+Progress: [          ] 0% (requirements phase)
 
 ## Historical Context
 
@@ -42,9 +42,9 @@ v2.5 decisions:
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: v2.5 milestone archived and tagged
+Stopped at: Started v2.6 milestone, defining requirements
 Resume file: None
-Next: `/gsd:new-milestone` to start next milestone
+Next: Complete requirements → create roadmap
 
 ## Quick Tasks Completed
 
