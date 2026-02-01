@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-01-31)
 ## Current Position
 
 Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis
-Phase: 38 of 40 (Strategy Matching)
+Phase: 39 of 40 (Trend Analysis)
 Plan: 01 of 01 - Complete
 Status: Phase complete
-Last activity: 2026-02-01 - Completed 38-01-PLAN.md
+Last activity: 2026-02-01 - Completed 39-01-PLAN.md
 
-Progress: [######....] 67% (4/6 phases)
+Progress: [########..] 83% (5/6 phases)
 
 ## Historical Context
 
@@ -30,12 +30,17 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 
 All decisions now captured in PROJECT.md Key Decisions table.
 
+Recent decisions (Phase 39):
+- Linear regression uses normal approximation for p-value (normalCDF from lib)
+- Trend interpretation threshold: p < 0.05 for significance
+- Confidence levels: high (n >= 30), moderate (n >= 10), low (n < 10)
+
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Phase 38 complete, verified
+Stopped at: Phase 39 complete, verified
 Resume file: None
-Next: `/gsd:discuss-phase 39` to plan Trend Analysis
+Next: `/gsd:discuss-phase 40` to plan Final Integration
 
 ## Quick Tasks Completed
 
