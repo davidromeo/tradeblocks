@@ -723,17 +723,17 @@ describe('Calendar Data Service', () => {
       it('should extract contract counts from first trade of each array', () => {
         const backtestTrades = [
           createBacktestTrade({ numContracts: 10 }),
-          createBacktestTrade({ numContracts: 5 }), // Should be ignored
+          createBacktestTrade({ numContracts: 5 }),
         ]
         const actualTrades = [
           createActualTrade({ numContracts: 1 }),
-          createActualTrade({ numContracts: 2 }), // Should be ignored
+          createActualTrade({ numContracts: 2 }),
         ]
 
         const context = createScalingContext(backtestTrades, actualTrades)
 
-        expect(context.btContracts).toBe(10) // First backtest trade
-        expect(context.actualContracts).toBe(1) // First actual trade
+        expect(context.btContracts).toBe(15) // Sum of all backtest contracts
+        expect(context.actualContracts).toBe(3) // Sum of all actual contracts
         expect(context.hasBacktest).toBe(true)
         expect(context.hasActual).toBe(true)
       })
@@ -1035,8 +1035,8 @@ describe('Calendar Data Service', () => {
         expect(slippage).toBe(-25)
       })
 
-      it('should use first trade contract count, not sum (critical rule)', () => {
-        // Multiple trades on same day - should use FIRST trade's contracts
+      it('should use sum of all contract counts for accurate scaling', () => {
+        // Multiple trades on same day - should use SUM of all contracts
         const dayData = createDayData({
           backtestPl: 300,
           backtestTrades: [
@@ -1052,14 +1052,14 @@ describe('Calendar Data Service', () => {
           hasActual: true,
         })
 
-        // Scale factor should be 1/10 (from first trades), NOT 2/30
+        // Scale factor should be 2/30 (sum of contracts)
         const context = createScalingContextFromDay(dayData)
-        expect(context.btContracts).toBe(10)      // First trade, not sum of 30
-        expect(context.actualContracts).toBe(1)   // First trade, not sum of 2
+        expect(context.btContracts).toBe(30)      // Sum of 10+10+10
+        expect(context.actualContracts).toBe(2)   // Sum of 1+1
 
-        // toReported scaling: 300 * (1/10) = 30
+        // toReported scaling: 300 * (2/30) = 20
         const strategyMatches: StrategyMatch[] = [{ backtestStrategy: 'Test Strategy', actualStrategy: 'Test Strategy', isAutoMatched: false }]
-        expect(getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)).toBe(30)
+        expect(getScaledDayBacktestPl(dayData, 'toReported', strategyMatches)).toBe(20)
       })
 
       it('should scale each strategy separately when day has multiple strategies', () => {

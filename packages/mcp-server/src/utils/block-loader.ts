@@ -1042,24 +1042,22 @@ export async function loadReportingLog(
   try {
     await fs.access(reportingLogPath);
   } catch {
-    // Try discovery as fallback
-    if (filename === "reportinglog.csv") {
-      const discovered = await discoverCsvFiles(blockPath);
-      if (discovered.mappings.reportinglog) {
-        const altPath = path.join(blockPath, discovered.mappings.reportinglog);
-        const content = await fs.readFile(altPath, "utf-8");
-        const records = parseCSV(content);
-        const trades: ReportingTrade[] = [];
-        for (const record of records) {
-          const trade = convertToReportingTrade(record);
-          if (trade) trades.push(trade);
-        }
-        trades.sort(
-          (a, b) =>
-            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
-        );
-        return trades;
+    // Try discovery as fallback (handles both default filename and stale mappings)
+    const discovered = await discoverCsvFiles(blockPath);
+    if (discovered.mappings.reportinglog) {
+      const altPath = path.join(blockPath, discovered.mappings.reportinglog);
+      const content = await fs.readFile(altPath, "utf-8");
+      const records = parseCSV(content);
+      const trades: ReportingTrade[] = [];
+      for (const record of records) {
+        const trade = convertToReportingTrade(record);
+        if (trade) trades.push(trade);
       }
+      trades.sort(
+        (a, b) =>
+          new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+      );
+      return trades;
     }
     throw new Error(`reportinglog.csv not found in block: ${blockId}`);
   }

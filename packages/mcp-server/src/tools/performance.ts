@@ -2011,8 +2011,6 @@ export function registerPerformanceTools(
             actualByKey.set(key, existing);
           });
 
-          const processedActualKeys = new Set<string>();
-
           // Match backtest trades to actual trades
           for (const btTrade of backtestTrades) {
             const dateKey = formatDateKey(new Date(btTrade.dateOpened));
@@ -2023,7 +2021,6 @@ export function registerPerformanceTools(
             const actualTrade = actualMatches?.[0]; // Take first match
 
             if (actualTrade) {
-              processedActualKeys.add(key);
               // Remove the matched trade from the list to avoid double-matching
               if (actualMatches && actualMatches.length > 1) {
                 actualByKey.set(key, actualMatches.slice(1));
@@ -2221,7 +2218,7 @@ export function registerPerformanceTools(
             };
             existing.trades.push(trade);
             existing.totalPl += trade.pl;
-            existing.contracts = existing.trades[0].numContracts;
+            existing.contracts += trade.numContracts;
             backtestByDateStrategy.set(key, existing);
           });
 
@@ -2235,7 +2232,7 @@ export function registerPerformanceTools(
             };
             existing.trades.push(trade);
             existing.totalPl += trade.pl;
-            existing.contracts = existing.trades[0].numContracts;
+            existing.contracts += trade.numContracts;
             actualByDateStrategy.set(key, existing);
           });
 
