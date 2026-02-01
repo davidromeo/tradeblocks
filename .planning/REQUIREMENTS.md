@@ -78,9 +78,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DSC-02 | Phase 37 | Complete |
 | DSC-03 | Phase 37 | Complete |
 | DSC-04 | Phase 37 | Complete |
-| MTH-01 | Phase 38 | Pending |
-| MTH-02 | Phase 38 | Pending |
-| MTH-03 | Phase 38 | Pending |
+| MTH-01 | Phase 38 | Complete |
+| MTH-02 | Phase 38 | Complete |
+| MTH-03 | Phase 38 | Complete |
 | TRD-01 | Phase 39 | Pending |
 | TRD-02 | Phase 39 | Pending |
 | TRD-03 | Phase 39 | Pending |
@@ -95,4 +95,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-02-01 after Phase 37 completion*
+*Last updated: 2026-02-01 after Phase 38 completion*
