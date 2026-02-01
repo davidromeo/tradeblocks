@@ -1,6 +1,6 @@
 {
   "name": "tradeblocks-mcp",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "MCP server for options trade analysis - works with Claude Desktop/Cowork",
   "author": "David Romeo <davidmromeo@gmail.com>",
   "type": "module",
