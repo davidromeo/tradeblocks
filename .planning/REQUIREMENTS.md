@@ -74,10 +74,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CMP-01 | Phase 36 | Complete |
 | CMP-02 | Phase 36 | Complete |
 | CMP-03 | Phase 36 | Complete |
-| DSC-01 | Phase 37 | Pending |
-| DSC-02 | Phase 37 | Pending |
-| DSC-03 | Phase 37 | Pending |
-| DSC-04 | Phase 37 | Pending |
+| DSC-01 | Phase 37 | Complete |
+| DSC-02 | Phase 37 | Complete |
+| DSC-03 | Phase 37 | Complete |
+| DSC-04 | Phase 37 | Complete |
 | MTH-01 | Phase 38 | Pending |
 | MTH-02 | Phase 38 | Pending |
 | MTH-03 | Phase 38 | Pending |
@@ -95,4 +95,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-01-31 after roadmap creation*
+*Last updated: 2026-02-01 after Phase 37 completion*

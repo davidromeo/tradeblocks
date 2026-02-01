@@ -35,7 +35,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 Last session: 2026-02-01
 Stopped at: Phase 37 complete, verified
 Resume file: None
-Next: `/gsd:discuss-phase 38` to plan Alerts & Monitoring
+Next: `/gsd:discuss-phase 38` to plan Strategy Matching
 
 ## Quick Tasks Completed
 

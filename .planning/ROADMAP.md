@@ -42,7 +42,7 @@ Plans:
 Plans:
 - [x] 36-01-PLAN.md — Enhance compare_backtest_to_actual with detailLevel, outlier detection, and groupBy parameters
 
-### Phase 37: Discrepancy Analysis
+### Phase 37: Discrepancy Analysis ✓
 
 **Goal**: Model can classify slippage sources and identify systematic patterns
 **Depends on**: Phase 36
@@ -52,10 +52,10 @@ Plans:
   2. Model can identify strategies with systematic slippage patterns (direction bias, category concentration)
   3. Model can detect patterns via configurable thresholds (not risk flags - insights for user interpretation)
   4. Model can correlate slippage with market conditions (VIX levels, time-of-day)
-**Plans**: 1 plan
+**Plans**: 1 plan — completed 2026-02-01
 
 Plans:
-- [ ] 37-01-PLAN.md - Implement analyze_discrepancies MCP tool with slippage attribution, pattern detection, and market correlations
+- [x] 37-01-PLAN.md — Implement analyze_discrepancies MCP tool with slippage attribution, pattern detection, and market correlations
 
 ### Phase 38: Strategy Matching
 
@@ -218,7 +218,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 | v2.4 Backtest Optimization Tools | 32-34 | 3 | Complete | 2026-01-19 |
-| v2.5 Reporting Log Integration | 35-40 | 2+ | In Progress | - |
+| v2.5 Reporting Log Integration | 35-40 | 3+ | In Progress | - |
 
 ## Audit Notes
 
