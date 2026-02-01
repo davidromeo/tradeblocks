@@ -25,7 +25,7 @@ jobs:
         id: dates
         run: |
           # Get the last date in the file
-          LAST_DATE=$(grep -oE '"[0-9]{4}-[0-9]{2}-[0-9]{2}"' lib/data/treasury-rates.ts | tail -1 | tr -d '"')
+          LAST_DATE=$(grep -oE '"[0-9]{4}-[0-9]{2}-[0-9]{2}"' packages/lib/data/treasury-rates.ts | tail -1 | tr -d '"')
           # Start from the day after the last date
           START_DATE=$(date -d "$LAST_DATE + 1 day" +%Y-%m-%d)
           # End date is today
@@ -94,11 +94,11 @@ jobs:
           cat new_entries.txt
 
           # Insert new entries before the closing brace
-          CLOSE_LINE=$(grep -n '^};$' lib/data/treasury-rates.ts | cut -d: -f1)
-          head -n $((CLOSE_LINE - 1)) lib/data/treasury-rates.ts > temp_rates.ts
+          CLOSE_LINE=$(grep -n '^};$' packages/lib/data/treasury-rates.ts | cut -d: -f1)
+          head -n $((CLOSE_LINE - 1)) packages/lib/data/treasury-rates.ts > temp_rates.ts
           cat new_entries.txt >> temp_rates.ts
           echo "};" >> temp_rates.ts
-          mv temp_rates.ts lib/data/treasury-rates.ts
+          mv temp_rates.ts packages/lib/data/treasury-rates.ts
 
           echo "Updated treasury-rates.ts"
 
@@ -112,16 +112,16 @@ jobs:
         if: steps.fetch.outputs.has_updates == 'true'
         run: |
           # Check if there are actually changes to commit
-          if git diff --quiet lib/data/treasury-rates.ts; then
+          if git diff --quiet packages/lib/data/treasury-rates.ts; then
             echo "No changes to commit"
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add lib/data/treasury-rates.ts
+          git add packages/lib/data/treasury-rates.ts
 
           # Get the actual last date added
-          LAST_NEW_DATE=$(grep -oE '"[0-9]{4}-[0-9]{2}-[0-9]{2}"' lib/data/treasury-rates.ts | tail -1 | tr -d '"')
+          LAST_NEW_DATE=$(grep -oE '"[0-9]{4}-[0-9]{2}-[0-9]{2}"' packages/lib/data/treasury-rates.ts | tail -1 | tr -d '"')
           git commit -m "chore: update treasury rates through ${LAST_NEW_DATE}"
           git push
