@@ -66,10 +66,10 @@ Plans:
   1. Model can get suggested strategy matches based on P/L correlation
   2. Model receives confidence scores for each match suggestion
   3. Model can detect when backtest and actual are systematically different (unmatchable divergence)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 38-01: Implement strategy_match_analysis MCP tool
+- [ ] 38-01-PLAN.md — Implement suggest_strategy_matches MCP tool with correlation-based matching, confidence scores, and unmatchable detection
 
 ### Phase 39: Trend Analysis
 
@@ -218,7 +218,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 | v2.4 Backtest Optimization Tools | 32-34 | 3 | Complete | 2026-01-19 |
-| v2.5 Reporting Log Integration | 35-40 | 3+ | In Progress | - |
+| v2.5 Reporting Log Integration | 35-40 | 4+ | In Progress | - |
 
 ## Audit Notes
 
