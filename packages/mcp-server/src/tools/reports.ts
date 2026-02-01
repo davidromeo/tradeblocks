@@ -1907,42 +1907,72 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
             const totalSlippage = scaledActualPl - scaledBtPl;
 
             // Sequential attribution:
-            // 1. Entry price slippage: (actual.openingPrice - bt.openingPrice) * actualContracts * multiplier
-            const entryPriceDelta =
-              actualTrade.openingPrice - btTrade.openingPrice;
-            const entryPriceSlippage =
-              entryPriceDelta * actualContracts * OPTION_MULTIPLIER;
+            // We want to decompose totalSlippage into explainable components.
+            // The approach: compute what P/L "would have been" if only one factor changed.
+            //
+            // For toReported scaling: both are scaled to actualContracts, so size slippage = 0
+            // For perContract: both are per-contract, so size slippage = 0
+            // For raw: size difference matters
+            //
+            // Entry price impact: How much P/L changed due to different entry price?
+            // Using actual contracts as basis (since we're comparing to actual results):
+            // Entry price slippage = (btOpeningPrice - actualOpeningPrice) * actualContracts * 100
+            // (Positive if actual entry was better = lower credit or higher debit)
+            //
+            // Exit price impact: How much P/L changed due to different exit price?
+            // Exit price slippage = (actualClosingPrice - btClosingPrice) * actualContracts * 100
+            // (Positive if actual exit was better = higher credit or lower debit)
 
-            // 2. Exit price slippage: (actual.closingPrice - bt.closingPrice) * actualContracts * multiplier
-            const exitPriceDelta =
-              (actualTrade.closingPrice ?? 0) - (btTrade.closingPrice ?? 0);
-            const exitPriceSlippage =
-              exitPriceDelta * actualContracts * OPTION_MULTIPLIER;
+            // Entry price contribution to slippage
+            // Higher actual opening price = worse entry for credit, better for debit
+            // Since most are credits (positive premium), higher actual opening = worse = negative slippage contribution
+            // But we want: slippage = actual - backtest, so if actual > bt, slippage is positive
+            // For credits: PL = (open - close) * contracts * 100
+            // So opening price delta contribution = (actual.open - bt.open) * contracts * 100 = -entrySlippage (for credits)
+            // Wait - need to think about this more carefully.
+            //
+            // Total PL (for credit) = (openingPrice - closingPrice) * contracts * multiplier
+            // If actual opening price > bt opening price, actual PL is higher (better) => positive slippage
+            // If actual closing price > bt closing price, actual PL is lower (worse) => negative slippage
+            //
+            // Entry slippage (contribution to PL diff from entry price diff):
+            //   = (actual.openingPrice - bt.openingPrice) * actualContracts * MULTIPLIER
+            //
+            // Exit slippage (contribution to PL diff from exit price diff):
+            //   = -(actual.closingPrice - bt.closingPrice) * actualContracts * MULTIPLIER
+            //   = (bt.closingPrice - actual.closingPrice) * actualContracts * MULTIPLIER
+            //
+            // Because PL = (open - close) * contracts * multiplier for credits
 
-            // 3. Size slippage: P/L difference due to contract count difference
-            // Calculate what the backtest P/L would be at actual contracts vs backtest contracts
+            const entryPriceDelta = actualTrade.openingPrice - btTrade.openingPrice;
+            const entryPriceSlippage = entryPriceDelta * actualContracts * OPTION_MULTIPLIER;
+
+            const btClose = btTrade.closingPrice ?? 0;
+            const actualClose = actualTrade.closingPrice ?? 0;
+            const exitPriceDelta = btClose - actualClose;
+            const exitPriceSlippage = exitPriceDelta * actualContracts * OPTION_MULTIPLIER;
+
+            // Size slippage: P/L difference due to different contract counts
             let sizeSlippage = 0;
             if (scaling === "toReported") {
-              // Already accounted for in the scaling
+              // Already accounted for in the scaling (bt is scaled to actual size)
               sizeSlippage = 0;
             } else if (scaling === "raw") {
-              // In raw mode, size difference = bt.pl * (actualContracts/btContracts - 1)
+              // In raw mode, size difference = bt P/L impact from contract diff
               if (btContracts > 0 && actualContracts !== btContracts) {
                 const btPlPerContract = btTrade.pl / btContracts;
-                sizeSlippage =
-                  btPlPerContract * (actualContracts - btContracts);
+                sizeSlippage = btPlPerContract * (actualContracts - btContracts);
               }
             }
             // perContract mode: size is normalized out
 
-            // 4. Timing: flag if reasonForClose differs
+            // Timing: flag if reasonForClose differs (no dollar attribution)
             const btReason = btTrade.reasonForClose ?? null;
             const actualReason = actualTrade.reasonForClose ?? null;
             const timingDiffers = btReason !== actualReason;
 
-            // 5. Unexplained: whatever remains after entry, exit, size
-            const explainedSlippage =
-              entryPriceSlippage + exitPriceSlippage + sizeSlippage;
+            // Unexplained: whatever remains after entry, exit, size
+            const explainedSlippage = entryPriceSlippage + exitPriceSlippage + sizeSlippage;
             const unexplainedResidual = totalSlippage - explainedSlippage;
 
             attributions.push({
@@ -2012,15 +2042,16 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
           (a) => a.timingDiffers
         ).length;
 
-        // Calculate percentage of total absolute slippage for each category
-        const totalAbsSlippage = attributions.reduce(
-          (sum, a) => sum + Math.abs(a.totalSlippage),
-          0
-        );
+        // Calculate percentage of gross category impact for each category
+        // Gross impact = sum of absolute values of all categories
+        // This gives meaningful percentages that sum to 100% (or close to it)
+        const grossImpact =
+          Math.abs(totalEntrySlippage) +
+          Math.abs(totalExitSlippage) +
+          Math.abs(totalSizeSlippage) +
+          Math.abs(totalUnexplained);
         const calculatePct = (value: number): number =>
-          totalAbsSlippage > 0
-            ? (Math.abs(value) / totalAbsSlippage) * 100
-            : 0;
+          grossImpact > 0 ? (Math.abs(value) / grossImpact) * 100 : 0;
 
         // Attribution breakdown
         const attribution = {
@@ -2110,48 +2141,46 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
             });
           }
 
-          // 2. Category concentration - if one category accounts for >patternThreshold of total absolute slippage
-          const localTotalAbs = attrs.reduce(
-            (sum, a) => sum + Math.abs(a.totalSlippage),
-            0
-          );
-          if (localTotalAbs > 0) {
-            const categories = [
-              {
-                name: "entryPrice",
-                total: attrs.reduce(
-                  (s, a) => s + Math.abs(a.entryPriceSlippage),
-                  0
-                ),
-              },
-              {
-                name: "exitPrice",
-                total: attrs.reduce(
-                  (s, a) => s + Math.abs(a.exitPriceSlippage),
-                  0
-                ),
-              },
-              {
-                name: "size",
-                total: attrs.reduce((s, a) => s + Math.abs(a.sizeSlippage), 0),
-              },
-              {
-                name: "unexplained",
-                total: attrs.reduce(
-                  (s, a) => s + Math.abs(a.unexplainedResidual),
-                  0
-                ),
-              },
-            ];
+          // 2. Category concentration - if one category accounts for >patternThreshold of gross impact
+          const categories = [
+            {
+              name: "entryPrice",
+              total: attrs.reduce(
+                (s, a) => s + Math.abs(a.entryPriceSlippage),
+                0
+              ),
+            },
+            {
+              name: "exitPrice",
+              total: attrs.reduce(
+                (s, a) => s + Math.abs(a.exitPriceSlippage),
+                0
+              ),
+            },
+            {
+              name: "size",
+              total: attrs.reduce((s, a) => s + Math.abs(a.sizeSlippage), 0),
+            },
+            {
+              name: "unexplained",
+              total: attrs.reduce(
+                (s, a) => s + Math.abs(a.unexplainedResidual),
+                0
+              ),
+            },
+          ];
 
+          const localGrossImpact = categories.reduce((sum, c) => sum + c.total, 0);
+
+          if (localGrossImpact > 0) {
             const dominant = categories.reduce((max, c) =>
               c.total > max.total ? c : max
             );
-            const dominantPercent = dominant.total / localTotalAbs;
+            const dominantPercent = dominant.total / localGrossImpact;
 
             if (dominantPercent >= patternThreshold) {
               patterns.push({
-                pattern: `Category concentration: ${formatPercent(dominantPercent * 100)} of slippage attributed to ${dominant.name.replace(/([A-Z])/g, " $1").toLowerCase().trim()}`,
+                pattern: `Category concentration: ${formatPercent(dominantPercent * 100)} of gross impact attributed to ${dominant.name.replace(/([A-Z])/g, " $1").toLowerCase().trim()}`,
                 metric: "dominant_category_percent",
                 value: dominantPercent,
                 sampleSize: attrs.length,
