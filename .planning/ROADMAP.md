@@ -36,10 +36,12 @@ This milestone adds SQL query capabilities to the MCP server, enabling Claude to
 **Success Criteria** (what must be TRUE):
   1. MCP server starts successfully with @duckdb/node-api integrated
   2. DuckDB connection initializes on first query and shuts down gracefully on server exit
-  3. trades.duckdb and market.duckdb databases are created with correct schemas
-  4. Filesystem access is disabled (SET enable_external_access = false enforced)
+  3. analytics.duckdb created with trades and market schemas (single file per CONTEXT.md)
+  4. Filesystem access is disabled (enable_external_access = false enforced)
   5. Memory and thread limits are configured (no OOM on large queries)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 41-01-PLAN.md - DuckDB integration with connection manager and shutdown handling
 
 ### Phase 42: Sync Layer
 **Goal**: Reliable CSV-to-DuckDB synchronization that keeps cache fresh without manual intervention
@@ -92,7 +94,7 @@ Phases execute in numeric order: 41 -> 42 -> 43 -> 44 -> 45
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 41. Database Infrastructure | v2.6 | 0/TBD | Not started | - |
+| 41. Database Infrastructure | v2.6 | 0/1 | Planned | - |
 | 42. Sync Layer | v2.6 | 0/TBD | Not started | - |
 | 43. Query Interface | v2.6 | 0/TBD | Not started | - |
 | 44. Schema Discovery | v2.6 | 0/TBD | Not started | - |
