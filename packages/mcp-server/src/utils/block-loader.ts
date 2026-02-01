@@ -50,6 +50,25 @@ export interface BlockMetadata {
     maxDrawdown: number;
     calculatedAt: string;
   };
+  /** Cached reporting log statistics (actual trade execution data) */
+  reportingLogStats?: {
+    totalTrades: number;
+    totalPL: number;
+    dateRange: { start: string | null; end: string | null };
+    strategies: string[];
+    byStrategy: Record<
+      string,
+      {
+        tradeCount: number;
+        winRate: number;
+        totalPL: number;
+        avgPL: number;
+        contractCount: number;
+      }
+    >;
+    invalidTrades: number;
+    calculatedAt: string;
+  };
 }
 
 /**
@@ -60,6 +79,7 @@ export interface BlockInfo {
   name: string;
   tradeCount: number;
   hasDailyLog: boolean;
+  hasReportingLog: boolean;
   dateRange: {
     start: Date | null;
     end: Date | null;
@@ -67,6 +87,14 @@ export interface BlockInfo {
   strategies: string[];
   totalPl: number;
   netPl: number;
+  /** Summary of reporting log data if available */
+  reportingLog?: {
+    tradeCount: number;
+    strategyCount: number;
+    totalPL: number;
+    dateRange: { start: string | null; end: string | null };
+    stale: boolean;
+  };
 }
 
 /**
@@ -294,13 +322,30 @@ async function discoverCsvFiles(
       mappings.reportinglog = "reportinglog.csv";
     }
 
+    // Second, check for filename patterns (before content detection)
+    // This helps with Option Omega exports where strategy-trade-log has same columns as tradelog
+    if (!mappings.reportinglog) {
+      const strategyLogFile = csvFiles.find((f) => {
+        const lower = f.toLowerCase();
+        return (
+          lower.includes("strategy-trade-log") ||
+          lower.includes("strategylog") ||
+          lower.startsWith("strategy-log")
+        );
+      });
+      if (strategyLogFile) {
+        mappings.reportinglog = strategyLogFile;
+      }
+    }
+
     // For any remaining CSVs, detect by content
     for (const csvFile of csvFiles) {
-      // Skip if already mapped via exact name
+      // Skip if already mapped via exact name or filename pattern
       if (
         csvFile === "tradelog.csv" ||
         csvFile === "dailylog.csv" ||
-        csvFile === "reportinglog.csv"
+        csvFile === "reportinglog.csv" ||
+        csvFile === mappings.reportinglog
       ) {
         continue;
       }
@@ -807,6 +852,26 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
 
       const hasDailyLog = !!dailylogFilename;
 
+      // Check for reporting log
+      const reportingLogFilename = await findReportingLogFile(blockPath, metadata);
+      const hasReportingLog = !!reportingLogFilename;
+
+      // Build reporting log summary from cached stats if available
+      let reportingLogSummary: BlockInfo["reportingLog"] | undefined;
+      if (hasReportingLog && metadata?.reportingLogStats) {
+        // Check if reporting log stats are stale
+        const reportingLogStale = reportingLogFilename
+          ? !(await isReportingLogCacheValid(blockPath, metadata, reportingLogFilename))
+          : false;
+        reportingLogSummary = {
+          tradeCount: metadata.reportingLogStats.totalTrades,
+          strategyCount: metadata.reportingLogStats.strategies.length,
+          totalPL: metadata.reportingLogStats.totalPL,
+          dateRange: metadata.reportingLogStats.dateRange,
+          stale: reportingLogStale,
+        };
+      }
+
       // Check if cached stats are valid (files haven't changed)
       const cacheValid =
         metadata?.cachedStats &&
@@ -820,6 +885,7 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
           name: metadata.name || entry.name,
           tradeCount: metadata.tradeCount,
           hasDailyLog,
+          hasReportingLog,
           dateRange: {
             start: metadata.dateRange.start
               ? new Date(metadata.dateRange.start)
@@ -831,6 +897,7 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
           strategies: metadata.strategies,
           totalPl: metadata.cachedStats.totalPl,
           netPl: metadata.cachedStats.netPl,
+          reportingLog: reportingLogSummary,
         });
       } else {
         // Load trades to get basic info
@@ -863,6 +930,7 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
             name: updatedMetadata.name,
             tradeCount: trades.length,
             hasDailyLog,
+            hasReportingLog,
             dateRange: {
               start: updatedMetadata.dateRange.start
                 ? new Date(updatedMetadata.dateRange.start)
@@ -874,6 +942,7 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
             strategies: updatedMetadata.strategies,
             totalPl,
             netPl: totalPl - totalCommissions,
+            reportingLog: reportingLogSummary,
           });
 
           // Save updated metadata (cache the mappings and mtimes)
@@ -973,24 +1042,22 @@ export async function loadReportingLog(
   try {
     await fs.access(reportingLogPath);
   } catch {
-    // Try discovery as fallback
-    if (filename === "reportinglog.csv") {
-      const discovered = await discoverCsvFiles(blockPath);
-      if (discovered.mappings.reportinglog) {
-        const altPath = path.join(blockPath, discovered.mappings.reportinglog);
-        const content = await fs.readFile(altPath, "utf-8");
-        const records = parseCSV(content);
-        const trades: ReportingTrade[] = [];
-        for (const record of records) {
-          const trade = convertToReportingTrade(record);
-          if (trade) trades.push(trade);
-        }
-        trades.sort(
-          (a, b) =>
-            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
-        );
-        return trades;
+    // Try discovery as fallback (handles both default filename and stale mappings)
+    const discovered = await discoverCsvFiles(blockPath);
+    if (discovered.mappings.reportinglog) {
+      const altPath = path.join(blockPath, discovered.mappings.reportinglog);
+      const content = await fs.readFile(altPath, "utf-8");
+      const records = parseCSV(content);
+      const trades: ReportingTrade[] = [];
+      for (const record of records) {
+        const trade = convertToReportingTrade(record);
+        if (trade) trades.push(trade);
       }
+      trades.sort(
+        (a, b) =>
+          new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+      );
+      return trades;
     }
     throw new Error(`reportinglog.csv not found in block: ${blockId}`);
   }
@@ -1013,6 +1080,237 @@ export async function loadReportingLog(
   );
 
   return trades;
+}
+
+/**
+ * Compute statistics from reporting log trades.
+ * Used for caching per-strategy breakdown.
+ */
+function computeReportingLogStats(
+  trades: ReportingTrade[],
+  invalidCount: number = 0
+): NonNullable<BlockMetadata["reportingLogStats"]> {
+  // Group trades by strategy
+  const byStrategy: Record<
+    string,
+    {
+      tradeCount: number;
+      winRate: number;
+      totalPL: number;
+      avgPL: number;
+      contractCount: number;
+    }
+  > = {};
+
+  const strategyTrades = new Map<string, ReportingTrade[]>();
+
+  for (const trade of trades) {
+    const strategyKey = trade.strategy.trim();
+    if (!strategyTrades.has(strategyKey)) {
+      strategyTrades.set(strategyKey, []);
+    }
+    strategyTrades.get(strategyKey)!.push(trade);
+  }
+
+  for (const [strategy, strategyTradeList] of strategyTrades) {
+    const tradeCount = strategyTradeList.length;
+    const winningTrades = strategyTradeList.filter((t) => t.pl > 0).length;
+    const winRate = tradeCount > 0 ? winningTrades / tradeCount : 0;
+    const totalPL = strategyTradeList.reduce((sum, t) => sum + t.pl, 0);
+    const avgPL = tradeCount > 0 ? totalPL / tradeCount : 0;
+    const contractCount = strategyTradeList.reduce(
+      (sum, t) => sum + t.numContracts,
+      0
+    );
+
+    byStrategy[strategy] = {
+      tradeCount,
+      winRate,
+      totalPL,
+      avgPL,
+      contractCount,
+    };
+  }
+
+  // Calculate date range
+  const dates = trades.map((t) => new Date(t.dateOpened).getTime());
+  const dateRange = {
+    start: dates.length > 0 ? new Date(Math.min(...dates)).toISOString() : null,
+    end: dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null,
+  };
+
+  return {
+    totalTrades: trades.length,
+    totalPL: trades.reduce((sum, t) => sum + t.pl, 0),
+    dateRange,
+    strategies: Array.from(strategyTrades.keys()).sort(),
+    byStrategy,
+    invalidTrades: invalidCount,
+    calculatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Check if a reporting log exists for a block.
+ * Returns the filename if found, undefined otherwise.
+ */
+async function findReportingLogFile(
+  blockPath: string,
+  metadata?: BlockMetadata
+): Promise<string | undefined> {
+  // Check metadata mappings first
+  if (metadata?.csvMappings?.reportinglog) {
+    const mappedPath = path.join(blockPath, metadata.csvMappings.reportinglog);
+    try {
+      await fs.access(mappedPath);
+      return metadata.csvMappings.reportinglog;
+    } catch {
+      // Mapped file no longer exists, fall through to discovery
+    }
+  }
+
+  // Check standard name
+  const standardPath = path.join(blockPath, "reportinglog.csv");
+  try {
+    await fs.access(standardPath);
+    return "reportinglog.csv";
+  } catch {
+    // No standard file, try discovery
+  }
+
+  // Try discovery
+  const discovered = await discoverCsvFiles(blockPath);
+  return discovered.mappings.reportinglog;
+}
+
+/**
+ * Check if cached reporting log stats are still valid.
+ * Returns true if cache is valid, false if stale or missing.
+ */
+async function isReportingLogCacheValid(
+  blockPath: string,
+  metadata: BlockMetadata,
+  reportingLogFilename: string
+): Promise<boolean> {
+  // No cached stats means we need to compute
+  if (!metadata.reportingLogStats) {
+    return false;
+  }
+
+  // No cached mtime means old format - invalidate
+  if (!metadata.csvFileMtimes?.reportinglog) {
+    return false;
+  }
+
+  // Check if file mtime matches cached mtime
+  try {
+    const filePath = path.join(blockPath, reportingLogFilename);
+    const stat = await fs.stat(filePath);
+    return stat.mtimeMs === metadata.csvFileMtimes.reportinglog;
+  } catch {
+    // File missing - cache invalid
+    return false;
+  }
+}
+
+/**
+ * Load reporting log statistics with caching.
+ * Returns cached stats if valid, otherwise recomputes and caches.
+ *
+ * @returns Stats object if reporting log exists, undefined if no reporting log
+ */
+export async function loadReportingLogStats(
+  baseDir: string,
+  blockId: string
+): Promise<{
+  stats: NonNullable<BlockMetadata["reportingLogStats"]>;
+  stale: boolean;
+} | undefined> {
+  const blockPath = path.join(baseDir, blockId);
+
+  // Load metadata to check for cached stats
+  const metadata = await loadMetadata(blockPath);
+
+  // Find reporting log file
+  const reportingLogFilename = await findReportingLogFile(blockPath, metadata);
+  if (!reportingLogFilename) {
+    // No reporting log exists for this block
+    return undefined;
+  }
+
+  // Check if cache is valid
+  if (metadata && await isReportingLogCacheValid(blockPath, metadata, reportingLogFilename)) {
+    return {
+      stats: metadata.reportingLogStats!,
+      stale: false,
+    };
+  }
+
+  // Need to recompute - load trades
+  try {
+    const reportingLogPath = path.join(blockPath, reportingLogFilename);
+    const content = await fs.readFile(reportingLogPath, "utf-8");
+    const records = parseCSV(content);
+
+    const trades: ReportingTrade[] = [];
+    let invalidCount = 0;
+
+    for (const record of records) {
+      const trade = convertToReportingTrade(record);
+      if (trade) {
+        trades.push(trade);
+      } else {
+        invalidCount++;
+      }
+    }
+
+    // Compute stats
+    const stats = computeReportingLogStats(trades, invalidCount);
+
+    // Get current file mtime
+    const fileStat = await fs.stat(reportingLogPath);
+
+    // Update metadata with cached stats
+    const updatedMetadata: BlockMetadata = {
+      ...(metadata || {
+        blockId,
+        name: blockId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        tradeCount: 0,
+        dailyLogCount: 0,
+        dateRange: { start: null, end: null },
+        strategies: [],
+      }),
+      updatedAt: new Date().toISOString(),
+      csvMappings: {
+        ...(metadata?.csvMappings || {}),
+        reportinglog: reportingLogFilename,
+      },
+      csvFileMtimes: {
+        ...(metadata?.csvFileMtimes || {}),
+        reportinglog: fileStat.mtimeMs,
+      },
+      reportingLogStats: stats,
+    };
+
+    // Save updated metadata
+    await saveMetadata(blockPath, updatedMetadata);
+
+    return {
+      stats,
+      stale: false,
+    };
+  } catch (error) {
+    // If we have cached stats but file is now inaccessible, return stale data
+    if (metadata?.reportingLogStats) {
+      return {
+        stats: metadata.reportingLogStats,
+        stale: true,
+      };
+    }
+    throw error;
+  }
 }
 
 /**

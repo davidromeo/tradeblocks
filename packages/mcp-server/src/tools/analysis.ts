@@ -252,12 +252,13 @@ export function registerAnalysisTools(
         // Apply strategy filter
         trades = filterByStrategy(trades, strategy);
 
-        // Apply ticker filter
+        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter(
-            (t) => t.ticker?.toLowerCase() === tickerLower
-          );
+          trades = trades.filter((t) => {
+            const ticker = t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
+            return typeof ticker === "string" && ticker.toLowerCase() === tickerLower;
+          });
         }
 
         // Apply date range filter
@@ -805,12 +806,13 @@ export function registerAnalysisTools(
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
-        // Apply ticker filter
+        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter(
-            (t) => t.ticker?.toLowerCase() === tickerLower
-          );
+          trades = trades.filter((t) => {
+            const ticker = t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
+            return typeof ticker === "string" && ticker.toLowerCase() === tickerLower;
+          });
         }
 
         // Apply date range filter

@@ -1,5 +1,32 @@
 # Project Milestones: TradeBlocks
 
+## v2.5 Reporting Log Integration & Discrepancy Analysis (Shipped: 2026-02-01)
+
+**Delivered:** MCP tools for AI-powered reporting log analysis: discover blocks with reporting logs, compare backtest vs actual at trade level with outlier detection, analyze slippage sources and patterns, match strategies by P/L correlation, and detect slippage trends over time.
+
+**Phases completed:** 35-39 (5 plans total)
+
+**Key accomplishments:**
+
+- `get_reporting_log_stats` MCP tool for per-strategy breakdown from reporting logs (trade count, win rate, total P/L)
+- Enhanced `compare_backtest_to_actual` with trade-level details, z-score outlier detection, and flexible grouping
+- `analyze_discrepancies` MCP tool with 5-category slippage attribution and systematic pattern detection
+- `suggest_strategy_matches` MCP tool with correlation-based matching and confidence scoring
+- `analyze_slippage_trends` MCP tool with linear regression trend detection and statistical significance
+
+**Stats:**
+
+- 7 files modified in packages/mcp-server/
+- +2,640 lines of TypeScript
+- 5 phases, 5 plans
+- 2 days (Jan 31 → Feb 1, 2026)
+
+**Git range:** `d97d617` → `91f9b41`
+
+**What's next:** Planning next milestone
+
+---
+
 ## v2.4 Backtest Optimization Tools (Shipped: 2026-01-19)
 
 **Delivered:** MCP tools for data-driven filter optimization: find_predictive_fields for correlation analysis and filter_curve for threshold sweeping with sweet spot detection.

@@ -2,23 +2,24 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-19)
+See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
 **Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: None active (v2.4 shipped)
-Phase: Ready to plan
+Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis — SHIPPED
+Phase: N/A (milestone complete)
 Plan: N/A
-Status: Between milestones
-Last activity: 2026-01-30 — Completed quick task 001 (expose parameterRanges in MCP)
+Status: Ready to plan next milestone
+Last activity: 2026-02-01 — v2.5 milestone archived and tagged
 
-Progress: All milestones complete through v2.4
+Progress: [##########] 100% (milestone complete)
 
 ## Historical Context
 
+See [v2.5 archive](milestones/v2.5-reporting-log-integration.md) for reporting log integration details.
 See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for backtest optimization tools.
 See [v2.3 archive](milestones/v2.3-workspace-packages.md) for workspace package migration details.
 See [v2.2 archive](milestones/v2.2-historical-risk-free-rates.md) for risk-free rate implementation details.
@@ -30,12 +31,20 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 
 All decisions now captured in PROJECT.md Key Decisions table.
 
+v2.5 decisions:
+- Per-contract P/L normalization for strategy matching
+- Z-score threshold of 2 for outlier detection
+- Confidence scoring: 70% correlation + 30% timing overlap
+- Linear regression with normal approximation for p-value
+- Trade matching by date|strategy|time (minute precision)
+- Phase 40 (Quality Scoring) dropped — AI synthesizes from existing tools
+
 ## Session Continuity
 
-Last session: 2026-01-30
-Stopped at: Completed quick task 001 (expose parameterRanges in run_walk_forward MCP tool)
+Last session: 2026-02-01
+Stopped at: v2.5 milestone archived and tagged
 Resume file: None
-Next: `/gsd:discuss-milestone` to plan next milestone
+Next: `/gsd:new-milestone` to start next milestone
 
 ## Quick Tasks Completed
 
