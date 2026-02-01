@@ -8,11 +8,11 @@
 - [v2.2 Historical Risk-Free Rates](milestones/v2.2-historical-risk-free-rates.md) (Phases 25-28) — SHIPPED 2026-01-18
 - [v2.3 Workspace Packages](milestones/v2.3-workspace-packages.md) (Phases 29-31) — SHIPPED 2026-01-19
 - [v2.4 Backtest Optimization Tools](milestones/v2.4-backtest-optimization-tools.md) (Phases 32-34) — SHIPPED 2026-01-19
-- **v2.5 Reporting Log Integration & Discrepancy Analysis** (Phases 35-40) — IN PROGRESS
+- **v2.5 Reporting Log Integration & Discrepancy Analysis** (Phases 35-39) — COMPLETE
 
 ## v2.5 Reporting Log Integration & Discrepancy Analysis
 
-**Milestone Goal:** Enable AI models to ingest reporting logs, compare backtest vs actual results at trade level, analyze discrepancy patterns, and score backtest quality — all via MCP.
+**Milestone Goal:** Enable AI models to ingest reporting logs, compare backtest vs actual results at trade level, and analyze discrepancy patterns — all via MCP. (Quality scoring dropped — existing tools provide metrics; AI synthesizes.)
 
 ### Phase 35: Reporting Log Ingestion ✓
 
@@ -84,20 +84,6 @@ Plans:
 
 Plans:
 - [x] 39-01-PLAN.md — Implement analyze_slippage_trends MCP tool with linear regression trend detection and external factor correlation
-
-### Phase 40: Quality Scoring
-
-**Goal**: Model can score backtest quality and receive improvement suggestions
-**Depends on**: Phase 37, Phase 38, Phase 39
-**Requirements**: QTY-01, QTY-02, QTY-03
-**Success Criteria** (what must be TRUE):
-  1. Model can get overall backtest quality score (0-100) based on accuracy vs actual
-  2. Model receives component scores (accuracy, consistency, coverage)
-  3. Model receives actionable improvement suggestions based on score breakdown
-**Plans**: TBD
-
-Plans:
-- [ ] 40-01: Implement backtest_quality_score MCP tool
 
 ## Completed Milestones
 
@@ -218,7 +204,7 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for full details.
 | v2.2 Historical Risk-Free Rates | 25-28 | 6 | Complete | 2026-01-18 |
 | v2.3 Workspace Packages | 29-31 | 4 | Complete | 2026-01-19 |
 | v2.4 Backtest Optimization Tools | 32-34 | 3 | Complete | 2026-01-19 |
-| v2.5 Reporting Log Integration | 35-40 | 5+ | In Progress | - |
+| v2.5 Reporting Log Integration | 35-39 | 5 | Complete | 2026-02-01 |
 
 ## Audit Notes
 

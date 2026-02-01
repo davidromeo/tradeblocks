@@ -37,11 +37,13 @@ Requirements for Reporting Log Integration & Discrepancy Analysis. Each maps to 
 - [ ] **TRD-02**: Model can detect if slippage is getting worse/better over time
 - [ ] **TRD-03**: Model can correlate slippage trends with external factors
 
-### Quality Scoring
+### ~~Quality Scoring~~ (Dropped)
 
-- [ ] **QTY-01**: Model can get backtest quality score (0-100) based on accuracy vs actual
-- [ ] **QTY-02**: Model receives component scores (accuracy, consistency, coverage)
-- [ ] **QTY-03**: Model receives improvement suggestions based on score
+Requirements dropped — existing tools (compare_backtest_to_actual, analyze_discrepancies, analyze_slippage_trends) provide all necessary metrics. AI synthesizes quality assessment from these tools rather than prescriptive scores.
+
+- ~~**QTY-01**: Model can get backtest quality score (0-100) based on accuracy vs actual~~
+- ~~**QTY-02**: Model receives component scores (accuracy, consistency, coverage)~~
+- ~~**QTY-03**: Model receives improvement suggestions based on score~~
 
 ## v3+ Requirements
 
@@ -62,6 +64,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Web UI for reporting log comparison | MCP-first focus for v2.5, web UI already has Trading Calendar |
 | Automatic strategy matching without user confirmation | Matches should be suggestions, not automatic |
 | External API calls for market data | Maintains 100% local data principle |
+| Quality scoring / combined scores | Existing tools provide metrics; AI synthesizes — avoids prescriptive judgments |
 
 ## Traceability
 
@@ -84,15 +87,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRD-01 | Phase 39 | Complete |
 | TRD-02 | Phase 39 | Complete |
 | TRD-03 | Phase 39 | Complete |
-| QTY-01 | Phase 40 | Pending |
-| QTY-02 | Phase 40 | Pending |
-| QTY-03 | Phase 40 | Pending |
+| ~~QTY-01~~ | ~~Phase 40~~ | Dropped |
+| ~~QTY-02~~ | ~~Phase 40~~ | Dropped |
+| ~~QTY-03~~ | ~~Phase 40~~ | Dropped |
 
 **Coverage:**
-- v2.5 requirements: 18 total
-- Mapped to phases: 18
-- Unmapped: 0
+- v2.5 requirements: 15 delivered (3 dropped)
+- Mapped to phases: 15
+- Dropped: 3 (QTY-01, QTY-02, QTY-03 — redundant with existing tools)
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-02-01 after Phase 39 completion*
+*Last updated: 2026-02-01 — Phase 40 dropped, milestone complete*

@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-31)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** v2.5 Reporting Log Integration & Discrepancy Analysis
+**Current focus:** v2.5 complete — ready for next milestone
 
 ## Current Position
 
-Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis
-Phase: 39 of 40 (Trend Analysis)
+Milestone: v2.5 Reporting Log Integration & Discrepancy Analysis — COMPLETE
+Phase: 39 of 39 (Trend Analysis)
 Plan: 01 of 01 - Complete
-Status: Phase complete
-Last activity: 2026-02-01 - Completed 39-01-PLAN.md
+Status: Milestone complete
+Last activity: 2026-02-01 - Phase 40 dropped (redundant with existing tools)
 
-Progress: [########..] 83% (5/6 phases)
+Progress: [##########] 100% (5/5 phases)
 
 ## Historical Context
 
@@ -30,17 +30,18 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 
 All decisions now captured in PROJECT.md Key Decisions table.
 
-Recent decisions (Phase 39):
+Recent decisions (v2.5):
+- Phase 40 (Quality Scoring) dropped — existing tools provide metrics, AI synthesizes
+- "Insights, not recommendations" — tools provide data, not prescriptive scores
 - Linear regression uses normal approximation for p-value (normalCDF from lib)
 - Trend interpretation threshold: p < 0.05 for significance
-- Confidence levels: high (n >= 30), moderate (n >= 10), low (n < 10)
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Phase 39 complete, verified
+Stopped at: v2.5 milestone complete
 Resume file: None
-Next: `/gsd:discuss-phase 40` to plan Final Integration
+Next: `/gsd:audit-milestone` or `/gsd:complete-milestone` to archive and tag
 
 ## Quick Tasks Completed
 
