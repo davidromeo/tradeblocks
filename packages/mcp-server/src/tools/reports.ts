@@ -3155,9 +3155,12 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
             ? periodSlippages.reduce((sum, p) => sum + p.totalSlippage, 0) / periodSlippages.length
             : 0;
 
-        // Calculate block-level trend
+        // Calculate block-level trend (only if enough samples)
         const periodAvgSlippages = periodSlippages.map((p) => p.avgSlippage);
-        const blockTrend = linearRegression(periodAvgSlippages);
+        const blockTrend =
+          matchedTrades.length >= minSamples
+            ? linearRegression(periodAvgSlippages)
+            : null;
 
         // Per-strategy breakdown
         const byStrategy = new Map<string, MatchedTradeData[]>();
