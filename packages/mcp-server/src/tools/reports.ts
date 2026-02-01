@@ -1657,7 +1657,7 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
     "analyze_discrepancies",
     {
       description:
-        "Analyze slippage patterns between backtest and actual trades. Detects systematic biases (direction, time-of-day) and correlates slippage with market conditions (VIX, gap, movement). Matches trades by date+strategy+time (minute precision). Requires both tradelog.csv (backtest) and reportinglog.csv (actual).",
+        "Analyze slippage patterns between backtest and actual trades. Detects systematic biases (direction, time-of-day) and correlates slippage with market conditions (VIX, gap, movement). Matches trades by date+strategy+time (minute precision). Requires both tradelog.csv (backtest) and reportinglog.csv (actual). Limitation: If multiple trades share the same date+strategy+minute, matching is order-dependent.",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
@@ -2751,7 +2751,7 @@ export function registerReportTools(server: McpServer, baseDir: string): void {
     "analyze_slippage_trends",
     {
       description:
-        "Analyze slippage trends over time with statistical significance testing. Detects improvement/degradation patterns using linear regression on time-aggregated slippage data. Provides slope, R-squared, p-value, and interpretation. Requires both tradelog.csv (backtest) and reportinglog.csv (actual).",
+        "Analyze slippage trends over time with statistical significance testing. Detects improvement/degradation patterns using linear regression on time-aggregated slippage data. Provides slope, R-squared, p-value, and interpretation. Requires both tradelog.csv (backtest) and reportinglog.csv (actual). Limitation: Trade matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z

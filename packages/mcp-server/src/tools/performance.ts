@@ -1783,7 +1783,7 @@ export function registerPerformanceTools(
     "compare_backtest_to_actual",
     {
       description:
-        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. Supports trade-level detail, outlier detection, and flexible grouping.",
+        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. Supports trade-level detail, outlier detection, and flexible grouping. Limitation: Trade-level matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
