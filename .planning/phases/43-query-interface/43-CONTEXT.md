@@ -17,41 +17,39 @@ MCP tool (`run_sql`) that accepts SQL strings and returns query results from Duc
 - Array of objects: each row as `{column: value}` — easy for Claude to read
 - Include column metadata with DuckDB types (VARCHAR, DOUBLE, DATE, etc.)
 - Truncation communicated via metadata fields: `truncated`, `totalRows`, `returnedRows`
-- Accept `limit` parameter with configurable cap (Claude decides default and max)
+- Accept optional `limit` parameter (default: 100, max: 1000)
 
 ### Error Responses
-- Claude's Discretion: syntax error detail level
-- Claude's Discretion: whether to suggest alternatives for unknown tables/columns
-- Claude's Discretion: whether to echo original query in error response
-- Claude's Discretion: resource limit error messaging style
+- Pass through DuckDB syntax errors verbatim — they're well-formatted with line/column info
+- Suggest alternatives for unknown tables/columns — enables self-correction without extra tool calls
+- Do NOT echo original query in error response — Claude already has it
+- Resource limit errors: clear message + suggestion ("Query exceeded 30s timeout. Consider adding LIMIT or filtering by block_id.")
 
 ### Query Limits
 - 30-second execution timeout (hard limit)
-- Row limits: Claude decides default, with configurable maximum
-- Memory limits: user-configurable in MCP server config
+- Default row limit: 100 rows
+- Maximum row limit: 1000 rows (cap for `limit` parameter)
+- Memory limits: user-configurable in MCP server config (already from Phase 41)
 
 ### Security
 - **Read-only**: Only SELECT statements allowed — INSERT/UPDATE/DELETE blocked
 - No query complexity limits — trust timeout to catch runaway queries
-- Dangerous operations blocked: COPY, EXPORT, ATTACH
-- Claude's Discretion: blocked operation error verbosity
-- Claude's Discretion: whether to log blocked queries
+- Dangerous operations blocked: COPY, EXPORT, ATTACH, and filesystem functions
+- Blocked operation errors: helpful message explaining what's blocked and the alternative
+- No audit logging for blocked queries — keep logs clean
 
 ### Claude's Discretion
-- Default row limit value
-- Maximum row limit cap
-- Error message detail levels
-- Unknown reference suggestions
-- Blocked operation error verbosity
-- Audit logging for blocked queries
+- Exact wording of error messages
+- Implementation details for query validation
 
 </decisions>
 
 <specifics>
 ## Specific Ideas
 
-- Results should fit comfortably in Claude's context — the limit system should prevent overwhelming responses
-- Metadata fields preferred over warning messages for truncation — structured data is easier to programmatically handle
+- Results should fit comfortably in Claude's context — 100 default × ~15 columns is reasonable
+- Most hypothesis queries use aggregates (GROUP BY), not raw rows — limits rarely hit in practice
+- Metadata fields preferred over warning messages for truncation — structured data is easier to handle programmatically
 
 </specifics>
 
@@ -61,6 +59,17 @@ MCP tool (`run_sql`) that accepts SQL strings and returns query results from Duc
 None — discussion stayed within phase scope
 
 </deferred>
+
+<research_focus>
+## Research Focus
+
+Before planning, investigate:
+
+1. **DuckDB timeout mechanism** — How does `@duckdb/node-api` handle query cancellation? Native timeout or manual implementation needed?
+
+2. **Existing MCP tool patterns** — Review `get_statistics`, `get_trades`, error handling in existing tools for consistency
+
+</research_focus>
 
 ---
 
