@@ -75,6 +75,7 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
     // Ensure sync metadata and data tables exist
     await ensureSyncTables(connection);
     await ensureTradeDataTable(connection);
+    await ensureMarketDataTables(connection);
 
     return connection;
   } catch (error) {
