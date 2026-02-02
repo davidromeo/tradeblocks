@@ -1,0 +1,3 @@
+Date Opened,Time Opened,Date Closed,Time Closed,Opening Price,Closing Price,Legs,Premium,No. of Contracts,P/L,Strategy,Opening Commissions + Fees,Closing Commissions + Fees,Reason For Close,Funds at Close,Margin Req.
+2024-01-02,09:35:00,2024-01-02,15:30:00,2.50,0.50,SPX 4800P/4750P,250,1,200,Sync Test Strategy,1.50,1.50,Target,10200,5000
+2024-01-03,09:35:00,2024-01-03,15:45:00,2.75,0.25,SPX 4820P/4770P,275,1,250,Sync Test Strategy,1.50,1.50,Target,10450,5000
