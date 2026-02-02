@@ -132,5 +132,5 @@ plot(intradayLow, "Intraday_Low", display=display.data_window)
 // VISUAL MARKERS
 // -----------------------------------------------------------------------------
 // Mark when new high/low is made
-plotshape(high == intradayHigh and not isNewDay, "New High", shape.triangleup, location.abovebar, color.green, size=size.tiny)
-plotshape(low == intradayLow and not isNewDay, "New Low", shape.triangledown, location.belowbar, color.red, size=size.tiny)
+plotshape(high == intradayHigh and not isNewDay, "New_High", shape.triangleup, location.abovebar, color.green, size=size.tiny)
+plotshape(low == intradayLow and not isNewDay, "New_Low", shape.triangledown, location.belowbar, color.red, size=size.tiny)

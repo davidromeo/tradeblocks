@@ -152,6 +152,6 @@ plot(reversal_score, "Reversal_Score", display=display.data_window)
 // -----------------------------------------------------------------------------
 // VISUAL MARKERS
 // -----------------------------------------------------------------------------
-plotshape(is_0930, "Open", shape.circle, location.belowbar, color.blue, size=size.tiny)
-plotshape(is_1200, "Noon", shape.circle, location.belowbar, color.gray, size=size.tiny)
-plotshape(is_1500, "3PM", shape.circle, location.belowbar, color.orange, size=size.tiny)
+plotshape(is_0930, "Marker_0930", shape.circle, location.belowbar, color.blue, size=size.tiny)
+plotshape(is_1200, "Marker_1200", shape.circle, location.belowbar, color.gray, size=size.tiny)
+plotshape(is_1500, "Marker_1500", shape.circle, location.belowbar, color.orange, size=size.tiny)

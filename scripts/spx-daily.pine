@@ -267,11 +267,9 @@ float prev2ReturnPct = safePct(prev2Return, prev2Close)
 // -----------------------------------------------------------------------------
 // EXPORT PLOTS - Core Price Data
 // -----------------------------------------------------------------------------
+// Note: TradingView already exports open, high, low, close as default columns.
+// We only need to export Prior_Close which is a computed value.
 plot(priorClose, "Prior_Close", display=display.data_window)
-plot(open, "Open", display=display.data_window)
-plot(high, "High", display=display.data_window)
-plot(low, "Low", display=display.data_window)
-plot(close, "Close", display=display.data_window)
 
 // -----------------------------------------------------------------------------
 // EXPORT PLOTS - Gap & Movement

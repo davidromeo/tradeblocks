@@ -197,5 +197,5 @@ plot(close_in_range, "VIX_Close_In_Range", display=display.data_window)
 // -----------------------------------------------------------------------------
 // VISUAL
 // -----------------------------------------------------------------------------
-plot(close, "VIX", color=color.purple, linewidth=2)
+plot(close, "VIX_Price", color=color.purple, linewidth=2)
 bgcolor(vix_spike ? color.new(color.red, 80) : vix_crush ? color.new(color.green, 80) : na)
