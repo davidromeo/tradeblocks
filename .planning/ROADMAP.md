@@ -23,6 +23,7 @@ This milestone adds SQL query capabilities to the MCP server, enabling Claude to
 
 - [x] **Phase 41: Database Infrastructure** - DuckDB integration with security and resource configuration
 - [x] **Phase 42: Sync Layer** - CSV-to-DuckDB synchronization with hash-based change detection
+- [ ] **Phase 42.1: Sync Layer Hardening** - Integration tests and sync middleware pattern (INSERTED)
 - [ ] **Phase 43: Query Interface** - run_sql MCP tool with security sandbox
 - [ ] **Phase 44: Schema Discovery** - Tools for Claude to discover tables and columns
 - [ ] **Phase 45: Tool Rationalization** - Analysis and deprecation of redundant query tools
@@ -60,6 +61,23 @@ Plans:
 - [x] 42-03-PLAN.md - Market data sync (date-based merge for _marketdata/)
 - [x] 42-04-PLAN.md - Tool integration (wire sync into list_blocks and per-block tools)
 
+### Phase 42.1: Sync Layer Hardening (INSERTED)
+**Goal**: Solidify sync layer with tests, split oversized tool files, and add cleaner middleware pattern
+**Depends on**: Phase 42
+**Requirements**: None (technical debt / quality improvement)
+**Success Criteria** (what must be TRUE):
+  1. Integration tests verify sync detects new/changed/deleted blocks correctly
+  2. Integration tests verify transaction rollback on failure (no partial state)
+  3. `blocks.ts` (3,374 lines) split into logical modules (<800 lines each)
+  4. `reports.ts` (3,338 lines) split into logical modules (<800 lines each)
+  5. Sync middleware pattern eliminates boilerplate from tool handlers
+  6. All sync-integrated tools use the middleware pattern
+**Plans**: 3 plans
+Plans:
+- [ ] 42.1-01-PLAN.md - Integration tests for sync layer
+- [ ] 42.1-02-PLAN.md - Tool file splitting (blocks.ts, reports.ts)
+- [ ] 42.1-03-PLAN.md - Sync middleware pattern
+
 ### Phase 43: Query Interface
 **Goal**: Claude can execute arbitrary SQL queries against trades and market data
 **Depends on**: Phase 42
@@ -95,16 +113,17 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 41 -> 42 -> 43 -> 44 -> 45
+Phases execute in numeric order: 41 -> 42 -> 42.1 -> 43 -> 44 -> 45
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 41. Database Infrastructure | v2.6 | 1/1 | Complete | 2026-02-01 |
 | 42. Sync Layer | v2.6 | 4/4 | Complete | 2026-02-02 |
+| 42.1 Sync Layer Hardening | v2.6 | 0/3 | Not started | - |
 | 43. Query Interface | v2.6 | 0/TBD | Not started | - |
 | 44. Schema Discovery | v2.6 | 0/TBD | Not started | - |
 | 45. Tool Rationalization | v2.6 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-01*
-*Last updated: 2026-02-02 (Phase 42 complete)*
+*Last updated: 2026-02-02 (Phase 42.1 inserted)*
