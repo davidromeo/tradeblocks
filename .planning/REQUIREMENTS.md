@@ -35,9 +35,9 @@
 
 ### Schema Discovery
 
-- [ ] **SCHEMA-01**: `list_tables` tool/resource shows available tables and columns
-- [ ] **SCHEMA-02**: `get_schema` provides column names, types for a table
-- [ ] **SCHEMA-03**: Example queries documented for common hypothesis patterns
+- [x] **SCHEMA-01**: `describe_database` tool shows all available tables and columns
+- [x] **SCHEMA-02**: `describe_database` provides column names, types for all tables
+- [x] **SCHEMA-03**: Example queries documented for common hypothesis patterns
 
 ### Tool Rationalization
 
@@ -89,9 +89,9 @@
 | SQL-04 | Phase 43 | Complete |
 | SQL-05 | Phase 43 | Complete |
 | SQL-06 | Phase 43 | Complete |
-| SCHEMA-01 | Phase 44 | Pending |
-| SCHEMA-02 | Phase 44 | Pending |
-| SCHEMA-03 | Phase 44 | Pending |
+| SCHEMA-01 | Phase 44 | Complete |
+| SCHEMA-02 | Phase 44 | Complete |
+| SCHEMA-03 | Phase 44 | Complete |
 | DEPR-01 | Phase 45 | Pending |
 | DEPR-02 | Phase 45 | Pending |
 | DEPR-03 | Phase 45 | Pending |
@@ -103,4 +103,4 @@
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-02 (Phase 43 complete)*
+*Last updated: 2026-02-02 (Phase 44 complete)*
