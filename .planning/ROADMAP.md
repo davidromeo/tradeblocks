@@ -21,7 +21,7 @@ This milestone adds SQL query capabilities to the MCP server, enabling Claude to
 - Integer phases (41, 42, 43...): Planned milestone work
 - Decimal phases (41.1, 41.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 41: Database Infrastructure** - DuckDB integration with security and resource configuration
+- [x] **Phase 41: Database Infrastructure** - DuckDB integration with security and resource configuration
 - [ ] **Phase 42: Sync Layer** - CSV-to-DuckDB synchronization with mtime-based change detection
 - [ ] **Phase 43: Query Interface** - run_sql MCP tool with security sandbox
 - [ ] **Phase 44: Schema Discovery** - Tools for Claude to discover tables and columns
@@ -41,7 +41,7 @@ This milestone adds SQL query capabilities to the MCP server, enabling Claude to
   5. Memory and thread limits are configured (no OOM on large queries)
 **Plans**: 1 plan
 Plans:
-- [ ] 41-01-PLAN.md - DuckDB integration with connection manager and shutdown handling
+- [x] 41-01-PLAN.md - DuckDB integration with connection manager and shutdown handling
 
 ### Phase 42: Sync Layer
 **Goal**: Reliable CSV-to-DuckDB synchronization that keeps cache fresh without manual intervention
@@ -94,7 +94,7 @@ Phases execute in numeric order: 41 -> 42 -> 43 -> 44 -> 45
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 41. Database Infrastructure | v2.6 | 0/1 | Planned | - |
+| 41. Database Infrastructure | v2.6 | 1/1 | Complete | 2026-02-01 |
 | 42. Sync Layer | v2.6 | 0/TBD | Not started | - |
 | 43. Query Interface | v2.6 | 0/TBD | Not started | - |
 | 44. Schema Discovery | v2.6 | 0/TBD | Not started | - |
@@ -102,4 +102,4 @@ Phases execute in numeric order: 41 -> 42 -> 43 -> 44 -> 45
 
 ---
 *Roadmap created: 2026-02-01*
-*Last updated: 2026-02-01*
+*Last updated: 2026-02-01 (Phase 41 complete)*
