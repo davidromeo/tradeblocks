@@ -20,7 +20,7 @@
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
 import * as path from "path";
-import { ensureSyncTables, ensureTradeDataTable } from "./schemas.js";
+import { ensureSyncTables, ensureTradeDataTable, ensureMarketDataTables } from "./schemas.js";
 
 // Module-level singleton state
 let instance: DuckDBInstance | null = null;
