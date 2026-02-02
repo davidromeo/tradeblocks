@@ -15,6 +15,7 @@ import {
   type BlockSyncResult,
 } from "./block-sync.js";
 import { getSyncMetadata } from "./metadata.js";
+import { syncMarketDataInternal } from "./market-sync.js";
 
 // Re-export hasher utilities
 export { hashFileContent } from "./hasher.js";
@@ -155,7 +156,27 @@ export async function syncBlock(
 export async function syncMarketData(
   baseDir: string
 ): Promise<MarketSyncResult> {
-  // TODO: Implement in Plan 03
-  void baseDir;
-  throw new Error("Not implemented - see Plan 42-03");
+  const conn = await getConnection(baseDir);
+  const results = await syncMarketDataInternal(conn, baseDir);
+
+  // Aggregate results
+  const errors: Array<{ fileName: string; error: string }> = [];
+  let totalRowsInserted = 0;
+
+  for (const result of results) {
+    if (result.status === "error" && result.error) {
+      errors.push({ fileName: result.file, error: result.error });
+    }
+    if (result.rowsInserted) {
+      totalRowsInserted += result.rowsInserted;
+    }
+  }
+
+  return {
+    filesProcessed: results.length,
+    filesSynced: results.filter((r) => r.status === "synced").length,
+    filesUnchanged: results.filter((r) => r.status === "unchanged").length,
+    rowsInserted: totalRowsInserted,
+    errors,
+  };
 }
