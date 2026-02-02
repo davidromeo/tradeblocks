@@ -20,6 +20,7 @@
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
 import * as path from "path";
+import { ensureSyncTables, ensureTradeDataTable } from "./schemas.js";
 
 // Module-level singleton state
 let instance: DuckDBInstance | null = null;
@@ -70,6 +71,10 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
     // market schema: SPY prices, VIX data, market context
     await connection.run("CREATE SCHEMA IF NOT EXISTS trades");
     await connection.run("CREATE SCHEMA IF NOT EXISTS market");
+
+    // Ensure sync metadata and data tables exist
+    await ensureSyncTables(connection);
+    await ensureTradeDataTable(connection);
 
     return connection;
   } catch (error) {
