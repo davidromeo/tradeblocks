@@ -22,7 +22,7 @@ This milestone adds SQL query capabilities to the MCP server, enabling Claude to
 - Decimal phases (41.1, 41.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 41: Database Infrastructure** - DuckDB integration with security and resource configuration
-- [ ] **Phase 42: Sync Layer** - CSV-to-DuckDB synchronization with hash-based change detection
+- [x] **Phase 42: Sync Layer** - CSV-to-DuckDB synchronization with hash-based change detection
 - [ ] **Phase 43: Query Interface** - run_sql MCP tool with security sandbox
 - [ ] **Phase 44: Schema Discovery** - Tools for Claude to discover tables and columns
 - [ ] **Phase 45: Tool Rationalization** - Analysis and deprecation of redundant query tools
@@ -55,10 +55,10 @@ Plans:
   5. Market data from _marketdata/ folder is synced and queryable
 **Plans**: 4 plans
 Plans:
-- [ ] 42-01-PLAN.md - Sync infrastructure (metadata tables, hasher, sync module skeleton)
-- [ ] 42-02-PLAN.md - Block sync logic (tradelog/dailylog CSV to DuckDB)
-- [ ] 42-03-PLAN.md - Market data sync (date-based merge for _marketdata/)
-- [ ] 42-04-PLAN.md - Tool integration (wire sync into list_blocks and per-block tools)
+- [x] 42-01-PLAN.md - Sync infrastructure (metadata tables, hasher, sync module skeleton)
+- [x] 42-02-PLAN.md - Block sync logic (tradelog/dailylog CSV to DuckDB)
+- [x] 42-03-PLAN.md - Market data sync (date-based merge for _marketdata/)
+- [x] 42-04-PLAN.md - Tool integration (wire sync into list_blocks and per-block tools)
 
 ### Phase 43: Query Interface
 **Goal**: Claude can execute arbitrary SQL queries against trades and market data
@@ -100,11 +100,11 @@ Phases execute in numeric order: 41 -> 42 -> 43 -> 44 -> 45
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 41. Database Infrastructure | v2.6 | 1/1 | Complete | 2026-02-01 |
-| 42. Sync Layer | v2.6 | 0/4 | In progress | - |
+| 42. Sync Layer | v2.6 | 4/4 | Complete | 2026-02-02 |
 | 43. Query Interface | v2.6 | 0/TBD | Not started | - |
 | 44. Schema Discovery | v2.6 | 0/TBD | Not started | - |
 | 45. Tool Rationalization | v2.6 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-01*
-*Last updated: 2026-02-01 (Phase 42 planned)*
+*Last updated: 2026-02-02 (Phase 42 complete)*
