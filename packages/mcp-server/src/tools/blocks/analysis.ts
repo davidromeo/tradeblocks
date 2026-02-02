@@ -17,70 +17,7 @@ import { PortfolioStatsCalculator } from "@tradeblocks/lib";
 import type { Trade } from "@tradeblocks/lib";
 import { syncBlock } from "../../sync/index.js";
 import { filterByStrategy, filterByDateRange } from "../shared/filters.js";
-
-// Built-in stress scenarios (all post-2013 since backtests typically start there)
-const STRESS_SCENARIOS: Record<
-  string,
-  { startDate: string; endDate: string; description: string }
-> = {
-  // Crashes & Corrections
-  china_deval_2015: {
-    startDate: "2015-08-11",
-    endDate: "2015-08-25",
-    description: "China yuan devaluation, global selloff",
-  },
-  brexit: {
-    startDate: "2016-06-23",
-    endDate: "2016-06-27",
-    description: "UK Brexit vote shock",
-  },
-  volmageddon: {
-    startDate: "2018-02-02",
-    endDate: "2018-02-09",
-    description: "VIX spike, XIV blowup, largest VIX jump since 1987",
-  },
-  q4_2018: {
-    startDate: "2018-10-01",
-    endDate: "2018-12-24",
-    description: "Fed rate hike selloff",
-  },
-  covid_crash: {
-    startDate: "2020-02-19",
-    endDate: "2020-03-23",
-    description: "COVID-19 pandemic crash, peak to trough",
-  },
-  bear_2022: {
-    startDate: "2022-01-03",
-    endDate: "2022-10-12",
-    description: "Fed tightening bear market",
-  },
-  svb_crisis: {
-    startDate: "2023-03-08",
-    endDate: "2023-03-15",
-    description: "Silicon Valley Bank collapse, regional bank contagion",
-  },
-  vix_aug_2024: {
-    startDate: "2024-08-01",
-    endDate: "2024-08-15",
-    description: "Yen carry trade unwind, VIX spike",
-  },
-  liberation_day: {
-    startDate: "2025-04-02",
-    endDate: "2025-04-08",
-    description: "Trump tariffs, largest drop since COVID",
-  },
-  // Recoveries
-  covid_recovery: {
-    startDate: "2020-03-23",
-    endDate: "2020-08-18",
-    description: "V-shaped recovery from COVID crash",
-  },
-  liberation_recovery: {
-    startDate: "2025-04-09",
-    endDate: "2025-05-02",
-    description: "Post 90-day tariff pause rally, S&P +9.5% single day",
-  },
-};
+import { STRESS_SCENARIOS } from "./stress-scenarios.js";
 
 /**
  * Register analysis block tools
@@ -146,13 +83,7 @@ export function registerAnalysisBlockTools(
         const trades = block.trades;
 
         // Build list of scenarios to run
-        const scenariosToRun: Array<{
-          name: string;
-          startDate: string;
-          endDate: string;
-          description: string;
-          isCustom: boolean;
-        }> = [];
+        const scenariosToRun: Array<{ name: string; startDate: string; endDate: string; description: string; isCustom: boolean }> = [];
 
         // Add built-in scenarios
         if (scenarios && scenarios.length > 0) {
@@ -209,22 +140,8 @@ export function registerAnalysisBlockTools(
         }
 
         // Calculate stats for each scenario
-        const scenarioResults: Array<{
-          name: string;
-          description: string;
-          dateRange: { start: string; end: string };
-          tradeCount: number;
-          stats: {
-            netPl: number;
-            winRate: number;
-            maxDrawdown: number;
-            profitFactor: number | null;
-            avgWin: number | null;
-            avgLoss: number | null;
-          } | null;
-          isCustom: boolean;
-          noCoverage?: boolean;
-        }> = [];
+        type ScenarioStats = { netPl: number; winRate: number; maxDrawdown: number; profitFactor: number | null; avgWin: number | null; avgLoss: number | null };
+        const scenarioResults: Array<{ name: string; description: string; dateRange: { start: string; end: string }; tradeCount: number; stats: ScenarioStats | null; isCustom: boolean; noCoverage?: boolean }> = [];
 
         let worstScenario: { name: string; netPl: number } | null = null;
         let bestScenario: { name: string; netPl: number } | null = null;
@@ -498,10 +415,7 @@ export function registerAnalysisBlockTools(
         });
 
         // Group trades by strategy and calculate attribution
-        const strategyPl: Map<
-          string,
-          { pl: number; trades: number; wins: number; losses: number }
-        > = new Map();
+        const strategyPl = new Map<string, { pl: number; trades: number; wins: number; losses: number }>();
 
         let totalLossDuringDrawdown = 0;
 
@@ -523,22 +437,13 @@ export function registerAnalysisBlockTools(
         }
 
         // Calculate contribution percentages and sort by P/L (most negative first)
+        // Contribution %: strategy's P/L as % of total loss (most negative = highest contribution)
         const attribution = Array.from(strategyPl.entries())
           .map(([strategyName, data]) => ({
-            strategy: strategyName,
-            pl: data.pl,
-            trades: data.trades,
-            wins: data.wins,
-            losses: data.losses,
-            // Contribution percentage: strategy's P/L as % of total loss
-            // If total loss is negative, most negative strategy has highest contribution
-            contributionPct:
-              totalLossDuringDrawdown !== 0
-                ? Math.abs((data.pl / totalLossDuringDrawdown) * 100)
-                : 0,
+            strategy: strategyName, pl: data.pl, trades: data.trades, wins: data.wins, losses: data.losses,
+            contributionPct: totalLossDuringDrawdown !== 0 ? Math.abs((data.pl / totalLossDuringDrawdown) * 100) : 0,
           }))
-          .sort((a, b) => a.pl - b.pl) // Most negative first
-          .slice(0, topN);
+          .sort((a, b) => a.pl - b.pl).slice(0, topN);
 
         // Calculate duration in days
         const durationMs = troughDate.getTime() - drawdownPeakDate.getTime();
@@ -722,13 +627,8 @@ export function registerAnalysisBlockTools(
           : strategies;
 
         // Calculate marginal contribution for each strategy
-        const contributions: Array<{
-          strategy: string;
-          trades: number;
-          marginalSharpe: number | null;
-          marginalSortino: number | null;
-          interpretation: string;
-        }> = [];
+        type Contribution = { strategy: string; trades: number; marginalSharpe: number | null; marginalSortino: number | null; interpretation: string };
+        const contributions: Contribution[] = [];
 
         for (const strategy of strategiesToAnalyze) {
           // Filter OUT this strategy's trades (portfolio WITHOUT this strategy)
@@ -758,24 +658,11 @@ export function registerAnalysisBlockTools(
             true
           );
 
-          // Marginal contribution = baseline - without
-          // Positive = strategy IMPROVES the ratio (removing it hurts)
-          // Negative = strategy HURTS the ratio (removing it helps)
-          const marginalSharpe =
-            baselineStats.sharpeRatio !== null &&
-            baselineStats.sharpeRatio !== undefined &&
-            withoutStats.sharpeRatio !== null &&
-            withoutStats.sharpeRatio !== undefined
-              ? baselineStats.sharpeRatio - withoutStats.sharpeRatio
-              : null;
-
-          const marginalSortino =
-            baselineStats.sortinoRatio !== null &&
-            baselineStats.sortinoRatio !== undefined &&
-            withoutStats.sortinoRatio !== null &&
-            withoutStats.sortinoRatio !== undefined
-              ? baselineStats.sortinoRatio - withoutStats.sortinoRatio
-              : null;
+          // Marginal contribution = baseline - without (positive = improves, negative = hurts)
+          const hasValidSharpe = baselineStats.sharpeRatio != null && withoutStats.sharpeRatio != null;
+          const hasValidSortino = baselineStats.sortinoRatio != null && withoutStats.sortinoRatio != null;
+          const marginalSharpe = hasValidSharpe ? baselineStats.sharpeRatio! - withoutStats.sharpeRatio! : null;
+          const marginalSortino = hasValidSortino ? baselineStats.sortinoRatio! - withoutStats.sortinoRatio! : null;
 
           // Determine interpretation based on marginal Sharpe
           let interpretation: string;
@@ -813,26 +700,14 @@ export function registerAnalysisBlockTools(
           : contributions.slice(0, topN);
 
         // Find most and least beneficial
-        const validContributions = contributions.filter(
-          (c) => c.marginalSharpe !== null
-        );
-        const mostBeneficial =
-          validContributions.length > 0
-            ? {
-                strategy: validContributions[0].strategy,
-                sharpe: validContributions[0].marginalSharpe,
-              }
-            : null;
-        const leastBeneficial =
-          validContributions.length > 0
-            ? {
-                strategy:
-                  validContributions[validContributions.length - 1].strategy,
-                sharpe:
-                  validContributions[validContributions.length - 1]
-                    .marginalSharpe,
-              }
-            : null;
+        const validContributions = contributions.filter((c) => c.marginalSharpe !== null);
+        const mostBeneficial = validContributions.length > 0
+          ? { strategy: validContributions[0].strategy, sharpe: validContributions[0].marginalSharpe }
+          : null;
+        const lastValid = validContributions[validContributions.length - 1];
+        const leastBeneficial = validContributions.length > 0
+          ? { strategy: lastValid.strategy, sharpe: lastValid.marginalSharpe }
+          : null;
 
         // Build summary line
         const summaryParts: string[] = [`Marginal Contribution: ${blockId}`];
