@@ -5,6 +5,17 @@
  * Exports hashing utilities, metadata operations, and sync functions.
  */
 
+import * as fs from "fs/promises";
+import * as path from "path";
+import { getConnection } from "../db/connection.js";
+import {
+  syncBlockInternal,
+  detectBlockChanges,
+  cleanupDeletedBlocks,
+  type BlockSyncResult,
+} from "./block-sync.js";
+import { getSyncMetadata } from "./metadata.js";
+
 // Re-export hasher utilities
 export { hashFileContent } from "./hasher.js";
 
@@ -20,17 +31,10 @@ export {
   type MarketSyncMetadata,
 } from "./metadata.js";
 
-// --- Result Types ---
+// Re-export block sync types and internal functions (for testing)
+export { type BlockSyncResult } from "./block-sync.js";
 
-/**
- * Result of syncing a single block
- */
-export interface BlockSyncResult {
-  blockId: string;
-  status: "synced" | "unchanged" | "error" | "deleted";
-  tradeCount?: number;
-  error?: string;
-}
+// --- Result Types ---
 
 /**
  * Result of syncing all blocks
@@ -55,7 +59,7 @@ export interface MarketSyncResult {
   errors: Array<{ fileName: string; error: string }>;
 }
 
-// --- Sync Functions (Placeholders) ---
+// --- Sync Functions ---
 
 /**
  * Sync all blocks from the data directory to DuckDB.
@@ -68,9 +72,42 @@ export interface MarketSyncResult {
  * @returns Sync result with counts and any errors
  */
 export async function syncAllBlocks(baseDir: string): Promise<SyncResult> {
-  // TODO: Implement in Plan 02
-  void baseDir; // Suppress unused parameter warning
-  throw new Error("Not implemented - see Plan 42-02");
+  const conn = await getConnection(baseDir);
+  const results: BlockSyncResult[] = [];
+  const errors: Array<{ blockId: string; error: string }> = [];
+
+  // 1. Detect changes
+  const { toSync, toDelete } = await detectBlockChanges(conn, baseDir);
+
+  // 2. Delete orphaned blocks
+  for (const blockId of toDelete) {
+    try {
+      await cleanupDeletedBlocks(conn, [blockId]);
+      results.push({ blockId, status: "deleted" });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      errors.push({ blockId, error: `Failed to delete: ${errorMsg}` });
+    }
+  }
+
+  // 3. Sync changed/new blocks
+  for (const blockId of toSync) {
+    const blockPath = path.join(baseDir, blockId);
+    const result = await syncBlockInternal(conn, blockId, blockPath);
+    results.push(result);
+    if (result.status === "error" && result.error) {
+      errors.push({ blockId, error: result.error });
+    }
+  }
+
+  return {
+    blocksProcessed: results.length,
+    blocksSynced: results.filter((r) => r.status === "synced").length,
+    blocksUnchanged: results.filter((r) => r.status === "unchanged").length,
+    blocksDeleted: results.filter((r) => r.status === "deleted").length,
+    errors,
+    results,
+  };
 }
 
 /**
@@ -87,10 +124,23 @@ export async function syncBlock(
   blockId: string,
   baseDir: string
 ): Promise<BlockSyncResult> {
-  // TODO: Implement in Plan 02
-  void blockId;
-  void baseDir;
-  throw new Error("Not implemented - see Plan 42-02");
+  const conn = await getConnection(baseDir);
+  const blockPath = path.join(baseDir, blockId);
+
+  // Check if folder exists
+  try {
+    await fs.access(blockPath);
+  } catch {
+    // Block folder doesn't exist - if it was synced before, clean it up
+    const existing = await getSyncMetadata(conn, blockId);
+    if (existing) {
+      await cleanupDeletedBlocks(conn, [blockId]);
+      return { blockId, status: "deleted" };
+    }
+    return { blockId, status: "error", error: `Block folder not found: ${blockId}` };
+  }
+
+  return syncBlockInternal(conn, blockId, blockPath);
 }
 
 /**
