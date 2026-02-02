@@ -88,7 +88,9 @@ Plans:
   3. Cross-block queries work (WHERE block_id IN (...) or no filter)
   4. Results are limited to prevent context overflow (default 100 rows)
   5. Dangerous SQL patterns (COPY, EXPORT, ATTACH) are blocked with helpful errors
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 43-01-PLAN.md - run_sql tool with validation, timeout, and error handling
 
 ### Phase 44: Schema Discovery
 **Goal**: Claude has tools to discover what tables and columns are available for queries
@@ -120,10 +122,10 @@ Phases execute in numeric order: 41 -> 42 -> 42.1 -> 43 -> 44 -> 45
 | 41. Database Infrastructure | v2.6 | 1/1 | Complete | 2026-02-01 |
 | 42. Sync Layer | v2.6 | 4/4 | Complete | 2026-02-02 |
 | 42.1 Sync Layer Hardening | v2.6 | 3/3 | Complete | 2026-02-02 |
-| 43. Query Interface | v2.6 | 0/TBD | Not started | - |
+| 43. Query Interface | v2.6 | 0/1 | Planned | - |
 | 44. Schema Discovery | v2.6 | 0/TBD | Not started | - |
 | 45. Tool Rationalization | v2.6 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-01*
-*Last updated: 2026-02-02 (Phase 42.1 complete)*
+*Last updated: 2026-02-02 (Phase 43 planned)*
