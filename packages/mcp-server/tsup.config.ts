@@ -13,10 +13,12 @@ export default defineConfig([
     banner: {
       js: '#!/usr/bin/env node'
     },
-    // Bundle ALL deps for standalone MCPB distribution
+    // Bundle most deps for standalone MCPB distribution, but exclude DuckDB native modules
+    // DuckDB has platform-specific native bindings (.node files) that cannot be bundled
     // http-server.ts is dynamically imported - built separately below
-    noExternal: [/.*/],
-    external: ['./http-server.js'],
+    external: ['./http-server.js', '@duckdb/node-api', '@duckdb/node-bindings', /^@duckdb\//],
+    // Bundle @tradeblocks workspace packages
+    noExternal: [/^@tradeblocks\//],
   },
   // Skill installer module (library, no shebang) - stays in dist/
   {

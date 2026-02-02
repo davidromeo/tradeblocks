@@ -30,6 +30,7 @@ import {
   type Platform,
 } from "./skill-installer.js";
 import { handleDirectCall } from "./cli-handler.js";
+import { closeConnection } from "./db/index.js";
 
 // CLI usage help
 function printUsage(): void {
@@ -292,6 +293,16 @@ async function main(): Promise<void> {
     await server.connect(transport);
     console.error(`TradeBlocks MCP ready (stdio). Watching: ${resolvedDir}`);
   }
+
+  // Graceful shutdown for DuckDB connection
+  // The connection is lazily initialized, so this only does work if a tool
+  // actually opened the database during this session
+  const shutdown = async () => {
+    await closeConnection();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 main().catch((error) => {

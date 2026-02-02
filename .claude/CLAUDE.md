@@ -130,37 +130,30 @@ When adding new metrics, calculations, or chart data to the UI, **consider wheth
 - `src/tools/reports.ts` - Custom queries, field statistics
 - `src/tools/market-data.ts` - Market context, intraday checkpoints, ORB calculation
 
-### MCP CLI Usage
+### Using MCP Tools Natively
 
-The MCP server can be called directly from command line for quick queries:
+The TradeBlocks MCP server is connected via `npm link`, making tools available directly as `mcp__tradeblocks__*`. Use these native tools instead of CLI commands for querying portfolio data.
 
-```bash
-# Basic syntax (run from project root)
-TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call <tool-name> '<json-args>'
+**Available tools** (use `ToolSearch` to load before first use):
+- `mcp__tradeblocks__list_blocks` - List all portfolio blocks (START HERE)
+- `mcp__tradeblocks__get_statistics` - Get portfolio statistics for a block
+- `mcp__tradeblocks__get_trades` - Get individual trades
+- `mcp__tradeblocks__get_performance_charts` - Get chart data (equity curve, drawdown, etc.)
+- `mcp__tradeblocks__get_market_context` - Get market data with intraday fields
+- `mcp__tradeblocks__run_monte_carlo` - Run Monte Carlo simulations
+- `mcp__tradeblocks__compare_backtest_to_actual` - Compare theoretical vs actual results
 
-# List available tools
-TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call --list
-
-# Examples
-TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call list_blocks '{}'
-TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call get_market_context '{"startDate":"2024-10-01","endDate":"2025-01-27","includeIntraday":true,"limit":500}'
+**Example workflow:**
+```
+1. ToolSearch: "select:mcp__tradeblocks__list_blocks"
+2. Call mcp__tradeblocks__list_blocks to see available blocks
+3. Call mcp__tradeblocks__get_statistics with a blockId
 ```
 
-**Common pitfalls:**
-- Use `server/index.js` NOT `dist/index.js` (dist is for test exports)
-- Use `--call <tool> '<json>'` NOT `cli <tool> --arg value`
-- Arguments must be valid JSON with double quotes
-- For market data with intraday fields (MOC_*, P_*, etc.), pass `"includeIntraday":true`
-- Use `"flatten":true` to merge intraday/highlow/vix fields into main record (easier for analysis)
+**Market data tips:**
+- Use `includeIntraday: true` for MOC_*, P_* fields
+- Use `flatten: true` to merge intraday/highlow/vix into main record
 - Without `flatten`, data is nested under `intraday`, `highlow`, `vix` keys
-- Redirect stderr when piping to Python: `2>/dev/null | python3 -c "..."`
-
-**Recommended query for analysis:**
-```bash
-TRADEBLOCKS_DATA_DIR=~/backtests node packages/mcp-server/server/index.js --call get_market_context \
-  '{"startDate":"2024-10-01","endDate":"2025-01-27","includeIntraday":true,"flatten":true,"limit":500}' \
-  2>/dev/null | python3 -c "import json,sys; data=json.load(sys.stdin); print(len(data['days']))"
-```
 
 ### Trading Calendar Data Model
 
