@@ -20,7 +20,7 @@ import {
   WalkForwardAnalyzer,
 } from "@tradeblocks/lib";
 import type { MonteCarloParams } from "@tradeblocks/lib";
-import { syncBlock } from "../../sync/index.js";
+import { withSyncedBlock } from "../middleware/sync-middleware.js";
 
 const HEALTH_CHECK_DEFAULTS = {
   correlationThreshold: 0.5,
@@ -106,24 +106,9 @@ export function registerHealthBlockTools(
       const mddMultThresh =
         mddMultiplierThreshold ?? HEALTH_CHECK_DEFAULTS.mddMultiplierThreshold;
 
-      try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const block = await loadBlock(baseDir, blockId);
+      return withSyncedBlock(baseDir, async ({ blockId }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
         if (trades.length === 0) {
@@ -540,18 +525,26 @@ export function registerHealthBlockTools(
           keyNumbers,
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error running portfolio health check: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error running portfolio health check: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      })({
+        blockId,
+        correlationThreshold,
+        tailDependenceThreshold,
+        profitProbabilityThreshold,
+        wfeThreshold,
+        mddMultiplierThreshold,
+      });
     }
   );
 }

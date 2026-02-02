@@ -15,9 +15,9 @@ import {
 } from "../../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@tradeblocks/lib";
 import type { Trade } from "@tradeblocks/lib";
-import { syncBlock } from "../../sync/index.js";
 import { filterByStrategy, filterByDateRange } from "../shared/filters.js";
 import { STRESS_SCENARIOS } from "./stress-scenarios.js";
+import { withSyncedBlock } from "../middleware/sync-middleware.js";
 
 /**
  * Register analysis block tools
@@ -61,25 +61,11 @@ export function registerAnalysisBlockTools(
           ),
       }),
     },
-    async ({ blockId, scenarios, customScenarios, includeEmpty }) => {
-      try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const block = await loadBlock(baseDir, blockId);
+    withSyncedBlock(
+      baseDir,
+      async ({ blockId, scenarios, customScenarios, includeEmpty }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
         // Build list of scenarios to run
@@ -250,19 +236,20 @@ export function registerAnalysisBlockTools(
           availableBuiltInScenarios: Object.keys(STRESS_SCENARIOS),
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error running stress test: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error running stress test: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 
   // Tool 8: drawdown_attribution
@@ -288,24 +275,8 @@ export function registerAnalysisBlockTools(
           .describe("Number of top contributors to return (default: 5)"),
       }),
     },
-    async ({ blockId, strategy, topN }) => {
+    withSyncedBlock(baseDir, async ({ blockId, strategy, topN }) => {
       try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -490,7 +461,7 @@ export function registerAnalysisBlockTools(
           isError: true,
         };
       }
-    }
+    })
   );
 
   // Tool 9: marginal_contribution
@@ -518,24 +489,8 @@ export function registerAnalysisBlockTools(
           ),
       }),
     },
-    async ({ blockId, targetStrategy, topN }) => {
+    withSyncedBlock(baseDir, async ({ blockId, targetStrategy, topN }) => {
       try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
@@ -764,6 +719,6 @@ export function registerAnalysisBlockTools(
           isError: true,
         };
       }
-    }
+    })
   );
 }

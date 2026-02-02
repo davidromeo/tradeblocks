@@ -25,8 +25,11 @@ import {
   calculateDailyExposure,
 } from "@tradeblocks/lib";
 import type { Trade, PeakExposure, EquityCurvePoint } from "@tradeblocks/lib";
-import { syncAllBlocks, syncBlock, syncMarketData } from "../../sync/index.js";
 import { filterByStrategy, filterByDateRange } from "../shared/filters.js";
+import {
+  withSyncedBlock,
+  withFullSync,
+} from "../middleware/sync-middleware.js";
 
 /**
  * Calculate peak daily exposure using the shared sweep-line algorithm.
@@ -121,23 +124,22 @@ export function registerCoreBlockTools(
           .describe("Limit number of results returned (default: all)"),
       }),
     },
-    async ({
-      sortBy,
-      sortOrder,
-      containsStrategy,
-      minTrades,
-      hasDailyLog,
-      hasReportingLog,
-      limit,
-    }) => {
-      try {
-        // Sync all blocks before listing - ensures DuckDB is fresh
-        const syncResult = await syncAllBlocks(baseDir);
-
-        // Also sync market data (if _marketdata folder exists)
-        const marketSyncResult = await syncMarketData(baseDir);
-
-        let blocks = await listBlocks(baseDir);
+    withFullSync(
+      baseDir,
+      async (
+        {
+          sortBy,
+          sortOrder,
+          containsStrategy,
+          minTrades,
+          hasDailyLog,
+          hasReportingLog,
+          limit,
+        },
+        { blockSyncResult: syncResult, marketSyncResult }
+      ) => {
+        try {
+          let blocks = await listBlocks(baseDir);
 
         // Apply filters
         if (containsStrategy) {
@@ -230,19 +232,20 @@ export function registerCoreBlockTools(
           ...(syncErrors.length > 0 ? { syncErrors } : {}),
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error listing blocks: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error listing blocks: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 
   // Tool 2: get_block_info
@@ -257,24 +260,8 @@ export function registerCoreBlockTools(
           .describe("Block ID from list_blocks (e.g., 'main-port')"),
       }),
     },
-    async ({ blockId }) => {
+    withSyncedBlock(baseDir, async ({ blockId }) => {
       try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
         const dailyLogs = block.dailyLogs;
@@ -315,7 +302,7 @@ export function registerCoreBlockTools(
           isError: true,
         };
       }
-    }
+    })
   );
 
   // Tool 2b: get_reporting_log_stats
@@ -328,24 +315,8 @@ export function registerCoreBlockTools(
         blockId: z.string().describe("Block ID from list_blocks"),
       }),
     },
-    async ({ blockId }) => {
+    withSyncedBlock(baseDir, async ({ blockId }) => {
       try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
         const result = await loadReportingLogStats(baseDir, blockId);
 
         if (!result) {
@@ -390,7 +361,7 @@ export function registerCoreBlockTools(
           isError: true,
         };
       }
-    }
+    })
   );
 
   // Tool 3: get_statistics
@@ -420,25 +391,11 @@ export function registerCoreBlockTools(
         endDate: z.string().optional().describe("End date filter (YYYY-MM-DD)"),
       }),
     },
-    async ({ blockId, strategy, tickerFilter, startDate, endDate }) => {
-      try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const block = await loadBlock(baseDir, blockId);
+    withSyncedBlock(
+      baseDir,
+      async ({ blockId, strategy, tickerFilter, startDate, endDate }, { syncResult }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
         const dailyLogs = block.dailyLogs;
 
@@ -568,19 +525,20 @@ export function registerCoreBlockTools(
             : {}),
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error calculating statistics: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error calculating statistics: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 
   // Tool 12: get_trades
@@ -643,38 +601,24 @@ export function registerCoreBlockTools(
           .describe("Trades per page (default: 50, max: 100)"),
       }),
     },
-    async ({
-      blockId,
-      strategy,
-      tickerFilter,
-      startDate,
-      endDate,
-      minPl,
-      maxPl,
-      outcome,
-      sortBy,
-      sortOrder,
-      page = 1,
-      pageSize = 50,
-    }) => {
-      try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const block = await loadBlock(baseDir, blockId);
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        strategy,
+        tickerFilter,
+        startDate,
+        endDate,
+        minPl,
+        maxPl,
+        outcome,
+        sortBy,
+        sortOrder,
+        page = 1,
+        pageSize = 50,
+      }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
         // Apply filters
@@ -784,18 +728,19 @@ export function registerCoreBlockTools(
           },
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error loading trades: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error loading trades: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 }

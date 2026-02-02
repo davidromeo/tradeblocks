@@ -18,8 +18,8 @@ import {
   performTailRiskAnalysis,
 } from "@tradeblocks/lib";
 import type { Trade } from "@tradeblocks/lib";
-import { syncBlock } from "../../sync/index.js";
 import { filterByDateRange } from "../shared/filters.js";
+import { withSyncedBlock } from "../middleware/sync-middleware.js";
 
 const SIMILARITY_DEFAULTS = {
   correlationThreshold: 0.7,
@@ -102,24 +102,9 @@ export function registerSimilarityBlockTools(
       const minDays = minSharedDays ?? SIMILARITY_DEFAULTS.minSharedDays;
       const limit = topN ?? SIMILARITY_DEFAULTS.topN;
 
-      try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const block = await loadBlock(baseDir, blockId);
+      return withSyncedBlock(baseDir, async ({ blockId }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
         if (trades.length === 0) {
@@ -361,18 +346,26 @@ export function registerSimilarityBlockTools(
           recommendations,
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error calculating strategy similarity: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error calculating strategy similarity: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      })({
+        blockId,
+        correlationThreshold,
+        tailDependenceThreshold,
+        method,
+        minSharedDays,
+        topN,
+      });
     }
   );
 
@@ -397,25 +390,11 @@ export function registerSimilarityBlockTools(
         endDate: z.string().optional().describe("End date filter (YYYY-MM-DD)"),
       }),
     },
-    async ({ blockId, strategyWeights, startDate, endDate }) => {
-      try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const block = await loadBlock(baseDir, blockId);
+    withSyncedBlock(
+      baseDir,
+      async ({ blockId, strategyWeights, startDate, endDate }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
         // Apply date range filter
@@ -728,18 +707,19 @@ export function registerSimilarityBlockTools(
           perStrategy,
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error calculating what-if scaling: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error calculating what-if scaling: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 }

@@ -12,8 +12,11 @@ import {
   formatCurrency,
 } from "../../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@tradeblocks/lib";
-import { syncBlock } from "../../sync/index.js";
 import { filterByDateRange } from "../shared/filters.js";
+import {
+  withSyncedBlock,
+  withSyncedBlocks,
+} from "../middleware/sync-middleware.js";
 
 /**
  * Register comparison block tools
@@ -61,34 +64,20 @@ export function registerComparisonBlockTools(
           .describe("Limit number of strategies shown"),
       }),
     },
-    async ({
-      blockId,
-      startDate,
-      endDate,
-      tickerFilter,
-      minTrades,
-      sortBy,
-      sortOrder,
-      limit,
-    }) => {
-      try {
-        // Sync this block before querying - ensures fresh data
-        const syncResult = await syncBlock(blockId, baseDir);
-
-        // If block was deleted, return error
-        if (syncResult.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockId}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const block = await loadBlock(baseDir, blockId);
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        startDate,
+        endDate,
+        tickerFilter,
+        minTrades,
+        sortBy,
+        sortOrder,
+        limit,
+      }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
         // Apply date filter
@@ -181,19 +170,20 @@ export function registerComparisonBlockTools(
           count: strategies.length,
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error comparing strategies: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error comparing strategies: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 
   // Tool 5: compare_blocks
@@ -245,19 +235,16 @@ export function registerComparisonBlockTools(
           .describe("Sort direction (default: asc)"),
       }),
     },
-    async ({ blockIds, metrics, sortBy, sortOrder }) => {
-      try {
-        const blockStats: Array<{
-          blockId: string;
-          stats: ReturnType<typeof calculator.calculatePortfolioStats>;
-        }> = [];
+    withSyncedBlocks(
+      baseDir,
+      async ({ blockIds, metrics, sortBy, sortOrder }) => {
+        try {
+          const blockStats: Array<{
+            blockId: string;
+            stats: ReturnType<typeof calculator.calculatePortfolioStats>;
+          }> = [];
 
-        // Sync all requested blocks before comparison
-        for (const blockId of blockIds) {
-          await syncBlock(blockId, baseDir);
-        }
-
-        for (const blockId of blockIds) {
+          for (const blockId of blockIds!) {
           try {
             const block = await loadBlock(baseDir, blockId);
             const stats = calculator.calculatePortfolioStats(
@@ -380,19 +367,20 @@ export function registerComparisonBlockTools(
           failedBlocks: failedIds,
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error comparing blocks: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error comparing blocks: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 
   // Tool 6: block_diff
@@ -431,43 +419,15 @@ export function registerComparisonBlockTools(
           ),
       }),
     },
-    async ({ blockIdA, blockIdB, startDate, endDate, metricsToCompare }) => {
-      try {
-        // Sync both blocks before comparison - ensures fresh data
-        const [syncResultA, syncResultB] = await Promise.all([
-          syncBlock(blockIdA, baseDir),
-          syncBlock(blockIdB, baseDir),
-        ]);
-
-        // Check for deleted blocks
-        if (syncResultA.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockIdA}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-        if (syncResultB.status === "deleted") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Block '${blockIdB}' no longer exists (folder was deleted)`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        // Load both blocks
-        const [blockA, blockB] = await Promise.all([
-          loadBlock(baseDir, blockIdA),
-          loadBlock(baseDir, blockIdB),
-        ]);
+    withSyncedBlocks(
+      baseDir,
+      async ({ blockIdA, blockIdB, startDate, endDate, metricsToCompare }) => {
+        try {
+          // Load both blocks
+          const [blockA, blockB] = await Promise.all([
+            loadBlock(baseDir, blockIdA!),
+            loadBlock(baseDir, blockIdB!),
+          ]);
 
         // Apply date filters
         const tradesA = filterByDateRange(blockA.trades, startDate, endDate);
@@ -647,18 +607,19 @@ export function registerComparisonBlockTools(
           },
         };
 
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error comparing blocks: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error comparing blocks: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 }
