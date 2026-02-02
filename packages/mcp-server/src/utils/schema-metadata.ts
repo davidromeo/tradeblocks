@@ -148,20 +148,20 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             description: "Previous day's SPX close price",
             hypothesis: false,
           },
-          Open: {
-            description: "SPX open price",
+          open: {
+            description: "SPX open price (lowercase to match TradingView export)",
             hypothesis: false,
           },
-          High: {
-            description: "SPX high price",
+          high: {
+            description: "SPX high price (lowercase to match TradingView export)",
             hypothesis: false,
           },
-          Low: {
-            description: "SPX low price",
+          low: {
+            description: "SPX low price (lowercase to match TradingView export)",
             hypothesis: false,
           },
-          Close: {
-            description: "SPX close price",
+          close: {
+            description: "SPX close price (lowercase to match TradingView export)",
             hypothesis: false,
           },
           Gap_Pct: {

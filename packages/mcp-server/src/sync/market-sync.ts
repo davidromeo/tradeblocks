@@ -122,9 +122,23 @@ export async function mergeMarketDataRows(
     return { inserted: 0, skipped: 0 };
   }
 
-  // Build column list: replace date column with 'date', exclude original date column
+  // Get actual table columns from DuckDB schema
+  // This filters out CSV columns that don't exist in the table (e.g., marker columns)
+  const [schemaName, tableNameOnly] = tableName.split(".");
+  const columnsResult = await conn.runAndReadAll(`
+    SELECT column_name
+    FROM duckdb_columns()
+    WHERE schema_name = '${schemaName}' AND table_name = '${tableNameOnly}'
+  `);
+  const tableColumns = new Set(
+    columnsResult.getRows().map((row) => String(row[0]))
+  );
+
+  // Build column list: only include CSV columns that exist in the table schema
+  // Replace date column with 'date', exclude original date column
   const dbColumns = headers
     .filter((h) => h !== dateColumn)
+    .filter((h) => tableColumns.has(h)) // Only include columns that exist in table
     .map((h) => {
       // Column names are used as-is (they match CSV headers)
       return h;
@@ -147,9 +161,9 @@ export async function mergeMarketDataRows(
   const uniqueRows = Array.from(dateRows.entries());
   const totalRows = uniqueRows.length;
 
-  // Get current row count
+  // Get current row count (COUNT returns BigInt, convert to number)
   const beforeResult = await conn.runAndReadAll(`SELECT COUNT(*) FROM ${tableName}`);
-  const beforeCount = beforeResult.getRows()[0][0] as number;
+  const beforeCount = Number(beforeResult.getRows()[0][0]);
 
   // Process in batches of 500
   const BATCH_SIZE = 500;
@@ -192,9 +206,9 @@ export async function mergeMarketDataRows(
     await conn.run(sql, values);
   }
 
-  // Get new row count to calculate actual insertions
+  // Get new row count to calculate actual insertions (COUNT returns BigInt, convert to number)
   const afterResult = await conn.runAndReadAll(`SELECT COUNT(*) FROM ${tableName}`);
-  const afterCount = afterResult.getRows()[0][0] as number;
+  const afterCount = Number(afterResult.getRows()[0][0]);
 
   const inserted = afterCount - beforeCount;
   const skipped = totalRows - inserted;

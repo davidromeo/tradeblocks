@@ -79,14 +79,15 @@ export async function ensureTradeDataTable(conn: DuckDBConnection): Promise<void
  */
 export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<void> {
   // SPX daily market context data (35 fields)
+  // Note: open/high/low/close are lowercase to match TradingView's default export columns
   await conn.run(`
     CREATE TABLE IF NOT EXISTS market.spx_daily (
       date VARCHAR PRIMARY KEY,
       Prior_Close DOUBLE,
-      Open DOUBLE,
-      High DOUBLE,
-      Low DOUBLE,
-      Close DOUBLE,
+      open DOUBLE,
+      high DOUBLE,
+      low DOUBLE,
+      close DOUBLE,
       Gap_Pct DOUBLE,
       Intraday_Range_Pct DOUBLE,
       Intraday_Return_Pct DOUBLE,
