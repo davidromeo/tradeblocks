@@ -26,12 +26,12 @@
 
 ### Query Interface
 
-- [ ] **SQL-01**: `run_sql` MCP tool accepts SQL query string
-- [ ] **SQL-02**: Queries can JOIN trades with market data tables
-- [ ] **SQL-03**: Queries can filter by block_id or query across all blocks
-- [ ] **SQL-04**: Results are limited to prevent excessive output (configurable limit)
-- [ ] **SQL-05**: SQL errors return helpful messages (not stack traces)
-- [ ] **SQL-06**: Dangerous SQL patterns blocked (COPY, EXPORT, ATTACH, etc.)
+- [x] **SQL-01**: `run_sql` MCP tool accepts SQL query string
+- [x] **SQL-02**: Queries can JOIN trades with market data tables
+- [x] **SQL-03**: Queries can filter by block_id or query across all blocks
+- [x] **SQL-04**: Results are limited to prevent excessive output (configurable limit)
+- [x] **SQL-05**: SQL errors return helpful messages (not stack traces)
+- [x] **SQL-06**: Dangerous SQL patterns blocked (COPY, EXPORT, ATTACH, etc.)
 
 ### Schema Discovery
 
@@ -83,12 +83,12 @@
 | SYNC-05 | Phase 42 | Complete |
 | SYNC-06 | Phase 42 | Complete |
 | SYNC-07 | Phase 42 | Complete |
-| SQL-01 | Phase 43 | Pending |
-| SQL-02 | Phase 43 | Pending |
-| SQL-03 | Phase 43 | Pending |
-| SQL-04 | Phase 43 | Pending |
-| SQL-05 | Phase 43 | Pending |
-| SQL-06 | Phase 43 | Pending |
+| SQL-01 | Phase 43 | Complete |
+| SQL-02 | Phase 43 | Complete |
+| SQL-03 | Phase 43 | Complete |
+| SQL-04 | Phase 43 | Complete |
+| SQL-05 | Phase 43 | Complete |
+| SQL-06 | Phase 43 | Complete |
 | SCHEMA-01 | Phase 44 | Pending |
 | SCHEMA-02 | Phase 44 | Pending |
 | SCHEMA-03 | Phase 44 | Pending |
@@ -103,4 +103,4 @@
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-02 (Phase 42 complete)*
+*Last updated: 2026-02-02 (Phase 43 complete)*
