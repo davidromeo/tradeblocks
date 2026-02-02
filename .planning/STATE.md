@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 Milestone: v2.6 DuckDB Analytics Layer
 Phase: 42.1 of 45 (Sync Layer Hardening)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-02-02 — Phase 42.1 inserted (tests + middleware)
+Plan: 1 of 4 complete
+Status: In progress
+Last activity: 2026-02-02 — Completed 42.1-01-PLAN.md (sync layer integration tests)
 
-Progress: [███       ] 33% (2/6 phases)
+Progress: [███       ] 37% (2.25/6 phases)
 
 ## Historical Context
 
@@ -38,6 +38,9 @@ v2.6 decisions:
 - Batch inserts: 500 rows per batch for performance
 - Market data merge/preserve strategy: INSERT ON CONFLICT DO NOTHING
 - 14 MCP tools integrated with sync layer
+- Unchanged blocks are not tracked in SyncResult (simply not processed)
+- Concurrent sync not safe - use sequential syncs only
+- DuckDB COUNT returns BigInt, requires Number() conversion
 
 ## Roadmap Evolution
 
@@ -46,9 +49,9 @@ v2.6 decisions:
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Phase 42.1 inserted
+Stopped at: Completed 42.1-01-PLAN.md
 Resume file: None
-Next: `/gsd:plan-phase 42.1` to plan integration tests and middleware
+Next: Execute 42.1-02-PLAN.md (sync middleware pattern)
 
 ## Quick Tasks Completed
 
