@@ -85,38 +85,40 @@ export function registerSimilarityBlockTools(
           ),
       }),
     },
-    async ({
-      blockId,
-      correlationThreshold,
-      tailDependenceThreshold,
-      method,
-      minSharedDays,
-      topN,
-    }) => {
-      // Apply defaults for optional parameters (zod defaults may not apply through MCP CLI)
-      const corrThreshold =
-        correlationThreshold ?? SIMILARITY_DEFAULTS.correlationThreshold;
-      const tailThreshold =
-        tailDependenceThreshold ?? SIMILARITY_DEFAULTS.tailDependenceThreshold;
-      const corrMethod = method ?? SIMILARITY_DEFAULTS.method;
-      const minDays = minSharedDays ?? SIMILARITY_DEFAULTS.minSharedDays;
-      const limit = topN ?? SIMILARITY_DEFAULTS.topN;
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        correlationThreshold,
+        tailDependenceThreshold,
+        method,
+        minSharedDays,
+        topN,
+      }) => {
+        // Apply defaults for optional parameters (zod defaults may not apply through MCP CLI)
+        const corrThreshold =
+          correlationThreshold ?? SIMILARITY_DEFAULTS.correlationThreshold;
+        const tailThreshold =
+          tailDependenceThreshold ??
+          SIMILARITY_DEFAULTS.tailDependenceThreshold;
+        const corrMethod = method ?? SIMILARITY_DEFAULTS.method;
+        const minDays = minSharedDays ?? SIMILARITY_DEFAULTS.minSharedDays;
+        const limit = topN ?? SIMILARITY_DEFAULTS.topN;
 
-      return withSyncedBlock(baseDir, async ({ blockId }) => {
         try {
           const block = await loadBlock(baseDir, blockId);
-        const trades = block.trades;
+          const trades = block.trades;
 
-        if (trades.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No trades found in block "${blockId}".`,
-              },
-            ],
-          };
-        }
+          if (trades.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `No trades found in block "${blockId}".`,
+                },
+              ],
+            };
+          }
 
         // Get unique strategies
         const strategies = Array.from(
@@ -124,17 +126,17 @@ export function registerSimilarityBlockTools(
         ).sort();
 
         // Need at least 2 strategies for similarity analysis
-        if (strategies.length < 2) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Strategy similarity requires at least 2 strategies. Found ${strategies.length} strategy in block "${blockId}".`,
-              },
-            ],
-            isError: true,
-          };
-        }
+          if (strategies.length < 2) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Strategy similarity requires at least 2 strategies. Found ${strategies.length} strategy in block "${blockId}".`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
 
         // Calculate correlation matrix using existing utility
         const correlationMatrix = calculateCorrelationMatrix(trades, {
@@ -351,22 +353,15 @@ export function registerSimilarityBlockTools(
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: `Error calculating strategy similarity: ${(error as Error).message}`,
               },
             ],
-            isError: true,
+            isError: true as const,
           };
         }
-      })({
-        blockId,
-        correlationThreshold,
-        tailDependenceThreshold,
-        method,
-        minSharedDays,
-        topN,
-      });
-    }
+      }
+    )
   );
 
   // Tool 11: what_if_scaling

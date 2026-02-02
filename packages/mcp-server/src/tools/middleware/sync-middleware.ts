@@ -14,8 +14,9 @@ import {
   type MarketSyncResult,
 } from "../../sync/index.js";
 
-// MCP tool response types
+// MCP tool response types - index signature required for SDK compatibility
 interface ToolError {
+  [key: string]: unknown;
   content: Array<{ type: "text"; text: string }>;
   isError: true;
 }

@@ -22,6 +22,7 @@ import {
   getConfidenceLevel,
   type MatchedTradeData,
 } from "./slippage-helpers.js";
+import { withSyncedBlock } from "../middleware/sync-middleware.js";
 
 /**
  * Register the analyze_discrepancies tool
@@ -71,17 +72,19 @@ export function registerDiscrepancyTool(
           ),
       }),
     },
-    async ({
-      blockId,
-      strategy,
-      dateRange,
-      scaling,
-      correlationMethod,
-      minSamples,
-      patternThreshold,
-    }) => {
-      try {
-        const block = await loadBlock(baseDir, blockId);
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        strategy,
+        dateRange,
+        scaling,
+        correlationMethod,
+        minSamples,
+        patternThreshold,
+      }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         let backtestTrades = block.trades;
 
         // Load reporting log (actual trades)
@@ -437,17 +440,18 @@ export function registerDiscrepancyTool(
         };
 
         return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error analyzing discrepancies: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error analyzing discrepancies: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 }

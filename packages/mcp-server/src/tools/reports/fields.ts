@@ -18,6 +18,7 @@ import {
   stdDev,
   generateHistogram,
 } from "./helpers.js";
+import { withSyncedBlock } from "../middleware/sync-middleware.js";
 
 /**
  * Register field-related report tools
@@ -37,7 +38,7 @@ export function registerFieldTools(server: McpServer, baseDir: string): void {
           ),
       }),
     },
-    async ({ blockId }) => {
+    withSyncedBlock(baseDir, async ({ blockId }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
@@ -131,7 +132,7 @@ export function registerFieldTools(server: McpServer, baseDir: string): void {
           isError: true,
         };
       }
-    }
+    })
   );
 
   // Tool 3: get_field_statistics
@@ -167,115 +168,118 @@ export function registerFieldTools(server: McpServer, baseDir: string): void {
           .describe("Number of histogram buckets (default: 10)"),
       }),
     },
-    async ({
-      blockId,
-      field,
-      strategy,
-      startDate,
-      endDate,
-      histogramBuckets,
-    }) => {
-      try {
-        const block = await loadBlock(baseDir, blockId);
-        let trades = block.trades;
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        field,
+        strategy,
+        startDate,
+        endDate,
+        histogramBuckets,
+      }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
+          let trades = block.trades;
 
-        // Apply pre-filters
-        trades = filterByStrategy(trades, strategy);
-        trades = filterByDateRange(trades, startDate, endDate);
+          // Apply pre-filters
+          trades = filterByStrategy(trades, strategy);
+          trades = filterByDateRange(trades, startDate, endDate);
 
-        if (trades.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "No trades found matching the specified filters.",
-              },
-            ],
-          };
-        }
-
-        // Enrich trades
-        const enrichedTrades = enrichTrades(trades);
-
-        // Extract field values
-        const values: number[] = [];
-        for (const trade of enrichedTrades) {
-          const value = getTradeFieldValue(trade, field);
-          if (value !== null) {
-            values.push(value);
+          if (trades.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "No trades found matching the specified filters.",
+                },
+              ],
+            };
           }
-        }
 
-        if (values.length === 0) {
+          // Enrich trades
+          const enrichedTrades = enrichTrades(trades);
+
+          // Extract field values
+          const values: number[] = [];
+          for (const trade of enrichedTrades) {
+            const value = getTradeFieldValue(trade, field);
+            if (value !== null) {
+              values.push(value);
+            }
+          }
+
+          if (values.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Field "${field}" has no valid numeric values in the filtered trades.`,
+                },
+              ],
+            };
+          }
+
+          // Calculate statistics
+          const sorted = [...values].sort((a, b) => a - b);
+          const min = sorted[0];
+          const max = sorted[sorted.length - 1];
+          const sum = values.reduce((a, b) => a + b, 0);
+          const avg = sum / values.length;
+          const median = percentile(sorted, 50);
+          const standardDev = stdDev(values, avg);
+
+          // Calculate percentiles
+          const percentiles = {
+            p5: percentile(sorted, 5),
+            p10: percentile(sorted, 10),
+            p25: percentile(sorted, 25),
+            p50: median,
+            p75: percentile(sorted, 75),
+            p90: percentile(sorted, 90),
+            p95: percentile(sorted, 95),
+          };
+
+          // Generate histogram
+          const histogram = generateHistogram(values, histogramBuckets);
+
+          // Brief summary
+          const summary = `Field "${field}": ${values.length} values | Range: ${min.toFixed(2)} to ${max.toFixed(2)} | Avg: ${avg.toFixed(2)} | Median: ${median.toFixed(2)}`;
+
+          const structuredData = {
+            blockId,
+            field,
+            filters: {
+              strategy: strategy ?? null,
+              startDate: startDate ?? null,
+              endDate: endDate ?? null,
+            },
+            statistics: {
+              count: values.length,
+              min,
+              max,
+              sum,
+              avg,
+              median,
+              stdDev: standardDev,
+            },
+            percentiles,
+            histogram,
+          };
+
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
           return {
             content: [
               {
                 type: "text",
-                text: `Field "${field}" has no valid numeric values in the filtered trades.`,
+                text: `Error getting field statistics: ${(error as Error).message}`,
               },
             ],
+            isError: true,
           };
         }
-
-        // Calculate statistics
-        const sorted = [...values].sort((a, b) => a - b);
-        const min = sorted[0];
-        const max = sorted[sorted.length - 1];
-        const sum = values.reduce((a, b) => a + b, 0);
-        const avg = sum / values.length;
-        const median = percentile(sorted, 50);
-        const standardDev = stdDev(values, avg);
-
-        // Calculate percentiles
-        const percentiles = {
-          p5: percentile(sorted, 5),
-          p10: percentile(sorted, 10),
-          p25: percentile(sorted, 25),
-          p50: median,
-          p75: percentile(sorted, 75),
-          p90: percentile(sorted, 90),
-          p95: percentile(sorted, 95),
-        };
-
-        // Generate histogram
-        const histogram = generateHistogram(values, histogramBuckets);
-
-        // Brief summary
-        const summary = `Field "${field}": ${values.length} values | Range: ${min.toFixed(2)} to ${max.toFixed(2)} | Avg: ${avg.toFixed(2)} | Median: ${median.toFixed(2)}`;
-
-        const structuredData = {
-          blockId,
-          field,
-          filters: {
-            strategy: strategy ?? null,
-            startDate: startDate ?? null,
-            endDate: endDate ?? null,
-          },
-          statistics: {
-            count: values.length,
-            min,
-            max,
-            sum,
-            avg,
-            median,
-            stdDev: standardDev,
-          },
-          percentiles,
-          histogram,
-        };
-
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error getting field statistics: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
       }
-    }
+    )
   );
 }

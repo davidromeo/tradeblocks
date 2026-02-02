@@ -14,6 +14,7 @@ import {
   formatDateKey,
   applyDateRangeFilter,
 } from "./slippage-helpers.js";
+import { withSyncedBlock } from "../middleware/sync-middleware.js";
 
 /**
  * Register the suggest_strategy_matches tool
@@ -63,16 +64,18 @@ export function registerStrategyMatchesTool(
           ),
       }),
     },
-    async ({
-      blockId,
-      dateRange,
-      correlationMethod,
-      minOverlapDays,
-      minCorrelation,
-      includeUnmatched,
-    }) => {
-      try {
-        const block = await loadBlock(baseDir, blockId);
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        dateRange,
+        correlationMethod,
+        minOverlapDays,
+        minCorrelation,
+        includeUnmatched,
+      }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
         let backtestTrades = block.trades;
 
         // Load reporting log (actual trades)
@@ -552,17 +555,18 @@ export function registerStrategyMatchesTool(
         const summaryText = `Strategy matching: ${exactMatches.length} exact matches, ${suggestedMatches.length} suggested matches | ${backtestStrategies.size} backtest strategies, ${actualStrategies.size} actual strategies`;
 
         return createToolOutput(summaryText, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error suggesting strategy matches: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error suggesting strategy matches: ${(error as Error).message}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
-    }
+    )
   );
 }

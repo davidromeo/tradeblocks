@@ -86,42 +86,45 @@ export function registerHealthBlockTools(
           ),
       }),
     },
-    async ({
-      blockId,
-      correlationThreshold,
-      tailDependenceThreshold,
-      profitProbabilityThreshold,
-      wfeThreshold,
-      mddMultiplierThreshold,
-    }) => {
-      // Apply defaults for optional parameters
-      const corrThreshold =
-        correlationThreshold ?? HEALTH_CHECK_DEFAULTS.correlationThreshold;
-      const tailThreshold =
-        tailDependenceThreshold ?? HEALTH_CHECK_DEFAULTS.tailDependenceThreshold;
-      const profitThreshold =
-        profitProbabilityThreshold ??
-        HEALTH_CHECK_DEFAULTS.profitProbabilityThreshold;
-      const wfeThresh = wfeThreshold ?? HEALTH_CHECK_DEFAULTS.wfeThreshold;
-      const mddMultThresh =
-        mddMultiplierThreshold ?? HEALTH_CHECK_DEFAULTS.mddMultiplierThreshold;
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        correlationThreshold,
+        tailDependenceThreshold,
+        profitProbabilityThreshold,
+        wfeThreshold,
+        mddMultiplierThreshold,
+      }) => {
+        // Apply defaults for optional parameters
+        const corrThreshold =
+          correlationThreshold ?? HEALTH_CHECK_DEFAULTS.correlationThreshold;
+        const tailThreshold =
+          tailDependenceThreshold ??
+          HEALTH_CHECK_DEFAULTS.tailDependenceThreshold;
+        const profitThreshold =
+          profitProbabilityThreshold ??
+          HEALTH_CHECK_DEFAULTS.profitProbabilityThreshold;
+        const wfeThresh = wfeThreshold ?? HEALTH_CHECK_DEFAULTS.wfeThreshold;
+        const mddMultThresh =
+          mddMultiplierThreshold ??
+          HEALTH_CHECK_DEFAULTS.mddMultiplierThreshold;
 
-      return withSyncedBlock(baseDir, async ({ blockId }) => {
         try {
           const block = await loadBlock(baseDir, blockId);
-        const trades = block.trades;
+          const trades = block.trades;
 
-        if (trades.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No trades found in block "${blockId}".`,
-              },
-            ],
-            isError: true,
-          };
-        }
+          if (trades.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `No trades found in block "${blockId}".`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
 
         // Get unique strategies
         const strategies = Array.from(
@@ -129,29 +132,29 @@ export function registerHealthBlockTools(
         ).sort();
 
         // Require at least 2 strategies and 20 trades
-        if (strategies.length < 2) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Portfolio health check requires at least 2 strategies. Found ${strategies.length} strategy in block "${blockId}".`,
-              },
-            ],
-            isError: true,
-          };
-        }
+          if (strategies.length < 2) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Portfolio health check requires at least 2 strategies. Found ${strategies.length} strategy in block "${blockId}".`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
 
-        if (trades.length < 20) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Portfolio health check requires at least 20 trades. Found ${trades.length} trades in block "${blockId}".`,
-              },
-            ],
-            isError: true,
-          };
-        }
+          if (trades.length < 20) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Portfolio health check requires at least 20 trades. Found ${trades.length} trades in block "${blockId}".`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
 
         // Calculate portfolio stats
         const stats = calculator.calculatePortfolioStats(
@@ -530,21 +533,14 @@ export function registerHealthBlockTools(
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: `Error running portfolio health check: ${(error as Error).message}`,
               },
             ],
-            isError: true,
+            isError: true as const,
           };
         }
-      })({
-        blockId,
-        correlationThreshold,
-        tailDependenceThreshold,
-        profitProbabilityThreshold,
-        wfeThreshold,
-        mddMultiplierThreshold,
-      });
-    }
+      }
+    )
   );
 }
