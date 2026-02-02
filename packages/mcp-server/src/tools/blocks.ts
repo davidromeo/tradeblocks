@@ -23,6 +23,7 @@ import {
   calculateDailyExposure,
 } from "@tradeblocks/lib";
 import type { Trade, MonteCarloParams, PeakExposure, EquityCurvePoint } from "@tradeblocks/lib";
+import { syncAllBlocks, syncBlock, syncMarketData } from "../sync/index.js";
 
 /**
  * Filter trades by strategy
@@ -148,6 +149,12 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ sortBy, sortOrder, containsStrategy, minTrades, hasDailyLog, hasReportingLog, limit }) => {
       try {
+        // Sync all blocks before listing - ensures DuckDB is fresh
+        const syncResult = await syncAllBlocks(baseDir);
+
+        // Also sync market data (if _marketdata folder exists)
+        const marketSyncResult = await syncMarketData(baseDir);
+
         let blocks = await listBlocks(baseDir);
 
         // Apply filters
@@ -196,6 +203,9 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
         const blocksWithReporting = blocks.filter(b => b.hasReportingLog).length;
         const summary = `Found ${blocks.length} block(s)${totalBeforeLimit > blocks.length ? ` (showing ${blocks.length} of ${totalBeforeLimit})` : ""}${blocksWithReporting > 0 ? `, ${blocksWithReporting} with reporting logs` : ""}`;
 
+        // Collect sync errors
+        const syncErrors = [...syncResult.errors, ...marketSyncResult.errors];
+
         // Build structured data for Claude reasoning
         const structuredData = {
           options: {
@@ -224,6 +234,16 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             reportingLog: b.reportingLog ?? null,
           })),
           count: blocks.length,
+          // Add sync info (informational for Claude)
+          syncInfo: {
+            blocksProcessed: syncResult.blocksProcessed,
+            blocksSynced: syncResult.blocksSynced,
+            blocksUnchanged: syncResult.blocksUnchanged,
+            blocksDeleted: syncResult.blocksDeleted,
+            marketFilesSynced: marketSyncResult.filesSynced,
+          },
+          // Add sync errors if any occurred
+          ...(syncErrors.length > 0 ? { syncErrors } : {}),
         };
 
         return createToolOutput(summary, structuredData);
@@ -253,6 +273,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
         const dailyLogs = block.dailyLogs;
@@ -308,6 +344,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const result = await loadReportingLogStats(baseDir, blockId);
 
         if (!result) {
@@ -383,6 +435,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId, strategy, tickerFilter, startDate, endDate }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
         const dailyLogs = block.dailyLogs;
@@ -499,6 +567,14 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
             byDollars: peakExposure.peakByDollars,
             byPercent: peakExposure.peakByPercent,
           },
+          // Add sync info if sync occurred
+          ...(syncResult.status === "synced"
+            ? { syncInfo: { status: "synced", tradeCount: syncResult.tradeCount } }
+            : {}),
+          // Add sync warning if sync errored (continuing with potentially stale data)
+          ...(syncResult.status === "error"
+            ? { syncWarning: syncResult.error }
+            : {}),
         };
 
         return createToolOutput(summary, structuredData);
@@ -558,6 +634,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId, startDate, endDate, tickerFilter, minTrades, sortBy, sortOrder, limit }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -713,6 +805,11 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
           stats: ReturnType<typeof calculator.calculatePortfolioStats>;
         }> = [];
 
+        // Sync all requested blocks before comparison
+        for (const blockId of blockIds) {
+          await syncBlock(blockId, baseDir);
+        }
+
         for (const blockId of blockIds) {
           try {
             const block = await loadBlock(baseDir, blockId);
@@ -863,6 +960,36 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockIdA, blockIdB, startDate, endDate, metricsToCompare }) => {
       try {
+        // Sync both blocks before comparison - ensures fresh data
+        const [syncResultA, syncResultB] = await Promise.all([
+          syncBlock(blockIdA, baseDir),
+          syncBlock(blockIdB, baseDir),
+        ]);
+
+        // Check for deleted blocks
+        if (syncResultA.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockIdA}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        if (syncResultB.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockIdB}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         // Load both blocks
         const [blockA, blockB] = await Promise.all([
           loadBlock(baseDir, blockIdA),
@@ -1154,6 +1281,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId, scenarios, customScenarios, includeEmpty }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
@@ -1385,6 +1528,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId, strategy, topN }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -1608,6 +1767,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId, targetStrategy, topN }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
@@ -1909,6 +2084,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
       const limit = topN ?? SIMILARITY_DEFAULTS.topN;
 
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
@@ -2177,6 +2368,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
     },
     async ({ blockId, strategyWeights, startDate, endDate }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -2539,6 +2746,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
       pageSize = 50,
     }) => {
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
@@ -2717,6 +2940,22 @@ export function registerBlockTools(server: McpServer, baseDir: string): void {
       const mddMultThresh = mddMultiplierThreshold ?? HEALTH_CHECK_DEFAULTS.mddMultiplierThreshold;
 
       try {
+        // Sync this block before querying - ensures fresh data
+        const syncResult = await syncBlock(blockId, baseDir);
+
+        // If block was deleted, return error
+        if (syncResult.status === "deleted") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Block '${blockId}' no longer exists (folder was deleted)`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
