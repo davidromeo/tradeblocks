@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 Milestone: v2.6 DuckDB Analytics Layer
 Phase: 44 of 45 (Schema Discovery)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-02-02 — Phase 43 complete (query interface)
+Plan: 01 complete
+Status: Phase complete
+Last activity: 2026-02-02 — Completed 44-01-PLAN.md (schema discovery)
 
-Progress: [██████    ] 67% (4/6 phases)
+Progress: [████████  ] 83% (5/6 phases)
 
 ## Historical Context
 
@@ -46,6 +46,9 @@ v2.6 decisions:
 - SQL validation via pattern blocklist (not parsing) for security
 - 30s query timeout with Promise.race for protection
 - Auto-append LIMIT (default 100, max 1000) for unbounded queries
+- describe_database: single tool returns all schema info (tables, columns, types, descriptions, row counts, examples)
+- Schema descriptions hardcoded + merged with DuckDB introspection for accuracy + context
+- Hypothesis flags on columns for analytical relevance
 
 ## Roadmap Evolution
 
@@ -54,9 +57,9 @@ v2.6 decisions:
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Phase 43 complete
+Stopped at: Phase 44 complete (schema discovery)
 Resume file: None
-Next: `/gsd:discuss-phase 44` to gather context for schema discovery
+Next: Phase 45 (TV Indicator API) or milestone completion
 
 ## Quick Tasks Completed
 
