@@ -22,6 +22,7 @@ import { registerReportTools } from "./tools/reports.js";
 import { registerImportTools } from "./tools/imports.js";
 import { registerMarketDataTools } from "./tools/market-data.js";
 import { registerSQLTools } from "./tools/sql.js";
+import { registerSchemaTools } from "./tools/schema.js";
 import { registerResources } from "./resources/index.js";
 import {
   installSkills,
@@ -279,6 +280,7 @@ async function main(): Promise<void> {
     registerImportTools(server, resolvedDir);
     registerMarketDataTools(server, resolvedDir);
     registerSQLTools(server, resolvedDir);
+    registerSchemaTools(server, resolvedDir);
     registerResources(server);
     return server;
   };

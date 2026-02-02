@@ -18,6 +18,7 @@ import { registerReportTools } from "./tools/reports.js";
 import { registerImportTools } from "./tools/imports.js";
 import { registerMarketDataTools } from "./tools/market-data.js";
 import { registerSQLTools } from "./tools/sql.js";
+import { registerSchemaTools } from "./tools/schema.js";
 
 // Type for tool result content items
 type ContentItem =
@@ -105,6 +106,7 @@ export async function handleDirectCall(args: string[]): Promise<void> {
   registerImportTools(mockServer, resolvedDir);
   registerMarketDataTools(mockServer, resolvedDir);
   registerSQLTools(mockServer, resolvedDir);
+  registerSchemaTools(mockServer, resolvedDir);
 
   // Handle special case: list available tools
   if (!toolName || toolName === "--list" || toolName === "help") {
