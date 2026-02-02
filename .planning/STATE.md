@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Milestone: v2.6 DuckDB Analytics Layer
-Phase: 42 of 45 (Sync Layer)
-Plan: 04 of 04 complete
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 42-04-PLAN.md (Tool Integration)
+Phase: 43 of 45 (Query Interface)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-02-02 — Phase 42 complete (Sync Layer verified)
 
-Progress: [████████  ] 80% (4/5 phases)
+Progress: [████      ] 40% (2/5 phases)
 
 ## Historical Context
 
@@ -31,20 +31,20 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 
 All decisions now captured in PROJECT.md Key Decisions table.
 
-v2.5 decisions:
-- Per-contract P/L normalization for strategy matching
-- Z-score threshold of 2 for outlier detection
-- Confidence scoring: 70% correlation + 30% timing overlap
-- Linear regression with normal approximation for p-value
-- Trade matching by date|strategy|time (minute precision)
-- Phase 40 (Quality Scoring) dropped — AI synthesizes from existing tools
+v2.6 decisions:
+- Single DuckDB file (analytics.duckdb) with trades/market schemas
+- SHA-256 hash-based change detection (not mtime)
+- Lazy sync: triggered on query, not server startup
+- Batch inserts: 500 rows per batch for performance
+- Market data merge/preserve strategy: INSERT ON CONFLICT DO NOTHING
+- 14 MCP tools integrated with sync layer
 
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 42-04-PLAN.md (Tool Integration) - Phase 42 complete
+Stopped at: Phase 42 execution and verification complete
 Resume file: None
-Next: `/gsd:plan-phase 43` (Schema Layer)
+Next: `/gsd:discuss-phase 43` to gather context for Query Interface phase
 
 ## Quick Tasks Completed
 

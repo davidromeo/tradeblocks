@@ -7,22 +7,22 @@
 
 ### Database Infrastructure
 
-- [ ] **DB-01**: MCP server integrates `@duckdb/node-api` package
-- [ ] **DB-02**: DuckDB connection manager handles init, shutdown, and errors gracefully
-- [ ] **DB-03**: `trades.duckdb` stores all block trades with `block_id` column
-- [ ] **DB-04**: `market.duckdb` stores market data (spx_daily, vix, extensible)
-- [ ] **DB-05**: Security sandbox configured (disable filesystem access, read-only for queries)
-- [ ] **DB-06**: Resource limits set (memory, threads appropriate for MCP server)
+- [x] **DB-01**: MCP server integrates `@duckdb/node-api` package
+- [x] **DB-02**: DuckDB connection manager handles init, shutdown, and errors gracefully
+- [x] **DB-03**: `trades.duckdb` stores all block trades with `block_id` column
+- [x] **DB-04**: `market.duckdb` stores market data (spx_daily, vix, extensible)
+- [x] **DB-05**: Security sandbox configured (disable filesystem access, read-only for queries)
+- [x] **DB-06**: Resource limits set (memory, threads appropriate for MCP server)
 
 ### Sync Layer
 
-- [ ] **SYNC-01**: `_sync_metadata` table tracks block_id, csv_mtime, synced_at
-- [ ] **SYNC-02**: Sync detects new blocks (folder exists, not in metadata)
-- [ ] **SYNC-03**: Sync detects changed blocks (csv_mtime > synced_at)
-- [ ] **SYNC-04**: Sync detects deleted blocks (in metadata, folder missing)
-- [ ] **SYNC-05**: Sync operations are transaction-safe (no partial state)
-- [ ] **SYNC-06**: Sync is lazy (triggered on query, not on server startup)
-- [ ] **SYNC-07**: Market data syncs from `_marketdata/` folder
+- [x] **SYNC-01**: `_sync_metadata` table tracks block_id, csv_hash, synced_at
+- [x] **SYNC-02**: Sync detects new blocks (folder exists, not in metadata)
+- [x] **SYNC-03**: Sync detects changed blocks (hash differs from stored hash)
+- [x] **SYNC-04**: Sync detects deleted blocks (in metadata, folder missing)
+- [x] **SYNC-05**: Sync operations are transaction-safe (no partial state)
+- [x] **SYNC-06**: Sync is lazy (triggered on query, not on server startup)
+- [x] **SYNC-07**: Market data syncs from `_marketdata/` folder
 
 ### Query Interface
 
@@ -70,19 +70,19 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | Phase 41 | Pending |
-| DB-02 | Phase 41 | Pending |
-| DB-03 | Phase 41 | Pending |
-| DB-04 | Phase 41 | Pending |
-| DB-05 | Phase 41 | Pending |
-| DB-06 | Phase 41 | Pending |
-| SYNC-01 | Phase 42 | Pending |
-| SYNC-02 | Phase 42 | Pending |
-| SYNC-03 | Phase 42 | Pending |
-| SYNC-04 | Phase 42 | Pending |
-| SYNC-05 | Phase 42 | Pending |
-| SYNC-06 | Phase 42 | Pending |
-| SYNC-07 | Phase 42 | Pending |
+| DB-01 | Phase 41 | Complete |
+| DB-02 | Phase 41 | Complete |
+| DB-03 | Phase 41 | Complete |
+| DB-04 | Phase 41 | Complete |
+| DB-05 | Phase 41 | Complete |
+| DB-06 | Phase 41 | Complete |
+| SYNC-01 | Phase 42 | Complete |
+| SYNC-02 | Phase 42 | Complete |
+| SYNC-03 | Phase 42 | Complete |
+| SYNC-04 | Phase 42 | Complete |
+| SYNC-05 | Phase 42 | Complete |
+| SYNC-06 | Phase 42 | Complete |
+| SYNC-07 | Phase 42 | Complete |
 | SQL-01 | Phase 43 | Pending |
 | SQL-02 | Phase 43 | Pending |
 | SQL-03 | Phase 43 | Pending |
@@ -103,4 +103,4 @@
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after initial definition*
+*Last updated: 2026-02-02 (Phase 42 complete)*
