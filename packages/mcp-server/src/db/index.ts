@@ -1,7 +1,12 @@
 /**
  * DuckDB module exports
  *
- * Provides connection management for the analytics database.
+ * Provides connection management and schema definitions for the analytics database.
  */
 
 export { getConnection, closeConnection, isConnected } from "./connection.js";
+export {
+  ensureSyncTables,
+  ensureTradeDataTable,
+  ensureMarketDataTables,
+} from "./schemas.js";
