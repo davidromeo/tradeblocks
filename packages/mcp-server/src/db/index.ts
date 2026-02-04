@@ -8,5 +8,6 @@ export { getConnection, closeConnection, isConnected } from "./connection.js";
 export {
   ensureSyncTables,
   ensureTradeDataTable,
+  ensureReportingDataTable,
   ensureMarketDataTables,
 } from "./schemas.js";

@@ -64,11 +64,11 @@ export interface ExampleQueries {
 export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
   trades: {
     description:
-      "Trading data synced from CSV files. Contains trade records from all portfolio blocks.",
+      "Trading data synced from CSV files. Contains trade records from all portfolio blocks, including both backtest (trade_data) and actual/reported (reporting_data) trades.",
     tables: {
       trade_data: {
         description:
-          "Individual trade records. Each row = one trade with entry/exit details, P&L, and strategy. Filter by block_id to query specific portfolios.",
+          "Individual backtest trade records. Each row = one trade with entry/exit details, P&L, and strategy. Filter by block_id to query specific portfolios.",
         keyColumns: ["block_id", "date_opened", "strategy", "pl"],
         columns: {
           block_id: {
@@ -125,6 +125,69 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           closing_commissions: {
             description: "Commissions paid at exit ($)",
+            hypothesis: false,
+          },
+        },
+      },
+      reporting_data: {
+        description:
+          "Actual/reported trade records from reportinglog.csv. Each row = one live trade executed. Compare with trade_data (backtest) to analyze slippage and execution differences. Filter by block_id to query specific portfolios.",
+        keyColumns: ["block_id", "date_opened", "strategy", "legs", "pl"],
+        columns: {
+          block_id: {
+            description: "Portfolio block ID - filter by this to query specific portfolios",
+            hypothesis: true,
+          },
+          date_opened: {
+            description: "Trade entry date (DATE format, use for joins with market data)",
+            hypothesis: true,
+          },
+          time_opened: {
+            description: "Trade entry time in Eastern Time (e.g., '09:35:00')",
+            hypothesis: false,
+          },
+          strategy: {
+            description: "Strategy name (e.g., 'IronCondor', 'PutSpread')",
+            hypothesis: true,
+          },
+          legs: {
+            description: "Option legs description with strikes (e.g., 'SPY 450P/445P') - compare with trade_data.legs to identify strike differences",
+            hypothesis: true,
+          },
+          initial_premium: {
+            description: "Credit received (+) or debit paid (-) at entry",
+            hypothesis: false,
+          },
+          num_contracts: {
+            description: "Number of contracts traded (often fewer than backtest)",
+            hypothesis: false,
+          },
+          pl: {
+            description: "Actual P&L realized (DOUBLE)",
+            hypothesis: true,
+          },
+          date_closed: {
+            description: "Trade exit date (NULL if still open)",
+            hypothesis: false,
+          },
+          time_closed: {
+            description: "Trade exit time in Eastern Time",
+            hypothesis: false,
+          },
+          closing_price: {
+            description: "Price at exit",
+            hypothesis: false,
+          },
+          avg_closing_cost: {
+            description: "Average cost to close the position",
+            hypothesis: false,
+          },
+          reason_for_close: {
+            description: "Exit reason (e.g., 'Target', 'Stop', 'Expiration')",
+            hypothesis: true,
+          },
+          opening_price: {
+            description: "Price at entry",
             hypothesis: false,
           },
         },
@@ -737,6 +800,19 @@ FROM market.spx_daily
 WHERE date BETWEEN '2024-01-01' AND '2024-06-30'
   AND VIX_Close > 20
 ORDER BY date`,
+    },
+    {
+      description: "Compare backtest vs actual trades by date/strategy",
+      sql: `SELECT
+  t.date_opened, t.strategy, t.legs as bt_legs, r.legs as actual_legs,
+  t.pl as bt_pl, r.pl as actual_pl, r.pl - t.pl as slippage
+FROM trades.trade_data t
+JOIN trades.reporting_data r
+  ON t.block_id = r.block_id
+  AND t.date_opened = r.date_opened
+  AND t.strategy = r.strategy
+WHERE t.block_id = 'my-block'
+ORDER BY t.date_opened`,
     },
   ],
   joins: [

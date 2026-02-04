@@ -69,6 +69,35 @@ export async function ensureTradeDataTable(conn: DuckDBConnection): Promise<void
 }
 
 /**
+ * Create the reporting data table for storing synced reporting log records.
+ *
+ * Note: No PRIMARY KEY constraint - trades can have duplicates per day
+ * (same pattern as trade_data).
+ *
+ * @param conn - Active DuckDB connection
+ */
+export async function ensureReportingDataTable(conn: DuckDBConnection): Promise<void> {
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS trades.reporting_data (
+      block_id VARCHAR NOT NULL,
+      date_opened DATE NOT NULL,
+      time_opened VARCHAR,
+      strategy VARCHAR,
+      legs VARCHAR,
+      initial_premium DOUBLE,
+      num_contracts INTEGER,
+      pl DOUBLE NOT NULL,
+      date_closed DATE,
+      time_closed VARCHAR,
+      closing_price DOUBLE,
+      avg_closing_cost DOUBLE,
+      reason_for_close VARCHAR,
+      opening_price DOUBLE
+    )
+  `);
+}
+
+/**
  * Create market data tables for storing synced market data.
  *
  * Tables use date as PRIMARY KEY for merge/preserve strategy:

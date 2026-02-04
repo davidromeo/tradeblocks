@@ -279,6 +279,78 @@ async function insertTradeBatch(
   await conn.run(sql, params);
 }
 
+/**
+ * Insert reporting log records in batches to avoid parameter limits.
+ *
+ * @param conn - DuckDB connection
+ * @param blockId - Block identifier
+ * @param records - Parsed CSV records
+ * @param startIdx - Starting index in records array
+ * @param batchSize - Number of records per batch
+ */
+async function insertReportingBatch(
+  conn: DuckDBConnection,
+  blockId: string,
+  records: Record<string, string>[],
+  startIdx: number,
+  batchSize: number
+): Promise<void> {
+  const batch = records.slice(startIdx, startIdx + batchSize);
+  if (batch.length === 0) return;
+
+  // Build VALUES placeholders: ($1, $2, $3, ...), ($15, $16, $17, ...), ...
+  // Each row has 14 columns: block_id + 13 reporting fields
+  const columnsPerRow = 14;
+  const placeholders: string[] = [];
+  const params: (string | number | null)[] = [];
+
+  for (let rowIdx = 0; rowIdx < batch.length; rowIdx++) {
+    const record = batch[rowIdx];
+    const baseParam = rowIdx * columnsPerRow + 1;
+    const rowPlaceholders = Array.from(
+      { length: columnsPerRow },
+      (_, i) => `$${baseParam + i}`
+    );
+    placeholders.push(`(${rowPlaceholders.join(", ")})`);
+
+    // Parse numeric values safely
+    const initialPremium = parseFloat(record["Initial Premium"]);
+    const numContracts = parseInt(record["No. of Contracts"], 10);
+    const pl = parseFloat(record["P/L"]);
+    const closingPrice = parseFloat(record["Closing Price"]);
+    const avgClosingCost = parseFloat(record["Avg. Closing Cost"]);
+    const openingPrice = parseFloat(record["Opening Price"]);
+
+    // Map CSV record to column values
+    params.push(
+      blockId, // block_id
+      record["Date Opened"] || null, // date_opened
+      record["Time Opened"] || null, // time_opened
+      record["Strategy"] || null, // strategy
+      record["Legs"] || null, // legs
+      isNaN(initialPremium) ? null : initialPremium, // initial_premium
+      isNaN(numContracts) ? 1 : numContracts, // num_contracts
+      isNaN(pl) ? 0 : pl, // pl
+      record["Date Closed"] || null, // date_closed
+      record["Time Closed"] || null, // time_closed
+      isNaN(closingPrice) ? null : closingPrice, // closing_price
+      isNaN(avgClosingCost) ? null : avgClosingCost, // avg_closing_cost
+      record["Reason For Close"] || null, // reason_for_close
+      isNaN(openingPrice) ? null : openingPrice // opening_price
+    );
+  }
+
+  const sql = `
+    INSERT INTO trades.reporting_data (
+      block_id, date_opened, time_opened, strategy, legs, initial_premium,
+      num_contracts, pl, date_closed, time_closed, closing_price,
+      avg_closing_cost, reason_for_close, opening_price
+    ) VALUES ${placeholders.join(", ")}
+  `;
+
+  await conn.run(sql, params);
+}
+
 // --- Core Sync Functions ---
 
 /**
@@ -367,6 +439,25 @@ export async function syncBlockInternal(
           );
         } catch {
           // Reportinglog file can't be read, leave hash null
+        }
+      }
+
+      // Sync reporting log if it exists and has changed
+      // Always delete old reporting data for this block (same pattern as trade_data)
+      await conn.run(
+        "DELETE FROM trades.reporting_data WHERE block_id = $1",
+        [blockId]
+      );
+
+      if (optionalLogs.reportinglog && reportinglogHash) {
+        // Read and parse reporting CSV
+        const reportingPath = path.join(blockPath, optionalLogs.reportinglog);
+        const reportingContent = await fs.readFile(reportingPath, "utf-8");
+        const reportingRecords = parseCSV(reportingContent);
+
+        // Insert reporting trades in batches of 500
+        for (let i = 0; i < reportingRecords.length; i += batchSize) {
+          await insertReportingBatch(conn, blockId, reportingRecords, i, batchSize);
         }
       }
 
@@ -515,6 +606,10 @@ export async function cleanupDeletedBlocks(
     try {
       await conn.run(
         "DELETE FROM trades.trade_data WHERE block_id = $1",
+        [blockId]
+      );
+      await conn.run(
+        "DELETE FROM trades.reporting_data WHERE block_id = $1",
         [blockId]
       );
       await deleteSyncMetadata(conn, blockId);

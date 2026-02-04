@@ -20,7 +20,7 @@
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
 import * as path from "path";
-import { ensureSyncTables, ensureTradeDataTable, ensureMarketDataTables } from "./schemas.js";
+import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable, ensureMarketDataTables } from "./schemas.js";
 
 // Module-level singleton state
 let instance: DuckDBInstance | null = null;
@@ -75,6 +75,7 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
     // Ensure sync metadata and data tables exist
     await ensureSyncTables(connection);
     await ensureTradeDataTable(connection);
+    await ensureReportingDataTable(connection);
     await ensureMarketDataTables(connection);
 
     return connection;
