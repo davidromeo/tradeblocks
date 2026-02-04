@@ -41,9 +41,9 @@
 
 ### Tool Rationalization
 
-- [ ] **DEPR-01**: Analysis of which tools `run_sql` can replace
-- [ ] **DEPR-02**: Deprecation plan documented (which tools, timeline)
-- [ ] **DEPR-03**: At least one tool deprecated or marked for deprecation
+- [x] **DEPR-01**: Analysis of which tools `run_sql` can replace
+- [x] **DEPR-02**: Deprecation plan documented (which tools, timeline)
+- [x] **DEPR-03**: At least one tool deprecated or marked for deprecation
 
 ## Future Requirements (v2.7+)
 
@@ -63,7 +63,7 @@
 |---------|--------|
 | Web UI SQL interface | MCP server only; web app remains client-side |
 | Real-time sync | Lazy sync sufficient; no file watchers |
-| Full tool deprecation | v2.6 analyzes; actual removal in future versions |
+| ~~Full tool deprecation~~ | ~~v2.6 analyzes; actual removal in future versions~~ Completed in v2.6 |
 | DuckDB extensions | Core functionality sufficient; extensions add complexity |
 
 ## Traceability
@@ -92,9 +92,9 @@
 | SCHEMA-01 | Phase 44 | Complete |
 | SCHEMA-02 | Phase 44 | Complete |
 | SCHEMA-03 | Phase 44 | Complete |
-| DEPR-01 | Phase 45 | Pending |
-| DEPR-02 | Phase 45 | Pending |
-| DEPR-03 | Phase 45 | Pending |
+| DEPR-01 | Phase 45 | Complete |
+| DEPR-02 | Phase 45 | Complete |
+| DEPR-03 | Phase 45 | Complete |
 
 **Coverage:**
 - v2.6 requirements: 24 total
@@ -103,4 +103,4 @@
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-02 (Phase 44 complete)*
+*Last updated: 2026-02-04 (Phase 45 complete - v2.6 milestone complete)*
