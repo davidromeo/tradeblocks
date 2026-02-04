@@ -4,7 +4,8 @@ Model Context Protocol (MCP) server for options trading analysis. Works with Cla
 
 ## Features
 
-- **21 MCP tools** for comprehensive trading analysis
+- **34 MCP tools** for comprehensive trading analysis
+- **SQL analytics layer** - `run_sql` for arbitrary queries, `describe_database` for schema discovery
 - **Two transport modes**: stdio (CLI tools) and HTTP (web platforms)
 - **Block-based data organization** - each folder is a trading strategy
 - **Automatic caching** - statistics cached in `block.json` for fast access
@@ -221,7 +222,6 @@ backtests/
 | `get_statistics` | Performance metrics (Sharpe, Sortino, drawdown, etc.) |
 | `get_strategy_comparison` | Compare strategies within a block |
 | `compare_blocks` | Compare statistics across multiple blocks |
-| `get_trades` | Raw trade data with filtering, sorting, pagination |
 
 ### Analysis Tools
 | Tool | Description |
@@ -239,13 +239,11 @@ backtests/
 | `get_period_returns` | Returns aggregated by time period |
 | `compare_backtest_to_actual` | Backtest vs live performance comparison |
 
-### Report Builder Tools
+### SQL Tools
 | Tool | Description |
 |------|-------------|
-| `list_available_fields` | List filterable trade fields |
-| `run_filtered_query` | Query trades with custom filters |
-| `get_field_statistics` | Statistics for a specific field |
-| `aggregate_by_field` | Group and aggregate by field values |
+| `run_sql` | Execute SQL queries against trades and market data |
+| `describe_database` | Schema discovery with table info and example queries |
 
 ### Import Tools
 | Tool | Description |
