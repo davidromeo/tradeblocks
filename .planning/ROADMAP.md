@@ -105,14 +105,17 @@ Plans:
 - [x] 44-01-PLAN.md - describe_database tool with schema metadata and example queries
 
 ### Phase 45: Tool Rationalization
-**Goal**: Identify and deprecate MCP tools that run_sql can replace
+**Goal**: Remove MCP tools that run_sql can fully replace, completing the SQL analytics layer
 **Depends on**: Phase 44
 **Requirements**: DEPR-01, DEPR-02, DEPR-03
 **Success Criteria** (what must be TRUE):
-  1. Analysis document exists listing which tools run_sql can replace
-  2. Deprecation plan documented with timeline
-  3. At least one tool marked deprecated with migration guidance
-**Plans**: TBD
+  1. Analysis document lists which tools run_sql replaces (7 tools) vs which stay (computational)
+  2. Removed tools deleted from codebase (not soft-deprecated)
+  3. CHANGELOG documents breaking changes with SQL migration patterns
+  4. describe_database examples updated to cover removed tool functionality
+**Plans**: 1 plan
+Plans:
+- [ ] 45-01-PLAN.md - Remove redundant tools, update examples, document changes
 
 ## Progress
 
@@ -126,8 +129,8 @@ Phases execute in numeric order: 41 -> 42 -> 42.1 -> 43 -> 44 -> 45
 | 42.1 Sync Layer Hardening | v2.6 | 3/3 | Complete | 2026-02-02 |
 | 43. Query Interface | v2.6 | 1/1 | Complete | 2026-02-02 |
 | 44. Schema Discovery | v2.6 | 1/1 | Complete | 2026-02-02 |
-| 45. Tool Rationalization | v2.6 | 0/TBD | Not started | - |
+| 45. Tool Rationalization | v2.6 | 0/1 | Planned | - |
 
 ---
 *Roadmap created: 2026-02-01*
-*Last updated: 2026-02-02 (Phase 44 complete)*
+*Last updated: 2026-02-04 (Phase 45 planned)*
