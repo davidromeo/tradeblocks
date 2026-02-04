@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Milestone: v2.6 DuckDB Analytics Layer
-Phase: 44 of 45 (Schema Discovery)
-Plan: 01 complete
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 44-01-PLAN.md (schema discovery)
+Phase: 44 of 45 (Schema Discovery) — COMPLETE
+Plan: All plans complete
+Status: Ready for Phase 45
+Last activity: 2026-02-04 — Phase 44 verified, market data sync bug fixed
 
 Progress: [████████  ] 83% (5/6 phases)
 
@@ -49,6 +49,8 @@ v2.6 decisions:
 - describe_database: single tool returns all schema info (tables, columns, types, descriptions, row counts, examples)
 - Schema descriptions hardcoded + merged with DuckDB introspection for accuracy + context
 - Hypothesis flags on columns for analytical relevance
+- Market sync filters CSV columns to only those in table schema (handles TradingView marker columns)
+- PineScript exports use SQL-safe column names (Marker_*, underscores instead of spaces)
 
 ## Roadmap Evolution
 
@@ -56,10 +58,19 @@ v2.6 decisions:
 
 ## Session Continuity
 
-Last session: 2026-02-02
-Stopped at: Phase 44 complete (schema discovery)
+Last session: 2026-02-04
+Stopped at: Phase 44 verified + market sync bug fixed
 Resume file: None
-Next: Phase 45 (TV Indicator API) or milestone completion
+Next: `/gsd:discuss-phase 45` (Tool Rationalization)
+
+### Session Notes (2026-02-04)
+- Executed Phase 44 (describe_database tool) — verified working
+- Found market data sync bug during verification testing
+- Fixed PineScript column names (SQL-safe: Marker_*, New_High/New_Low, VIX_Price)
+- Fixed MCP sync to filter columns to schema, handle BigInt, lowercase OHLC
+- Commits: 6b2b512 (scripts), fbdd824 (mcp-server)
+- User needs to re-export CSVs from TradingView with updated indicators
+- Discussed automating market data fetch (v2.7 idea: Yahoo Finance + local calculation)
 
 ## Quick Tasks Completed
 
