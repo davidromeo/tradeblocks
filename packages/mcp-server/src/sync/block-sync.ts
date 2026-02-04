@@ -585,6 +585,17 @@ export async function detectBlockChanges(
 
       if (!metadata || metadata.tradelog_hash !== currentHash) {
         toSync.push(blockId);
+      } else {
+        // Tradelog unchanged - check if reportinglog needs syncing
+        const optionalLogs = await findOptionalLogFiles(blockPath);
+        if (optionalLogs.reportinglog) {
+          const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
+          const reportingHash = await hashFileContent(reportinglogPath);
+          if (metadata.reportinglog_hash !== reportingHash) {
+            // Reportinglog changed or was never synced
+            toSync.push(blockId);
+          }
+        }
       }
     } catch {
       // Can't hash file - mark for sync (will fail during sync with proper error)
