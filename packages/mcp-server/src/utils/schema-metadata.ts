@@ -720,6 +720,24 @@ FROM trades.trade_data
 GROUP BY block_id
 ORDER BY block_id`,
     },
+    {
+      description: "Filter and paginate trades (replaces get_trades)",
+      sql: `SELECT date_opened, time_opened, strategy, legs, pl, num_contracts
+FROM trades.trade_data
+WHERE block_id = 'my-block'
+  AND strategy ILIKE '%iron%'
+  AND pl > 0
+ORDER BY date_opened DESC
+LIMIT 50 OFFSET 0`,
+    },
+    {
+      description: "Market data query (replaces get_market_context)",
+      sql: `SELECT date, VIX_Close, Vol_Regime, Term_Structure_State, Gap_Pct
+FROM market.spx_daily
+WHERE date BETWEEN '2024-01-01' AND '2024-06-30'
+  AND VIX_Close > 20
+ORDER BY date`,
+    },
   ],
   joins: [
     {
@@ -761,6 +779,14 @@ FROM trades.trade_data t
 JOIN market.spx_highlow h ON t.date_opened = h.date
 WHERE h.Reversal_Type != 0
   AND t.block_id = 'my-block'`,
+    },
+    {
+      description: "Enrich trades with market data (replaces enrich_trades)",
+      sql: `SELECT t.date_opened, t.strategy, t.pl,
+       m.VIX_Close, m.Vol_Regime, m.Gap_Pct
+FROM trades.trade_data t
+LEFT JOIN market.spx_daily m ON t.date_opened = m.date
+WHERE t.block_id = 'my-block'`,
     },
   ],
   hypothesis: [
@@ -819,6 +845,38 @@ FROM trades.trade_data t
 JOIN market.spx_daily m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'
 GROUP BY term_structure`,
+    },
+    {
+      description: "Aggregate by VIX buckets (replaces aggregate_by_field)",
+      sql: `SELECT
+  CASE
+    WHEN m.VIX_Close < 15 THEN '10-15'
+    WHEN m.VIX_Close < 20 THEN '15-20'
+    WHEN m.VIX_Close < 25 THEN '20-25'
+    ELSE '25+'
+  END as vix_bucket,
+  COUNT(*) as trades,
+  SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END)::FLOAT / COUNT(*) as win_rate,
+  SUM(t.pl) as total_pl
+FROM trades.trade_data t
+JOIN market.spx_daily m ON t.date_opened = m.date
+WHERE t.block_id = 'my-block'
+GROUP BY vix_bucket
+ORDER BY vix_bucket`,
+    },
+    {
+      description: "Find similar days by conditions (replaces find_similar_days)",
+      sql: `WITH ref AS (
+  SELECT VIX_Close, Vol_Regime, Term_Structure_State
+  FROM market.spx_daily WHERE date = '2024-01-15'
+)
+SELECT m.date, m.VIX_Close, m.Vol_Regime, m.Term_Structure_State
+FROM market.spx_daily m, ref
+WHERE m.date != '2024-01-15'
+  AND m.Vol_Regime = ref.Vol_Regime
+  AND ABS(m.VIX_Close - ref.VIX_Close) < 3
+ORDER BY ABS(m.VIX_Close - ref.VIX_Close)
+LIMIT 20`,
     },
   ],
 };

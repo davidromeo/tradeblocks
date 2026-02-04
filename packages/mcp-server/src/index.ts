@@ -270,7 +270,7 @@ async function main(): Promise<void> {
   // Used by HTTP transport which needs fresh instances per request (stateless mode)
   const createServer = (): McpServer => {
     const server = new McpServer(
-      { name: "tradeblocks-mcp", version: "0.5.0" },
+      { name: "tradeblocks-mcp", version: "0.6.0" },
       { capabilities: { tools: {}, resources: {} } }
     );
     registerBlockTools(server, resolvedDir);
