@@ -51,6 +51,8 @@ v2.6 decisions:
 - Hypothesis flags on columns for analytical relevance
 - Market sync filters CSV columns to only those in table schema (handles TradingView marker columns)
 - PineScript exports use SQL-safe column names (Marker_*, underscores instead of spaces)
+- purge_market_table tool for clearing corrupted data and triggering re-sync
+- PineScript day detection: use [1] comparison, not var with na (na comparisons unreliable on historical bars)
 
 ## Roadmap Evolution
 
@@ -62,6 +64,15 @@ Last session: 2026-02-04
 Stopped at: Phase 44 verified + market sync bug fixed
 Resume file: None
 Next: `/gsd:discuss-phase 45` (Tool Rationalization)
+
+### Session Notes (2026-02-04 continued)
+- Added purge_market_table MCP tool for clearing corrupted data
+- Fixed PineScript day detection bug in spx-highlow-timing.pine and vix-intraday.pine
+- Root cause: var variables with na comparisons don't work reliably on historical bars
+- Solution: Use [1] syntax to compare dayofmonth to previous bar's value
+- Changed spx-highlow to overlay=false for proper CSV export
+- All market data now syncing correctly with proper daily resets
+- Commit: 273f05a
 
 ### Session Notes (2026-02-04)
 - Executed Phase 44 (describe_database tool) — verified working
