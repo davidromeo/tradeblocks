@@ -99,6 +99,7 @@ Next: Archive v2.6 milestone, update ROADMAP/PROJECT, create v2.6 tag
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 001 | Expose parameterRanges in run_walk_forward MCP tool | 2026-01-30 | d1de196 | [001-expose-parameterranges-in-run-walk-forwa](./quick/001-expose-parameterranges-in-run-walk-forwa/) |
+| 002 | Add reporting_data SQL table and legs to backtest comparison | 2026-02-04 | 2788a65 | [002-add-reporting-data-sql-table-and-legs-to](./quick/002-add-reporting-data-sql-table-and-legs-to/) |
 
 ## Testing Infrastructure
 
