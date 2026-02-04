@@ -392,8 +392,21 @@ export async function syncBlockInternal(
     const existingMetadata = await getSyncMetadata(conn, blockId);
 
     // Check if hash matches (unchanged)
+    // Also check if reportinglog exists but hasn't been synced yet
     if (existingMetadata && existingMetadata.tradelog_hash === tradelogHash) {
-      return { blockId, status: "unchanged" };
+      // Check if reporting log needs to be synced (new file or changed)
+      const optionalLogs = await findOptionalLogFiles(blockPath);
+      if (optionalLogs.reportinglog) {
+        const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
+        const reportinglogHash = await hashFileContent(reportinglogPath);
+        if (existingMetadata.reportinglog_hash !== reportinglogHash) {
+          // Reportinglog changed or was never synced - fall through to sync
+        } else {
+          return { blockId, status: "unchanged" };
+        }
+      } else {
+        return { blockId, status: "unchanged" };
+      }
     }
 
     // Hash differs or no metadata - need to sync
