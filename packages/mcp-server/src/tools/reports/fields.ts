@@ -1,15 +1,15 @@
 /**
  * Report Field Tools
  *
- * Tools for field listing and statistics: list_available_fields, get_field_statistics
+ * Tools for field statistics: get_field_statistics
+ *
+ * Note: list_available_fields was removed in v0.6.0 - use describe_database instead.
  */
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadBlock } from "../../utils/block-loader.js";
 import { createToolOutput } from "../../utils/output-formatter.js";
-import type { FieldInfo, FieldCategory } from "@tradeblocks/lib";
-import { REPORT_FIELDS, FIELD_CATEGORY_ORDER } from "@tradeblocks/lib";
 import { filterByStrategy, filterByDateRange } from "../shared/filters.js";
 import {
   enrichTrades,
@@ -24,118 +24,7 @@ import { withSyncedBlock } from "../middleware/sync-middleware.js";
  * Register field-related report tools
  */
 export function registerFieldTools(server: McpServer, baseDir: string): void {
-  // Tool 1: list_available_fields
-  server.registerTool(
-    "list_available_fields",
-    {
-      description:
-        "List all fields available for filtering and analysis, grouped by category (market, returns, risk, trade, timing)",
-      inputSchema: z.object({
-        blockId: z
-          .string()
-          .describe(
-            "Block folder name. Used to detect any custom fields present in the trade data."
-          ),
-      }),
-    },
-    withSyncedBlock(baseDir, async ({ blockId }) => {
-      try {
-        const block = await loadBlock(baseDir, blockId);
-        const trades = block.trades;
-
-        // Group static fields by category
-        const fieldsByCategory = new Map<FieldCategory, FieldInfo[]>();
-        for (const category of FIELD_CATEGORY_ORDER) {
-          fieldsByCategory.set(category, []);
-        }
-        for (const field of REPORT_FIELDS) {
-          fieldsByCategory.get(field.category)?.push(field);
-        }
-
-        // Extract custom field names from trades
-        const customFieldNames = new Set<string>();
-        for (const trade of trades) {
-          if (trade.customFields) {
-            for (const key of Object.keys(trade.customFields)) {
-              customFieldNames.add(key);
-            }
-          }
-        }
-
-        // Build structured output
-        const categories: Array<{
-          category: string;
-          label: string;
-          fields: Array<{
-            field: string;
-            label: string;
-            unit?: string;
-            description?: string;
-          }>;
-        }> = [];
-
-        const categoryLabels: Record<FieldCategory, string> = {
-          market: "Market",
-          returns: "Returns",
-          risk: "Risk (MFE/MAE)",
-          trade: "Trade Details",
-          timing: "Timing",
-        };
-
-        for (const category of FIELD_CATEGORY_ORDER) {
-          const fields = fieldsByCategory.get(category) ?? [];
-          categories.push({
-            category,
-            label: categoryLabels[category],
-            fields: fields.map((f) => ({
-              field: f.field,
-              label: f.label,
-              unit: f.unit,
-              description: f.description,
-            })),
-          });
-        }
-
-        // Add custom fields category if present
-        if (customFieldNames.size > 0) {
-          categories.push({
-            category: "custom",
-            label: "Custom (Trade)",
-            fields: Array.from(customFieldNames).map((name) => ({
-              field: `custom.${name}`,
-              label: name,
-              description: "Custom field from trade CSV",
-            })),
-          });
-        }
-
-        // Brief summary
-        const totalFields = REPORT_FIELDS.length + customFieldNames.size;
-        const summary = `Available fields: ${totalFields} fields across ${categories.length} categories`;
-
-        const structuredData = {
-          blockId,
-          totalFields,
-          categories,
-          tradeCount: trades.length,
-        };
-
-        return createToolOutput(summary, structuredData);
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error listing fields: ${(error as Error).message}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    })
-  );
-
-  // Tool 3: get_field_statistics
+  // Tool: get_field_statistics
   server.registerTool(
     "get_field_statistics",
     {
