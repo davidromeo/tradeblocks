@@ -2,6 +2,14 @@
 
 All notable changes to the TradeBlocks MCP Server will be documented in this file.
 
+## [0.6.1] - 2026-02-04
+
+### Added
+
+- `trades.reporting_data` SQL table synced from reportinglog.csv
+- `backtestLegs` and `actualLegs` fields in `compare_backtest_to_actual` output (detailLevel: "trades")
+- Leg differences now shown in trade comparison differences array
+
 ## [0.6.0] - 2026-02-04
 
 ### BREAKING CHANGES

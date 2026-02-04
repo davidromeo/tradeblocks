@@ -2297,6 +2297,8 @@ export function registerPerformanceTools(
                 backtestContracts: btData.contracts,
                 actualContracts: actualData.contracts,
                 scalingFactor,
+                backtestLegs: null, // Not available in summary mode (aggregated trades)
+                actualLegs: null,
                 differences: [],
                 isOutlier: false,
               });
@@ -2317,6 +2319,8 @@ export function registerPerformanceTools(
                 backtestContracts: btData.contracts,
                 actualContracts: 0,
                 scalingFactor: 0,
+                backtestLegs: null, // Not available in summary mode
+                actualLegs: null,
                 differences: [],
                 isOutlier: false,
               });
@@ -2341,6 +2345,8 @@ export function registerPerformanceTools(
               backtestContracts: 0,
               actualContracts: actualData.contracts,
               scalingFactor: 0,
+              backtestLegs: null, // Not available in summary mode
+              actualLegs: null,
               differences: [],
               isOutlier: false,
             });
