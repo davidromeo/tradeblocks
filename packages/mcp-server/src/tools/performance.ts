@@ -1966,6 +1966,8 @@ export function registerPerformanceTools(
           backtestContracts: number;
           actualContracts: number;
           scalingFactor: number;
+          backtestLegs: string | null;
+          actualLegs: string | null;
           differences: Array<{
             field: string;
             backtest: number | string | null;
@@ -2080,6 +2082,15 @@ export function registerPerformanceTools(
                 });
               }
 
+              // legs (strike differences)
+              if (btTrade.legs !== actualTrade.legs) {
+                differences.push({
+                  field: "legs",
+                  backtest: btTrade.legs,
+                  actual: actualTrade.legs,
+                });
+              }
+
               // closingPrice (if both have it)
               if (
                 btTrade.closingPrice !== undefined &&
@@ -2126,6 +2137,8 @@ export function registerPerformanceTools(
                 backtestContracts: btContracts,
                 actualContracts: actualContracts,
                 scalingFactor,
+                backtestLegs: btTrade.legs,
+                actualLegs: actualTrade.legs,
                 differences,
                 isOutlier: false, // Will be set later
                 context: {
@@ -2157,6 +2170,8 @@ export function registerPerformanceTools(
                 backtestContracts: btTrade.numContracts,
                 actualContracts: 0,
                 scalingFactor: 0,
+                backtestLegs: btTrade.legs,
+                actualLegs: null,
                 differences: [],
                 isOutlier: false,
                 context: {
@@ -2189,6 +2204,8 @@ export function registerPerformanceTools(
                 backtestContracts: 0,
                 actualContracts: actualTrade.numContracts,
                 scalingFactor: 0,
+                backtestLegs: null,
+                actualLegs: actualTrade.legs,
                 differences: [],
                 isOutlier: false,
                 context: {
