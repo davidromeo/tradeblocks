@@ -1,5 +1,5 @@
 //@version=6
-indicator("SPX High/Low Timing", overlay=true)
+indicator("SPX High/Low Timing", overlay=false)
 
 // =============================================================================
 // SPX HIGH/LOW TIMING EXPORT
@@ -39,32 +39,31 @@ var int highHour = na
 var int highMinute = na
 var int lowHour = na
 var int lowMinute = na
-var int currentDay = na
-
-// Detect new day
-int today = dayofmonth(time, "America/New_York")
-bool isNewDay = today != currentDay
+// Detect new day by comparing today's date to previous bar's date
+// Using dayofweek change as a simple reliable signal (changes once per day)
+int todayDOW = dayofweek(time, "America/New_York")
+int todayDOM = dayofmonth(time, "America/New_York")
+bool isNewDay = bar_index == 0 or todayDOM != todayDOM[1] or todayDOW != todayDOW[1]
 
 if isNewDay
-    currentDay := today
-    intradayHigh := na
-    intradayLow := na
-    highHour := na
-    highMinute := na
-    lowHour := na
-    lowMinute := na
-
-// Track high
-if na(intradayHigh) or high > intradayHigh
+    // Reset to current bar's values on first bar of new day
     intradayHigh := high
+    intradayLow := low
     highHour := barHour
     highMinute := barMinute
-
-// Track low
-if na(intradayLow) or low < intradayLow
-    intradayLow := low
     lowHour := barHour
     lowMinute := barMinute
+else
+    // Track high - only on non-new-day bars
+    if high > intradayHigh
+        intradayHigh := high
+        highHour := barHour
+        highMinute := barMinute
+    // Track low - only on non-new-day bars
+    if low < intradayLow
+        intradayLow := low
+        lowHour := barHour
+        lowMinute := barMinute
 
 // -----------------------------------------------------------------------------
 // CALCULATED METRICS
@@ -112,25 +111,29 @@ bool lateExtreme = (highHour == 15 and highMinute >= 30) or (lowHour == 15 and l
 // -----------------------------------------------------------------------------
 // EXPORT PLOTS
 // -----------------------------------------------------------------------------
-plot(highTime, "High_Time", display=display.data_window)
-plot(lowTime, "Low_Time", display=display.data_window)
-plot(highBeforeLow ? 1 : 0, "High_Before_Low", display=display.data_window)
-plot(highInFirstHour ? 1 : 0, "High_In_First_Hour", display=display.data_window)
-plot(lowInFirstHour ? 1 : 0, "Low_In_First_Hour", display=display.data_window)
-plot(highInLastHour ? 1 : 0, "High_In_Last_Hour", display=display.data_window)
-plot(lowInLastHour ? 1 : 0, "Low_In_Last_Hour", display=display.data_window)
-plot(reversalType, "Reversal_Type", display=display.data_window)
-plot(highLowSpread, "High_Low_Spread", display=display.data_window)
-plot(earlyExtreme ? 1 : 0, "Early_Extreme", display=display.data_window)
-plot(lateExtreme ? 1 : 0, "Late_Extreme", display=display.data_window)
+// Note: Using display.all so TradingView exports these values
+// They'll appear in a separate pane below the price chart
+plot(highTime, "High_Time")
+plot(lowTime, "Low_Time")
+plot(highBeforeLow ? 1 : 0, "High_Before_Low")
+plot(highInFirstHour ? 1 : 0, "High_In_First_Hour")
+plot(lowInFirstHour ? 1 : 0, "Low_In_First_Hour")
+plot(highInLastHour ? 1 : 0, "High_In_Last_Hour")
+plot(lowInLastHour ? 1 : 0, "Low_In_Last_Hour")
+plot(reversalType, "Reversal_Type")
+plot(highLowSpread, "High_Low_Spread")
+plot(earlyExtreme ? 1 : 0, "Early_Extreme")
+plot(lateExtreme ? 1 : 0, "Late_Extreme")
 
 // Also export the actual prices
-plot(intradayHigh, "Intraday_High", display=display.data_window)
-plot(intradayLow, "Intraday_Low", display=display.data_window)
+plot(intradayHigh, "Intraday_High")
+plot(intradayLow, "Intraday_Low")
+
+// Debug: export new day flag to verify day detection
+plot(isNewDay ? 1 : 0, "Debug_NewDay")
 
 // -----------------------------------------------------------------------------
-// VISUAL MARKERS
+// VISUAL MARKERS (for export)
 // -----------------------------------------------------------------------------
-// Mark when new high/low is made
-plotshape(high == intradayHigh and not isNewDay, "New_High", shape.triangleup, location.abovebar, color.green, size=size.tiny)
-plotshape(low == intradayLow and not isNewDay, "New_Low", shape.triangledown, location.belowbar, color.red, size=size.tiny)
+plot(high == intradayHigh and not isNewDay ? 1 : 0, "New_High")
+plot(low == intradayLow and not isNewDay ? 1 : 0, "New_Low")

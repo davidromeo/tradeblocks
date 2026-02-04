@@ -57,6 +57,21 @@ interface DatabaseSchemaOutput {
 }
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * Valid market tables and their corresponding CSV file names.
+ * Used for purge_market_table validation.
+ */
+const MARKET_TABLE_FILES: Record<string, string> = {
+  spx_daily: "spx_daily.csv",
+  spx_15min: "spx_15min.csv",
+  spx_highlow: "spx_highlow.csv",
+  vix_intraday: "vix_intraday.csv",
+};
+
+// ============================================================================
 // Tool Implementation
 // ============================================================================
 
@@ -184,5 +199,56 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
 
       return createToolOutput(summary, result);
     })
+  );
+
+  // --------------------------------------------------------------------------
+  // purge_market_table - Delete all data from a market table for re-sync
+  // --------------------------------------------------------------------------
+  server.registerTool(
+    "purge_market_table",
+    {
+      description:
+        "Delete all data from a market table and clear its sync metadata. " +
+        "Use when market data is corrupted and needs to be re-imported from CSV. " +
+        "After purging, the next query will trigger a fresh sync from the CSV file. " +
+        "Valid tables: spx_daily, spx_15min, spx_highlow, vix_intraday",
+      inputSchema: z.object({
+        table: z
+          .enum(["spx_daily", "spx_15min", "spx_highlow", "vix_intraday"])
+          .describe("Market table to purge (without 'market.' prefix)"),
+      }),
+    },
+    async ({ table }) => {
+      const conn = await getConnection(baseDir);
+      const fullTableName = `market.${table}`;
+      const fileName = MARKET_TABLE_FILES[table];
+
+      // Get current row count before deletion
+      const countResult = await conn.runAndReadAll(
+        `SELECT COUNT(*) FROM ${fullTableName}`
+      );
+      const rowsBefore = Number(countResult.getRows()[0][0]);
+
+      // Delete all rows from the market table
+      await conn.run(`DELETE FROM ${fullTableName}`);
+
+      // Delete sync metadata so next sync will re-import
+      await conn.run(
+        `DELETE FROM market._sync_metadata WHERE file_name = '${fileName}'`
+      );
+
+      const result = {
+        table: fullTableName,
+        file: fileName,
+        rowsDeleted: rowsBefore,
+        syncMetadataCleared: true,
+        nextStep: "Next query will trigger fresh import from CSV",
+      };
+
+      return createToolOutput(
+        `Purged ${rowsBefore} rows from ${fullTableName}. Sync metadata cleared for ${fileName}.`,
+        result
+      );
+    }
   );
 }

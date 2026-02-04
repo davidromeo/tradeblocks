@@ -63,14 +63,13 @@ var float v_1545 = na
 
 var float dayHigh = na
 var float dayLow = na
-var int currentDay = na
 
-// Detect new day
-int today = dayofmonth(time, "America/New_York")
-bool isNewDay = today != currentDay
+// Detect new day by comparing today's date to previous bar's date
+int todayDOM = dayofmonth(time, "America/New_York")
+int todayDOW = dayofweek(time, "America/New_York")
+bool isNewDay = bar_index == 0 or todayDOM != todayDOM[1] or todayDOW != todayDOW[1]
 
 if isNewDay
-    currentDay := today
     v_0930 := na
     v_1000 := na
     v_1030 := na
@@ -85,8 +84,11 @@ if isNewDay
     v_1500 := na
     v_1530 := na
     v_1545 := na
-    dayHigh := na
-    dayLow := na
+    dayHigh := high
+    dayLow := low
+else
+    dayHigh := math.max(dayHigh, high)
+    dayLow := math.min(dayLow, low)
 
 // Capture checkpoint prices
 if is_0930
@@ -117,10 +119,6 @@ if is_1530
     v_1530 := close
 if is_1545
     v_1545 := close
-
-// Track daily high/low
-dayHigh := na(dayHigh) ? high : math.max(dayHigh, high)
-dayLow := na(dayLow) ? low : math.min(dayLow, low)
 
 // -----------------------------------------------------------------------------
 // CALCULATED METRICS
