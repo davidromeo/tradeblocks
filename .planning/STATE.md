@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Milestone: v2.6 DuckDB Analytics Layer
-Phase: 44 of 45 (Schema Discovery) — COMPLETE
-Plan: All plans complete
-Status: Ready for Phase 45
-Last activity: 2026-02-04 — Phase 44 verified, market data sync bug fixed
+Phase: 45 of 45 (Tool Rationalization) -- COMPLETE
+Plan: 01/01 complete
+Status: Milestone complete - ready for archival
+Last activity: 2026-02-04 -- Phase 45 executed, 7 tools removed, version 0.6.0
 
-Progress: [████████  ] 83% (5/6 phases)
+Progress: [##########] 100% (6/6 phases)
 
 ## Historical Context
 
@@ -53,6 +53,8 @@ v2.6 decisions:
 - PineScript exports use SQL-safe column names (Marker_*, underscores instead of spaces)
 - purge_market_table tool for clearing corrupted data and triggering re-sync
 - PineScript day detection: use [1] comparison, not var with na (na comparisons unreliable on historical bars)
+- Tool rationalization: remove query-only tools that run_sql can replace, keep computational tools
+- SQL-first data access pattern: describe_database -> run_sql -> computational tool
 
 ## Roadmap Evolution
 
@@ -61,9 +63,18 @@ v2.6 decisions:
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Phase 44 verified + market sync bug fixed
+Stopped at: Phase 45 complete, v2.6 milestone ready for archival
 Resume file: None
-Next: `/gsd:discuss-phase 45` (Tool Rationalization)
+Next: Archive v2.6 milestone, update ROADMAP/PROJECT, create v2.6 tag
+
+### Session Notes (2026-02-04 - Phase 45)
+- Executed Phase 45 Plan 01 (Tool Rationalization)
+- Removed 7 query-only tools: get_trades, list_available_fields, run_filtered_query, aggregate_by_field, get_market_context, enrich_trades, find_similar_days
+- Added SQL replacement examples to describe_database
+- Created CHANGELOG.md with breaking changes and migration guide
+- Bumped version to 0.6.0
+- Tool count: 41 -> 34
+- Commits: e72fd5d, b89fd1b
 
 ### Session Notes (2026-02-04 continued)
 - Added purge_market_table MCP tool for clearing corrupted data
@@ -75,7 +86,7 @@ Next: `/gsd:discuss-phase 45` (Tool Rationalization)
 - Commit: 273f05a
 
 ### Session Notes (2026-02-04)
-- Executed Phase 44 (describe_database tool) — verified working
+- Executed Phase 44 (describe_database tool) -- verified working
 - Found market data sync bug during verification testing
 - Fixed PineScript column names (SQL-safe: Marker_*, New_High/New_Low, VIX_Price)
 - Fixed MCP sync to filter columns to schema, handle BigInt, lowercase OHLC
