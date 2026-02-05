@@ -23,7 +23,7 @@ Five phases deliver the edge decay analysis tool bottom-up: two foundational cal
 
 - [x] **Phase 46: Core Calculation Engines** - Period segmentation and rolling metrics analysis (completed 2026-02-05)
 - [x] **Phase 47: Monte Carlo Regime Comparison** - Dual MC simulation comparing full history vs recent window (completed 2026-02-05)
-- [ ] **Phase 48: Walk-Forward Degradation** - Progressive walk-forward with OOS efficiency tracking
+- [x] **Phase 48: Walk-Forward Degradation** - Progressive walk-forward with OOS efficiency tracking (completed 2026-02-05)
 - [ ] **Phase 49: Live Alignment Signal** - Backtest vs actual comparison when reporting log exists
 - [ ] **Phase 50: Verdict Synthesis & Tool Registration** - Combine all signals into unified MCP tool
 
@@ -70,8 +70,8 @@ Plans:
   4. Recent OOS periods are compared to historical OOS average with quantified degradation
 **Plans:** 2 plans
 Plans:
-- [ ] 48-01-PLAN.md — WFD calculation engine + efficiency tracking + trend detection + tests
-- [ ] 48-02-PLAN.md — MCP tool registration (analyze_walk_forward_degradation) + CLI verification
+- [x] 48-01-PLAN.md — WFD calculation engine + efficiency tracking + trend detection + tests
+- [x] 48-02-PLAN.md — MCP tool registration (analyze_walk_forward_degradation) + CLI verification
 
 ### Phase 49: Live Alignment Signal
 **Goal**: Users can assess whether live execution matches backtest expectations when reporting log data exists
@@ -106,6 +106,6 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 |-------|-----------|----------------|--------|-----------|
 | 46. Core Calculation Engines | v2.7 | 3/3 | ✓ Complete | 2026-02-05 |
 | 47. MC Regime Comparison | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
-| 48. WF Degradation | v2.7 | 0/2 | Planned | - |
+| 48. WF Degradation | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
 | 49. Live Alignment | v2.7 | 0/TBD | Not started | - |
 | 50. Verdict & Tool API | v2.7 | 0/TBD | Not started | - |

@@ -27,10 +27,10 @@
 
 ### Walk-Forward Degradation
 
-- [ ] **WFD-01**: Tool runs progressive walk-forward analysis (365d IS / 90d OOS / 90d step) across the full trade history
-- [ ] **WFD-02**: Tool tracks OOS efficiency (OOS metric / IS metric) for each period as a time series
-- [ ] **WFD-03**: Tool detects when OOS efficiency breaks below a threshold (e.g., 50%) or turns negative
-- [ ] **WFD-04**: Tool compares recent OOS periods to historical OOS average to quantify degradation
+- [x] **WFD-01**: Tool runs progressive walk-forward analysis (365d IS / 90d OOS / 90d step) across the full trade history
+- [x] **WFD-02**: Tool tracks OOS efficiency (OOS metric / IS metric) for each period as a time series
+- [x] **WFD-03**: Tool detects when OOS efficiency breaks below a threshold (e.g., 50%) or turns negative
+- [x] **WFD-04**: Tool compares recent OOS periods to historical OOS average to quantify degradation
 
 ### Live Alignment Signal
 
@@ -90,10 +90,10 @@
 | MCRG-02 | Phase 47 | Complete |
 | MCRG-03 | Phase 47 | Complete |
 | MCRG-04 | Phase 47 | Complete |
-| WFD-01 | Phase 48 | Pending |
-| WFD-02 | Phase 48 | Pending |
-| WFD-03 | Phase 48 | Pending |
-| WFD-04 | Phase 48 | Pending |
+| WFD-01 | Phase 48 | Complete |
+| WFD-02 | Phase 48 | Complete |
+| WFD-03 | Phase 48 | Complete |
+| WFD-04 | Phase 48 | Complete |
 | LIVE-01 | Phase 49 | Pending |
 | LIVE-02 | Phase 49 | Pending |
 | LIVE-03 | Phase 49 | Pending |
@@ -115,4 +115,4 @@
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-05 after Phase 47 completion*
+*Last updated: 2026-02-05 after Phase 48 completion*
