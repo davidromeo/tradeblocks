@@ -54,7 +54,10 @@ Plans:
   2. Monte Carlo simulation runs on only the recent window trades (configurable, default ~200)
   3. P(Profit), expected return, Sharpe, and median max drawdown are compared between the two simulations
   4. Regime divergence is classified into severity levels (aligned / mild divergence / significant divergence / regime break)
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 47-01-PLAN.md — MC regime comparison engine + divergence classification + TDD tests
+- [ ] 47-02-PLAN.md — MCP tool registration (analyze_regime_comparison) + CLI verification
 
 ### Phase 48: Walk-Forward Degradation
 **Goal**: Users can track whether out-of-sample performance is degrading over time relative to in-sample optimization
@@ -88,6 +91,7 @@ Plans:
   3. Tool produces actionable flags and key numbers summary (recent vs historical Sharpe, WR, PF, MC P(Profit), WFE trend)
   4. Tool includes detailed supporting data for each signal (period breakdowns, rolling series, MC comparison, WF details)
   5. Tool works with CLI --call mode for testing and is registered in the MCP server
+**Known constraint**: Rolling metrics series produces ~N-W+1 data points (e.g., 3200+ for a 3425-trade block). This exceeds MCP output limits. The unified tool will need to either downsample the rolling series or return summary statistics with an option to fetch the full series separately.
 **Plans**: TBD
 
 ## Progress
@@ -98,7 +102,7 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 46. Core Calculation Engines | v2.7 | 3/3 | ✓ Complete | 2026-02-05 |
-| 47. MC Regime Comparison | v2.7 | 0/TBD | Not started | - |
+| 47. MC Regime Comparison | v2.7 | 0/2 | Not started | - |
 | 48. WF Degradation | v2.7 | 0/TBD | Not started | - |
 | 49. Live Alignment | v2.7 | 0/TBD | Not started | - |
 | 50. Verdict & Tool API | v2.7 | 0/TBD | Not started | - |
