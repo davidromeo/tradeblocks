@@ -23,6 +23,7 @@ export * from './static-dataset-matcher'
 export * from './trend-detection'
 export * from './period-segmentation'
 export * from './rolling-metrics'
+export * from './mc-regime-comparison'
 // Re-export from cumulative-distribution excluding conflicting name
 export {
   type CumulativeDistributionPoint,

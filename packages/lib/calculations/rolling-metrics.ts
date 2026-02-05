@@ -129,7 +129,7 @@ function calculateDefaultWindowSize(tradeCount: number): number {
  * Calculate smart default recent window size.
  * max(20% of trades, 200), capped at tradeCount.
  */
-function calculateDefaultRecentWindow(tradeCount: number): number {
+export function calculateDefaultRecentWindow(tradeCount: number): number {
   const twentyPercent = Math.round(tradeCount * 0.2)
   const defaultN = Math.max(twentyPercent, 200)
   return Math.min(defaultN, tradeCount)
