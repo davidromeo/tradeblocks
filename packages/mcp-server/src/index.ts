@@ -23,6 +23,7 @@ import { registerImportTools } from "./tools/imports.js";
 import { registerMarketDataTools } from "./tools/market-data.js";
 import { registerSQLTools } from "./tools/sql.js";
 import { registerSchemaTools } from "./tools/schema.js";
+import { registerEdgeDecayTools } from "./tools/edge-decay.js";
 import { registerResources } from "./resources/index.js";
 import {
   installSkills,
@@ -270,7 +271,7 @@ async function main(): Promise<void> {
   // Used by HTTP transport which needs fresh instances per request (stateless mode)
   const createServer = (): McpServer => {
     const server = new McpServer(
-      { name: "tradeblocks-mcp", version: "0.6.0" },
+      { name: "tradeblocks-mcp", version: "0.7.0" },
       { capabilities: { tools: {}, resources: {} } }
     );
     registerBlockTools(server, resolvedDir);
@@ -281,6 +282,7 @@ async function main(): Promise<void> {
     registerMarketDataTools(server, resolvedDir);
     registerSQLTools(server, resolvedDir);
     registerSchemaTools(server, resolvedDir);
+    registerEdgeDecayTools(server, resolvedDir);
     registerResources(server);
     return server;
   };
