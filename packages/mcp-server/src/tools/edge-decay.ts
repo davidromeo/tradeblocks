@@ -13,6 +13,7 @@ import { withSyncedBlock } from "./middleware/sync-middleware.js";
 import {
   segmentByPeriod,
   computeRollingMetrics,
+  runRegimeComparison,
 } from "@tradeblocks/lib";
 import type { Trade } from "@tradeblocks/lib";
 
@@ -227,6 +228,161 @@ export function registerEdgeDecayTools(
               {
                 type: "text" as const,
                 text: `Error analyzing rolling metrics: ${(error as Error).message}`,
+              },
+            ],
+            isError: true as const,
+          };
+        }
+      }
+    )
+  );
+
+  // Tool 3: analyze_regime_comparison
+  server.registerTool(
+    "analyze_regime_comparison",
+    {
+      description:
+        "Run dual Monte Carlo simulations comparing full trade history vs recent window to detect regime divergence. Compares P(Profit), expected return, Sharpe ratio, and median max drawdown between the two periods. Classifies divergence severity as aligned, mild_divergence, significant_divergence, or regime_break.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter by strategy name (case-insensitive)"),
+        recentWindowSize: z
+          .number()
+          .min(20)
+          .optional()
+          .describe(
+            "Number of recent trades for the recent window simulation (default: auto-calculated, typically max(20% of trades, 200))"
+          ),
+        numSimulations: z
+          .number()
+          .min(50)
+          .max(10000)
+          .optional()
+          .describe(
+            "Number of Monte Carlo simulation paths (default: 1000)"
+          ),
+        simulationLength: z
+          .number()
+          .min(10)
+          .optional()
+          .describe(
+            "Number of trades to project forward per simulation (default: recentWindowSize)"
+          ),
+        randomSeed: z
+          .number()
+          .optional()
+          .describe("Random seed for reproducibility (default: 42)"),
+      }),
+    },
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        strategy,
+        recentWindowSize,
+        numSimulations,
+        simulationLength,
+        randomSeed,
+      }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
+          let trades = block.trades;
+
+          // Apply strategy filter
+          trades = filterByStrategy(trades, strategy);
+
+          if (trades.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: strategy
+                    ? `No trades found for strategy "${strategy}" in block "${blockId}".`
+                    : `No trades found in block "${blockId}".`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
+
+          const result = runRegimeComparison(trades, {
+            recentWindowSize,
+            numSimulations,
+            simulationLength,
+            randomSeed,
+            strategy: undefined, // Already filtered above
+          });
+
+          // Build summary
+          const fullPProfit = (
+            result.fullHistory.statistics.probabilityOfProfit * 100
+          ).toFixed(1);
+          const recentPProfit = (
+            result.recentWindow.statistics.probabilityOfProfit * 100
+          ).toFixed(1);
+          const fullSharpe =
+            result.fullHistory.statistics.meanSharpeRatio.toFixed(2);
+          const recentSharpe =
+            result.recentWindow.statistics.meanSharpeRatio.toFixed(2);
+          const severity = result.divergence.severity.replace(/_/g, " ");
+          const score = result.divergence.compositeScore.toFixed(2);
+
+          const summary = `Regime comparison for ${blockId}${strategy ? ` (${strategy})` : ""}: ${result.fullHistory.tradeCount} full / ${result.recentWindow.tradeCount} recent trades\nP(Profit): ${fullPProfit}% (full) vs ${recentPProfit}% (recent) | Sharpe: ${fullSharpe} (full) vs ${recentSharpe} (recent)\nDivergence: ${severity} (score: ${score})`;
+
+          const structuredData = {
+            blockId,
+            strategy: strategy ?? null,
+            fullHistory: {
+              tradeCount: result.fullHistory.tradeCount,
+              dateRange: result.fullHistory.dateRange,
+              statistics: {
+                probabilityOfProfit:
+                  result.fullHistory.statistics.probabilityOfProfit,
+                meanTotalReturn:
+                  result.fullHistory.statistics.meanTotalReturn,
+                meanSharpeRatio:
+                  result.fullHistory.statistics.meanSharpeRatio,
+                medianMaxDrawdown:
+                  result.fullHistory.statistics.medianMaxDrawdown,
+                meanFinalValue:
+                  result.fullHistory.statistics.meanFinalValue,
+                medianFinalValue:
+                  result.fullHistory.statistics.medianFinalValue,
+              },
+            },
+            recentWindow: {
+              tradeCount: result.recentWindow.tradeCount,
+              dateRange: result.recentWindow.dateRange,
+              statistics: {
+                probabilityOfProfit:
+                  result.recentWindow.statistics.probabilityOfProfit,
+                meanTotalReturn:
+                  result.recentWindow.statistics.meanTotalReturn,
+                meanSharpeRatio:
+                  result.recentWindow.statistics.meanSharpeRatio,
+                medianMaxDrawdown:
+                  result.recentWindow.statistics.medianMaxDrawdown,
+                meanFinalValue:
+                  result.recentWindow.statistics.meanFinalValue,
+                medianFinalValue:
+                  result.recentWindow.statistics.medianFinalValue,
+              },
+            },
+            comparison: result.comparison,
+            divergence: result.divergence,
+            parameters: result.parameters,
+          };
+
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error analyzing regime comparison: ${(error as Error).message}`,
               },
             ],
             isError: true as const,
