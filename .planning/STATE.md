@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Milestone: v2.6 DuckDB Analytics Layer — COMPLETE
-Status: Milestone archived, ready for next milestone
-Last activity: 2026-02-04 — v2.6 milestone completed and archived
+Milestone: v2.7 Edge Decay Analysis — DEFINING REQUIREMENTS
+Status: Defining requirements
+Last activity: 2026-02-04 — Milestone v2.7 started
 
-Progress: Between milestones
+Progress: Requirements phase
 
 ## Historical Context
 

@@ -74,7 +74,14 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ### Active
 
-(None — planning next milestone)
+**v2.7 Edge Decay Analysis:**
+- [ ] Unified `analyze_edge_decay` MCP tool detecting strategy performance degradation
+- [ ] Period-segmented statistics (yearly/quarterly) with trend detection
+- [ ] Rolling metrics trajectory analysis (Sharpe/WR/PF) with seasonal pattern identification
+- [ ] Dual Monte Carlo regime comparison (full history vs recent window)
+- [ ] Progressive walk-forward efficiency tracking across time windows
+- [ ] Live alignment signal (backtest vs actual) when reporting log exists
+- [ ] 4-layer verdict output (verdict → grades → flags → numbers) plus detailed supporting data
 
 ### Out of Scope
 
@@ -148,4 +155,4 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Sync middleware (withSyncedBlock/withFullSync) | Eliminates ~15 lines of boilerplate per tool | ✓ Good |
 
 ---
-*Last updated: 2026-02-04 after v2.6 milestone completed*
+*Last updated: 2026-02-04 after v2.7 milestone started*
