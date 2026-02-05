@@ -60,7 +60,7 @@ Plans:
 - [x] 47-02-PLAN.md — MCP tool registration (analyze_regime_comparison) + CLI verification
 
 ### Phase 48: Walk-Forward Degradation
-**Goal**: Users can track whether out-of-sample performance is degrading over time relative to in-sample optimization
+**Goal**: Users can track whether out-of-sample performance is degrading over time relative to in-sample performance
 **Depends on**: Nothing (independent of Phases 46-47, reuses existing walk-forward infrastructure)
 **Requirements**: WFD-01, WFD-02, WFD-03, WFD-04
 **Success Criteria** (what must be TRUE):
@@ -68,7 +68,10 @@ Plans:
   2. OOS efficiency (OOS metric / IS metric) is tracked as a time series across all periods
   3. Efficiency breakdowns are detected when OOS efficiency drops below threshold (50%) or turns negative
   4. Recent OOS periods are compared to historical OOS average with quantified degradation
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 48-01-PLAN.md — WFD calculation engine + efficiency tracking + trend detection + tests
+- [ ] 48-02-PLAN.md — MCP tool registration (analyze_walk_forward_degradation) + CLI verification
 
 ### Phase 49: Live Alignment Signal
 **Goal**: Users can assess whether live execution matches backtest expectations when reporting log data exists
@@ -103,6 +106,6 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 |-------|-----------|----------------|--------|-----------|
 | 46. Core Calculation Engines | v2.7 | 3/3 | ✓ Complete | 2026-02-05 |
 | 47. MC Regime Comparison | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
-| 48. WF Degradation | v2.7 | 0/TBD | Not started | - |
+| 48. WF Degradation | v2.7 | 0/2 | Planned | - |
 | 49. Live Alignment | v2.7 | 0/TBD | Not started | - |
 | 50. Verdict & Tool API | v2.7 | 0/TBD | Not started | - |
