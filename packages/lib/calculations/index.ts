@@ -22,6 +22,7 @@ export * from './threshold-analysis'
 export * from './static-dataset-matcher'
 export * from './trend-detection'
 export * from './period-segmentation'
+export * from './rolling-metrics'
 // Re-export from cumulative-distribution excluding conflicting name
 export {
   type CumulativeDistributionPoint,
