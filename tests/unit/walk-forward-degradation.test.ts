@@ -438,6 +438,33 @@ describe('edge cases', () => {
     expect(result.config.strategy).toBeUndefined()
   })
 
+  test('22. undefined options do not overwrite defaults (MCP tool pattern)', () => {
+    const trades = generateTradeSet(730, { startDate: new Date(2022, 0, 1) })
+    // Simulate MCP tool passing undefined for all optional params
+    const result = analyzeWalkForwardDegradation(trades, {
+      inSampleDays: undefined,
+      outOfSampleDays: undefined,
+      stepSizeDays: undefined,
+      minTradesPerPeriod: undefined,
+      recentPeriodCount: undefined,
+      strategy: undefined,
+    })
+
+    // Defaults should be applied, not undefined
+    expect(result.config.inSampleDays).toBe(365)
+    expect(result.config.outOfSampleDays).toBe(90)
+    expect(result.config.stepSizeDays).toBe(90)
+    expect(result.config.minTradesPerPeriod).toBe(10)
+    expect(result.config.recentPeriodCount).toBe(3)
+    // Should produce valid windows with non-NaN dates
+    expect(result.dataQuality.totalPeriods).toBeGreaterThan(0)
+    if (result.periods.length > 0) {
+      expect(result.periods[0].window.inSampleEnd).not.toContain('NaN')
+    }
+    // Should have sufficient periods with real metrics
+    expect(result.dataQuality.sufficientPeriods).toBeGreaterThan(0)
+  })
+
   test('19. empty trades returns empty result', () => {
     const result = analyzeWalkForwardDegradation([])
 

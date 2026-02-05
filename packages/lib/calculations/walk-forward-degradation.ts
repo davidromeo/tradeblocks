@@ -265,7 +265,16 @@ export function analyzeWalkForwardDegradation(
   trades: Trade[],
   options?: Partial<WFDConfig>,
 ): WFDResult {
-  const config: WFDConfig = { ...DEFAULT_CONFIG, ...options }
+  // Filter out undefined values so they don't overwrite defaults via spread
+  const definedOptions: Partial<WFDConfig> = {}
+  if (options) {
+    for (const [key, value] of Object.entries(options)) {
+      if (value !== undefined) {
+        ;(definedOptions as Record<string, unknown>)[key] = value
+      }
+    }
+  }
+  const config: WFDConfig = { ...DEFAULT_CONFIG, ...definedOptions }
 
   // 1. Apply strategy filter (case-insensitive)
   let filtered = trades
