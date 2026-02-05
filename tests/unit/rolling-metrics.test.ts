@@ -2,11 +2,7 @@ import {
   computeRollingMetrics,
   compareRecentVsHistorical,
 } from '@tradeblocks/lib'
-import type {
-  Trade,
-  RollingMetricsResult,
-  RecentVsHistoricalComparison,
-} from '@tradeblocks/lib'
+import type { Trade } from '@tradeblocks/lib'
 
 // ---------------------------------------------------------------------------
 // Test helper: create a Trade with sensible defaults
