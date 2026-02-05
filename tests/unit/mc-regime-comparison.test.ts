@@ -1,0 +1,461 @@
+import {
+  runRegimeComparison,
+  classifyDivergence,
+} from '@tradeblocks/lib'
+import type {
+  Trade,
+  MetricComparison,
+} from '@tradeblocks/lib'
+
+// ---------------------------------------------------------------------------
+// Test helper: create a Trade with sensible defaults
+// ---------------------------------------------------------------------------
+
+function makeTrade(overrides: Partial<Trade> = {}): Trade {
+  return {
+    dateOpened: new Date('2024-01-15'),
+    timeOpened: '09:30:00',
+    openingPrice: 100,
+    legs: 'SPX Put Spread',
+    premium: 1.5,
+    pl: 100,
+    numContracts: 1,
+    fundsAtClose: 100100,
+    marginReq: 5000,
+    strategy: 'Iron Condor',
+    openingCommissionsFees: 1.5,
+    closingCommissionsFees: 1.5,
+    openingShortLongRatio: 1.0,
+    ...overrides,
+  }
+}
+
+/**
+ * Generate N trades with controllable win rate on consecutive days.
+ */
+function generateTradeSet(
+  count: number,
+  options?: {
+    winRate?: number
+    avgPl?: number
+    startDate?: Date
+    strategy?: string
+  },
+): Trade[] {
+  const winRate = options?.winRate ?? 0.7
+  const avgWin = options?.avgPl ?? 200
+  const avgLoss = -(Math.abs(options?.avgPl ?? 200) * 0.5)
+  const startDate = options?.startDate ?? new Date(2024, 0, 1)
+  const strategy = options?.strategy ?? 'Iron Condor'
+
+  const trades: Trade[] = []
+  let runningFunds = 100000
+
+  for (let i = 0; i < count; i++) {
+    const date = new Date(startDate)
+    date.setDate(date.getDate() + i)
+
+    const isWin = i < Math.round(count * winRate)
+    const pl = isWin ? avgWin : avgLoss
+    runningFunds += pl
+
+    trades.push(
+      makeTrade({
+        dateOpened: date,
+        timeOpened: `09:${String(30 + (i % 30)).padStart(2, '0')}:00`,
+        pl,
+        fundsAtClose: runningFunds,
+        strategy,
+      }),
+    )
+  }
+
+  return trades
+}
+
+// ---------------------------------------------------------------------------
+// Tests for runRegimeComparison
+// ---------------------------------------------------------------------------
+
+describe('runRegimeComparison', () => {
+  test('1. Insufficient trades: throws error for < 30 trades', () => {
+    const trades = generateTradeSet(25)
+
+    expect(() => runRegimeComparison(trades)).toThrow(
+      'Insufficient trades for regime comparison. Found 25, need at least 30.',
+    )
+  })
+
+  test('2. Basic execution with 50 trades: returns all expected fields', () => {
+    const trades = generateTradeSet(50)
+    const result = runRegimeComparison(trades, {
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // Check top-level structure
+    expect(result).toHaveProperty('fullHistory')
+    expect(result).toHaveProperty('recentWindow')
+    expect(result).toHaveProperty('comparison')
+    expect(result).toHaveProperty('divergence')
+    expect(result).toHaveProperty('parameters')
+
+    // Check fullHistory structure
+    expect(result.fullHistory).toHaveProperty('statistics')
+    expect(result.fullHistory).toHaveProperty('tradeCount')
+    expect(result.fullHistory).toHaveProperty('dateRange')
+    expect(result.fullHistory.dateRange).toHaveProperty('start')
+    expect(result.fullHistory.dateRange).toHaveProperty('end')
+
+    // Check recentWindow structure
+    expect(result.recentWindow).toHaveProperty('statistics')
+    expect(result.recentWindow).toHaveProperty('tradeCount')
+    expect(result.recentWindow).toHaveProperty('dateRange')
+
+    // Check divergence structure
+    expect(result.divergence).toHaveProperty('severity')
+    expect(result.divergence).toHaveProperty('compositeScore')
+    expect(result.divergence).toHaveProperty('scoreDescription')
+
+    // Check parameters structure
+    expect(result.parameters).toHaveProperty('recentWindowSize')
+    expect(result.parameters).toHaveProperty('numSimulations')
+    expect(result.parameters).toHaveProperty('simulationLength')
+    expect(result.parameters).toHaveProperty('initialCapital')
+    expect(result.parameters).toHaveProperty('tradesPerYear')
+    expect(result.parameters).toHaveProperty('randomSeed')
+  })
+
+  test('3. Default recentWindowSize uses calculateDefaultRecentWindow formula', () => {
+    // For 500 trades: max(round(500 * 0.2), 200) = max(100, 200) = 200
+    const trades = generateTradeSet(500)
+    const result = runRegimeComparison(trades, {
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(result.parameters.recentWindowSize).toBe(200)
+    expect(result.recentWindow.tradeCount).toBe(200)
+  })
+
+  test('4. Custom recentWindowSize is honored', () => {
+    const trades = generateTradeSet(100)
+    const result = runRegimeComparison(trades, {
+      recentWindowSize: 30,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(result.parameters.recentWindowSize).toBe(30)
+    expect(result.recentWindow.tradeCount).toBe(30)
+  })
+
+  test('5. Strategy filter: only matching trades are used', () => {
+    const ironCondorTrades = generateTradeSet(40, { strategy: 'Iron Condor' })
+    const putSpreadTrades = generateTradeSet(30, {
+      strategy: 'Put Spread',
+      startDate: new Date(2024, 6, 1),
+    })
+    const allTrades = [...ironCondorTrades, ...putSpreadTrades]
+
+    const result = runRegimeComparison(allTrades, {
+      strategy: 'Iron Condor',
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // Should use only the 40 Iron Condor trades
+    expect(result.fullHistory.tradeCount).toBe(40)
+  })
+
+  test('6. Strategy filter is case-insensitive', () => {
+    const trades = generateTradeSet(50, { strategy: 'Iron Condor' })
+
+    const result = runRegimeComparison(trades, {
+      strategy: 'iron condor',
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(result.fullHistory.tradeCount).toBe(50)
+  })
+
+  test('7. Date ranges are correct', () => {
+    const startDate = new Date(2024, 0, 1)
+    const trades = generateTradeSet(100, { startDate })
+
+    const result = runRegimeComparison(trades, {
+      recentWindowSize: 30,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // Full history starts at first trade
+    expect(result.fullHistory.dateRange.start).toBe('2024-01-01')
+    // Full history ends at last trade (day 99 = April 9)
+    expect(result.fullHistory.dateRange.end).toBeTruthy()
+
+    // Recent window ends at same date as full history
+    expect(result.recentWindow.dateRange.end).toBe(result.fullHistory.dateRange.end)
+
+    // Recent window starts later than full history
+    expect(result.recentWindow.dateRange.start > result.fullHistory.dateRange.start).toBe(true)
+  })
+
+  test('8. Comparison has exactly 4 metrics', () => {
+    const trades = generateTradeSet(50)
+    const result = runRegimeComparison(trades, {
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(result.comparison).toHaveLength(4)
+
+    const metricNames = result.comparison.map(c => c.metric)
+    expect(metricNames).toContain('probabilityOfProfit')
+    expect(metricNames).toContain('expectedReturn')
+    expect(metricNames).toContain('sharpeRatio')
+    expect(metricNames).toContain('medianMaxDrawdown')
+  })
+
+  test('9. RecentWindowSize clamping: clamped to 50% when >= trade count', () => {
+    const trades = generateTradeSet(50)
+    const result = runRegimeComparison(trades, {
+      recentWindowSize: 100, // larger than trade count
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // Should be clamped to floor(50 * 0.5) = 25
+    expect(result.parameters.recentWindowSize).toBe(25)
+    expect(result.recentWindow.tradeCount).toBe(25)
+  })
+
+  test('10. Strategy filter with insufficient filtered trades throws', () => {
+    const ironCondorTrades = generateTradeSet(20, { strategy: 'Iron Condor' })
+    const putSpreadTrades = generateTradeSet(50, {
+      strategy: 'Put Spread',
+      startDate: new Date(2024, 6, 1),
+    })
+    const allTrades = [...ironCondorTrades, ...putSpreadTrades]
+
+    expect(() =>
+      runRegimeComparison(allTrades, {
+        strategy: 'Iron Condor',
+        numSimulations: 100,
+      }),
+    ).toThrow('Insufficient trades for regime comparison. Found 20, need at least 30.')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests for classifyDivergence
+// ---------------------------------------------------------------------------
+
+describe('classifyDivergence', () => {
+  test('11. Aligned: all metric divergence scores near 0', () => {
+    const comparisons: MetricComparison[] = [
+      { metric: 'probabilityOfProfit', fullHistoryValue: 0.7, recentWindowValue: 0.72, delta: 0.02, percentChange: 2.86, divergenceScore: 0.2 },
+      { metric: 'expectedReturn', fullHistoryValue: 0.1, recentWindowValue: 0.11, delta: 0.01, percentChange: 10, divergenceScore: 0.1 },
+      { metric: 'sharpeRatio', fullHistoryValue: 1.5, recentWindowValue: 1.45, delta: -0.05, percentChange: -3.33, divergenceScore: 0.033 },
+      { metric: 'medianMaxDrawdown', fullHistoryValue: 0.08, recentWindowValue: 0.085, delta: 0.005, percentChange: 6.25, divergenceScore: 0.0625 },
+    ]
+
+    const result = classifyDivergence(comparisons)
+    expect(result.severity).toBe('aligned')
+    expect(result.compositeScore).toBeLessThan(0.30)
+  })
+
+  test('12. Mild divergence: moderate divergence scores', () => {
+    const comparisons: MetricComparison[] = [
+      { metric: 'probabilityOfProfit', fullHistoryValue: 0.7, recentWindowValue: 0.65, delta: -0.05, percentChange: -7.14, divergenceScore: 0.5 },
+      { metric: 'expectedReturn', fullHistoryValue: 0.1, recentWindowValue: 0.06, delta: -0.04, percentChange: -40, divergenceScore: 0.4 },
+      { metric: 'sharpeRatio', fullHistoryValue: 1.5, recentWindowValue: 1.2, delta: -0.3, percentChange: -20, divergenceScore: 0.2 },
+      { metric: 'medianMaxDrawdown', fullHistoryValue: 0.08, recentWindowValue: 0.12, delta: 0.04, percentChange: 50, divergenceScore: 0.5 },
+    ]
+
+    const result = classifyDivergence(comparisons)
+    expect(result.severity).toBe('mild_divergence')
+    expect(result.compositeScore).toBeGreaterThanOrEqual(0.30)
+    expect(result.compositeScore).toBeLessThan(0.60)
+  })
+
+  test('13. Significant divergence: large divergence scores', () => {
+    const comparisons: MetricComparison[] = [
+      { metric: 'probabilityOfProfit', fullHistoryValue: 0.7, recentWindowValue: 0.55, delta: -0.15, percentChange: -21.4, divergenceScore: 1.5 },
+      { metric: 'expectedReturn', fullHistoryValue: 0.1, recentWindowValue: 0.04, delta: -0.06, percentChange: -60, divergenceScore: 0.6 },
+      { metric: 'sharpeRatio', fullHistoryValue: 1.5, recentWindowValue: 0.8, delta: -0.7, percentChange: -46.7, divergenceScore: 0.467 },
+      { metric: 'medianMaxDrawdown', fullHistoryValue: 0.08, recentWindowValue: 0.14, delta: 0.06, percentChange: 75, divergenceScore: 0.75 },
+    ]
+
+    const result = classifyDivergence(comparisons)
+    expect(result.severity).toBe('significant_divergence')
+    expect(result.compositeScore).toBeGreaterThanOrEqual(0.60)
+    expect(result.compositeScore).toBeLessThan(1.00)
+  })
+
+  test('14. Regime break: extreme divergence scores', () => {
+    const comparisons: MetricComparison[] = [
+      { metric: 'probabilityOfProfit', fullHistoryValue: 0.7, recentWindowValue: 0.4, delta: -0.3, percentChange: -42.9, divergenceScore: 3.0 },
+      { metric: 'expectedReturn', fullHistoryValue: 0.1, recentWindowValue: -0.05, delta: -0.15, percentChange: -150, divergenceScore: 1.5 },
+      { metric: 'sharpeRatio', fullHistoryValue: 1.5, recentWindowValue: -0.5, delta: -2.0, percentChange: -133, divergenceScore: 1.333 },
+      { metric: 'medianMaxDrawdown', fullHistoryValue: 0.08, recentWindowValue: 0.25, delta: 0.17, percentChange: 212.5, divergenceScore: 2.125 },
+    ]
+
+    const result = classifyDivergence(comparisons)
+    expect(result.severity).toBe('regime_break')
+    expect(result.compositeScore).toBeGreaterThanOrEqual(1.00)
+  })
+
+  test('15. Score description is factual and contains composite score', () => {
+    const comparisons: MetricComparison[] = [
+      { metric: 'probabilityOfProfit', fullHistoryValue: 0.7, recentWindowValue: 0.65, delta: -0.05, percentChange: -7.14, divergenceScore: 0.5 },
+      { metric: 'expectedReturn', fullHistoryValue: 0.1, recentWindowValue: 0.08, delta: -0.02, percentChange: -20, divergenceScore: 0.2 },
+      { metric: 'sharpeRatio', fullHistoryValue: 1.5, recentWindowValue: 1.3, delta: -0.2, percentChange: -13.3, divergenceScore: 0.133 },
+      { metric: 'medianMaxDrawdown', fullHistoryValue: 0.08, recentWindowValue: 0.1, delta: 0.02, percentChange: 25, divergenceScore: 0.25 },
+    ]
+
+    const result = classifyDivergence(comparisons)
+
+    // Should contain the score value
+    expect(result.scoreDescription).toContain(result.compositeScore.toFixed(2))
+    // Should contain factual info about metric count
+    expect(result.scoreDescription).toContain('4 metric divergences')
+    // Should NOT contain interpretive labels
+    expect(result.scoreDescription).not.toMatch(/improving|deteriorating|healthy|unhealthy/i)
+  })
+
+  test('16. Empty comparisons returns aligned', () => {
+    const result = classifyDivergence([])
+    expect(result.severity).toBe('aligned')
+    expect(result.compositeScore).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+describe('edge cases', () => {
+  test('17. Deterministic with same seed: identical results', () => {
+    const trades = generateTradeSet(50)
+
+    const result1 = runRegimeComparison(trades, {
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+    const result2 = runRegimeComparison(trades, {
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(result1.fullHistory.statistics.probabilityOfProfit).toBe(
+      result2.fullHistory.statistics.probabilityOfProfit,
+    )
+    expect(result1.recentWindow.statistics.meanTotalReturn).toBe(
+      result2.recentWindow.statistics.meanTotalReturn,
+    )
+    expect(result1.divergence.compositeScore).toBe(result2.divergence.compositeScore)
+    expect(result1.divergence.severity).toBe(result2.divergence.severity)
+  })
+
+  test('18. All winning trades: high P(Profit) for both pools, low divergence', () => {
+    const trades = generateTradeSet(50, { winRate: 1.0, avgPl: 200 })
+
+    const result = runRegimeComparison(trades, {
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // Both pools should have very high P(Profit)
+    expect(result.fullHistory.statistics.probabilityOfProfit).toBeGreaterThan(0.9)
+    expect(result.recentWindow.statistics.probabilityOfProfit).toBeGreaterThan(0.9)
+
+    // Divergence should be low since both pools draw from same distribution
+    expect(result.divergence.severity).toBe('aligned')
+  })
+
+  test('19. Recent window much worse: detects divergence', () => {
+    // First 400 trades: 80% win rate (good)
+    const goodTrades = generateTradeSet(400, {
+      winRate: 0.8,
+      avgPl: 200,
+      startDate: new Date(2023, 0, 1),
+    })
+    // Last 100 trades: 30% win rate (bad)
+    const badTrades = generateTradeSet(100, {
+      winRate: 0.3,
+      avgPl: 200,
+      startDate: new Date(2024, 2, 7), // Start after good trades end
+    })
+
+    // Fix fundsAtClose continuity
+    let runningFunds = goodTrades[goodTrades.length - 1].fundsAtClose
+    for (const t of badTrades) {
+      runningFunds += t.pl
+      t.fundsAtClose = runningFunds
+    }
+
+    const allTrades = [...goodTrades, ...badTrades]
+
+    const result = runRegimeComparison(allTrades, {
+      recentWindowSize: 100,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // The recent window is much worse, so divergence should be at least mild
+    expect(['mild_divergence', 'significant_divergence', 'regime_break']).toContain(
+      result.divergence.severity,
+    )
+    expect(result.divergence.compositeScore).toBeGreaterThan(0.3)
+  })
+
+  test('20. Each comparison metric has valid delta and percentChange', () => {
+    const trades = generateTradeSet(60)
+    const result = runRegimeComparison(trades, {
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    for (const comp of result.comparison) {
+      expect(typeof comp.delta).toBe('number')
+      expect(isFinite(comp.delta)).toBe(true)
+      expect(typeof comp.divergenceScore).toBe('number')
+      expect(comp.divergenceScore).toBeGreaterThanOrEqual(0)
+
+      // delta should equal recentWindowValue - fullHistoryValue
+      expect(comp.delta).toBeCloseTo(comp.recentWindowValue - comp.fullHistoryValue, 10)
+
+      // percentChange should be null if fullHistoryValue is 0, otherwise a number
+      if (comp.fullHistoryValue === 0) {
+        expect(comp.percentChange).toBeNull()
+      } else {
+        expect(typeof comp.percentChange).toBe('number')
+      }
+    }
+  })
+
+  test('21. simulationLength defaults to recentWindowSize', () => {
+    const trades = generateTradeSet(100)
+    const result = runRegimeComparison(trades, {
+      recentWindowSize: 40,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(result.parameters.simulationLength).toBe(40)
+  })
+
+  test('22. Custom simulationLength is honored', () => {
+    const trades = generateTradeSet(100)
+    const result = runRegimeComparison(trades, {
+      recentWindowSize: 40,
+      simulationLength: 60,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(result.parameters.simulationLength).toBe(60)
+  })
+})
