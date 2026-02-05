@@ -10,25 +10,26 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Milestone: v2.7 Edge Decay Analysis
-Phase: 46 of 50 (Core Calculation Engines) -- COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase 46 complete, ready for Phase 47
-Last activity: 2026-02-05 -- Phase 46 verified and complete
+Phase: 47 of 50 (Monte Carlo Regime Comparison)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-05 -- Completed 47-01-PLAN.md
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 27%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 6min
-- Total execution time: 18min
+- Total plans completed: 4
+- Average duration: 5min
+- Total execution time: 23min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 46-core-calculation-engines | 3 | 18min | 6min |
+| 47-monte-carlo-regime-comparison | 1 | 5min | 5min |
 
 ## Historical Context
 
@@ -67,5 +68,5 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call portfolio_health_check '
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Phase 46 complete, ready for Phase 47
+Stopped at: Completed 47-01-PLAN.md
 Resume file: None
