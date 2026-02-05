@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Options trading analytics platform with a web dashboard and AI-powered analysis via MCP (Model Context Protocol). Includes walk-forward analysis, Monte Carlo simulation, correlation analysis, position sizing, and more — all accessible through a browser UI or programmatically via MCP server for integration with Claude, Codex, and Gemini AI assistants.
+Options trading analytics platform with a web dashboard and AI-powered analysis via MCP (Model Context Protocol). Includes walk-forward analysis, Monte Carlo simulation, correlation analysis, position sizing, SQL-based data exploration via DuckDB, and more — all accessible through a browser UI or programmatically via MCP server for integration with Claude, Codex, and Gemini AI assistants.
 
 ## Core Value
 
@@ -64,25 +64,17 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ Models can track slippage trends over time — v2.5
 - ✓ Quality scoring dropped (existing tools provide metrics, AI synthesizes) — v2.5
 
+**v2.6 DuckDB Analytics Layer:**
+- ✓ DuckDB integration with lazy singleton, security sandbox, graceful shutdown — v2.6
+- ✓ CSV-to-DuckDB sync with SHA-256 hash-based change detection — v2.6
+- ✓ `run_sql` MCP tool for arbitrary SQL with security validation and timeout — v2.6
+- ✓ Cross-block queries and market data JOINs — v2.6
+- ✓ `describe_database` for schema discovery with hypothesis flags — v2.6
+- ✓ Tool rationalization: 7 query tools removed, SQL-first pattern established — v2.6
+
 ### Active
 
-**v2.6 DuckDB Analytics Layer:**
-- [ ] Central `market.duckdb` for all market data (SPX daily, intraday, VIX, extensible)
-- [ ] Auto-synced `trades.duckdb` caching all blocks with mtime-based refresh
-- [ ] `run_sql` MCP tool for arbitrary SQL queries joining trades ↔ market data
-- [ ] Cross-block queries (e.g., "all Iron Condors across all portfolios")
-- [ ] Deprecate redundant query tools (SQL replaces filter/aggregate tools)
-
-## Current Milestone: v2.6 DuckDB Analytics Layer
-
-**Goal:** Enable Claude to write arbitrary SQL against trades and market data for hypothesis generation and backtest research.
-
-**Target features:**
-- Central market data store (`market.duckdb`) with existing + extensible data sources
-- Auto-synced trade cache (`trades.duckdb`) that stays fresh with CSV changes
-- `run_sql` tool as primary query interface for AI-driven exploration
-- Support for cross-block analysis and market data joins
-- Preserve block portability (folder delete/update/add still works)
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -92,22 +84,22 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.5):**
+**Current state (v2.6):**
 - Next.js 15 web application with client-side computation
-- MCP server (`tradeblocks-mcp` v0.4.8) with 33 tools at packages/mcp-server/
+- MCP server (`tradeblocks-mcp` v0.6.1) with 34 tools at packages/mcp-server/
+- DuckDB analytics layer with SQL query interface and schema discovery
+- CSV-to-DuckDB sync with hash-based change detection (trades + 4 market data tables)
 - 6 agent skills at packages/agent-skills/
 - Shared library at packages/lib/ (81 files, barrel exports)
-- ~20,800 LOC in packages/, ~12,500 LOC in WFA-related files
-- 1024 tests (65 test suites)
+- ~59,000 LOC in packages/mcp-server/
 - Embedded historical Treasury rates (2013-2026) for accurate risk metrics
-- Backtest optimization tools for data-driven filter development
-- Reporting log analysis tools for backtest vs actual comparison
+- SQL-first data access pattern: describe_database → run_sql → computational tools
 
 **Architecture:**
 - Monorepo with npm workspaces
 - Root: Next.js web app
 - packages/lib/: Shared library (@tradeblocks/lib workspace package)
-- packages/mcp-server/: MCP server (npm: tradeblocks-mcp)
+- packages/mcp-server/: MCP server (npm: tradeblocks-mcp) with DuckDB analytics
 - packages/agent-skills/: Agent skill definitions
 
 ## Constraints
@@ -146,6 +138,14 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Linear regression with normal approximation for p-value | Simple, uses existing normalCDF from lib | ✓ Good |
 | Drop Quality Scoring (Phase 40) | Existing tools provide metrics; AI synthesizes rather than prescriptive scores | ✓ Good |
 | Trade matching by date\|strategy\|time (minute precision) | Handles fractional seconds in actual trades | ✓ Good |
+| Single DuckDB file (analytics.duckdb) with schemas | Simpler than separate files, single connection | ✓ Good |
+| SHA-256 hash-based change detection | Content-based, more reliable than mtime | ✓ Good |
+| Lazy sync (on query, not startup) | No startup cost, sync only when needed | ✓ Good |
+| SQL validation via pattern blocklist | Simple, effective security for SELECT-only access | ✓ Good |
+| describe_database single tool (not separate list_tables + get_schema) | Reduces round-trips, one call for full context | ✓ Good |
+| Remove 7 query tools immediately (no deprecation period) | Pre-1.0 beta, clean break simpler for AI agents | ✓ Good |
+| SQL-first data access pattern | Flexible exploration, replaces rigid query tools | ✓ Good |
+| Sync middleware (withSyncedBlock/withFullSync) | Eliminates ~15 lines of boilerplate per tool | ✓ Good |
 
 ---
-*Last updated: 2026-02-01 after v2.6 milestone started*
+*Last updated: 2026-02-04 after v2.6 milestone completed*

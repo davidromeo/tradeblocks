@@ -1,5 +1,33 @@
 # Project Milestones: TradeBlocks
 
+## v2.6 DuckDB Analytics Layer (Shipped: 2026-02-04)
+
+**Delivered:** SQL query capabilities for the MCP server via DuckDB, enabling Claude to write arbitrary SQL against trades and market data for hypothesis generation, with hash-based sync, security sandbox, schema discovery, and tool rationalization.
+
+**Phases completed:** 41-45 including 42.1 (11 plans total)
+
+**Key accomplishments:**
+
+- DuckDB integration with lazy singleton connection manager, security sandbox (`enable_external_access: false`), and graceful shutdown
+- CSV-to-DuckDB sync layer with SHA-256 hash-based change detection, atomic transactions, and 4 market data tables
+- `run_sql` MCP tool enabling arbitrary SQL with security validation, 30s timeout, and helpful error messages
+- `describe_database` MCP tool with DuckDB introspection, column descriptions, hypothesis flags, and 12 example queries
+- Sync middleware pattern (`withSyncedBlock`/`withFullSync`) applied to 23+ tools, eliminating sync boilerplate
+- Tool rationalization: removed 7 redundant query tools (41→34), establishing SQL-first data access pattern
+
+**Stats:**
+
+- 44 files modified in packages/mcp-server/
+- +10,444 / -7,010 lines of TypeScript
+- 6 phases, 11 plans
+- 4 days (Feb 1 → Feb 4, 2026)
+
+**Git range:** `4be28bb` → `01c0718`
+
+**What's next:** Planning next milestone
+
+---
+
 ## v2.5 Reporting Log Integration & Discrepancy Analysis (Shipped: 2026-02-01)
 
 **Delivered:** MCP tools for AI-powered reporting log analysis: discover blocks with reporting logs, compare backtest vs actual at trade level with outlier detection, analyze slippage sources and patterns, match strategies by P/L correlation, and detect slippage trends over time.

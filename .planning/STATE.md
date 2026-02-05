@@ -2,23 +2,22 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-01)
+See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** v2.6 DuckDB Analytics Layer
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v2.6 DuckDB Analytics Layer
-Phase: 45 of 45 (Tool Rationalization) -- COMPLETE
-Plan: 01/01 complete
-Status: Milestone complete - ready for archival
-Last activity: 2026-02-04 -- Phase 45 executed, 7 tools removed, version 0.6.0
+Milestone: v2.6 DuckDB Analytics Layer — COMPLETE
+Status: Milestone archived, ready for next milestone
+Last activity: 2026-02-04 — v2.6 milestone completed and archived
 
-Progress: [##########] 100% (6/6 phases)
+Progress: Between milestones
 
 ## Historical Context
 
+See [v2.6 archive](milestones/v2.6-duckdb-analytics-layer.md) for DuckDB analytics layer details.
 See [v2.5 archive](milestones/v2.5-reporting-log-integration.md) for reporting log integration details.
 See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for backtest optimization tools.
 See [v2.3 archive](milestones/v2.3-workspace-packages.md) for workspace package migration details.
@@ -30,69 +29,6 @@ See [v1.0 archive](milestones/v1.0-wfa-enhancement.md) for WFA enhancement histo
 ## Accumulated Decisions
 
 All decisions now captured in PROJECT.md Key Decisions table.
-
-v2.6 decisions:
-- Single DuckDB file (analytics.duckdb) with trades/market schemas
-- SHA-256 hash-based change detection (not mtime)
-- Lazy sync: triggered on query, not server startup
-- Batch inserts: 500 rows per batch for performance
-- Market data merge/preserve strategy: INSERT ON CONFLICT DO NOTHING
-- 14 MCP tools integrated with sync layer
-- Unchanged blocks are not tracked in SyncResult (simply not processed)
-- Concurrent sync not safe - use sequential syncs only
-- DuckDB COUNT returns BigInt, requires Number() conversion
-- Sync middleware: withSyncedBlock, withSyncedBlocks, withFullSync patterns
-- Tool files split: blocks/ (7 modules), reports/ (10 modules), shared/ (1 module)
-- SQL validation via pattern blocklist (not parsing) for security
-- 30s query timeout with Promise.race for protection
-- Auto-append LIMIT (default 100, max 1000) for unbounded queries
-- describe_database: single tool returns all schema info (tables, columns, types, descriptions, row counts, examples)
-- Schema descriptions hardcoded + merged with DuckDB introspection for accuracy + context
-- Hypothesis flags on columns for analytical relevance
-- Market sync filters CSV columns to only those in table schema (handles TradingView marker columns)
-- PineScript exports use SQL-safe column names (Marker_*, underscores instead of spaces)
-- purge_market_table tool for clearing corrupted data and triggering re-sync
-- PineScript day detection: use [1] comparison, not var with na (na comparisons unreliable on historical bars)
-- Tool rationalization: remove query-only tools that run_sql can replace, keep computational tools
-- SQL-first data access pattern: describe_database -> run_sql -> computational tool
-
-## Roadmap Evolution
-
-- Phase 42.1 inserted after Phase 42: Sync Layer Hardening (integration tests + middleware pattern)
-
-## Session Continuity
-
-Last session: 2026-02-04
-Stopped at: Phase 45 complete, v2.6 milestone ready for archival
-Resume file: None
-Next: Archive v2.6 milestone, update ROADMAP/PROJECT, create v2.6 tag
-
-### Session Notes (2026-02-04 - Phase 45)
-- Executed Phase 45 Plan 01 (Tool Rationalization)
-- Removed 7 query-only tools: get_trades, list_available_fields, run_filtered_query, aggregate_by_field, get_market_context, enrich_trades, find_similar_days
-- Added SQL replacement examples to describe_database
-- Created CHANGELOG.md with breaking changes and migration guide
-- Bumped version to 0.6.0
-- Tool count: 41 -> 34
-- Commits: e72fd5d, b89fd1b
-
-### Session Notes (2026-02-04 continued)
-- Added purge_market_table MCP tool for clearing corrupted data
-- Fixed PineScript day detection bug in spx-highlow-timing.pine and vix-intraday.pine
-- Root cause: var variables with na comparisons don't work reliably on historical bars
-- Solution: Use [1] syntax to compare dayofmonth to previous bar's value
-- Changed spx-highlow to overlay=false for proper CSV export
-- All market data now syncing correctly with proper daily resets
-- Commit: 273f05a
-
-### Session Notes (2026-02-04)
-- Executed Phase 44 (describe_database tool) -- verified working
-- Found market data sync bug during verification testing
-- Fixed PineScript column names (SQL-safe: Marker_*, New_High/New_Low, VIX_Price)
-- Fixed MCP sync to filter columns to schema, handle BigInt, lowercase OHLC
-- Commits: 6b2b512 (scripts), fbdd824 (mcp-server)
-- User needs to re-export CSVs from TradingView with updated indicators
-- Discussed automating market data fetch (v2.7 idea: Yahoo Finance + local calculation)
 
 ## Quick Tasks Completed
 
