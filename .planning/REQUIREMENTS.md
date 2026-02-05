@@ -20,10 +20,10 @@
 
 ### Monte Carlo Regime Comparison
 
-- [ ] **MCRG-01**: Tool runs Monte Carlo simulation sampling from full trade history (percentage-based resampling)
-- [ ] **MCRG-02**: Tool runs Monte Carlo simulation sampling from only the recent window (configurable, default ~200 trades)
-- [ ] **MCRG-03**: Tool compares P(Profit), expected return, Sharpe, and median max drawdown between full-history and recent-window simulations
-- [ ] **MCRG-04**: Tool classifies regime divergence severity (aligned, mild divergence, significant divergence, regime break)
+- [x] **MCRG-01**: Tool runs Monte Carlo simulation sampling from full trade history (percentage-based resampling)
+- [x] **MCRG-02**: Tool runs Monte Carlo simulation sampling from only the recent window (configurable, default ~200 trades)
+- [x] **MCRG-03**: Tool compares P(Profit), expected return, Sharpe, and median max drawdown between full-history and recent-window simulations
+- [x] **MCRG-04**: Tool classifies regime divergence severity (aligned, mild divergence, significant divergence, regime break)
 
 ### Walk-Forward Degradation
 
@@ -86,10 +86,10 @@
 | ROLL-02 | Phase 46 | Complete |
 | ROLL-03 | Phase 46 | Complete |
 | ROLL-04 | Phase 46 | Complete |
-| MCRG-01 | Phase 47 | Pending |
-| MCRG-02 | Phase 47 | Pending |
-| MCRG-03 | Phase 47 | Pending |
-| MCRG-04 | Phase 47 | Pending |
+| MCRG-01 | Phase 47 | Complete |
+| MCRG-02 | Phase 47 | Complete |
+| MCRG-03 | Phase 47 | Complete |
+| MCRG-04 | Phase 47 | Complete |
 | WFD-01 | Phase 48 | Pending |
 | WFD-02 | Phase 48 | Pending |
 | WFD-03 | Phase 48 | Pending |
@@ -115,4 +115,4 @@
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 after roadmap creation*
+*Last updated: 2026-02-05 after Phase 47 completion*

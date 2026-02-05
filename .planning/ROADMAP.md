@@ -22,7 +22,7 @@ Five phases deliver the edge decay analysis tool bottom-up: two foundational cal
 ## Phases
 
 - [x] **Phase 46: Core Calculation Engines** - Period segmentation and rolling metrics analysis (completed 2026-02-05)
-- [ ] **Phase 47: Monte Carlo Regime Comparison** - Dual MC simulation comparing full history vs recent window
+- [x] **Phase 47: Monte Carlo Regime Comparison** - Dual MC simulation comparing full history vs recent window (completed 2026-02-05)
 - [ ] **Phase 48: Walk-Forward Degradation** - Progressive walk-forward with OOS efficiency tracking
 - [ ] **Phase 49: Live Alignment Signal** - Backtest vs actual comparison when reporting log exists
 - [ ] **Phase 50: Verdict Synthesis & Tool Registration** - Combine all signals into unified MCP tool
@@ -56,8 +56,8 @@ Plans:
   4. Regime divergence is classified into severity levels (aligned / mild divergence / significant divergence / regime break)
 **Plans:** 2 plans
 Plans:
-- [ ] 47-01-PLAN.md — MC regime comparison engine + divergence classification + TDD tests
-- [ ] 47-02-PLAN.md — MCP tool registration (analyze_regime_comparison) + CLI verification
+- [x] 47-01-PLAN.md — MC regime comparison engine + divergence classification + TDD tests
+- [x] 47-02-PLAN.md — MCP tool registration (analyze_regime_comparison) + CLI verification
 
 ### Phase 48: Walk-Forward Degradation
 **Goal**: Users can track whether out-of-sample performance is degrading over time relative to in-sample optimization
@@ -102,7 +102,7 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 46. Core Calculation Engines | v2.7 | 3/3 | ✓ Complete | 2026-02-05 |
-| 47. MC Regime Comparison | v2.7 | 0/2 | Not started | - |
+| 47. MC Regime Comparison | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
 | 48. WF Degradation | v2.7 | 0/TBD | Not started | - |
 | 49. Live Alignment | v2.7 | 0/TBD | Not started | - |
 | 50. Verdict & Tool API | v2.7 | 0/TBD | Not started | - |
