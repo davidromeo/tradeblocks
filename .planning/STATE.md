@@ -11,24 +11,24 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 Milestone: v2.7 Edge Decay Analysis
 Phase: 46 of 50 (Core Calculation Engines)
-Plan: 1 of TBD in current phase
+Plan: 2 of TBD in current phase
 Status: In progress
-Last activity: 2026-02-05 -- Completed 46-01-PLAN.md (period segmentation engine + trend detection)
+Last activity: 2026-02-05 -- Completed 46-02-PLAN.md (rolling metrics engine)
 
-Progress: [█░░░░░░░░░] ~10%
+Progress: [██░░░░░░░░] ~20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 6min
-- Total execution time: 6min
+- Total plans completed: 2
+- Average duration: 6.5min
+- Total execution time: 13min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 46-core-calculation-engines | 1 | 6min | 6min |
+| 46-core-calculation-engines | 2 | 13min | 6.5min |
 
 ## Historical Context
 
@@ -67,5 +67,5 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call portfolio_health_check '
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 46-01-PLAN.md (period segmentation engine + trend detection)
+Stopped at: Completed 46-02-PLAN.md (rolling metrics engine)
 Resume file: None
