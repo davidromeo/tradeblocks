@@ -1,7 +1,7 @@
 # Requirements: TradeBlocks v2.7 Edge Decay Analysis
 
 **Defined:** 2026-02-04
-**Core Value:** Detect whether a trading strategy is losing its edge — regime change vs normal drawdown — through a single unified MCP tool
+**Core Value:** Detect whether a trading strategy is losing its edge -- regime change vs normal drawdown -- through a single unified MCP tool
 
 ## v2.7 Requirements
 
@@ -72,47 +72,47 @@
 |---------|--------|
 | Automated trading decisions | Analysis tool, not execution engine |
 | Real-time monitoring | Batch analysis on stored data, not live feeds |
-| Strategy optimization/repair | Detect decay, don't fix it — that's the user's job |
-| Per-strategy independent analysis | Defer to future — start with portfolio-level |
+| Strategy optimization/repair | Detect decay, don't fix it -- that's the user's job |
+| Per-strategy independent analysis | Defer to future -- start with portfolio-level |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PSEG-01 | TBD | Pending |
-| PSEG-02 | TBD | Pending |
-| PSEG-03 | TBD | Pending |
-| ROLL-01 | TBD | Pending |
-| ROLL-02 | TBD | Pending |
-| ROLL-03 | TBD | Pending |
-| ROLL-04 | TBD | Pending |
-| MCRG-01 | TBD | Pending |
-| MCRG-02 | TBD | Pending |
-| MCRG-03 | TBD | Pending |
-| MCRG-04 | TBD | Pending |
-| WFD-01 | TBD | Pending |
-| WFD-02 | TBD | Pending |
-| WFD-03 | TBD | Pending |
-| WFD-04 | TBD | Pending |
-| LIVE-01 | TBD | Pending |
-| LIVE-02 | TBD | Pending |
-| LIVE-03 | TBD | Pending |
-| LIVE-04 | TBD | Pending |
-| VERD-01 | TBD | Pending |
-| VERD-02 | TBD | Pending |
-| VERD-03 | TBD | Pending |
-| VERD-04 | TBD | Pending |
-| VERD-05 | TBD | Pending |
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| API-03 | TBD | Pending |
-| API-04 | TBD | Pending |
+| PSEG-01 | Phase 46 | Pending |
+| PSEG-02 | Phase 46 | Pending |
+| PSEG-03 | Phase 46 | Pending |
+| ROLL-01 | Phase 46 | Pending |
+| ROLL-02 | Phase 46 | Pending |
+| ROLL-03 | Phase 46 | Pending |
+| ROLL-04 | Phase 46 | Pending |
+| MCRG-01 | Phase 47 | Pending |
+| MCRG-02 | Phase 47 | Pending |
+| MCRG-03 | Phase 47 | Pending |
+| MCRG-04 | Phase 47 | Pending |
+| WFD-01 | Phase 48 | Pending |
+| WFD-02 | Phase 48 | Pending |
+| WFD-03 | Phase 48 | Pending |
+| WFD-04 | Phase 48 | Pending |
+| LIVE-01 | Phase 49 | Pending |
+| LIVE-02 | Phase 49 | Pending |
+| LIVE-03 | Phase 49 | Pending |
+| LIVE-04 | Phase 49 | Pending |
+| VERD-01 | Phase 50 | Pending |
+| VERD-02 | Phase 50 | Pending |
+| VERD-03 | Phase 50 | Pending |
+| VERD-04 | Phase 50 | Pending |
+| VERD-05 | Phase 50 | Pending |
+| API-01 | Phase 50 | Pending |
+| API-02 | Phase 50 | Pending |
+| API-03 | Phase 50 | Pending |
+| API-04 | Phase 50 | Pending |
 
 **Coverage:**
 - v2.7 requirements: 28 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 28
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 after initial definition*
+*Last updated: 2026-02-04 after roadmap creation*

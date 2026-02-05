@@ -5,15 +5,30 @@
 See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Planning next milestone
+**Current focus:** v2.7 Edge Decay Analysis
 
 ## Current Position
 
-Milestone: v2.7 Edge Decay Analysis — DEFINING REQUIREMENTS
-Status: Defining requirements
-Last activity: 2026-02-04 — Milestone v2.7 started
+Milestone: v2.7 Edge Decay Analysis
+Phase: 46 of 50 (Core Calculation Engines)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-02-04 -- Roadmap created for v2.7
 
-Progress: Requirements phase
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: -
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
 
 ## Historical Context
 
@@ -48,3 +63,9 @@ Example:
 ```bash
 TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call portfolio_health_check '{"blockId":"main-port-2026"}'
 ```
+
+## Session Continuity
+
+Last session: 2026-02-04
+Stopped at: Roadmap created for v2.7 Edge Decay Analysis
+Resume file: None
