@@ -21,7 +21,7 @@ Five phases deliver the edge decay analysis tool bottom-up: two foundational cal
 
 ## Phases
 
-- [ ] **Phase 46: Core Calculation Engines** - Period segmentation and rolling metrics analysis
+- [x] **Phase 46: Core Calculation Engines** - Period segmentation and rolling metrics analysis (completed 2026-02-05)
 - [ ] **Phase 47: Monte Carlo Regime Comparison** - Dual MC simulation comparing full history vs recent window
 - [ ] **Phase 48: Walk-Forward Degradation** - Progressive walk-forward with OOS efficiency tracking
 - [ ] **Phase 49: Live Alignment Signal** - Backtest vs actual comparison when reporting log exists
@@ -41,9 +41,9 @@ Five phases deliver the edge decay analysis tool bottom-up: two foundational cal
   5. Recent window vs full history comparison surfaces payoff structure inversions (avg loss > avg win)
 **Plans:** 3 plans
 Plans:
-- [ ] 46-01-PLAN.md — Period segmentation engine + trend detection + tests
-- [ ] 46-02-PLAN.md — Rolling metrics engine + seasonal averages + recent comparison + tests
-- [ ] 46-03-PLAN.md — MCP tool registration (analyze_period_metrics, analyze_rolling_metrics) + CLI verification
+- [x] 46-01-PLAN.md — Period segmentation engine + trend detection + tests
+- [x] 46-02-PLAN.md — Rolling metrics engine + seasonal averages + recent comparison + tests
+- [x] 46-03-PLAN.md — MCP tool registration (analyze_period_metrics, analyze_rolling_metrics) + CLI verification
 
 ### Phase 47: Monte Carlo Regime Comparison
 **Goal**: Users can compare forward-looking risk profiles between full trade history and recent trading window
@@ -97,7 +97,7 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 46. Core Calculation Engines | v2.7 | 0/3 | Not started | - |
+| 46. Core Calculation Engines | v2.7 | 3/3 | ✓ Complete | 2026-02-05 |
 | 47. MC Regime Comparison | v2.7 | 0/TBD | Not started | - |
 | 48. WF Degradation | v2.7 | 0/TBD | Not started | - |
 | 49. Live Alignment | v2.7 | 0/TBD | Not started | - |

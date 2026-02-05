@@ -79,13 +79,13 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PSEG-01 | Phase 46 | Pending |
-| PSEG-02 | Phase 46 | Pending |
-| PSEG-03 | Phase 46 | Pending |
-| ROLL-01 | Phase 46 | Pending |
-| ROLL-02 | Phase 46 | Pending |
-| ROLL-03 | Phase 46 | Pending |
-| ROLL-04 | Phase 46 | Pending |
+| PSEG-01 | Phase 46 | Complete |
+| PSEG-02 | Phase 46 | Complete |
+| PSEG-03 | Phase 46 | Complete |
+| ROLL-01 | Phase 46 | Complete |
+| ROLL-02 | Phase 46 | Complete |
+| ROLL-03 | Phase 46 | Complete |
+| ROLL-04 | Phase 46 | Complete |
 | MCRG-01 | Phase 47 | Pending |
 | MCRG-02 | Phase 47 | Pending |
 | MCRG-03 | Phase 47 | Pending |
