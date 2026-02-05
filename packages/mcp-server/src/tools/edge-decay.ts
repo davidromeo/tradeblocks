@@ -1,7 +1,8 @@
 /**
  * Edge Decay Analysis Tools
  *
- * MCP tools for period segmentation and rolling metrics analysis.
+ * MCP tools for period segmentation, rolling metrics analysis,
+ * regime comparison, and walk-forward degradation.
  * Foundation for edge decay detection in trading strategies.
  */
 
@@ -14,6 +15,7 @@ import {
   segmentByPeriod,
   computeRollingMetrics,
   runRegimeComparison,
+  analyzeWalkForwardDegradation,
 } from "@tradeblocks/lib";
 import type { Trade } from "@tradeblocks/lib";
 
@@ -383,6 +385,133 @@ export function registerEdgeDecayTools(
               {
                 type: "text" as const,
                 text: `Error analyzing regime comparison: ${(error as Error).message}`,
+              },
+            ],
+            isError: true as const,
+          };
+        }
+      }
+    )
+  );
+
+  // Tool 4: analyze_walk_forward_degradation
+  server.registerTool(
+    "analyze_walk_forward_degradation",
+    {
+      description:
+        "Run progressive walk-forward analysis to track whether out-of-sample performance is degrading relative to in-sample. Slides IS/OOS windows across trade history, computes efficiency ratios (OOS metric / IS metric) for Sharpe, win rate, and profit factor, detects trends via linear regression, and compares recent vs historical OOS efficiency.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter by strategy name (case-insensitive)"),
+        inSampleDays: z
+          .number()
+          .min(30)
+          .optional()
+          .describe(
+            "In-sample window in calendar days (default: 365)"
+          ),
+        outOfSampleDays: z
+          .number()
+          .min(7)
+          .optional()
+          .describe(
+            "Out-of-sample window in calendar days (default: 90)"
+          ),
+        stepSizeDays: z
+          .number()
+          .min(7)
+          .optional()
+          .describe("Step size in calendar days (default: 90)"),
+        minTradesPerPeriod: z
+          .number()
+          .min(1)
+          .optional()
+          .describe(
+            "Minimum trades for a period to be considered sufficient (default: 10)"
+          ),
+        recentPeriodCount: z
+          .number()
+          .min(1)
+          .optional()
+          .describe(
+            "Number of recent WF periods for comparison (default: 3)"
+          ),
+      }),
+    },
+    withSyncedBlock(
+      baseDir,
+      async ({
+        blockId,
+        strategy,
+        inSampleDays,
+        outOfSampleDays,
+        stepSizeDays,
+        minTradesPerPeriod,
+        recentPeriodCount,
+      }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
+          let trades = block.trades;
+
+          // Apply strategy filter
+          trades = filterByStrategy(trades, strategy);
+
+          if (trades.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: strategy
+                    ? `No trades found for strategy "${strategy}" in block "${blockId}".`
+                    : `No trades found in block "${blockId}".`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
+
+          const result = analyzeWalkForwardDegradation(trades, {
+            inSampleDays,
+            outOfSampleDays,
+            stepSizeDays,
+            minTradesPerPeriod,
+            recentPeriodCount,
+            strategy: undefined, // Already filtered above
+          });
+
+          // Build text summary
+          const dq = result.dataQuality;
+          const rvh = result.recentVsHistorical;
+          const fmtVal = (v: number | null) =>
+            v !== null ? v.toFixed(2) : "N/A";
+
+          const summary = [
+            `WF degradation for ${blockId}${strategy ? ` (${strategy})` : ""}: ${dq.totalTrades} trades, ${dq.totalPeriods} periods (${dq.sufficientPeriods} sufficient)`,
+            `Config: IS=${result.config.inSampleDays}d, OOS=${result.config.outOfSampleDays}d, step=${result.config.stepSizeDays}d`,
+            `Recent vs historical efficiency (Sharpe): ${fmtVal(rvh.recentAvgEfficiency.sharpe)} vs ${fmtVal(rvh.historicalAvgEfficiency.sharpe)} (delta: ${fmtVal(rvh.delta.sharpe)})`,
+            `Trends sufficient: ${dq.sufficientForTrends ? "yes" : "no"}, Efficiency trend slope (Sharpe): ${result.efficiencyTrends.sharpe?.slope !== undefined ? result.efficiencyTrends.sharpe.slope.toFixed(4) : "N/A"}`,
+          ].join("\n");
+
+          const structuredData = {
+            blockId,
+            strategy: strategy ?? null,
+            periods: result.periods,
+            efficiencyTrends: result.efficiencyTrends,
+            recentVsHistorical: result.recentVsHistorical,
+            config: result.config,
+            dataQuality: result.dataQuality,
+          };
+
+          return createToolOutput(summary, structuredData);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error analyzing walk-forward degradation: ${(error as Error).message}`,
               },
             ],
             isError: true as const,
