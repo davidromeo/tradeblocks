@@ -609,4 +609,30 @@ describe('edge cases', () => {
       }
     }
   })
+
+  test('27. returns null Sharpe efficiency for negative IS Sharpe', () => {
+    // Generate mostly-losing trades to produce negative IS Sharpe
+    const trades = generateTradeSet(730, {
+      winRate: 0.1,
+      avgPl: 50,
+      startDate: new Date(2022, 0, 1),
+    })
+    const result = analyzeWalkForwardDegradation(trades)
+
+    const sufficientPeriods = result.periods.filter((p) => p.sufficient)
+
+    // Periods with negative IS Sharpe should have null Sharpe efficiency
+    for (const period of sufficientPeriods) {
+      const sharpe = period.metrics.sharpe
+      if (sharpe.inSample !== null && sharpe.inSample < 0) {
+        expect(sharpe.efficiency).toBeNull()
+      }
+    }
+
+    // At least some periods should have negative IS Sharpe (given 10% win rate)
+    const periodsWithNegIS = sufficientPeriods.filter(
+      (p) => p.metrics.sharpe.inSample !== null && p.metrics.sharpe.inSample < 0,
+    )
+    expect(periodsWithNegIS.length).toBeGreaterThan(0)
+  })
 })

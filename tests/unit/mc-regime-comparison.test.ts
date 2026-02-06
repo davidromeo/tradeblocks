@@ -544,6 +544,23 @@ describe('calculateMarginReturns', () => {
   test('28. Empty trades returns empty array', () => {
     expect(calculateMarginReturns([])).toEqual([])
   })
+
+  test('36. Clamps margin returns exceeding -100% to -0.99', () => {
+    const trades = [
+      makeTrade({ pl: 500, marginReq: 5000, dateOpened: new Date('2024-01-01') }),
+      makeTrade({ pl: -1340.4, marginReq: 1330, dateOpened: new Date('2024-01-02') }),  // raw: -1.0078 -> clamped
+      makeTrade({ pl: -6000, marginReq: 5000, dateOpened: new Date('2024-01-03') }),    // raw: -1.20 -> clamped
+      makeTrade({ pl: -200, marginReq: 5000, dateOpened: new Date('2024-01-04') }),     // raw: -0.04 -> not clamped
+    ]
+
+    const returns = calculateMarginReturns(trades)
+
+    expect(returns).toHaveLength(4)
+    expect(returns[0]).toBeCloseTo(0.10, 6)     // 500/5000 = 0.10
+    expect(returns[1]).toBeCloseTo(-0.99, 6)    // -1340.4/1330 = -1.0078 -> clamped to -0.99
+    expect(returns[2]).toBeCloseTo(-0.99, 6)    // -6000/5000 = -1.20 -> clamped to -0.99
+    expect(returns[3]).toBeCloseTo(-0.04, 6)    // -200/5000 = -0.04 -> not clamped
+  })
 })
 
 // ---------------------------------------------------------------------------
