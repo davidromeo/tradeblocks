@@ -790,19 +790,22 @@ function runSingleSimulation(
   const returns: number[] = [];
 
   // Build equity curve (as cumulative returns from starting capital)
+  let cumulativeReturn = 0;
   for (const value of resampledValues) {
     const capitalBeforeTrade = capital;
 
     if (isPercentageMode) {
-      // Value is a percentage return - apply it to current capital
-      capital = capital * (1 + value);
+      // Additive mode: sum percentage returns, then apply to initial capital
+      // Prevents blowup where sequential -99% returns compound to near-zero
+      cumulativeReturn += value;
+      capital = initialCapital * (1 + cumulativeReturn);
     } else {
       // Value is dollar P&L - add it to capital
       capital += value;
     }
 
-    const cumulativeReturn = (capital - initialCapital) / initialCapital;
-    equityCurve.push(cumulativeReturn);
+    const cumRet = (capital - initialCapital) / initialCapital;
+    equityCurve.push(cumRet);
 
     if (capitalBeforeTrade > 0) {
       const periodReturn = capital / capitalBeforeTrade - 1;
