@@ -25,7 +25,7 @@ import {
   calculateDailyExposure,
 } from "@tradeblocks/lib";
 import type { Trade, PeakExposure, EquityCurvePoint } from "@tradeblocks/lib";
-import { filterByStrategy, filterByDateRange } from "../shared/filters.js";
+import { filterByStrategy, filterByDateRange, filterDailyLogsByDateRange } from "../shared/filters.js";
 import {
   withSyncedBlock,
   withFullSync,
@@ -428,12 +428,19 @@ export function registerCoreBlockTools(
           };
         }
 
+        // Filter daily logs by date range when date filters are provided
+        // Only applies when not strategy-filtered (daily logs represent full portfolio)
+        const isStrategyFiltered = !!strategy;
+        let filteredDailyLogs = dailyLogs;
+        if (!isStrategyFiltered && (startDate || endDate) && dailyLogs) {
+          filteredDailyLogs = filterDailyLogsByDateRange(dailyLogs, startDate, endDate);
+        }
+
         // When strategy filter is applied, we MUST use trade-based calculations
         // because daily logs represent the FULL portfolio, not per-strategy
-        const isStrategyFiltered = !!strategy;
         const stats = calculator.calculatePortfolioStats(
           trades,
-          isStrategyFiltered ? undefined : dailyLogs,
+          isStrategyFiltered ? undefined : filteredDailyLogs,
           isStrategyFiltered
         );
 
