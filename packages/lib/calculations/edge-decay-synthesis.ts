@@ -162,6 +162,15 @@ export interface EdgeDecaySummary {
   structuralFlagCount: number
   /** Top 5 observations by absolute percent change magnitude */
   topObservations: FactualObservation[]
+  /** Composite decay score (0-1 scale, 0 = no decay, 1 = maximum decay) */
+  compositeDecayScore: number
+  /** Component breakdown of the composite decay score */
+  compositeDecayScoreComponents: {
+    meanAbsPercentChange: { value: number; normalized: number; weight: number }
+    mcRegimeDivergence: { value: number | null; normalized: number; weight: number }
+    wfEfficiencyDelta: { value: number | null; normalized: number; weight: number }
+    structuralFlagRatio: { value: number; normalized: number; weight: number }
+  }
 }
 
 export interface EdgeDecayMetadata {
@@ -570,6 +579,76 @@ export function synthesizeEdgeDecay(
   const pfComp = findMetric(rollingResult.recentVsHistorical.metrics, 'profitFactor')
   const sharpeComp = findMetric(rollingResult.recentVsHistorical.metrics, 'sharpeRatio')
 
+  // -----------------------------------------------------------------------
+  // Compute composite decay score (0 = no decay, 1 = maximum decay)
+  // -----------------------------------------------------------------------
+  // Component 1: Mean absolute percent change across observations
+  const obsWithAbsPct = observations.filter(o => o.absPercentChange !== null)
+  const meanAbsPctValue = obsWithAbsPct.length > 0
+    ? obsWithAbsPct.reduce((sum, o) => sum + o.absPercentChange!, 0) / obsWithAbsPct.length
+    : 0
+  const meanAbsPctNormalized = Math.min(meanAbsPctValue / 50, 1) // 50% mean = fully decayed
+
+  // Component 2: MC regime divergence composite score (already 0-1)
+  const mcDivergenceValue = regimeResult?.divergence.compositeScore ?? null
+  const mcDivergenceNormalized = mcDivergenceValue ?? 0
+  const mcAvailable = mcDivergenceValue !== null
+
+  // Component 3: WF efficiency delta (average of absolute deltas)
+  const wfDeltas: number[] = []
+  const wfDelta = wfResult.recentVsHistorical.delta
+  if (wfDelta.sharpe !== null) wfDeltas.push(Math.abs(wfDelta.sharpe))
+  if (wfDelta.winRate !== null) wfDeltas.push(Math.abs(wfDelta.winRate))
+  if (wfDelta.profitFactor !== null) wfDeltas.push(Math.abs(wfDelta.profitFactor))
+  const wfEffDeltaValue = wfDeltas.length > 0
+    ? wfDeltas.reduce((sum, v) => sum + v, 0) / wfDeltas.length
+    : null
+  const wfEffDeltaNormalized = wfEffDeltaValue !== null ? Math.min(wfEffDeltaValue / 0.5, 1) : 0
+
+  // Component 4: Structural flag ratio
+  const totalMetricsCompared = rollingResult.recentVsHistorical.metrics.length
+  const structuralFlagRatioValue = totalMetricsCompared > 0
+    ? rollingResult.recentVsHistorical.structuralFlags.length / totalMetricsCompared
+    : 0
+  const structuralFlagRatioNormalized = structuralFlagRatioValue // already 0-1
+
+  // Base weights
+  const BASE_WEIGHTS = {
+    meanAbsPercentChange: 0.3,
+    mcRegimeDivergence: 0.3,
+    wfEfficiencyDelta: 0.2,
+    structuralFlagRatio: 0.2,
+  }
+
+  // Redistribute MC weight if unavailable
+  let weights: typeof BASE_WEIGHTS
+  if (mcAvailable) {
+    weights = { ...BASE_WEIGHTS }
+  } else {
+    // MC's 0.3 weight redistributed proportionally among others (0.3 + 0.2 + 0.2 = 0.7)
+    const otherSum = BASE_WEIGHTS.meanAbsPercentChange + BASE_WEIGHTS.wfEfficiencyDelta + BASE_WEIGHTS.structuralFlagRatio
+    weights = {
+      meanAbsPercentChange: BASE_WEIGHTS.meanAbsPercentChange / otherSum,
+      mcRegimeDivergence: 0,
+      wfEfficiencyDelta: BASE_WEIGHTS.wfEfficiencyDelta / otherSum,
+      structuralFlagRatio: BASE_WEIGHTS.structuralFlagRatio / otherSum,
+    }
+  }
+
+  const compositeDecayScore = Math.max(0, Math.min(1,
+    meanAbsPctNormalized * weights.meanAbsPercentChange +
+    mcDivergenceNormalized * weights.mcRegimeDivergence +
+    wfEffDeltaNormalized * weights.wfEfficiencyDelta +
+    structuralFlagRatioNormalized * weights.structuralFlagRatio
+  ))
+
+  const compositeDecayScoreComponents = {
+    meanAbsPercentChange: { value: meanAbsPctValue, normalized: meanAbsPctNormalized, weight: weights.meanAbsPercentChange },
+    mcRegimeDivergence: { value: mcDivergenceValue, normalized: mcDivergenceNormalized, weight: weights.mcRegimeDivergence },
+    wfEfficiencyDelta: { value: wfEffDeltaValue, normalized: wfEffDeltaNormalized, weight: weights.wfEfficiencyDelta },
+    structuralFlagRatio: { value: structuralFlagRatioValue, normalized: structuralFlagRatioNormalized, weight: weights.structuralFlagRatio },
+  }
+
   const summary: EdgeDecaySummary = {
     totalTrades,
     recentWindow,
@@ -599,6 +678,8 @@ export function synthesizeEdgeDecay(
     observationCount: observations.length,
     structuralFlagCount: rollingResult.recentVsHistorical.structuralFlags.length,
     topObservations,
+    compositeDecayScore,
+    compositeDecayScoreComponents,
   }
 
   // -----------------------------------------------------------------------
