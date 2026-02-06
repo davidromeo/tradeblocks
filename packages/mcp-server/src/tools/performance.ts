@@ -457,7 +457,6 @@ function buildStreakData(trades: Trade[]): {
     pValue: number;
     isNonRandom: boolean;
     patternType: "random" | "clustered" | "alternating";
-    interpretation: string;
   } | null;
 } {
   const sortedTrades = [...trades].sort(
@@ -540,7 +539,6 @@ function calculateRunsTest(trades: Trade[]): {
   pValue: number;
   isNonRandom: boolean;
   patternType: "random" | "clustered" | "alternating";
-  interpretation: string;
 } | null {
   if (trades.length < 20) return null;
 
@@ -571,17 +569,12 @@ function calculateRunsTest(trades: Trade[]): {
 
   const isNonRandom = pValue < 0.05;
   let patternType: "random" | "clustered" | "alternating" = "random";
-  let interpretation = "Results appear random (no significant pattern detected)";
 
   if (isNonRandom) {
     if (zScore < 0) {
       patternType = "clustered";
-      interpretation =
-        "Results show clustering (fewer runs than expected - wins/losses tend to group together)";
     } else {
       patternType = "alternating";
-      interpretation =
-        "Results show alternating pattern (more runs than expected - wins/losses tend to alternate)";
     }
   }
 
@@ -592,7 +585,6 @@ function calculateRunsTest(trades: Trade[]): {
     pValue,
     isNonRandom,
     patternType,
-    interpretation,
   };
 }
 
