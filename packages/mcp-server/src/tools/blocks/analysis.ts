@@ -68,8 +68,22 @@ export function registerAnalysisBlockTools(
           const block = await loadBlock(baseDir, blockId);
         const trades = block.trades;
 
+        // Get portfolio date range for context and pre-filtering
+        const sortedTrades = [...trades].sort(
+          (a, b) =>
+            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
+        );
+        const portfolioStartDate = sortedTrades[0]?.dateOpened
+          ? new Date(sortedTrades[0].dateOpened).toISOString().split("T")[0]
+          : null;
+        const lastTrade = sortedTrades[sortedTrades.length - 1];
+        const portfolioEndDate = lastTrade?.dateClosed
+          ? new Date(lastTrade.dateClosed).toISOString().split("T")[0]
+          : null;
+
         // Build list of scenarios to run
         const scenariosToRun: Array<{ name: string; startDate: string; endDate: string; description: string; isCustom: boolean }> = [];
+        const preFilteredScenarioNames: string[] = [];
 
         // Add built-in scenarios
         if (scenarios && scenarios.length > 0) {
@@ -89,6 +103,7 @@ export function registerAnalysisBlockTools(
             };
           }
 
+          // Run exactly what was requested (no pre-filtering)
           for (const scenarioName of scenarios) {
             const scenario = STRESS_SCENARIOS[scenarioName];
             scenariosToRun.push({
@@ -100,19 +115,30 @@ export function registerAnalysisBlockTools(
             });
           }
         } else {
-          // Run all built-in scenarios
+          // Pre-filter built-in scenarios by portfolio date overlap
           for (const [name, scenario] of Object.entries(STRESS_SCENARIOS)) {
-            scenariosToRun.push({
-              name,
-              startDate: scenario.startDate,
-              endDate: scenario.endDate,
-              description: scenario.description,
-              isCustom: false,
-            });
+            // Check date overlap: scenario.endDate >= portfolioStartDate && scenario.startDate <= portfolioEndDate
+            const hasOverlap =
+              portfolioStartDate !== null &&
+              portfolioEndDate !== null &&
+              scenario.endDate >= portfolioStartDate &&
+              scenario.startDate <= portfolioEndDate;
+
+            if (hasOverlap) {
+              scenariosToRun.push({
+                name,
+                startDate: scenario.startDate,
+                endDate: scenario.endDate,
+                description: scenario.description,
+                isCustom: false,
+              });
+            } else {
+              preFilteredScenarioNames.push(name);
+            }
           }
         }
 
-        // Add custom scenarios
+        // Add custom scenarios (always included, no pre-filtering)
         if (customScenarios && customScenarios.length > 0) {
           for (const custom of customScenarios) {
             scenariosToRun.push({
@@ -135,19 +161,6 @@ export function registerAnalysisBlockTools(
         let scenariosSkipped = 0;
         const skippedScenarioNames: string[] = [];
 
-        // Get portfolio date range for context
-        const sortedTrades = [...trades].sort(
-          (a, b) =>
-            new Date(a.dateOpened).getTime() - new Date(b.dateOpened).getTime()
-        );
-        const portfolioStartDate = sortedTrades[0]?.dateOpened
-          ? new Date(sortedTrades[0].dateOpened).toISOString().split("T")[0]
-          : null;
-        const lastTrade = sortedTrades[sortedTrades.length - 1];
-        const portfolioEndDate = lastTrade?.dateClosed
-          ? new Date(lastTrade.dateClosed).toISOString().split("T")[0]
-          : null;
-
         for (const scenario of scenariosToRun) {
           // Filter trades to scenario date range
           const scenarioTrades = filterByDateRange(
@@ -157,7 +170,7 @@ export function registerAnalysisBlockTools(
           );
 
           if (scenarioTrades.length === 0) {
-            // No trades in this scenario - only include if requested
+            // Genuine coverage gap (had date overlap but zero trades)
             scenariosSkipped++;
             skippedScenarioNames.push(scenario.name);
             if (includeEmpty) {
@@ -212,7 +225,8 @@ export function registerAnalysisBlockTools(
           totalScenariosTested: scenariosToRun.length,
           scenariosWithTrades,
           scenariosSkipped,
-          skippedScenarios: skippedScenarioNames,
+          ...(skippedScenarioNames.length > 0 ? { skippedScenarios: skippedScenarioNames } : {}),
+          ...(preFilteredScenarioNames.length > 0 ? { preFilteredScenarios: preFilteredScenarioNames } : {}),
           worstScenario: worstScenario?.name ?? null,
           bestScenario: bestScenario?.name ?? null,
           portfolioDateRange: {
@@ -224,9 +238,13 @@ export function registerAnalysisBlockTools(
         // Brief summary for user display
         const skippedNote =
           scenariosSkipped > 0
-            ? ` (${scenariosSkipped} skipped - no data coverage, portfolio starts ${portfolioStartDate})`
+            ? ` (${scenariosSkipped} skipped - no data coverage)`
             : "";
-        const summary = `Stress Test: ${blockId} | ${scenariosWithTrades} scenarios with trades${skippedNote} | Worst: ${worstScenario?.name ?? "N/A"} (${worstScenario ? formatCurrency(worstScenario.netPl) : "N/A"}) | Best: ${bestScenario?.name ?? "N/A"} (${bestScenario ? formatCurrency(bestScenario.netPl) : "N/A"})`;
+        const preFilterNote =
+          preFilteredScenarioNames.length > 0
+            ? ` (${preFilteredScenarioNames.length} excluded - outside portfolio date range)`
+            : "";
+        const summary = `Stress Test: ${blockId} | ${scenariosWithTrades} scenarios with trades${skippedNote}${preFilterNote} | Worst: ${worstScenario?.name ?? "N/A"} (${worstScenario ? formatCurrency(worstScenario.netPl) : "N/A"}) | Best: ${bestScenario?.name ?? "N/A"} (${bestScenario ? formatCurrency(bestScenario.netPl) : "N/A"})`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
