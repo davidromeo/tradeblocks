@@ -13,7 +13,7 @@ Milestone: v2.7 Edge Decay Analysis -- COMPLETE
 Phase: All complete (46-50)
 Plan: All complete
 Status: Milestone shipped, archived, tagged v2.7
-Last activity: 2026-02-06 -- Completed quick task 003: MCP tooling improvements
+Last activity: 2026-02-06 -- Completed quick task 004: MCP tooling feedback fixes
 
 Progress: [██████████] 100%
 
@@ -40,6 +40,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 | 001 | Expose parameterRanges in run_walk_forward MCP tool | 2026-01-30 | d1de196 | [001-expose-parameterranges-in-run-walk-forwa](./quick/001-expose-parameterranges-in-run-walk-forwa/) |
 | 002 | Add reporting_data SQL table and legs to backtest comparison | 2026-02-04 | 2788a65 | [002-add-reporting-data-sql-table-and-legs-to](./quick/002-add-reporting-data-sql-table-and-legs-to/) |
 | 003 | MCP tooling improvements (7 items: daily log filtering, rolling metrics trim, health check sample sizes, edge decay sorting + composite score, stress test pre-filter, pl→netPl naming) | 2026-02-06 | ce5f73b | [003-mcp-tooling-improvements](./quick/003-mcp-tooling-improvements/) |
+| 004 | MCP tooling feedback fixes (5 items: dollar-metric filtering, composite score accuracy, per-pair tail risk n=, netPl enum, severity label removal) | 2026-02-06 | 37d871c | [004-mcp-tooling-feedback-fixes](./quick/004-mcp-tooling-feedback-fixes/) |
 
 ## Testing Infrastructure
 
