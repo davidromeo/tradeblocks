@@ -1,5 +1,33 @@
 # Project Milestones: TradeBlocks
 
+## v2.7 Edge Decay Analysis (Shipped: 2026-02-06)
+
+**Delivered:** Unified `analyze_edge_decay` MCP tool detecting strategy performance degradation through 5 signal engines (period segmentation, rolling metrics, Monte Carlo regime comparison, walk-forward degradation, live alignment) with structured factual data output for LLM interpretation.
+
+**Phases completed:** 46-50 (11 plans total)
+
+**Key accomplishments:**
+
+- Period segmentation engine with yearly/quarterly/monthly breakdowns, linear regression trend detection, and worst losing stretch identification
+- Rolling metrics engine with configurable windows, seasonal averages, recent-vs-historical comparison, and structural flag detection (payoff inversion)
+- Dual Monte Carlo regime comparison with 4-level divergence classification (aligned/mild/significant/regime_break)
+- Progressive walk-forward degradation tracking with OOS efficiency time series and recent-vs-historical comparison
+- Live alignment signal comparing backtest vs actual execution with direction agreement and per-contract efficiency
+- Unified `analyze_edge_decay` synthesis tool aggregating all 5 signals into exhaustive factual observations
+
+**Stats:**
+
+- 258 files changed, +41,570 / -37,529 lines of TypeScript
+- 5 phases, 11 plans
+- 152 new tests (1177 total)
+- 9 days (Jan 28 → Feb 6, 2026)
+
+**Git range:** `297c2fe` → `4338396`
+
+**What's next:** Planning next milestone
+
+---
+
 ## v2.6 DuckDB Analytics Layer (Shipped: 2026-02-04)
 
 **Delivered:** SQL query capabilities for the MCP server via DuckDB, enabling Claude to write arbitrary SQL against trades and market data for hypothesis generation, with hash-based sync, security sandbox, schema discovery, and tool rationalization.

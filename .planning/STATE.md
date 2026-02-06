@@ -2,40 +2,24 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-04)
+See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** v2.7 Edge Decay Analysis
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v2.7 Edge Decay Analysis
-Phase: 50 of 50 (Verdict Synthesis & Tool Registration)
-Plan: 2 of 2 in current phase
-Status: Phase complete -- all plans executed
-Last activity: 2026-02-06 -- Completed 50-02-PLAN.md
+Milestone: v2.7 Edge Decay Analysis -- COMPLETE
+Phase: All complete (46-50)
+Plan: All complete
+Status: Milestone shipped, archived, tagged v2.7
+Last activity: 2026-02-06 -- v2.7 milestone complete
 
 Progress: [██████████] 100%
 
-## Performance Metrics
-
-**Velocity:**
-- Total plans completed: 11
-- Average duration: 5min
-- Total execution time: 56min
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 46-core-calculation-engines | 3 | 18min | 6min |
-| 47-monte-carlo-regime-comparison | 2 | 8min | 4min |
-| 48-walk-forward-degradation | 2 | 10min | 5min |
-| 49-live-alignment-signal | 2 | 12min | 6min |
-| 50-verdict-synthesis-tool-registration | 2 | 8min | 4min |
-
 ## Historical Context
 
+See [v2.7 archive](milestones/v2.7-edge-decay-analysis.md) for edge decay analysis details.
 See [v2.6 archive](milestones/v2.6-duckdb-analytics-layer.md) for DuckDB analytics layer details.
 See [v2.5 archive](milestones/v2.5-reporting-log-integration.md) for reporting log integration details.
 See [v2.4 archive](milestones/v2.4-backtest-optimization-tools.md) for backtest optimization tools.
@@ -65,11 +49,11 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call <tool> '<json-args>'
 
 Example:
 ```bash
-TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call portfolio_health_check '{"blockId":"main-port-2026"}'
+TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call analyze_edge_decay '{"blockId":"main-port"}'
 ```
 
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 50-02-PLAN.md (MCP tool registration) -- v2.7 milestone complete
+Stopped at: v2.7 milestone complete, archived, tagged
 Resume file: None

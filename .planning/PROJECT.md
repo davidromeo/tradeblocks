@@ -72,16 +72,18 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ `describe_database` for schema discovery with hypothesis flags — v2.6
 - ✓ Tool rationalization: 7 query tools removed, SQL-first pattern established — v2.6
 
+**v2.7 Edge Decay Analysis:**
+- ✓ Unified `analyze_edge_decay` MCP tool with 5 signal engines — v2.7
+- ✓ Period-segmented statistics (yearly/quarterly/monthly) with linear regression trend detection — v2.7
+- ✓ Rolling metrics trajectory analysis (Sharpe/WR/PF/Kelly) with seasonal averages and structural flags — v2.7
+- ✓ Dual Monte Carlo regime comparison (full history vs recent window) with 4-level divergence classification — v2.7
+- ✓ Progressive walk-forward efficiency tracking with OOS/IS ratios across time windows — v2.7
+- ✓ Live alignment signal (backtest vs actual) with direction agreement and execution efficiency — v2.7
+- ✓ Structured factual data output (observations, summaries, details) for LLM interpretation — v2.7
+
 ### Active
 
-**v2.7 Edge Decay Analysis:**
-- [ ] Unified `analyze_edge_decay` MCP tool detecting strategy performance degradation
-- [ ] Period-segmented statistics (yearly/quarterly) with trend detection
-- [ ] Rolling metrics trajectory analysis (Sharpe/WR/PF) with seasonal pattern identification
-- [ ] Dual Monte Carlo regime comparison (full history vs recent window)
-- [ ] Progressive walk-forward efficiency tracking across time windows
-- [ ] Live alignment signal (backtest vs actual) when reporting log exists
-- [ ] 4-layer verdict output (verdict → grades → flags → numbers) plus detailed supporting data
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -91,14 +93,15 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.6):**
+**Current state (v2.7):**
 - Next.js 15 web application with client-side computation
-- MCP server (`tradeblocks-mcp` v0.6.1) with 34 tools at packages/mcp-server/
+- MCP server (`tradeblocks-mcp` v0.8.0) with 40 tools at packages/mcp-server/
+- Edge decay analysis: unified `analyze_edge_decay` tool + 5 standalone signal tools
 - DuckDB analytics layer with SQL query interface and schema discovery
 - CSV-to-DuckDB sync with hash-based change detection (trades + 4 market data tables)
 - 6 agent skills at packages/agent-skills/
-- Shared library at packages/lib/ (81 files, barrel exports)
-- ~59,000 LOC in packages/mcp-server/
+- Shared library at packages/lib/ (89 files, barrel exports)
+- 1177 tests across 71 suites
 - Embedded historical Treasury rates (2013-2026) for accurate risk metrics
 - SQL-first data access pattern: describe_database → run_sql → computational tools
 
@@ -153,6 +156,14 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Remove 7 query tools immediately (no deprecation period) | Pre-1.0 beta, clean break simpler for AI agents | ✓ Good |
 | SQL-first data access pattern | Flexible exploration, replaces rigid query tools | ✓ Good |
 | Sync middleware (withSyncedBlock/withFullSync) | Eliminates ~15 lines of boilerplate per tool | ✓ Good |
+| Data-not-interpretation for edge decay | LLM decides what's notable, not hardcoded thresholds | ✓ Good |
+| Exhaustive observations (no filtering) | ALL metric comparisons included for LLM interpretation | ✓ Good |
+| Graceful signal skipping (MC, live alignment) | Partial results better than errors for small datasets | ✓ Good |
+| Rolling series exclusion from unified tool | Series too large for MCP output; standalone tool available | ✓ Good |
+| Dual MC seeds (seed vs seed+10000) | Avoids correlated randomness between full/recent simulations | ✓ Good |
+| Lightweight WFD engine (not WalkForwardAnalyzer) | Purpose-built for degradation tracking, not optimization | ✓ Good |
+| Trade matching extraction to lib | Shared utilities across MCP tools, single source of truth | ✓ Good |
+| 4-level divergence classification | Threshold-based (0.30/0.60/1.00) for regime change severity | ✓ Good |
 
 ---
-*Last updated: 2026-02-04 after v2.7 milestone started*
+*Last updated: 2026-02-06 after v2.7 milestone complete*
