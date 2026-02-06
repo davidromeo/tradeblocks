@@ -168,7 +168,7 @@ export interface EdgeDecaySummary {
   compositeDecayScore: number
   /** Component breakdown of the composite decay score */
   compositeDecayScoreComponents: {
-    meanAbsPercentChange: { value: number; normalized: number; weight: number }
+    meanAbsPercentChange: { value: number; normalized: number; weight: number; decayFraction: number }
     mcRegimeDivergence: { value: number | null; normalized: number; weight: number }
     wfEfficiencyDelta: { value: number | null; normalized: number; weight: number }
     structuralFlagRatio: { value: number; normalized: number; weight: number }
@@ -238,6 +238,11 @@ const DOLLAR_METRICS = new Set([
 /** Trend metrics derived from dollar/count values (excluded from composite like dollar metrics) */
 const DOLLAR_TREND_METRICS = new Set([
   'netPl', 'tradeCount',
+])
+
+/** Metrics where a positive change means degradation (higher = worse) */
+const HIGHER_IS_WORSE_METRICS = new Set([
+  'maxDrawdownPercent', 'medianMaxDrawdown',
 ])
 
 // ---------------------------------------------------------------------------
@@ -605,16 +610,27 @@ export function synthesizeEdgeDecay(
   // -----------------------------------------------------------------------
   // Compute composite decay score (0 = no decay, 1 = maximum decay)
   // -----------------------------------------------------------------------
-  // Component 1: Mean absolute percent change across rate-type observations only
+  // Component 1: Direction-aware mean percent change across rate-type observations
+  // Decay observations (metrics getting worse) contribute positively, improvement reduces the score
+  const rateObsWithPct = observations.filter(o => o.percentChange !== null && o.metricType === 'rate')
+  let decayCount = 0
+  for (const o of rateObsWithPct) {
+    const isDecay = HIGHER_IS_WORSE_METRICS.has(o.metric)
+      ? o.percentChange! > 0  // e.g., maxDrawdown getting larger = worse
+      : o.percentChange! < 0  // e.g., winRate going down = worse
+    if (isDecay) decayCount++
+  }
+  const decayFraction = rateObsWithPct.length > 0 ? decayCount / rateObsWithPct.length : 0
+
   const rateObsWithAbsPct = observations.filter(o => o.absPercentChange !== null && o.metricType === 'rate')
   const meanAbsPctValue = rateObsWithAbsPct.length > 0
     ? rateObsWithAbsPct.reduce((sum, o) => sum + o.absPercentChange!, 0) / rateObsWithAbsPct.length
     : 0
-  const meanAbsPctNormalized = Math.min(meanAbsPctValue / 50, 1) // 50% mean = fully decayed
+  const meanAbsPctNormalized = Math.min(meanAbsPctValue / 50, 1) * decayFraction // scaled by proportion of decaying metrics
 
-  // Component 2: MC regime divergence composite score (already 0-1)
+  // Component 2: MC regime divergence composite score (capped at 1.0)
   const mcDivergenceValue = regimeResult?.divergence.compositeScore ?? null
-  const mcDivergenceNormalized = mcDivergenceValue ?? 0
+  const mcDivergenceNormalized = Math.min(mcDivergenceValue ?? 0, 1)
   const mcAvailable = mcDivergenceValue !== null
 
   // Component 3: WF efficiency delta (average of absolute deltas)
@@ -666,7 +682,7 @@ export function synthesizeEdgeDecay(
   ))
 
   const compositeDecayScoreComponents = {
-    meanAbsPercentChange: { value: meanAbsPctValue, normalized: meanAbsPctNormalized, weight: weights.meanAbsPercentChange },
+    meanAbsPercentChange: { value: meanAbsPctValue, normalized: meanAbsPctNormalized, weight: weights.meanAbsPercentChange, decayFraction },
     mcRegimeDivergence: { value: mcDivergenceValue, normalized: mcDivergenceNormalized, weight: weights.mcRegimeDivergence },
     wfEfficiencyDelta: { value: wfEffDeltaValue, normalized: wfEffDeltaNormalized, weight: weights.wfEfficiencyDelta },
     structuralFlagRatio: { value: structuralFlagRatioValue, normalized: structuralFlagRatioNormalized, weight: weights.structuralFlagRatio },

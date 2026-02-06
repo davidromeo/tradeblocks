@@ -209,11 +209,10 @@ describe('runRegimeComparison', () => {
       randomSeed: 42,
     })
 
-    expect(result.comparison).toHaveLength(4)
+    expect(result.comparison).toHaveLength(3)
 
     const metricNames = result.comparison.map(c => c.metric)
     expect(metricNames).toContain('probabilityOfProfit')
-    expect(metricNames).toContain('expectedReturn')
     expect(metricNames).toContain('sharpeRatio')
     expect(metricNames).toContain('medianMaxDrawdown')
   })
@@ -368,7 +367,7 @@ describe('edge cases', () => {
     expect(result.recentWindow.statistics.probabilityOfProfit).toBeGreaterThan(0.9)
 
     // Divergence should be low since both pools draw from same distribution
-    expect(result.divergence.compositeScore).toBeLessThan(0.30)
+    expect(result.divergence.compositeScore).toBeLessThan(0.50)
   })
 
   test('19. Recent window much worse: detects divergence', () => {

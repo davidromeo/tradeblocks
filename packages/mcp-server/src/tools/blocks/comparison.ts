@@ -50,10 +50,10 @@ export function registerComparisonBlockTools(
           .optional()
           .describe("Minimum trades per strategy to include in comparison"),
         sortBy: z
-          .enum(["pl", "netPl", "winRate", "trades", "profitFactor", "name"])
-          .default("pl")
+          .enum(["netPl", "pl", "winRate", "trades", "profitFactor", "name"])
+          .default("netPl")
           .describe(
-            "Sort strategies by metric (default: pl for net P&L). 'netPl' and 'pl' are equivalent."
+            "Sort strategies by metric (default: netPl). 'pl' is an alias for 'netPl'."
           ),
         sortOrder: z
           .enum(["asc", "desc"])

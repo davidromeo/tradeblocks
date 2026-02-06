@@ -198,7 +198,7 @@ describe('synthesizeEdgeDecay', () => {
     // Verify all MC comparison metrics present (500 trades always qualifies)
     expect(result.signals.regimeComparison.available).toBe(true)
     const mcObs = result.observations.filter((o) => o.signal === 'regimeComparison')
-    expect(mcObs.length).toBe(4) // all 4 MC metrics
+    expect(mcObs.length).toBe(3) // P(profit), sharpe, MDD (expectedReturn dropped)
   })
 
   test('9. recentWindow option honored', () => {

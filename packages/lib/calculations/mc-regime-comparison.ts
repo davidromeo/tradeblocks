@@ -159,10 +159,6 @@ function computeDivergenceScore(metric: string, fullValue: number, delta: number
       // 10pp difference = score of 1.0
       return absDelta / 0.10
 
-    case 'expectedReturn':
-      // 100% relative change = 1.0, cap at 5.0
-      return Math.min(5.0, absDelta / Math.max(0.01, Math.abs(fullValue)))
-
     case 'sharpeRatio':
       // Halving Sharpe = 1.0, cap at 5.0
       return Math.min(5.0, absDelta / Math.max(0.5, Math.abs(fullValue)))
@@ -249,10 +245,10 @@ export function runRegimeComparison(
   }
   const recentResult = runMonteCarloSimulation(recentPool, recentParams)
 
-  // 8. Compare four metrics
+  // 8. Compare three metrics (expectedReturn dropped — cumulative return is
+  //    too sensitive to simulation length and compounds position sizing artifacts)
   const metricPairs: [string, number, number][] = [
     ['probabilityOfProfit', fullResult.statistics.probabilityOfProfit, recentResult.statistics.probabilityOfProfit],
-    ['expectedReturn', fullResult.statistics.meanTotalReturn, recentResult.statistics.meanTotalReturn],
     ['sharpeRatio', fullResult.statistics.meanSharpeRatio, recentResult.statistics.meanSharpeRatio],
     ['medianMaxDrawdown', fullResult.statistics.medianMaxDrawdown, recentResult.statistics.medianMaxDrawdown],
   ]
