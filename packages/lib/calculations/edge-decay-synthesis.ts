@@ -150,10 +150,10 @@ export interface AlignmentDetail {
 export interface EdgeDecaySummary {
   totalTrades: number
   recentWindow: number
-  recentWinRate: number
-  historicalWinRate: number
-  recentProfitFactor: number
-  historicalProfitFactor: number
+  recentWinRate: number | null
+  historicalWinRate: number | null
+  recentProfitFactor: number | null
+  historicalProfitFactor: number | null
   recentSharpe: number | null
   historicalSharpe: number | null
   mcProbabilityOfProfit: { full: number; recent: number } | null
@@ -703,10 +703,10 @@ export function synthesizeEdgeDecay(
   const summary: EdgeDecaySummary = {
     totalTrades,
     recentWindow,
-    recentWinRate: winRateComp?.recentValue ?? 0,
-    historicalWinRate: winRateComp?.historicalValue ?? 0,
-    recentProfitFactor: pfComp?.recentValue ?? 0,
-    historicalProfitFactor: pfComp?.historicalValue ?? 0,
+    recentWinRate: winRateComp?.recentValue ?? null,
+    historicalWinRate: winRateComp?.historicalValue ?? null,
+    recentProfitFactor: pfComp?.recentValue ?? null,
+    historicalProfitFactor: pfComp?.historicalValue ?? null,
     recentSharpe: sharpeComp?.recentValue ?? null,
     historicalSharpe: sharpeComp?.historicalValue ?? null,
     mcProbabilityOfProfit: regimeResult

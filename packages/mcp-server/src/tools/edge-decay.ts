@@ -701,7 +701,7 @@ export function registerEdgeDecayTools(
 
           // Build text summary
           const s = result.summary;
-          const fmtPct = (v: number) => (v * 100).toFixed(1) + "%";
+          const fmtPct = (v: number | null) => v !== null ? (v * 100).toFixed(1) + "%" : "N/A";
           const fmtRatio = (v: number | null) =>
             v !== null ? v.toFixed(2) : "N/A";
 

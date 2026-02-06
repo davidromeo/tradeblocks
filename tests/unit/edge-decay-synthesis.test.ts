@@ -231,8 +231,8 @@ describe('synthesizeEdgeDecay', () => {
     expect(result.summary).toHaveProperty('observationCount')
 
     expect(typeof result.summary.totalTrades).toBe('number')
-    expect(typeof result.summary.recentWinRate).toBe('number')
-    expect(typeof result.summary.historicalWinRate).toBe('number')
+    expect(result.summary.recentWinRate === null || typeof result.summary.recentWinRate === 'number').toBe(true)
+    expect(result.summary.historicalWinRate === null || typeof result.summary.historicalWinRate === 'number').toBe(true)
   })
 
   test('12a. topObservations contains only rate-type metrics (no dollar metrics)', () => {
