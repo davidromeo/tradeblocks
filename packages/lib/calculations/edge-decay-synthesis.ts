@@ -462,16 +462,18 @@ export function synthesizeEdgeDecay(
   }
 
   // -----------------------------------------------------------------------
+  // Auto-detect margin returns eligibility (used by both MC and WF signals)
+  // -----------------------------------------------------------------------
+  const validMarginCount = trades.filter(t => t.marginReq > 0).length
+  const useMarginReturns = validMarginCount >= trades.length * 0.9
+
+  // -----------------------------------------------------------------------
   // 3. MC regime comparison -- skip if < 30 trades
   // -----------------------------------------------------------------------
   let regimeResult: MCRegimeComparisonResult | null = null
   let regimeSignal: SignalOutput<RegimeDetail>
 
   try {
-    // Auto-detect margin returns eligibility
-    const validMarginCount = trades.filter(t => t.marginReq > 0).length
-    const useMarginReturns = validMarginCount >= trades.length * 0.9
-
     regimeResult = runRegimeComparison(trades, {
       recentWindowSize: recentWindow,
       useMarginReturns,
@@ -507,7 +509,9 @@ export function synthesizeEdgeDecay(
   // -----------------------------------------------------------------------
   // 4. Walk-forward degradation -- always runs
   // -----------------------------------------------------------------------
-  const wfResult = analyzeWalkForwardDegradation(trades)
+  const wfResult = analyzeWalkForwardDegradation(trades, {
+    normalizeTo1Lot: useMarginReturns,
+  })
   signalsRun++
 
   const wfDetail: WFDetail = {

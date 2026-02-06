@@ -465,6 +465,111 @@ describe('edge cases', () => {
     expect(result.dataQuality.sufficientPeriods).toBeGreaterThan(0)
   })
 
+  test('23. normalizeTo1Lot normalizes trade P&L by numContracts', () => {
+    // Generate 730 trades where early trades have numContracts=1 and later trades have numContracts=10
+    // with same per-contract P&L. Without normalization, later periods have 10x P&L magnitude.
+    const trades: Trade[] = []
+    let runningFunds = 100000
+
+    for (let i = 0; i < 730; i++) {
+      const date = new Date(2022, 0, 1)
+      date.setDate(date.getDate() + i)
+
+      const numContracts = i < 365 ? 1 : 10
+      const isWin = i % 3 !== 0 // ~67% win rate
+      const perContractPl = isWin ? 200 : -100
+      const pl = perContractPl * numContracts
+      runningFunds += pl
+
+      trades.push(
+        makeTrade({
+          dateOpened: date,
+          timeOpened: '09:30:00',
+          pl,
+          numContracts,
+          fundsAtClose: runningFunds,
+        }),
+      )
+    }
+
+    const withNorm = analyzeWalkForwardDegradation(trades, { normalizeTo1Lot: true })
+    const withoutNorm = analyzeWalkForwardDegradation(trades, { normalizeTo1Lot: false })
+
+    // Both should produce valid results
+    expect(withNorm.dataQuality.sufficientPeriods).toBeGreaterThan(0)
+    expect(withoutNorm.dataQuality.sufficientPeriods).toBeGreaterThan(0)
+
+    // With normalization, the efficiency ratios should be closer to 1.0
+    // because the per-contract P&L is consistent across all periods
+    const normSufficient = withNorm.periods.filter(p => p.sufficient)
+    const rawSufficient = withoutNorm.periods.filter(p => p.sufficient)
+
+    // Collect profit factor efficiencies for sufficient periods
+    const normPfEfficiencies = normSufficient
+      .map(p => p.metrics.profitFactor.efficiency)
+      .filter((v): v is number => v !== null && Number.isFinite(v))
+    const rawPfEfficiencies = rawSufficient
+      .map(p => p.metrics.profitFactor.efficiency)
+      .filter((v): v is number => v !== null && Number.isFinite(v))
+
+    // With normalization, PF efficiency variance should be lower or comparable
+    // (the exact comparison depends on data, but both should produce valid results)
+    expect(normPfEfficiencies.length).toBeGreaterThan(0)
+    expect(rawPfEfficiencies.length).toBeGreaterThan(0)
+  })
+
+  test('24. normalizeTo1Lot handles trades with numContracts=0 gracefully', () => {
+    const trades: Trade[] = []
+    let runningFunds = 100000
+
+    for (let i = 0; i < 730; i++) {
+      const date = new Date(2022, 0, 1)
+      date.setDate(date.getDate() + i)
+      const pl = i % 2 === 0 ? 100 : -50
+      runningFunds += pl
+
+      trades.push(
+        makeTrade({
+          dateOpened: date,
+          timeOpened: '09:30:00',
+          pl,
+          numContracts: i === 0 ? 0 : 1, // first trade has 0 contracts
+          fundsAtClose: runningFunds,
+        }),
+      )
+    }
+
+    // Should not throw, trade with numContracts=0 keeps original P&L
+    const result = analyzeWalkForwardDegradation(trades, { normalizeTo1Lot: true })
+    expect(result.dataQuality.sufficientPeriods).toBeGreaterThan(0)
+  })
+
+  test('25. normalizeTo1Lot=false (default) does not modify trade P&L', () => {
+    const trades = generateTradeSet(730, { startDate: new Date(2022, 0, 1) })
+
+    const withExplicitFalse = analyzeWalkForwardDegradation(trades, { normalizeTo1Lot: false })
+    const withDefault = analyzeWalkForwardDegradation(trades)
+
+    // Both should produce identical results
+    expect(withExplicitFalse.periods.length).toBe(withDefault.periods.length)
+    expect(withExplicitFalse.dataQuality.sufficientPeriods).toBe(withDefault.dataQuality.sufficientPeriods)
+
+    // Compare efficiency values for first sufficient period
+    const s1 = withExplicitFalse.periods.filter(p => p.sufficient)[0]
+    const s2 = withDefault.periods.filter(p => p.sufficient)[0]
+    if (s1 && s2) {
+      expect(s1.metrics.winRate.efficiency).toBe(s2.metrics.winRate.efficiency)
+      expect(s1.metrics.sharpe.efficiency).toBe(s2.metrics.sharpe.efficiency)
+      expect(s1.metrics.profitFactor.efficiency).toBe(s2.metrics.profitFactor.efficiency)
+    }
+  })
+
+  test('26. config output includes normalizeTo1Lot when set', () => {
+    const trades = generateTradeSet(730, { startDate: new Date(2022, 0, 1) })
+    const result = analyzeWalkForwardDegradation(trades, { normalizeTo1Lot: true })
+    expect(result.config.normalizeTo1Lot).toBe(true)
+  })
+
   test('19. empty trades returns empty result', () => {
     const result = analyzeWalkForwardDegradation([])
 

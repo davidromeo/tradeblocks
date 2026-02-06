@@ -32,6 +32,8 @@ export interface WFDConfig {
   recentPeriodCount: number
   /** Optional case-insensitive strategy filter. */
   strategy?: string
+  /** When true, normalize trade P&L to 1-lot (divide pl by numContracts) before computing metrics. Prevents position sizing growth from contaminating IS/OOS efficiency comparisons. */
+  normalizeTo1Lot?: boolean
 }
 
 export interface WFDWindow {
@@ -284,7 +286,15 @@ export function analyzeWalkForwardDegradation(
   }
 
   // 2. Sort chronologically
-  const sorted = sortTradesChronologically(filtered)
+  const sortedRaw = sortTradesChronologically(filtered)
+
+  // 2b. Optionally normalize to 1-lot (divide pl by numContracts)
+  const sorted = config.normalizeTo1Lot
+    ? sortedRaw.map(t => ({
+        ...t,
+        pl: t.numContracts > 0 ? t.pl / t.numContracts : t.pl,
+      }))
+    : sortedRaw
 
   // 3. Validate minimum trades
   const emptyResult = (): WFDResult => ({
