@@ -633,9 +633,12 @@ export function synthesizeEdgeDecay(
     : 0
   const meanAbsPctNormalized = Math.min(meanAbsPctValue / 50, 1) * decayFraction // scaled by proportion of decaying metrics
 
-  // Component 2: MC regime divergence composite score (capped at 1.0)
+  // Component 2: MC regime divergence composite score
+  // compositeScore is signed: negative = degradation, positive = improvement
+  // For decay score: only count degradation (negative values), use magnitude capped at 1
   const mcDivergenceValue = regimeResult?.divergence.compositeScore ?? null
-  const mcDivergenceNormalized = Math.min(mcDivergenceValue ?? 0, 1)
+  const mcDivergenceNormalized = Math.min(Math.abs(mcDivergenceValue ?? 0), 1)
+  const mcDecayDirection = (mcDivergenceValue ?? 0) < 0 ? 1 : 0
   const mcAvailable = mcDivergenceValue !== null
 
   // Component 3: WF efficiency delta (average of absolute deltas)
@@ -681,14 +684,14 @@ export function synthesizeEdgeDecay(
 
   const compositeDecayScore = Math.max(0, Math.min(1,
     meanAbsPctNormalized * weights.meanAbsPercentChange +
-    mcDivergenceNormalized * weights.mcRegimeDivergence +
+    (mcDivergenceNormalized * mcDecayDirection) * weights.mcRegimeDivergence +
     wfEffDeltaNormalized * weights.wfEfficiencyDelta +
     structuralFlagRatioNormalized * weights.structuralFlagRatio
   ))
 
   const compositeDecayScoreComponents = {
     meanAbsPercentChange: { value: meanAbsPctValue, normalized: meanAbsPctNormalized, weight: weights.meanAbsPercentChange, decayFraction },
-    mcRegimeDivergence: { value: mcDivergenceValue, normalized: mcDivergenceNormalized, weight: weights.mcRegimeDivergence },
+    mcRegimeDivergence: { value: mcDivergenceValue, normalized: mcDivergenceNormalized * mcDecayDirection, weight: weights.mcRegimeDivergence },
     wfEfficiencyDelta: { value: wfEffDeltaValue, normalized: wfEffDeltaNormalized, weight: weights.wfEfficiencyDelta },
     structuralFlagRatio: { value: structuralFlagRatioValue, normalized: structuralFlagRatioNormalized, weight: weights.structuralFlagRatio },
   }

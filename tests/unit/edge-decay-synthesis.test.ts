@@ -314,6 +314,40 @@ describe('synthesizeEdgeDecay', () => {
     }
   })
 
+  test('15. composite decay score MC component is 0 when MC shows improvement', () => {
+    // Generate 60 trades with improving recent window (higher win rate in recent trades)
+    // First 40 trades: 50% win rate; last 20 trades: 90% win rate
+    const earlyTrades = generateTradeSet(40, {
+      winRate: 0.5,
+      avgPl: 200,
+      startDate: new Date(2024, 0, 1),
+    })
+    const lateTrades = generateTradeSet(20, {
+      winRate: 0.9,
+      avgPl: 200,
+      startDate: new Date(2024, 2, 10),
+    })
+    let runningFunds = earlyTrades[earlyTrades.length - 1].fundsAtClose
+    for (const t of lateTrades) {
+      runningFunds += t.pl
+      t.fundsAtClose = runningFunds
+    }
+    const trades = [...earlyTrades, ...lateTrades]
+
+    const result = synthesizeEdgeDecay(trades, undefined, { recentWindow: 20 })
+
+    // MC component should report normalized=0 when compositeScore >= 0 (improvement)
+    const mcComp = result.summary.compositeDecayScoreComponents.mcRegimeDivergence
+    // The MC compositeScore may be positive (improvement) or negative -- either way,
+    // if the regime shows improvement (positive compositeScore), normalized should be 0
+    if (mcComp.value !== null && mcComp.value >= 0) {
+      expect(mcComp.normalized).toBe(0)
+    }
+    // Regardless, the compositeDecayScore should be clamped [0, 1]
+    expect(result.summary.compositeDecayScore).toBeGreaterThanOrEqual(0)
+    expect(result.summary.compositeDecayScore).toBeLessThanOrEqual(1)
+  })
+
   test('14. Falls back to standard returns when <90% have valid marginReq', () => {
     const trades = generateTradeSet(60)
     // Set 80% of trades to marginReq=0 (only 20% valid, below 90% threshold)

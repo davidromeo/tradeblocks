@@ -26,7 +26,7 @@ export interface MetricComparison {
   delta: number
   /** (delta / |fullHistoryValue|) * 100, null if fullHistoryValue is 0 */
   percentChange: number | null
-  /** Per-metric normalized divergence score (0 = identical, higher = more divergent) */
+  /** Per-metric normalized divergence score. Signed: negative = degradation, positive = improvement. Magnitude indicates strength. */
   divergenceScore: number
 }
 
@@ -123,13 +123,12 @@ function formatLocalDate(date: Date): string {
 /**
  * Compute composite divergence score from metric comparisons.
  *
- * Per-metric divergence scores (normalized to comparable scales):
- * - probabilityOfProfit: |delta| / 0.10  (10pp difference = score 1.0)
- * - expectedReturn: |delta| / max(0.01, |fullValue|)  (100% relative change = 1.0), cap 5.0
- * - sharpeRatio: |delta| / max(0.5, |fullValue|)  (halving Sharpe = 1.0), cap 5.0
- * - medianMaxDrawdown: |delta| / max(0.01, fullValue)  (100% relative change = 1.0), cap 5.0
+ * Per-metric divergence scores are signed:
+ * - Negative = degradation (recent worse than full history)
+ * - Positive = improvement (recent better than full history)
  *
- * Composite score = mean of the four per-metric divergence scores.
+ * Composite score = mean of the signed per-metric divergence scores.
+ * A negative composite means net degradation, positive means net improvement.
  * Returns score and description only -- no severity labels.
  */
 export function classifyDivergence(
@@ -154,22 +153,32 @@ export function classifyDivergence(
 // Per-metric divergence score calculation
 // ---------------------------------------------------------------------------
 
+/**
+ * Compute signed divergence score for a metric.
+ *
+ * Signed: negative = degradation, positive = improvement.
+ * - probabilityOfProfit: delta / 0.10. Negative delta (lower recent P(profit)) = negative score.
+ * - sharpeRatio: sign(delta) * min(5.0, |delta| / max(0.5, |fullValue|)). Negative delta = negative score.
+ * - medianMaxDrawdown: sign flipped -- positive delta (larger MDD) = degradation = negative score.
+ */
 function computeDivergenceScore(metric: string, fullValue: number, delta: number): number {
-  const absDelta = Math.abs(delta)
-
   switch (metric) {
     case 'probabilityOfProfit':
-      // 10pp difference = score of 1.0
-      return absDelta / 0.10
+      // 10pp difference = score of 1.0, signed
+      return delta / 0.10
 
-    case 'sharpeRatio':
-      // Halving Sharpe = 1.0, cap at 5.0
-      return Math.min(5.0, absDelta / Math.max(0.5, Math.abs(fullValue)))
+    case 'sharpeRatio': {
+      // Halving Sharpe = 1.0, cap at 5.0, signed
+      const raw = Math.abs(delta) / Math.max(0.5, Math.abs(fullValue))
+      return Math.sign(delta) * Math.min(5.0, raw)
+    }
 
-    case 'medianMaxDrawdown':
-      // 100% relative change = 1.0, cap at 5.0
-      // fullValue for MDD is always positive (drawdown magnitude)
-      return Math.min(5.0, absDelta / Math.max(0.01, fullValue))
+    case 'medianMaxDrawdown': {
+      // MDD increasing (positive delta) is bad, so negate.
+      // 100% relative change = 1.0, cap at [-5.0, 5.0]
+      const raw = delta / Math.max(0.01, fullValue)
+      return -Math.sign(raw) * Math.min(5.0, Math.abs(raw))
+    }
 
     default:
       return 0

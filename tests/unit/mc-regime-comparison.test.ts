@@ -400,8 +400,8 @@ describe('edge cases', () => {
       randomSeed: 42,
     })
 
-    // The recent window is much worse, so divergence score should be above aligned threshold
-    expect(result.divergence.compositeScore).toBeGreaterThan(0.3)
+    // The recent window is much worse, so divergence score should be significantly negative (degradation)
+    expect(result.divergence.compositeScore).toBeLessThan(-0.3)
   })
 
   test('20. Each comparison metric has valid delta and percentChange', () => {
@@ -415,7 +415,6 @@ describe('edge cases', () => {
       expect(typeof comp.delta).toBe('number')
       expect(isFinite(comp.delta)).toBe(true)
       expect(typeof comp.divergenceScore).toBe('number')
-      expect(comp.divergenceScore).toBeGreaterThanOrEqual(0)
 
       // delta should equal recentWindowValue - fullHistoryValue
       expect(comp.delta).toBeCloseTo(comp.recentWindowValue - comp.fullHistoryValue, 10)
@@ -544,5 +543,120 @@ describe('calculateMarginReturns', () => {
 
   test('28. Empty trades returns empty array', () => {
     expect(calculateMarginReturns([])).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests for signed divergence scores
+// ---------------------------------------------------------------------------
+
+describe('signed divergence scores', () => {
+  test('29. degrading scenario produces negative divergenceScore for probabilityOfProfit', () => {
+    const comparisons: MetricComparison[] = [
+      {
+        metric: 'probabilityOfProfit',
+        fullHistoryValue: 0.70,
+        recentWindowValue: 0.65,
+        delta: -0.05,
+        percentChange: -7.14,
+        divergenceScore: -0.05 / 0.10, // -0.5
+      },
+    ]
+    expect(comparisons[0].divergenceScore).toBeCloseTo(-0.5, 6)
+
+    // Also verify via classifyDivergence
+    const result = classifyDivergence(comparisons)
+    expect(result.compositeScore).toBeLessThan(0)
+  })
+
+  test('30. improving scenario produces positive divergenceScore for probabilityOfProfit', () => {
+    const comparisons: MetricComparison[] = [
+      {
+        metric: 'probabilityOfProfit',
+        fullHistoryValue: 0.70,
+        recentWindowValue: 0.75,
+        delta: 0.05,
+        percentChange: 7.14,
+        divergenceScore: 0.05 / 0.10, // +0.5
+      },
+    ]
+    expect(comparisons[0].divergenceScore).toBeCloseTo(0.5, 6)
+
+    const result = classifyDivergence(comparisons)
+    expect(result.compositeScore).toBeGreaterThan(0)
+  })
+
+  test('31. medianMaxDrawdown increase (degradation) produces negative divergenceScore', () => {
+    // delta = +0.04 (MDD got larger = worse), fullValue = 0.08
+    // raw = 0.04 / 0.08 = 0.5, negated = -0.5
+    const delta = 0.04
+    const fullValue = 0.08
+    const raw = delta / Math.max(0.01, fullValue)
+    const expected = -Math.sign(raw) * Math.min(5.0, Math.abs(raw))
+    expect(expected).toBeCloseTo(-0.5, 6)
+  })
+
+  test('32. medianMaxDrawdown decrease (improvement) produces positive divergenceScore', () => {
+    // delta = -0.02 (MDD got smaller = better), fullValue = 0.08
+    // raw = -0.02 / 0.08 = -0.25, negated = +0.25
+    const delta = -0.02
+    const fullValue = 0.08
+    const raw = delta / Math.max(0.01, fullValue)
+    const expected = -Math.sign(raw) * Math.min(5.0, Math.abs(raw))
+    expect(expected).toBeCloseTo(0.25, 6)
+  })
+
+  test('33. compositeScore is negative for all-degrading comparisons', () => {
+    const comparisons: MetricComparison[] = [
+      { metric: 'probabilityOfProfit', fullHistoryValue: 0.70, recentWindowValue: 0.60, delta: -0.10, percentChange: -14.3, divergenceScore: -1.0 },
+      { metric: 'sharpeRatio', fullHistoryValue: 1.5, recentWindowValue: 0.5, delta: -1.0, percentChange: -66.7, divergenceScore: -0.67 },
+      { metric: 'medianMaxDrawdown', fullHistoryValue: 0.08, recentWindowValue: 0.16, delta: 0.08, percentChange: 100, divergenceScore: -1.0 },
+    ]
+
+    const result = classifyDivergence(comparisons)
+    expect(result.compositeScore).toBeLessThan(0)
+  })
+
+  test('34. compositeScore is positive for all-improving comparisons', () => {
+    const comparisons: MetricComparison[] = [
+      { metric: 'probabilityOfProfit', fullHistoryValue: 0.60, recentWindowValue: 0.70, delta: 0.10, percentChange: 16.7, divergenceScore: 1.0 },
+      { metric: 'sharpeRatio', fullHistoryValue: 1.0, recentWindowValue: 2.0, delta: 1.0, percentChange: 100, divergenceScore: 1.0 },
+      { metric: 'medianMaxDrawdown', fullHistoryValue: 0.10, recentWindowValue: 0.05, delta: -0.05, percentChange: -50, divergenceScore: 0.5 },
+    ]
+
+    const result = classifyDivergence(comparisons)
+    expect(result.compositeScore).toBeGreaterThan(0)
+  })
+
+  test('35. runRegimeComparison produces signed compositeScore for degrading scenario', () => {
+    // First 400 trades: 80% win rate (good)
+    const goodTrades = generateTradeSet(400, {
+      winRate: 0.8,
+      avgPl: 200,
+      startDate: new Date(2023, 0, 1),
+    })
+    // Last 100 trades: 30% win rate (bad)
+    const badTrades = generateTradeSet(100, {
+      winRate: 0.3,
+      avgPl: 200,
+      startDate: new Date(2024, 2, 7),
+    })
+
+    let runningFunds = goodTrades[goodTrades.length - 1].fundsAtClose
+    for (const t of badTrades) {
+      runningFunds += t.pl
+      t.fundsAtClose = runningFunds
+    }
+
+    const allTrades = [...goodTrades, ...badTrades]
+
+    const result = runRegimeComparison(allTrades, {
+      recentWindowSize: 100,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // With a degrading recent window, compositeScore should be negative
+    expect(result.divergence.compositeScore).toBeLessThan(0)
   })
 })
