@@ -2,13 +2,13 @@
  * Edge Decay Analysis Tools
  *
  * MCP tools for period segmentation, rolling metrics analysis,
- * regime comparison, and walk-forward degradation.
+ * regime comparison, walk-forward degradation, and live alignment.
  * Foundation for edge decay detection in trading strategies.
  */
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadBlock } from "../utils/block-loader.js";
+import { loadBlock, loadReportingLog } from "../utils/block-loader.js";
 import { createToolOutput } from "../utils/output-formatter.js";
 import { withSyncedBlock } from "./middleware/sync-middleware.js";
 import {
@@ -16,18 +16,10 @@ import {
   computeRollingMetrics,
   runRegimeComparison,
   analyzeWalkForwardDegradation,
+  analyzeLiveAlignment,
+  applyStrategyFilter,
 } from "@tradeblocks/lib";
-import type { Trade } from "@tradeblocks/lib";
-
-/**
- * Filter trades by strategy (case-insensitive)
- */
-function filterByStrategy(trades: Trade[], strategy?: string): Trade[] {
-  if (!strategy) return trades;
-  return trades.filter(
-    (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
-  );
-}
+import type { ReportingTrade } from "@tradeblocks/lib";
 
 /**
  * Register edge decay analysis MCP tools
@@ -56,7 +48,7 @@ export function registerEdgeDecayTools(
         let trades = block.trades;
 
         // Apply strategy filter
-        trades = filterByStrategy(trades, strategy);
+        trades = applyStrategyFilter(trades, strategy);
 
         if (trades.length === 0) {
           return {
@@ -163,7 +155,7 @@ export function registerEdgeDecayTools(
           let trades = block.trades;
 
           // Apply strategy filter
-          trades = filterByStrategy(trades, strategy);
+          trades = applyStrategyFilter(trades, strategy);
 
           if (trades.length === 0) {
             return {
@@ -294,7 +286,7 @@ export function registerEdgeDecayTools(
           let trades = block.trades;
 
           // Apply strategy filter
-          trades = filterByStrategy(trades, strategy);
+          trades = applyStrategyFilter(trades, strategy);
 
           if (trades.length === 0) {
             return {
@@ -457,7 +449,7 @@ export function registerEdgeDecayTools(
           let trades = block.trades;
 
           // Apply strategy filter
-          trades = filterByStrategy(trades, strategy);
+          trades = applyStrategyFilter(trades, strategy);
 
           if (trades.length === 0) {
             return {
@@ -519,5 +511,123 @@ export function registerEdgeDecayTools(
         }
       }
     )
+  );
+
+  // Tool 5: analyze_live_alignment
+  server.registerTool(
+    "analyze_live_alignment",
+    {
+      description:
+        "Compare backtest trades against actual (reporting log) trades to assess live execution alignment. Computes direction agreement rate (% of days where both agree on win/loss), per-strategy execution efficiency (actual P/L as ratio of backtest P/L), and alignment trend over time via monthly regression. Returns graceful skip when no reporting log exists.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter by strategy name (case-insensitive)"),
+        scaling: z
+          .enum(["raw", "perContract", "toReported"])
+          .optional()
+          .describe(
+            "P/L scaling mode: raw (as-is), perContract (divide by contracts, default), toReported (scale backtest to actual contract count)"
+          ),
+      }),
+    },
+    withSyncedBlock(baseDir, async ({ blockId, strategy, scaling }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+
+        // Load reporting log -- graceful skip if missing (LIVE-04)
+        let actualTrades: ReportingTrade[];
+        try {
+          actualTrades = await loadReportingLog(baseDir, blockId);
+        } catch {
+          return createToolOutput(
+            `Live alignment for ${blockId}: skipped (no reporting log found)`,
+            {
+              blockId,
+              strategy: strategy ?? null,
+              available: false,
+              reason: "no reporting log",
+            }
+          );
+        }
+
+        // Apply strategy filter to both sets
+        const backtestTrades = applyStrategyFilter(block.trades, strategy);
+        actualTrades = applyStrategyFilter(actualTrades, strategy);
+
+        if (backtestTrades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: strategy
+                  ? `No backtest trades found for strategy "${strategy}" in block "${blockId}".`
+                  : `No backtest trades found in block "${blockId}".`,
+              },
+            ],
+            isError: true as const,
+          };
+        }
+
+        // Call pure calculation engine
+        const output = analyzeLiveAlignment(backtestTrades, actualTrades, {
+          scaling: scaling ?? "perContract",
+        });
+
+        if (!output.available) {
+          return createToolOutput(
+            `Live alignment for ${blockId}: skipped (${output.reason})`,
+            {
+              blockId,
+              strategy: strategy ?? null,
+              available: false,
+              reason: output.reason,
+            }
+          );
+        }
+
+        const result = output;
+
+        // Build text summary
+        const da = result.directionAgreement;
+        const ee = result.executionEfficiency;
+        const dq = result.dataQuality;
+        const fmtPct = (v: number) => (v * 100).toFixed(1) + "%";
+        const fmtVal = (v: number | null) =>
+          v !== null ? v.toFixed(2) : "N/A";
+
+        const summary = [
+          `Live alignment for ${blockId}${strategy ? ` (${strategy})` : ""}: ${dq.backtestTradeCount} backtest, ${dq.actualTradeCount} actual, ${dq.matchedTradeCount} matched (${fmtPct(dq.matchRate)})`,
+          `Direction agreement: ${fmtPct(da.overallRate)} (${da.agreementDays}/${da.totalDays} days)`,
+          `Execution efficiency: ${fmtVal(ee.overallEfficiency)}`,
+          `Trend sufficient: ${result.alignmentTrend.sufficientForTrends ? "yes" : "no"}, Direction trend slope: ${result.alignmentTrend.directionTrend?.slope !== undefined ? result.alignmentTrend.directionTrend.slope.toFixed(4) : "N/A"}`,
+        ].join("\n");
+
+        const structuredData = {
+          blockId,
+          strategy: strategy ?? null,
+          available: true,
+          overlapDateRange: result.overlapDateRange,
+          directionAgreement: result.directionAgreement,
+          executionEfficiency: result.executionEfficiency,
+          alignmentTrend: result.alignmentTrend,
+          dataQuality: result.dataQuality,
+        };
+
+        return createToolOutput(summary, structuredData);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error analyzing live alignment: ${(error as Error).message}`,
+            },
+          ],
+          isError: true as const,
+        };
+      }
+    })
   );
 }
