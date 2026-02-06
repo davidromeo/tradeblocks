@@ -50,9 +50,11 @@ export function registerComparisonBlockTools(
           .optional()
           .describe("Minimum trades per strategy to include in comparison"),
         sortBy: z
-          .enum(["pl", "winRate", "trades", "profitFactor", "name"])
+          .enum(["pl", "netPl", "winRate", "trades", "profitFactor", "name"])
           .default("pl")
-          .describe("Sort strategies by metric (default: pl for net P&L)"),
+          .describe(
+            "Sort strategies by metric (default: pl for net P&L). 'netPl' and 'pl' are equivalent."
+          ),
         sortOrder: z
           .enum(["asc", "desc"])
           .default("desc")
@@ -130,6 +132,7 @@ export function registerComparisonBlockTools(
               );
             case "name":
               return a.strategyName.localeCompare(b.strategyName) * multiplier;
+            case "netPl":
             case "pl":
             default:
               return (a.totalPl - b.totalPl) * multiplier;
@@ -407,6 +410,7 @@ export function registerComparisonBlockTools(
             z.enum([
               "trades",
               "pl",
+              "netPl",
               "winRate",
               "profitFactor",
               "sharpeRatio",
@@ -415,7 +419,7 @@ export function registerComparisonBlockTools(
           )
           .optional()
           .describe(
-            "Specific metrics to include in comparison (default: all). Use to focus output."
+            "Specific metrics to include in comparison (default: all). 'netPl' and 'pl' are equivalent. Use to focus output."
           ),
       }),
     },
@@ -550,7 +554,8 @@ export function registerComparisonBlockTools(
         ) => {
           const entry: Record<string, number | null> = {};
           if (includeMetric("trades")) entry.totalTrades = stats.totalTrades;
-          if (includeMetric("pl")) entry.netPl = stats.netPl;
+          if (includeMetric("pl") || includeMetric("netPl"))
+            entry.netPl = stats.netPl;
           if (includeMetric("winRate")) entry.winRate = stats.winRate;
           if (includeMetric("profitFactor"))
             entry.profitFactor = stats.profitFactor;
