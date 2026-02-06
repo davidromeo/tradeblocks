@@ -1,6 +1,7 @@
 import {
   runRegimeComparison,
   classifyDivergence,
+  calculateMarginReturns,
 } from '@tradeblocks/lib'
 import type {
   Trade,
@@ -449,5 +450,99 @@ describe('edge cases', () => {
     })
 
     expect(result.parameters.simulationLength).toBe(60)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests for margin-based returns (useMarginReturns)
+// ---------------------------------------------------------------------------
+
+describe('margin-based returns (useMarginReturns)', () => {
+  test('23. useMarginReturns produces valid results', () => {
+    const trades = generateTradeSet(50)
+    const result = runRegimeComparison(trades, {
+      useMarginReturns: true,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // Should complete without error
+    expect(result.fullHistory.tradeCount).toBe(50)
+    expect(result.parameters.useMarginReturns).toBe(true)
+
+    // Should have valid divergence score
+    expect(typeof result.divergence.compositeScore).toBe('number')
+    expect(isFinite(result.divergence.compositeScore)).toBe(true)
+  })
+
+  test('24. useMarginReturns reports in parameters output', () => {
+    const trades = generateTradeSet(50)
+
+    const withMargin = runRegimeComparison(trades, {
+      useMarginReturns: true,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+    const withoutMargin = runRegimeComparison(trades, {
+      useMarginReturns: false,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    expect(withMargin.parameters.useMarginReturns).toBe(true)
+    expect(withoutMargin.parameters.useMarginReturns).toBe(false)
+  })
+
+  test('25. useMarginReturns uses median marginReq as initialCapital', () => {
+    const trades = generateTradeSet(50)
+    const result = runRegimeComparison(trades, {
+      useMarginReturns: true,
+      numSimulations: 100,
+      randomSeed: 42,
+    })
+
+    // All trades have marginReq=5000, so initialCapital should be 5000
+    expect(result.parameters.initialCapital).toBe(5000)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests for calculateMarginReturns
+// ---------------------------------------------------------------------------
+
+describe('calculateMarginReturns', () => {
+  test('26. Basic: returns pl/marginReq for each trade', () => {
+    const trades = [
+      makeTrade({ pl: 500, marginReq: 5000, dateOpened: new Date('2024-01-01') }),
+      makeTrade({ pl: -200, marginReq: 5000, dateOpened: new Date('2024-01-02') }),
+      makeTrade({ pl: 1000, marginReq: 10000, dateOpened: new Date('2024-01-03') }),
+    ]
+
+    const returns = calculateMarginReturns(trades)
+
+    expect(returns).toHaveLength(3)
+    expect(returns[0]).toBeCloseTo(0.10, 6)
+    expect(returns[1]).toBeCloseTo(-0.04, 6)
+    expect(returns[2]).toBeCloseTo(0.10, 6)
+  })
+
+  test('27. Skips trades with marginReq <= 0', () => {
+    const trades = [
+      makeTrade({ pl: 500, marginReq: 5000, dateOpened: new Date('2024-01-01') }),
+      makeTrade({ pl: 100, marginReq: 0, dateOpened: new Date('2024-01-02') }),
+      makeTrade({ pl: -200, marginReq: -100, dateOpened: new Date('2024-01-03') }),
+      makeTrade({ pl: 300, marginReq: 3000, dateOpened: new Date('2024-01-04') }),
+    ]
+
+    const returns = calculateMarginReturns(trades)
+
+    // Only 2 trades have valid marginReq
+    expect(returns).toHaveLength(2)
+    expect(returns[0]).toBeCloseTo(0.10, 6)   // 500/5000
+    expect(returns[1]).toBeCloseTo(0.10, 6)   // 300/3000
+  })
+
+  test('28. Empty trades returns empty array', () => {
+    expect(calculateMarginReturns([])).toEqual([])
   })
 })

@@ -299,4 +299,32 @@ describe('synthesizeEdgeDecay', () => {
     expect(result.metadata.dateRange).toHaveProperty('start')
     expect(result.metadata.dateRange).toHaveProperty('end')
   })
+
+  test('13. Auto-detects margin returns when trades have valid marginReq', () => {
+    // All trades from generateTradeSet have marginReq=5000 (100% valid, >= 90% threshold)
+    const trades = generateTradeSet(60)
+    const result = synthesizeEdgeDecay(trades, undefined)
+
+    // The regime signal should be available
+    if (result.signals.regimeComparison.available && result.signals.regimeComparison.detail) {
+      // Parameters should report useMarginReturns = true
+      expect(result.signals.regimeComparison.detail.parameters.useMarginReturns).toBe(true)
+      // initialCapital should be median marginReq (all 5000, so 5000)
+      expect(result.signals.regimeComparison.detail.parameters.initialCapital).toBe(5000)
+    }
+  })
+
+  test('14. Falls back to standard returns when <90% have valid marginReq', () => {
+    const trades = generateTradeSet(60)
+    // Set 80% of trades to marginReq=0 (only 20% valid, below 90% threshold)
+    for (let i = 0; i < 48; i++) {
+      trades[i].marginReq = 0
+    }
+    const result = synthesizeEdgeDecay(trades, undefined)
+
+    if (result.signals.regimeComparison.available && result.signals.regimeComparison.detail) {
+      // Should NOT use margin returns
+      expect(result.signals.regimeComparison.detail.parameters.useMarginReturns).toBe(false)
+    }
+  })
 })
