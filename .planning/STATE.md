@@ -13,7 +13,7 @@ Milestone: v2.7 Edge Decay Analysis -- COMPLETE
 Phase: All complete (46-50)
 Plan: All complete
 Status: Milestone shipped, archived, tagged v2.7
-Last activity: 2026-02-06 -- Completed quick task 005: MC dual resampling in health check
+Last activity: 2026-02-06 -- Completed quick task 006: composite decay score quality
 
 Progress: [██████████] 100%
 
@@ -42,7 +42,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 | 003 | MCP tooling improvements (7 items: daily log filtering, rolling metrics trim, health check sample sizes, edge decay sorting + composite score, stress test pre-filter, pl→netPl naming) | 2026-02-06 | ce5f73b | [003-mcp-tooling-improvements](./quick/003-mcp-tooling-improvements/) |
 | 004 | MCP tooling feedback fixes (5 items: dollar-metric filtering, composite score accuracy, per-pair tail risk n=, netPl enum, severity label removal) | 2026-02-06 | 37d871c | [004-mcp-tooling-feedback-fixes](./quick/004-mcp-tooling-feedback-fixes/) |
 | 005 | Health check dual MC resampling: detect position sizing inflation | 2026-02-06 | e29731b | [005-mc-dual-resampling-health-check](./quick/005-mc-dual-resampling-health-check/) |
-| 006 | Composite decay score quality: drop expectedReturn, cap mcDivergence, direction-aware scoring, netPl default | 2026-02-06 | — | — |
+| 006 | Composite decay score quality: drop expectedReturn, cap mcDivergence, direction-aware scoring, netPl default | 2026-02-06 | b0e4a54 | — |
 
 ## Testing Infrastructure
 

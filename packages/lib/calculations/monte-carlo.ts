@@ -37,6 +37,13 @@ export interface MonteCarloParams {
    */
   historicalInitialCapital?: number;
 
+  /**
+   * Pre-computed percentage returns to use directly instead of calculating from trades.
+   * When provided with resampleMethod='percentage', these returns are used as the
+   * resample pool, bypassing calculatePercentageReturns().
+   */
+  precomputedReturns?: number[];
+
   /** Filter to specific strategy (optional) */
   strategy?: string;
 
@@ -686,6 +693,40 @@ export function calculatePercentageReturns(
 }
 
 /**
+ * Calculate margin-based returns (Return on Margin) from trades.
+ * Uses pl / marginReq as the per-trade return, which provides a denominator
+ * that scales with position size and is independent of full portfolio equity.
+ *
+ * This is preferred over calculatePercentageReturns when strategy-filtered
+ * trades come from multi-strategy portfolios where fundsAtClose reflects
+ * full portfolio equity rather than the strategy's allocation.
+ *
+ * @param trades - Trades to calculate margin returns from
+ * @returns Array of margin-based returns (as decimals, e.g., 0.05 = 5% ROM)
+ */
+export function calculateMarginReturns(trades: Trade[]): number[] {
+  if (trades.length === 0) {
+    return [];
+  }
+
+  // Sort trades by date to ensure proper chronological order
+  const sortedTrades = [...trades].sort(
+    (a, b) => a.dateOpened.getTime() - b.dateOpened.getTime()
+  );
+
+  const returns: number[] = [];
+
+  for (const trade of sortedTrades) {
+    if (trade.marginReq > 0) {
+      returns.push(trade.pl / trade.marginReq);
+    }
+    // Skip trades where marginReq <= 0 (do NOT push 0)
+  }
+
+  return returns;
+}
+
+/**
  * Get the resample pool from percentage returns data
  *
  * @param percentageReturns - All percentage returns
@@ -923,22 +964,32 @@ export function runMonteCarloSimulation(
     resamplePool = dailyPLs;
   } else {
     // Percentage returns resampling (for compounding strategies)
-    const filteredTrades =
-      params.strategy && params.strategy !== "all"
-        ? trades.filter((t) => t.strategy === params.strategy)
-        : trades;
+    if (params.precomputedReturns && params.precomputedReturns.length > 0) {
+      // Use pre-computed returns directly (e.g., margin-based returns)
+      const precomputedPool = getPercentageResamplePool(
+        params.precomputedReturns,
+        params.resampleWindow
+      );
+      actualResamplePoolSize = precomputedPool.length;
+      resamplePool = precomputedPool;
+    } else {
+      const filteredTrades =
+        params.strategy && params.strategy !== "all"
+          ? trades.filter((t) => t.strategy === params.strategy)
+          : trades;
 
-    const percentageReturns = calculatePercentageReturns(
-      filteredTrades,
-      params.normalizeTo1Lot,
-      params.historicalInitialCapital // Use historical capital (if provided) to reconstruct trajectory
-    );
-    const percentagePool = getPercentageResamplePool(
-      percentageReturns,
-      params.resampleWindow
-    );
-    actualResamplePoolSize = percentagePool.length;
-    resamplePool = percentagePool;
+      const percentageReturns = calculatePercentageReturns(
+        filteredTrades,
+        params.normalizeTo1Lot,
+        params.historicalInitialCapital // Use historical capital (if provided) to reconstruct trajectory
+      );
+      const percentagePool = getPercentageResamplePool(
+        percentageReturns,
+        params.resampleWindow
+      );
+      actualResamplePoolSize = percentagePool.length;
+      resamplePool = percentagePool;
+    }
   }
 
   // Validate resample pool size
