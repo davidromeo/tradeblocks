@@ -140,6 +140,13 @@ export function registerEdgeDecayTools(
           .describe(
             "Override: recent window as calendar days instead of trade count"
           ),
+        includeSeries: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            "Include full rolling series data points in output (default: false, saves tokens)"
+          ),
       }),
     },
     withSyncedBlock(
@@ -150,6 +157,7 @@ export function registerEdgeDecayTools(
         windowSize,
         recentWindowSize,
         recentWindowDays,
+        includeSeries,
       }) => {
         try {
           const block = await loadBlock(baseDir, blockId);
@@ -210,7 +218,7 @@ export function registerEdgeDecayTools(
             blockId,
             strategy: strategy ?? null,
             windowSize: result.windowSize,
-            series: result.series,
+            ...(includeSeries ? { series: result.series } : {}),
             seasonalAverages: result.seasonalAverages,
             recentVsHistorical: result.recentVsHistorical,
             dataQuality: result.dataQuality,

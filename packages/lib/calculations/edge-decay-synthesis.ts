@@ -71,6 +71,8 @@ export interface FactualObservation {
   delta: number
   /** Relative change as percentage, null if comparison is 0 */
   percentChange: number | null
+  /** Absolute value of percentChange for magnitude sorting, null if percentChange is null */
+  absPercentChange: number | null
 }
 
 /** Per-signal wrapper. detail is the engine output (pruned as needed). */
@@ -158,6 +160,8 @@ export interface EdgeDecaySummary {
   liveExecutionEfficiency: number | null
   observationCount: number
   structuralFlagCount: number
+  /** Top 5 observations by absolute percent change magnitude */
+  topObservations: FactualObservation[]
 }
 
 export interface EdgeDecayMetadata {
@@ -235,6 +239,7 @@ function extractObservations(
       comparison: m.historicalValue,
       delta: m.delta,
       percentChange: m.percentChange,
+      absPercentChange: m.percentChange !== null ? Math.abs(m.percentChange) : null,
     })
   }
 
@@ -250,6 +255,7 @@ function extractObservations(
         comparison: c.fullHistoryValue,
         delta: c.delta,
         percentChange: c.percentChange,
+        absPercentChange: c.percentChange !== null ? Math.abs(c.percentChange) : null,
       })
     }
   }
@@ -262,13 +268,15 @@ function extractObservations(
     const recent = wfResult.recentVsHistorical.recentAvgEfficiency[metric]
     const historical = wfResult.recentVsHistorical.historicalAvgEfficiency[metric]
     if (recent !== null && historical !== null) {
+      const wfPctChange = safePercentChange(recent, historical)
       observations.push({
         signal: 'walkForward',
         metric: `${metric}Efficiency`,
         current: recent,
         comparison: historical,
         delta: recent - historical,
-        percentChange: safePercentChange(recent, historical),
+        percentChange: wfPctChange,
+        absPercentChange: wfPctChange !== null ? Math.abs(wfPctChange) : null,
       })
     }
   }
@@ -287,6 +295,7 @@ function extractObservations(
         comparison: 0,
         delta: trend.slope,
         percentChange: null, // comparison is 0
+        absPercentChange: null,
       })
     }
   }
@@ -297,23 +306,27 @@ function extractObservations(
   if (liveResult.available) {
     const live = liveResult as LiveAlignmentResult
     // Direction agreement rate
+    const dirPctChange = (live.directionAgreement.overallRate - 1.0) * 100
     observations.push({
       signal: 'liveAlignment',
       metric: 'directionAgreementRate',
       current: live.directionAgreement.overallRate,
       comparison: 1.0,
       delta: live.directionAgreement.overallRate - 1.0,
-      percentChange: (live.directionAgreement.overallRate - 1.0) * 100,
+      percentChange: dirPctChange,
+      absPercentChange: Math.abs(dirPctChange),
     })
     // Execution efficiency
     if (live.executionEfficiency.overallEfficiency !== null) {
+      const effPctChange = (live.executionEfficiency.overallEfficiency - 1.0) * 100
       observations.push({
         signal: 'liveAlignment',
         metric: 'executionEfficiency',
         current: live.executionEfficiency.overallEfficiency,
         comparison: 1.0,
         delta: live.executionEfficiency.overallEfficiency - 1.0,
-        percentChange: (live.executionEfficiency.overallEfficiency - 1.0) * 100,
+        percentChange: effPctChange,
+        absPercentChange: Math.abs(effPctChange),
       })
     }
   }
@@ -525,7 +538,7 @@ export function synthesizeEdgeDecay(
   }
 
   // -----------------------------------------------------------------------
-  // Extract observations -- EXHAUSTIVE
+  // Extract observations -- EXHAUSTIVE, sorted by magnitude
   // -----------------------------------------------------------------------
   const observations = extractObservations(
     periodResult,
@@ -534,6 +547,17 @@ export function synthesizeEdgeDecay(
     wfResult,
     liveResult,
   )
+
+  // Sort by absPercentChange descending, nulls last
+  observations.sort((a, b) => {
+    if (a.absPercentChange === null && b.absPercentChange === null) return 0
+    if (a.absPercentChange === null) return 1
+    if (b.absPercentChange === null) return -1
+    return b.absPercentChange - a.absPercentChange
+  })
+
+  // Top 5 observations by magnitude (non-null absPercentChange only)
+  const topObservations = observations.filter(o => o.absPercentChange !== null).slice(0, 5)
 
   // -----------------------------------------------------------------------
   // Build summary
@@ -574,6 +598,7 @@ export function synthesizeEdgeDecay(
       liveResult.available ? (liveResult as LiveAlignmentResult).executionEfficiency.overallEfficiency : null,
     observationCount: observations.length,
     structuralFlagCount: rollingResult.recentVsHistorical.structuralFlags.length,
+    topObservations,
   }
 
   // -----------------------------------------------------------------------
