@@ -73,6 +73,8 @@ export interface FactualObservation {
   percentChange: number | null
   /** Absolute value of percentChange for magnitude sorting, null if percentChange is null */
   absPercentChange: number | null
+  /** Whether this metric is a dollar-value metric or a rate/ratio metric */
+  metricType: 'dollar' | 'rate'
 }
 
 /** Per-signal wrapper. detail is the engine output (pruned as needed). */
@@ -225,6 +227,20 @@ function safePercentChange(current: number, comparison: number): number | null {
 }
 
 // ---------------------------------------------------------------------------
+// Metric type classification
+// ---------------------------------------------------------------------------
+
+/** Dollar-value metrics whose percent changes are not comparable to rate metrics */
+const DOLLAR_METRICS = new Set([
+  'avgWin', 'avgLoss', 'avgReturn', 'netPl',
+])
+
+/** Trend metrics derived from dollar/count values (excluded from composite like dollar metrics) */
+const DOLLAR_TREND_METRICS = new Set([
+  'netPl', 'tradeCount',
+])
+
+// ---------------------------------------------------------------------------
 // Observation extraction -- EXHAUSTIVE, no threshold filtering
 // ---------------------------------------------------------------------------
 
@@ -249,6 +265,7 @@ function extractObservations(
       delta: m.delta,
       percentChange: m.percentChange,
       absPercentChange: m.percentChange !== null ? Math.abs(m.percentChange) : null,
+      metricType: DOLLAR_METRICS.has(m.metric) ? 'dollar' : 'rate',
     })
   }
 
@@ -265,6 +282,7 @@ function extractObservations(
         delta: c.delta,
         percentChange: c.percentChange,
         absPercentChange: c.percentChange !== null ? Math.abs(c.percentChange) : null,
+        metricType: 'rate',
       })
     }
   }
@@ -286,6 +304,7 @@ function extractObservations(
         delta: recent - historical,
         percentChange: wfPctChange,
         absPercentChange: wfPctChange !== null ? Math.abs(wfPctChange) : null,
+        metricType: 'rate',
       })
     }
   }
@@ -305,6 +324,7 @@ function extractObservations(
         delta: trend.slope,
         percentChange: null, // comparison is 0
         absPercentChange: null,
+        metricType: DOLLAR_TREND_METRICS.has(metricName) ? 'dollar' : 'rate',
       })
     }
   }
@@ -324,6 +344,7 @@ function extractObservations(
       delta: live.directionAgreement.overallRate - 1.0,
       percentChange: dirPctChange,
       absPercentChange: Math.abs(dirPctChange),
+      metricType: 'rate',
     })
     // Execution efficiency
     if (live.executionEfficiency.overallEfficiency !== null) {
@@ -336,6 +357,7 @@ function extractObservations(
         delta: live.executionEfficiency.overallEfficiency - 1.0,
         percentChange: effPctChange,
         absPercentChange: Math.abs(effPctChange),
+        metricType: 'rate',
       })
     }
   }
@@ -565,8 +587,10 @@ export function synthesizeEdgeDecay(
     return b.absPercentChange - a.absPercentChange
   })
 
-  // Top 5 observations by magnitude (non-null absPercentChange only)
-  const topObservations = observations.filter(o => o.absPercentChange !== null).slice(0, 5)
+  // Top 5 observations by magnitude (rate-type with non-null absPercentChange only)
+  const topObservations = observations
+    .filter(o => o.absPercentChange !== null && o.metricType === 'rate')
+    .slice(0, 5)
 
   // -----------------------------------------------------------------------
   // Build summary
@@ -582,10 +606,10 @@ export function synthesizeEdgeDecay(
   // -----------------------------------------------------------------------
   // Compute composite decay score (0 = no decay, 1 = maximum decay)
   // -----------------------------------------------------------------------
-  // Component 1: Mean absolute percent change across observations
-  const obsWithAbsPct = observations.filter(o => o.absPercentChange !== null)
-  const meanAbsPctValue = obsWithAbsPct.length > 0
-    ? obsWithAbsPct.reduce((sum, o) => sum + o.absPercentChange!, 0) / obsWithAbsPct.length
+  // Component 1: Mean absolute percent change across rate-type observations only
+  const rateObsWithAbsPct = observations.filter(o => o.absPercentChange !== null && o.metricType === 'rate')
+  const meanAbsPctValue = rateObsWithAbsPct.length > 0
+    ? rateObsWithAbsPct.reduce((sum, o) => sum + o.absPercentChange!, 0) / rateObsWithAbsPct.length
     : 0
   const meanAbsPctNormalized = Math.min(meanAbsPctValue / 50, 1) // 50% mean = fully decayed
 

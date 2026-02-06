@@ -235,6 +235,53 @@ describe('synthesizeEdgeDecay', () => {
     expect(typeof result.summary.historicalWinRate).toBe('number')
   })
 
+  test('12a. topObservations contains only rate-type metrics (no dollar metrics)', () => {
+    const trades = generateTradeSet(500, {
+      startDate: new Date(2022, 0, 1),
+    })
+    const result = synthesizeEdgeDecay(trades, undefined, { recentWindow: 50 })
+
+    // topObservations should only contain rate-type metrics
+    for (const obs of result.summary.topObservations) {
+      expect(obs.metricType).toBe('rate')
+    }
+
+    // Verify dollar metrics are NOT in topObservations
+    const dollarMetrics = new Set(['avgWin', 'avgLoss', 'avgReturn', 'netPl'])
+    for (const obs of result.summary.topObservations) {
+      expect(dollarMetrics.has(obs.metric)).toBe(false)
+    }
+  })
+
+  test('12b. Dollar-type observations exist in full observations array', () => {
+    const trades = generateTradeSet(500, {
+      startDate: new Date(2022, 0, 1),
+    })
+    const result = synthesizeEdgeDecay(trades, undefined, { recentWindow: 50 })
+
+    // Dollar metrics should be present in the full observations array
+    const dollarObs = result.observations.filter(o => o.metricType === 'dollar')
+    expect(dollarObs.length).toBeGreaterThan(0)
+
+    // Each dollar observation should have metricType 'dollar'
+    for (const obs of dollarObs) {
+      expect(obs.metricType).toBe('dollar')
+    }
+
+    // Rate observations should also be present
+    const rateObs = result.observations.filter(o => o.metricType === 'rate')
+    expect(rateObs.length).toBeGreaterThan(0)
+  })
+
+  test('12c. All observations have metricType field', () => {
+    const trades = generateTradeSet(60)
+    const result = synthesizeEdgeDecay(trades, undefined)
+
+    for (const obs of result.observations) {
+      expect(['dollar', 'rate']).toContain(obs.metricType)
+    }
+  })
+
   test('12. Metadata completeness', () => {
     const trades = generateTradeSet(60)
     const result = synthesizeEdgeDecay(trades, undefined)
