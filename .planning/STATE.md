@@ -13,7 +13,7 @@ Milestone: v2.7 Edge Decay Analysis -- COMPLETE
 Phase: All complete (46-50)
 Plan: All complete
 Status: Milestone shipped, archived, tagged v2.7
-Last activity: 2026-02-06 -- Completed quick task 009: margin return floor, negative IS Sharpe guard, MDD docs
+Last activity: 2026-02-06 -- Completed quick task 010: MC additive mode, minSamples guard, remove recs, null fallback
 
 Progress: [██████████] 100%
 
@@ -46,6 +46,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 | 007 | Margin-based ROM (pl/marginReq) for MC regime comparison with auto-detection | 2026-02-06 | 7cee4f7 | [007-margin-based-rom-for-mc-regime-comparis](./quick/007-margin-based-rom-for-mc-regime-comparis/) |
 | 008 | Signed MC divergence scores + WF 1-lot normalization | 2026-02-06 | fcb5905 | [008-signed-mc-divergence-wf-1lot-normalizati](./quick/008-signed-mc-divergence-wf-1lot-normalizati/) |
 | 009 | Margin return floor -99%, negative IS Sharpe guard, MDD docs | 2026-02-06 | 829e8dd | [009-fix-margin-return-floor-wf-neg-sharpe-md](./quick/009-fix-margin-return-floor-wf-neg-sharpe-md/) |
+| 010 | MC additive mode, minSamples guard, remove recs, null fallback | 2026-02-06 | 17e4f1d | [010-fix-mcp-mc-additive-minsample-recs-null](./quick/010-fix-mcp-mc-additive-minsample-recs-null/) |
 
 ## Testing Infrastructure
 
@@ -62,5 +63,5 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call analyze_edge_decay '{"bl
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed quick task 009
+Stopped at: Completed quick task 010
 Resume file: None
