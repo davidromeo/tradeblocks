@@ -330,6 +330,12 @@ export function registerHealthBlockTools(
         }
 
         // High tail dependence pairs
+        // Build strategy-to-correlation-index map for per-pair sample sizes
+        const corrStrategyIndex = new Map<string, number>();
+        correlationMatrix.strategies.forEach((s, i) =>
+          corrStrategyIndex.set(s, i)
+        );
+
         const highTailPairs: string[] = [];
         for (let i = 0; i < tailRisk.strategies.length; i++) {
           for (let j = i + 1; j < tailRisk.strategies.length; j++) {
@@ -343,8 +349,15 @@ export function registerHealthBlockTools(
             ) {
               const avgTail = (valAB + valBA) / 2;
               if (avgTail > tailThreshold) {
+                // Look up per-pair sample size from correlation matrix
+                const corrI = corrStrategyIndex.get(tailRisk.strategies[i]);
+                const corrJ = corrStrategyIndex.get(tailRisk.strategies[j]);
+                const pairSampleSize =
+                  corrI !== undefined && corrJ !== undefined
+                    ? correlationMatrix.sampleSizes[corrI][corrJ]
+                    : null;
                 highTailPairs.push(
-                  `${tailRisk.strategies[i]} & ${tailRisk.strategies[j]} (${avgTail.toFixed(2)})`
+                  `${tailRisk.strategies[i]} & ${tailRisk.strategies[j]} (${avgTail.toFixed(2)}${pairSampleSize !== null ? `, n=${pairSampleSize}` : ""})`
                 );
               }
             }
@@ -354,7 +367,7 @@ export function registerHealthBlockTools(
           flags.push({
             type: "warning",
             dimension: "tailRisk",
-            message: `High tail dependence pairs (>${tailThreshold}, ${tailRisk.tradingDaysUsed} shared trading days): ${highTailPairs.join(", ")}`,
+            message: `High tail dependence pairs (>${tailThreshold}): ${highTailPairs.join(", ")}`,
           });
         } else {
           flags.push({
