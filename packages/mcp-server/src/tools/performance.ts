@@ -1781,7 +1781,7 @@ export function registerPerformanceTools(
     "compare_backtest_to_actual",
     {
       description:
-        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. Supports trade-level detail, outlier detection, and flexible grouping. Limitation: Trade-level matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
+        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. When no dateRange is specified, comparison is auto-limited to the reporting log's date range overlap. Unmatched trades are summarized separately (not listed individually). Supports trade-level detail, outlier detection, and flexible grouping. Limitation: Trade-level matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
@@ -1894,6 +1894,23 @@ export function registerPerformanceTools(
           };
         }
 
+        // Auto-filter backtest trades to reporting log date range overlap
+        // when no explicit dateRange is provided
+        let autoFilterApplied = false;
+        if (!dateRange) {
+          const actualDates = actualTrades.map(t => formatDateKey(new Date(t.dateOpened)));
+          if (actualDates.length > 0) {
+            const minActualDate = actualDates.reduce((a, b) => a < b ? a : b);
+            const maxActualDate = actualDates.reduce((a, b) => a > b ? a : b);
+            const beforeCount = backtestTrades.length;
+            backtestTrades = backtestTrades.filter(t => {
+              const d = formatDateKey(new Date(t.dateOpened));
+              return d >= minActualDate && d <= maxActualDate;
+            });
+            autoFilterApplied = backtestTrades.length < beforeCount;
+          }
+        }
+
         // Helper to get group key based on groupBy parameter
         const getGroupKey = (
           dateStr: string,
@@ -1975,7 +1992,7 @@ export function registerPerformanceTools(
           actualTrades.forEach((trade) => {
             const dateKey = formatDateKey(new Date(trade.dateOpened));
             const timeKey = truncateTimeToMinute(trade.timeOpened);
-            const key = `${dateKey}|${trade.strategy}|${timeKey}`;
+            const key = `${dateKey}\t${trade.strategy}\t${timeKey}`;
             const existing = actualByKey.get(key) || [];
             existing.push(trade);
             actualByKey.set(key, existing);
@@ -1985,7 +2002,7 @@ export function registerPerformanceTools(
           for (const btTrade of backtestTrades) {
             const dateKey = formatDateKey(new Date(btTrade.dateOpened));
             const timeKey = truncateTimeToMinute(btTrade.timeOpened);
-            const key = `${dateKey}|${btTrade.strategy}|${timeKey}`;
+            const key = `${dateKey}\t${btTrade.strategy}\t${timeKey}`;
 
             const actualMatches = actualByKey.get(key);
             const actualTrade = actualMatches?.[0]; // Take first match
@@ -2182,7 +2199,7 @@ export function registerPerformanceTools(
 
           backtestTrades.forEach((trade) => {
             const dateKey = formatDateKey(new Date(trade.dateOpened));
-            const key = `${dateKey}|${trade.strategy}`;
+            const key = `${dateKey}\t${trade.strategy}`;
             const existing = backtestByDateStrategy.get(key) || {
               trades: [],
               totalPl: 0,
@@ -2196,7 +2213,7 @@ export function registerPerformanceTools(
 
           actualTrades.forEach((trade) => {
             const dateKey = formatDateKey(new Date(trade.dateOpened));
-            const key = `${dateKey}|${trade.strategy}`;
+            const key = `${dateKey}\t${trade.strategy}`;
             const existing = actualByDateStrategy.get(key) || {
               trades: [],
               totalPl: 0,
@@ -2211,7 +2228,7 @@ export function registerPerformanceTools(
           const processedActual = new Set<string>();
 
           for (const [key, btData] of backtestByDateStrategy) {
-            const [dateKey, strategyName] = key.split("|");
+            const [dateKey, strategyName] = key.split("\t");
             const actualData = actualByDateStrategy.get(key);
 
             if (actualData) {
@@ -2277,7 +2294,7 @@ export function registerPerformanceTools(
           for (const [key, actualData] of actualByDateStrategy) {
             if (processedActual.has(key)) continue;
 
-            const [dateKey, strategyName] = key.split("|");
+            const [dateKey, strategyName] = key.split("\t");
             comparisons.push({
               date: dateKey,
               strategy: strategyName,
@@ -2377,6 +2394,45 @@ export function registerPerformanceTools(
           }
         }
 
+        // Build unmatched summaries before filtering
+        const unmatchedBacktestEntries = comparisons.filter(
+          (c) => !c.matched && c.backtestPl !== 0
+        );
+        const unmatchedActualEntries = comparisons.filter(
+          (c) => !c.matched && c.actualPl !== 0
+        );
+
+        const unmatchedBacktestSummary = unmatchedBacktestEntries.length > 0
+          ? {
+              count: unmatchedBacktestEntries.length,
+              dateRange: {
+                from: unmatchedBacktestEntries.reduce((a, b) => a.date < b.date ? a : b).date,
+                to: unmatchedBacktestEntries.reduce((a, b) => a.date > b.date ? a : b).date,
+              },
+              totalPl: unmatchedBacktestEntries.reduce((sum, c) => sum + c.backtestPl, 0),
+              strategies: Array.from(new Set(unmatchedBacktestEntries.map(c => c.strategy))).sort(),
+            }
+          : null;
+
+        const unmatchedActualSummary = unmatchedActualEntries.length > 0
+          ? {
+              count: unmatchedActualEntries.length,
+              dateRange: {
+                from: unmatchedActualEntries.reduce((a, b) => a.date < b.date ? a : b).date,
+                to: unmatchedActualEntries.reduce((a, b) => a.date > b.date ? a : b).date,
+              },
+              totalPl: unmatchedActualEntries.reduce((sum, c) => sum + c.actualPl, 0),
+              strategies: Array.from(new Set(unmatchedActualEntries.map(c => c.strategy))).sort(),
+            }
+          : null;
+
+        // Remove unmatched entries from comparisons (keep only matched for main array)
+        comparisons = comparisons.filter((c) => c.matched);
+
+        // Apply matchedOnly filter (now comparisons already contains only matched)
+        // matchedOnly parameter is kept for API backward compatibility but is now the default behavior
+        // for the comparisons array. Unmatched trades are always in the unmatchedSummary.
+
         // Apply outliersOnly filter if requested
         if (outliersOnly) {
           comparisons = comparisons.filter((c) => c.isOutlier);
@@ -2425,26 +2481,23 @@ export function registerPerformanceTools(
             .sort((a, b) => Math.abs(b.totalSlippage) - Math.abs(a.totalSlippage));
         }
 
-        // Calculate summary statistics
-        const comparisonsForTotals = matchedOnly
-          ? comparisons.filter((c) => c.matched)
-          : comparisons;
-        const totalBacktestPl = comparisonsForTotals.reduce(
+        // Calculate summary statistics from matched comparisons only
+        const matchedForSummary = comparisons.filter((c) => c.matched);
+        const totalBacktestPl = matchedForSummary.reduce(
           (sum, c) => sum + c.scaledBacktestPl,
           0
         );
-        const totalActualPl = comparisonsForTotals.reduce(
+        const totalActualPl = matchedForSummary.reduce(
           (sum, c) => sum + (scaling === "perContract" && c.actualContracts > 0
             ? c.actualPl / c.actualContracts
             : c.actualPl),
           0
         );
         const totalSlippage = totalActualPl - totalBacktestPl;
-        const matchedForStats = comparisons.filter((c) => c.matched);
         const avgSlippage =
-          matchedForStats.length > 0
-            ? matchedForStats.reduce((sum, c) => sum + c.slippage, 0) /
-              matchedForStats.length
+          matchedForSummary.length > 0
+            ? matchedForSummary.reduce((sum, c) => sum + c.slippage, 0) /
+              matchedForSummary.length
             : 0;
         const avgSlippagePercent =
           totalBacktestPl !== 0
@@ -2467,6 +2520,7 @@ export function registerPerformanceTools(
             `date=${dateRange.from ?? "start"} to ${dateRange.to ?? "end"}`
           );
         }
+        if (autoFilterApplied) filters.push("auto-date-overlap");
         if (matchedOnly) filters.push("matched-only");
         if (outliersOnly) filters.push("outliers-only");
         if (detailLevel === "trades") filters.push("trade-level");
@@ -2481,7 +2535,7 @@ export function registerPerformanceTools(
           outlierStats !== null
             ? ` | ${outlierStats.outlierCount} outliers`
             : "";
-        const summary = `Comparison: ${blockId}${filterStr} | ${scaling} scaling | ${matchedForStats.length}/${comparisons.length} matched | ${slippageDisplay}${outlierDisplay}`;
+        const summary = `Comparison: ${blockId}${filterStr} | ${scaling} scaling | ${matchedForSummary.length}/${comparisons.length} matched | ${slippageDisplay}${outlierDisplay}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -2489,6 +2543,7 @@ export function registerPerformanceTools(
           strategy: strategy ?? null,
           scalingMode: scaling,
           dateRange: dateRange ?? null,
+          autoFilterApplied,
           filters: {
             matchedOnly,
             detailLevel,
@@ -2502,22 +2557,22 @@ export function registerPerformanceTools(
           actualStrategies,
           summary: {
             totalComparisons: comparisons.length,
-            matchedComparisons: matchedForStats.length,
-            unmatchedBacktest: comparisons.filter(
-              (c) => !c.matched && c.backtestPl !== 0
-            ).length,
-            unmatchedActual: comparisons.filter(
-              (c) => !c.matched && c.actualPl !== 0
-            ).length,
+            matchedComparisons: matchedForSummary.length,
+            unmatchedBacktestCount: unmatchedBacktestEntries.length,
+            unmatchedActualCount: unmatchedActualEntries.length,
+            unmatchedBacktestPl: unmatchedBacktestSummary?.totalPl ?? 0,
+            unmatchedActualPl: unmatchedActualSummary?.totalPl ?? 0,
             totalBacktestPl,
             totalActualPl,
             totalSlippage,
             avgSlippage,
             avgSlippagePercent,
             outlierStats,
-            note: matchedOnly
-              ? "Totals include matched comparisons only"
-              : "Totals include all comparisons (matched and unmatched)",
+            note: "Summary stats are computed from matched comparisons only. Unmatched trades are reported separately.",
+          },
+          unmatchedSummary: {
+            backtest: unmatchedBacktestSummary,
+            actual: unmatchedActualSummary,
           },
           ...(groupBy === "none" ? { comparisons } : { groups }),
         };
