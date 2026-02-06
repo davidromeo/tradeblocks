@@ -308,8 +308,9 @@ export function registerHealthBlockTools(
           for (let j = i + 1; j < correlationMatrix.strategies.length; j++) {
             const val = correlationMatrix.correlationData[i][j];
             if (!Number.isNaN(val) && Math.abs(val) > corrThreshold) {
+              const sampleSize = correlationMatrix.sampleSizes[i][j];
               highCorrPairs.push(
-                `${correlationMatrix.strategies[i]} & ${correlationMatrix.strategies[j]} (${val.toFixed(2)})`
+                `${correlationMatrix.strategies[i]} & ${correlationMatrix.strategies[j]} (${val.toFixed(2)}, n=${sampleSize})`
               );
             }
           }
@@ -353,7 +354,7 @@ export function registerHealthBlockTools(
           flags.push({
             type: "warning",
             dimension: "tailRisk",
-            message: `High tail dependence pairs (>${tailThreshold}): ${highTailPairs.join(", ")}`,
+            message: `High tail dependence pairs (>${tailThreshold}, ${tailRisk.tradingDaysUsed} shared trading days): ${highTailPairs.join(", ")}`,
           });
         } else {
           flags.push({
