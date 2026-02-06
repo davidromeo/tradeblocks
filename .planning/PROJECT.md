@@ -83,7 +83,14 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ### Active
 
-(None — planning next milestone)
+**v2.8 Market Data Consolidation:**
+- [ ] Merge highlow timing into daily PineScript via `request.security_lower_tf()` (PoC validated: 100% match, 5x history)
+- [ ] Export 7 already-computed VIX fields (gap, VIX9D open/change, VIX high/low, VIX3M open/change)
+- [ ] Update DuckDB schema — absorb highlow columns into `spx_daily`, retire `spx_highlow` table
+- [ ] Update market sync logic for combined CSV and new columns
+- [ ] Retire in-memory CSV loading — consolidate to DuckDB-only for market data tools
+- [ ] Remove dead 30-min and hourly checkpoint scripts
+- [ ] Update scripts README and documentation
 
 ### Out of Scope
 
@@ -93,12 +100,14 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.7):**
+**Current state (v2.8 in progress):**
 - Next.js 15 web application with client-side computation
 - MCP server (`tradeblocks-mcp` v0.8.0) with 40 tools at packages/mcp-server/
 - Edge decay analysis: unified `analyze_edge_decay` tool + 5 standalone signal tools
 - DuckDB analytics layer with SQL query interface and schema discovery
 - CSV-to-DuckDB sync with hash-based change detection (trades + 4 market data tables)
+- 6 PineScripts for market data export (daily, 15min, 30min, hourly, highlow, VIX intraday)
+- Dual import system: in-memory CSV loading + DuckDB sync (to be consolidated)
 - 6 agent skills at packages/agent-skills/
 - Shared library at packages/lib/ (89 files, barrel exports)
 - 1177 tests across 71 suites
@@ -165,5 +174,9 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Trade matching extraction to lib | Shared utilities across MCP tools, single source of truth | ✓ Good |
 | 4-level divergence classification | Threshold-based (0.30/0.60/1.00) for regime change severity | ✓ Good |
 
+| Merge highlow into daily script via request.security_lower_tf() | 5x history depth, one fewer export for users, PoC validated 100% match | — Pending |
+| Export computed-but-hidden VIX fields aligned with Option Omega filters | Enables same entry/exit filter analysis OO supports | — Pending |
+| Consolidate dual import to DuckDB-only | Eliminate redundant in-memory CSV loading, single data path | — Pending |
+
 ---
-*Last updated: 2026-02-06 after v2.7 milestone complete*
+*Last updated: 2026-02-06 after v2.8 milestone started*

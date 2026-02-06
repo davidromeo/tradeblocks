@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** Planning next milestone
+**Current focus:** v2.8 Market Data Consolidation
 
 ## Current Position
 
-Milestone: v2.7 Edge Decay Analysis -- COMPLETE
-Phase: All complete (46-50)
-Plan: All complete
-Status: Milestone shipped, archived, tagged v2.7
-Last activity: 2026-02-06 -- Completed quick task 011: MCP output size, Sharpe consistency, ethos cleanup, bug fixes (10 issues)
+Milestone: v2.8 Market Data Consolidation
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-06 — Milestone v2.8 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Historical Context
 
@@ -64,5 +64,5 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call analyze_edge_decay '{"bl
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed quick task 011
+Stopped at: Defining v2.8 requirements
 Resume file: None
