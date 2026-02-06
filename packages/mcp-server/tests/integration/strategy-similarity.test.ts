@@ -17,7 +17,7 @@
  * CLI Test Mode Verification:
  * TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call strategy_similarity '{"blockId":"main-port-2026"}'
  *
- * Expected: Summary line + JSON with similarity pairs and recommendations
+ * Expected: Summary line + JSON with similarity pairs
  */
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -51,7 +51,6 @@ interface SimilarPair {
     isHighTailDependence: boolean;
     isRedundant: boolean;
   };
-  recommendation: string | null;
 }
 
 interface StrategySimilarityResult {
@@ -71,7 +70,6 @@ interface StrategySimilarityResult {
     highTailDependencePairs: number;
   };
   similarPairs: SimilarPair[];
-  recommendations: string[];
   error?: string;
   message?: string;
 }
@@ -107,7 +105,6 @@ async function simulateStrategySimilarity(
       options: { correlationThreshold, tailDependenceThreshold, method, minSharedDays, topN },
       strategySummary: { totalStrategies: 0, totalPairs: 0, redundantPairs: 0, highCorrelationPairs: 0, highTailDependencePairs: 0 },
       similarPairs: [],
-      recommendations: [],
       message: `No trades found in block "${blockId}"`,
     };
   }
@@ -120,7 +117,6 @@ async function simulateStrategySimilarity(
       options: { correlationThreshold, tailDependenceThreshold, method, minSharedDays, topN },
       strategySummary: { totalStrategies: strategies.length, totalPairs: 0, redundantPairs: 0, highCorrelationPairs: 0, highTailDependencePairs: 0 },
       similarPairs: [],
-      recommendations: [],
       error: `Strategy similarity requires at least 2 strategies. Found ${strategies.length}.`,
     };
   }
@@ -213,15 +209,6 @@ async function simulateStrategySimilarity(
       if (isHighTailDependence) highTailDependencePairs++;
       if (isRedundant) redundantPairs++;
 
-      let recommendation: string | null = null;
-      if (isRedundant) {
-        recommendation = 'Consider consolidating - these strategies move together and suffer losses together';
-      } else if (isHighCorrelation) {
-        recommendation = 'Moderate redundancy - correlated returns reduce diversification benefit';
-      } else if (isHighTailDependence) {
-        recommendation = 'Tail risk overlap - may amplify losses during market stress';
-      }
-
       pairs.push({
         strategyA,
         strategyB,
@@ -231,7 +218,6 @@ async function simulateStrategySimilarity(
         compositeSimilarity,
         sharedTradingDays,
         flags: { isHighCorrelation, isHighTailDependence, isRedundant },
-        recommendation,
       });
     }
   }
@@ -245,18 +231,6 @@ async function simulateStrategySimilarity(
 
   const topPairs = pairs.slice(0, topN);
 
-  const recommendations: string[] = [];
-  for (const pair of topPairs) {
-    if (pair.flags.isRedundant) {
-      recommendations.push(
-        `Pair ${pair.strategyA}-${pair.strategyB} flagged as redundant: high correlation (${pair.correlation?.toFixed(2) ?? 'N/A'}) + high tail dependence (${pair.tailDependence?.toFixed(2) ?? 'N/A'})`
-      );
-      recommendations.push(
-        `Consider removing one of ${pair.strategyA} or ${pair.strategyB} to reduce concentrated risk`
-      );
-    }
-  }
-
   return {
     blockId,
     options: { correlationThreshold, tailDependenceThreshold, method, minSharedDays, topN },
@@ -268,7 +242,6 @@ async function simulateStrategySimilarity(
       highTailDependencePairs,
     },
     similarPairs: topPairs,
-    recommendations,
   };
 }
 
@@ -307,7 +280,6 @@ describe('strategy_similarity', () => {
         expect(pair.flags).toHaveProperty('isHighCorrelation');
         expect(pair.flags).toHaveProperty('isHighTailDependence');
         expect(pair.flags).toHaveProperty('isRedundant');
-        expect(pair).toHaveProperty('recommendation');
       }
     });
 
@@ -516,60 +488,6 @@ describe('strategy_similarity', () => {
       if (result.strategySummary.totalStrategies === 2) {
         expect(result.strategySummary.totalPairs).toBe(1);
         expect(result.similarPairs.length).toBe(1);
-      }
-    });
-  });
-
-  describe('recommendations', () => {
-    it('should generate recommendations for redundant pairs', async () => {
-      // Use lower thresholds to ensure some pairs get flagged
-      const result = await simulateStrategySimilarity(FIXTURES_DIR, 'similarity-test-block', {
-        correlationThreshold: 0.5,
-        tailDependenceThreshold: 0.1,
-      });
-
-      // Check if any redundant pairs exist
-      const redundantPairs = result.similarPairs.filter((p) => p.flags.isRedundant);
-      if (redundantPairs.length > 0) {
-        expect(result.recommendations.length).toBeGreaterThan(0);
-        expect(result.recommendations.some((r) => r.includes('redundant'))).toBe(true);
-      }
-    });
-
-    it('should set correct recommendation for high correlation only', async () => {
-      const result = await simulateStrategySimilarity(FIXTURES_DIR, 'similarity-test-block');
-
-      for (const pair of result.similarPairs) {
-        if (pair.flags.isHighCorrelation && !pair.flags.isHighTailDependence) {
-          expect(pair.recommendation).toContain('Moderate redundancy');
-        }
-      }
-    });
-
-    it('should set correct recommendation for high tail dependence only', async () => {
-      const result = await simulateStrategySimilarity(FIXTURES_DIR, 'similarity-test-block', {
-        correlationThreshold: 0.99, // Very high to prevent correlation flags
-        tailDependenceThreshold: 0.1, // Low to allow tail flags
-      });
-
-      for (const pair of result.similarPairs) {
-        if (pair.flags.isHighTailDependence && !pair.flags.isHighCorrelation) {
-          expect(pair.recommendation).toContain('Tail risk overlap');
-        }
-      }
-    });
-
-    it('should set null recommendation when no flags', async () => {
-      // With very high thresholds, no pairs should be flagged
-      const result = await simulateStrategySimilarity(FIXTURES_DIR, 'similarity-test-block', {
-        correlationThreshold: 0.99,
-        tailDependenceThreshold: 0.99,
-      });
-
-      for (const pair of result.similarPairs) {
-        if (!pair.flags.isHighCorrelation && !pair.flags.isHighTailDependence) {
-          expect(pair.recommendation).toBeNull();
-        }
       }
     });
   });

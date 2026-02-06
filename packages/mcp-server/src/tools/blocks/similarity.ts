@@ -180,7 +180,6 @@ export function registerSimilarityBlockTools(
             isHighTailDependence: boolean;
             isRedundant: boolean;
           };
-          recommendation: string | null;
         }
 
         const pairs: SimilarPair[] = [];
@@ -264,18 +263,6 @@ export function registerSimilarityBlockTools(
               if (isHighTailDependence) highTailDependencePairs++;
               if (isRedundant) redundantPairs++;
 
-              // Generate recommendation
-              let recommendation: string | null = null;
-              if (isRedundant) {
-                recommendation =
-                  "Consider consolidating - these strategies move together and suffer losses together";
-              } else if (isHighCorrelation) {
-                recommendation =
-                  "Moderate redundancy - correlated returns reduce diversification benefit";
-              } else if (isHighTailDependence) {
-                recommendation =
-                  "Tail risk overlap - may amplify losses during market stress";
-              }
               pairs.push({
                 strategyA,
                 strategyB,
@@ -292,7 +279,6 @@ export function registerSimilarityBlockTools(
                   isHighTailDependence,
                   isRedundant,
                 },
-                recommendation,
               });
             }
           }
@@ -309,19 +295,6 @@ export function registerSimilarityBlockTools(
 
         // Apply limit
         const topPairs = pairs.slice(0, limit);
-
-        // Build recommendations list
-        const recommendations: string[] = [];
-        for (const pair of topPairs) {
-          if (pair.flags.isRedundant) {
-            recommendations.push(
-              `Pair ${pair.strategyA}-${pair.strategyB} flagged as redundant: high correlation (${pair.correlation?.toFixed(2) ?? "N/A"}) + high tail dependence (${pair.tailDependence?.toFixed(2) ?? "N/A"})`
-            );
-            recommendations.push(
-              `Consider removing one of ${pair.strategyA} or ${pair.strategyB} to reduce concentrated risk`
-            );
-          }
-        }
 
         // Build summary line
         const mostSimilar = topPairs[0];
@@ -345,7 +318,6 @@ export function registerSimilarityBlockTools(
             highTailDependencePairs,
           },
           similarPairs: topPairs,
-          recommendations,
         };
 
           return createToolOutput(summary, structuredData);
