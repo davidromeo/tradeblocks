@@ -13,7 +13,7 @@ Milestone: v2.7 Edge Decay Analysis -- COMPLETE
 Phase: All complete (46-50)
 Plan: All complete
 Status: Milestone shipped, archived, tagged v2.7
-Last activity: 2026-02-06 -- Completed quick task 010: MC additive mode, minSamples guard, remove recs, null fallback
+Last activity: 2026-02-06 -- Completed quick task 011-04: pipe-safe strategy keys, remove underperforming, remove insight, unmatched reporting
 
 Progress: [██████████] 100%
 
@@ -63,5 +63,5 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call analyze_edge_decay '{"bl
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed quick task 010
+Stopped at: Completed quick task 011 plan 04
 Resume file: None
