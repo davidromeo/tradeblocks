@@ -70,8 +70,6 @@ export interface ExecutionEfficiencyResult {
     unmatchedBacktest: number
     /** Unmatched actual trade count */
     unmatchedActual: number
-    /** Whether efficiency < 1.0 */
-    underperforming: boolean
     /** Sample standard deviation of per-trade slippage (null if < 2 trades) */
     slippageStdDev: number | null
   }>
@@ -165,7 +163,7 @@ function matchTradesWithScaledPl(
   for (const trade of actualTrades) {
     const dateKey = formatDateKey(new Date(trade.dateOpened))
     const timeKey = truncateTimeToMinute(trade.timeOpened)
-    const key = `${dateKey}|${trade.strategy}|${timeKey}`
+    const key = `${dateKey}\t${trade.strategy}\t${timeKey}`
     const existing = actualByKey.get(key) || []
     existing.push(trade)
     actualByKey.set(key, existing)
@@ -185,7 +183,7 @@ function matchTradesWithScaledPl(
   for (const btTrade of backtestTrades) {
     const dateKey = formatDateKey(new Date(btTrade.dateOpened))
     const timeKey = truncateTimeToMinute(btTrade.timeOpened)
-    const key = `${dateKey}|${btTrade.strategy}|${timeKey}`
+    const key = `${dateKey}\t${btTrade.strategy}\t${timeKey}`
 
     const actualMatches = actualByKey.get(key)
     const actualTrade = actualMatches?.[0]
@@ -337,10 +335,10 @@ export function analyzeLiveAlignment(
   // -----------------------------------------------------------------------
   // Direction Agreement
   // -----------------------------------------------------------------------
-  // Group matched pairs by date|strategy, sum scaled PL, compare signs
+  // Group matched pairs by date+strategy, sum scaled PL, compare signs
   const dayStrategyMap = new Map<string, { btTotal: number; actualTotal: number }>()
   for (const pair of pairs) {
-    const key = `${pair.date}|${pair.strategy}`
+    const key = `${pair.date}\t${pair.strategy}`
     const existing = dayStrategyMap.get(key) || { btTotal: 0, actualTotal: 0 }
     existing.btTotal += pair.scaledBtPl
     existing.actualTotal += pair.scaledActualPl
@@ -353,7 +351,7 @@ export function analyzeLiveAlignment(
   let agreementDays = 0
 
   for (const [key, sums] of dayStrategyMap) {
-    const strategy = key.split('|')[1]
+    const strategy = key.split('\t')[1]
     const agreed = (sums.btTotal >= 0 && sums.actualTotal >= 0) || (sums.btTotal < 0 && sums.actualTotal < 0)
 
     totalDays++
@@ -428,7 +426,6 @@ export function analyzeLiveAlignment(
       matchedTrades: stratPairs.length,
       unmatchedBacktest: unmatchedBacktestByStrategy.get(strategy) || 0,
       unmatchedActual: unmatchedActualByStrategy.get(strategy) || 0,
-      underperforming: efficiency !== null && efficiency < 1.0,
       slippageStdDev: sampleStdDev(stratSlippages),
     })
   }
@@ -463,7 +460,7 @@ export function analyzeLiveAlignment(
     // Direction agreement for this month
     const monthDayStrategy = new Map<string, { btTotal: number; actualTotal: number }>()
     for (const p of monthPairs) {
-      const key = `${p.date}|${p.strategy}`
+      const key = `${p.date}\t${p.strategy}`
       const existing = monthDayStrategy.get(key) || { btTotal: 0, actualTotal: 0 }
       existing.btTotal += p.scaledBtPl
       existing.actualTotal += p.scaledActualPl

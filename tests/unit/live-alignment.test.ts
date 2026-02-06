@@ -218,21 +218,7 @@ describe('analyzeLiveAlignment', () => {
       expect(strat.efficiency).toBeNull()
     })
 
-    test('11. underperforming flag: true when efficiency < 1.0', () => {
-      const bt = [makeTrade({ pl: 1000, numContracts: 10 })]
-      const actual = [makeReportingTrade({ pl: 80, numContracts: 1 })]
-      const result = asResult(analyzeLiveAlignment(bt, actual, { scaling: 'perContract' }))
-      expect(result.executionEfficiency.byStrategy[0].underperforming).toBe(true)
-    })
-
-    test('12. underperforming flag: false when efficiency >= 1.0', () => {
-      const bt = [makeTrade({ pl: 1000, numContracts: 10 })]
-      const actual = [makeReportingTrade({ pl: 120, numContracts: 1 })]
-      const result = asResult(analyzeLiveAlignment(bt, actual, { scaling: 'perContract' }))
-      expect(result.executionEfficiency.byStrategy[0].underperforming).toBe(false)
-    })
-
-    test('13. per-contract gap computed correctly', () => {
+    test('11. per-contract gap computed correctly', () => {
       const bt = [makeTrade({ pl: 1000, numContracts: 10 })]  // $100/contract
       const actual = [makeReportingTrade({ pl: 80, numContracts: 1 })]  // $80/contract
       const result = asResult(analyzeLiveAlignment(bt, actual, { scaling: 'perContract' }))
