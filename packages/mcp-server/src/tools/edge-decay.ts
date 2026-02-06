@@ -18,6 +18,7 @@ import {
   analyzeWalkForwardDegradation,
   analyzeLiveAlignment,
   applyStrategyFilter,
+  synthesizeEdgeDecay,
 } from "@tradeblocks/lib";
 import type { ReportingTrade } from "@tradeblocks/lib";
 
@@ -629,5 +630,109 @@ export function registerEdgeDecayTools(
         };
       }
     })
+  );
+
+  // Tool 6: analyze_edge_decay (unified)
+  server.registerTool(
+    "analyze_edge_decay",
+    {
+      description:
+        "Run comprehensive edge decay analysis combining all 5 signal categories: " +
+        "period metrics, rolling metrics, Monte Carlo regime comparison, walk-forward degradation, " +
+        "and live alignment. Returns structured factual data (no verdicts, no grades) for LLM interpretation. " +
+        "Use standalone tools (analyze_period_metrics, analyze_rolling_metrics, analyze_regime_comparison, " +
+        "analyze_walk_forward_degradation, analyze_live_alignment) for detailed drill-down or custom parameters.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block folder name"),
+        strategy: z
+          .string()
+          .optional()
+          .describe("Filter by strategy name (case-insensitive)"),
+        recentWindow: z
+          .number()
+          .min(10)
+          .optional()
+          .describe(
+            "Number of recent trades for comparison (default: auto-calculated as max(20% of trades, 200))"
+          ),
+      }),
+    },
+    withSyncedBlock(
+      baseDir,
+      async ({ blockId, strategy, recentWindow }) => {
+        try {
+          const block = await loadBlock(baseDir, blockId);
+          const trades = applyStrategyFilter(block.trades, strategy);
+
+          if (trades.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: strategy
+                    ? `No trades found for strategy "${strategy}" in block "${blockId}".`
+                    : `No trades found in block "${blockId}".`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
+
+          // Load reporting log -- graceful skip if missing
+          let actualTrades: ReportingTrade[] | undefined;
+          try {
+            const raw = await loadReportingLog(baseDir, blockId);
+            actualTrades = applyStrategyFilter(raw, strategy);
+          } catch {
+            actualTrades = undefined;
+          }
+
+          // Call pure synthesis engine
+          const result = synthesizeEdgeDecay(trades, actualTrades, {
+            recentWindow,
+          });
+
+          // Build text summary
+          const s = result.summary;
+          const fmtPct = (v: number) => (v * 100).toFixed(1) + "%";
+          const fmtRatio = (v: number | null) =>
+            v !== null ? v.toFixed(2) : "N/A";
+
+          const lines = [
+            `Edge decay analysis for ${blockId}${strategy ? ` (${strategy})` : ""}: ${s.totalTrades} trades, recent window=${s.recentWindow}`,
+            `Win rate: ${fmtPct(s.recentWinRate)} recent vs ${fmtPct(s.historicalWinRate)} historical`,
+            `Profit factor: ${fmtRatio(s.recentProfitFactor)} recent vs ${fmtRatio(s.historicalProfitFactor)} historical`,
+            `Sharpe: ${fmtRatio(s.recentSharpe)} recent vs ${fmtRatio(s.historicalSharpe)} historical`,
+            `Signals: ${result.metadata.signalsRun} run, ${result.metadata.signalsSkipped} skipped`,
+            `Observations: ${s.observationCount} notable (${s.structuralFlagCount} structural flags)`,
+          ];
+
+          if (s.mcProbabilityOfProfit) {
+            lines.push(
+              `MC P(Profit): ${(s.mcProbabilityOfProfit.full * 100).toFixed(1)}% full vs ${(s.mcProbabilityOfProfit.recent * 100).toFixed(1)}% recent`
+            );
+          }
+          if (s.liveDirectionAgreement !== null) {
+            lines.push(
+              `Live alignment: ${fmtPct(s.liveDirectionAgreement)} direction agreement, ${fmtRatio(s.liveExecutionEfficiency)} efficiency`
+            );
+          }
+
+          const summaryText = lines.join("\n");
+
+          return createToolOutput(summaryText, result);
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error analyzing edge decay: ${(error as Error).message}`,
+              },
+            ],
+            isError: true as const,
+          };
+        }
+      }
+    )
   );
 }
