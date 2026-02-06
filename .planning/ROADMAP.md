@@ -98,7 +98,10 @@ Plans:
   4. Tool includes detailed supporting data for each signal (period breakdowns, rolling metric summaries, MC comparison, WF details)
   5. Tool works with CLI --call mode for testing and is registered in the MCP server
 **Known constraint**: Rolling metrics series produces ~N-W+1 data points (e.g., 3200+ for a 3425-trade block). This exceeds MCP output limits. The unified tool will need to either downsample the rolling series or return summary statistics with an option to fetch the full series separately.
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 50-01-PLAN.md -- Edge decay synthesis engine (pure lib function) + TDD tests
+- [ ] 50-02-PLAN.md -- MCP tool registration (analyze_edge_decay) + CLI verification + version bump
 
 ## Progress
 
@@ -111,4 +114,4 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 | 47. MC Regime Comparison | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
 | 48. WF Degradation | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
 | 49. Live Alignment | v2.7 | 2/2 | ✓ Complete | 2026-02-06 |
-| 50. Verdict & Tool API | v2.7 | 0/TBD | Not started | - |
+| 50. Verdict & Tool API | v2.7 | 0/2 | Not started | - |
