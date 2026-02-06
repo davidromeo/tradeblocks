@@ -141,7 +141,6 @@ export function registerPredictiveTools(
             correlation: number;
             absCorrelation: number;
             sampleSize: number;
-            interpretation: "strong" | "moderate" | "weak" | "negligible";
             direction: "positive" | "negative";
           }
 
@@ -200,25 +199,12 @@ export function registerPredictiveTools(
             const correlation = pearsonCorrelation(xValues, yValues);
             const absCorrelation = Math.abs(correlation);
 
-            // Determine interpretation
-            let interpretation: "strong" | "moderate" | "weak" | "negligible";
-            if (absCorrelation >= 0.7) {
-              interpretation = "strong";
-            } else if (absCorrelation >= 0.4) {
-              interpretation = "moderate";
-            } else if (absCorrelation >= 0.2) {
-              interpretation = "weak";
-            } else {
-              interpretation = "negligible";
-            }
-
             rankedFields.push({
               field,
               label,
               correlation: Math.round(correlation * 10000) / 10000, // Round to 4 decimal places
               absCorrelation: Math.round(absCorrelation * 10000) / 10000,
               sampleSize: pairs.length,
-              interpretation,
               direction: correlation >= 0 ? "positive" : "negative",
             });
           }
@@ -229,16 +215,8 @@ export function registerPredictiveTools(
           // Build summary
           const fieldsWithData = rankedFields.length;
           const totalAnalyzed = fieldsToAnalyze.length;
-          const strongFields = rankedFields.filter(
-            (f) => f.interpretation === "strong"
-          ).length;
-          const moderateFields = rankedFields.filter(
-            (f) => f.interpretation === "moderate"
-          ).length;
 
-          const summary = `Found ${fieldsWithData} predictive fields out of ${totalAnalyzed} analyzed${
-            strongFields > 0 ? ` | ${strongFields} strong` : ""
-          }${moderateFields > 0 ? ` | ${moderateFields} moderate` : ""}`;
+          const summary = `Found ${fieldsWithData} predictive fields out of ${totalAnalyzed} analyzed`;
 
           const structuredData = {
             blockId,
@@ -254,12 +232,6 @@ export function registerPredictiveTools(
             fieldsWithSufficientData: fieldsWithData,
             rankedFields,
             fieldsSkipped: skippedFields,
-            interpretationGuide: {
-              strong: "|r| >= 0.7 - Strong linear relationship",
-              moderate: "|r| >= 0.4 - Moderate linear relationship",
-              weak: "|r| >= 0.2 - Weak linear relationship",
-              negligible: "|r| < 0.2 - No meaningful linear relationship",
-            },
           };
 
           return createToolOutput(summary, structuredData);
@@ -515,7 +487,6 @@ export function registerPredictiveTools(
             avgPlDelta: number;
             percentOfTrades: number;
             score: number;
-            recommendation: string;
           }
 
           const sweetSpots: SweetSpot[] = [];
@@ -537,7 +508,6 @@ export function registerPredictiveTools(
                   avgPlDelta,
                   percentOfTrades,
                   score: Math.round(score * 10000) / 10000,
-                  recommendation: `Consider filtering ${field} < ${result.threshold}`,
                 });
               }
             }
@@ -558,7 +528,6 @@ export function registerPredictiveTools(
                   avgPlDelta,
                   percentOfTrades,
                   score: Math.round(score * 10000) / 10000,
-                  recommendation: `Consider filtering ${field} > ${result.threshold}`,
                 });
               }
             }

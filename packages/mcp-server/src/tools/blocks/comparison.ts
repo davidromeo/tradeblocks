@@ -12,7 +12,10 @@ import {
   formatCurrency,
 } from "../../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@tradeblocks/lib";
-import { filterByDateRange } from "../shared/filters.js";
+import {
+  filterByDateRange,
+  filterDailyLogsByDateRange,
+} from "../shared/filters.js";
 import {
   withSyncedBlock,
   withSyncedBlocks,
@@ -528,16 +531,21 @@ export function registerComparisonBlockTools(
         ];
 
         // Calculate portfolio-level totals
-        // Use trade-based calculations for filtered comparison
+        // Use daily logs for portfolio-level stats when available (consistent with get_statistics)
+        // Per-strategy stats remain trade-based since daily logs are portfolio-wide
+        const dailyLogsA = blockA.dailyLogs && blockA.dailyLogs.length > 0
+          ? filterDailyLogsByDateRange(blockA.dailyLogs, startDate, endDate)
+          : undefined;
+        const dailyLogsB = blockB.dailyLogs && blockB.dailyLogs.length > 0
+          ? filterDailyLogsByDateRange(blockB.dailyLogs, startDate, endDate)
+          : undefined;
         const portfolioStatsA = calculator.calculatePortfolioStats(
           tradesA,
-          undefined, // Don't use daily logs for comparison - trades only
-          true // Force trade-based calculations
+          dailyLogsA && dailyLogsA.length > 0 ? dailyLogsA : undefined,
         );
         const portfolioStatsB = calculator.calculatePortfolioStats(
           tradesB,
-          undefined,
-          true
+          dailyLogsB && dailyLogsB.length > 0 ? dailyLogsB : undefined,
         );
 
         // Build portfolio totals with all or filtered metrics
