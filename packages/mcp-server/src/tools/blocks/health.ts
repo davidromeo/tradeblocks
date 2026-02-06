@@ -316,8 +316,8 @@ export function registerHealthBlockTools(
         for (let i = 0; i < correlationMatrix.strategies.length; i++) {
           for (let j = i + 1; j < correlationMatrix.strategies.length; j++) {
             const val = correlationMatrix.correlationData[i][j];
-            if (!Number.isNaN(val) && Math.abs(val) > corrThreshold) {
-              const sampleSize = correlationMatrix.sampleSizes[i][j];
+            const sampleSize = correlationMatrix.sampleSizes[i][j];
+            if (!Number.isNaN(val) && Math.abs(val) > corrThreshold && sampleSize >= 10) {
               highCorrPairs.push(
                 `${correlationMatrix.strategies[i]} & ${correlationMatrix.strategies[j]} (${val.toFixed(2)}, n=${sampleSize})`
               );
@@ -357,14 +357,14 @@ export function registerHealthBlockTools(
               !Number.isNaN(valBA)
             ) {
               const avgTail = (valAB + valBA) / 2;
-              if (avgTail > tailThreshold) {
-                // Look up per-pair sample size from correlation matrix
-                const corrI = corrStrategyIndex.get(tailRisk.strategies[i]);
-                const corrJ = corrStrategyIndex.get(tailRisk.strategies[j]);
-                const pairSampleSize =
-                  corrI !== undefined && corrJ !== undefined
-                    ? correlationMatrix.sampleSizes[corrI][corrJ]
-                    : null;
+              // Look up per-pair sample size from correlation matrix
+              const corrI = corrStrategyIndex.get(tailRisk.strategies[i]);
+              const corrJ = corrStrategyIndex.get(tailRisk.strategies[j]);
+              const pairSampleSize =
+                corrI !== undefined && corrJ !== undefined
+                  ? correlationMatrix.sampleSizes[corrI][corrJ]
+                  : null;
+              if (avgTail > tailThreshold && pairSampleSize !== null && pairSampleSize >= 10) {
                 highTailPairs.push(
                   `${tailRisk.strategies[i]} & ${tailRisk.strategies[j]} (${avgTail.toFixed(2)}${pairSampleSize !== null ? `, n=${pairSampleSize}` : ""})`
                 );
