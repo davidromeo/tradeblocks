@@ -11,7 +11,7 @@
  */
 
 import { Trade } from '../models/trade'
-import { runMonteCarloSimulation } from './monte-carlo'
+import { runMonteCarloSimulation, calculateMarginReturns } from './monte-carlo'
 import type { MonteCarloParams, SimulationStatistics } from './monte-carlo'
 import { calculateDefaultRecentWindow } from './rolling-metrics'
 
@@ -45,6 +45,8 @@ export interface MCRegimeComparisonOptions {
   tradesPerYear?: number
   /** Filter to specific strategy (case-insensitive). */
   strategy?: string
+  /** Use margin-based returns (pl/marginReq) instead of capital-based percentage returns. Auto-detected by edge-decay-synthesis when trades have valid marginReq. */
+  useMarginReturns?: boolean
 }
 
 export interface MCRegimeComparisonResult {
@@ -71,6 +73,7 @@ export interface MCRegimeComparisonResult {
     initialCapital: number
     tradesPerYear: number
     randomSeed: number
+    useMarginReturns: boolean
   }
 }
 
@@ -226,15 +229,38 @@ export function runRegimeComparison(
   const fullPool = sortedTrades
   const recentPool = sortedTrades.slice(-recentWindowSize)
 
+  // 5b. Resolve margin returns
+  const useMarginReturns = options?.useMarginReturns ?? false
+
+  let fullPrecomputedReturns: number[] | undefined
+  let recentPrecomputedReturns: number[] | undefined
+  let marginInitialCapital = initialCapital
+
+  if (useMarginReturns) {
+    // Compute margin returns for each pool
+    fullPrecomputedReturns = calculateMarginReturns(fullPool)
+    recentPrecomputedReturns = calculateMarginReturns(recentPool)
+
+    // Use median marginReq from full pool as stable initial capital estimate
+    const marginReqs = fullPool
+      .map(t => t.marginReq)
+      .filter(m => m > 0)
+      .sort((a, b) => a - b)
+    if (marginReqs.length > 0) {
+      marginInitialCapital = marginReqs[Math.floor(marginReqs.length / 2)]
+    }
+  }
+
   // 6. Run MC on full history
   const fullParams: MonteCarloParams = {
     numSimulations,
     simulationLength,
     resampleMethod: 'percentage',
-    initialCapital,
+    initialCapital: useMarginReturns ? marginInitialCapital : initialCapital,
     tradesPerYear,
     randomSeed,
     worstCaseEnabled: false,
+    ...(fullPrecomputedReturns ? { precomputedReturns: fullPrecomputedReturns } : {}),
   }
   const fullResult = runMonteCarloSimulation(fullPool, fullParams)
 
@@ -242,6 +268,7 @@ export function runRegimeComparison(
   const recentParams: MonteCarloParams = {
     ...fullParams,
     randomSeed: randomSeed + 10000,
+    ...(recentPrecomputedReturns ? { precomputedReturns: recentPrecomputedReturns } : {}),
   }
   const recentResult = runMonteCarloSimulation(recentPool, recentParams)
 
@@ -300,9 +327,10 @@ export function runRegimeComparison(
       recentWindowSize,
       numSimulations,
       simulationLength,
-      initialCapital,
+      initialCapital: useMarginReturns ? marginInitialCapital : initialCapital,
       tradesPerYear,
       randomSeed,
+      useMarginReturns,
     },
   }
 }

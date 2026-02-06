@@ -468,8 +468,13 @@ export function synthesizeEdgeDecay(
   let regimeSignal: SignalOutput<RegimeDetail>
 
   try {
+    // Auto-detect margin returns eligibility
+    const validMarginCount = trades.filter(t => t.marginReq > 0).length
+    const useMarginReturns = validMarginCount >= trades.length * 0.9
+
     regimeResult = runRegimeComparison(trades, {
       recentWindowSize: recentWindow,
+      useMarginReturns,
     })
     signalsRun++
 
