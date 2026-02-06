@@ -239,6 +239,9 @@ function computeEfficiency(
 
   const eps = EFFICIENCY_EPSILON[metric] ?? 0.01
   if (Math.abs(isValue) < eps) return null
+  // Negative IS Sharpe produces misleading efficiency ratios
+  // (e.g., -0.5 / -1.26 = 0.40 looks good but is meaningless)
+  if (metric === 'sharpe' && isValue < 0) return null
 
   return oosValue / isValue
 }

@@ -718,7 +718,8 @@ export function calculateMarginReturns(trades: Trade[]): number[] {
 
   for (const trade of sortedTrades) {
     if (trade.marginReq > 0) {
-      returns.push(trade.pl / trade.marginReq);
+      const marginReturn = trade.pl / trade.marginReq;
+      returns.push(Math.max(marginReturn, -0.99));
     }
     // Skip trades where marginReq <= 0 (do NOT push 0)
   }

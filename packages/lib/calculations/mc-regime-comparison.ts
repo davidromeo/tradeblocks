@@ -26,7 +26,9 @@ export interface MetricComparison {
   delta: number
   /** (delta / |fullHistoryValue|) * 100, null if fullHistoryValue is 0 */
   percentChange: number | null
-  /** Per-metric normalized divergence score. Signed: negative = degradation, positive = improvement. Magnitude indicates strength. */
+  /** Per-metric divergence score. Signed: negative = degradation, positive = improvement.
+   *  Note: For MDD, the sign is flipped relative to percentChange because lower MDD is better.
+   *  A negative percentChange (MDD decreased) produces a positive divergenceScore (improvement). */
   divergenceScore: number
 }
 
