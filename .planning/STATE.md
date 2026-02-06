@@ -13,7 +13,7 @@ Milestone: v2.7 Edge Decay Analysis -- COMPLETE
 Phase: All complete (46-50)
 Plan: All complete
 Status: Milestone shipped, archived, tagged v2.7
-Last activity: 2026-02-06 -- Completed quick task 006: composite decay score quality
+Last activity: 2026-02-06 -- Completed quick task 007: margin-based ROM for MC regime comparison
 
 Progress: [██████████] 100%
 
@@ -43,6 +43,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 | 004 | MCP tooling feedback fixes (5 items: dollar-metric filtering, composite score accuracy, per-pair tail risk n=, netPl enum, severity label removal) | 2026-02-06 | 37d871c | [004-mcp-tooling-feedback-fixes](./quick/004-mcp-tooling-feedback-fixes/) |
 | 005 | Health check dual MC resampling: detect position sizing inflation | 2026-02-06 | e29731b | [005-mc-dual-resampling-health-check](./quick/005-mc-dual-resampling-health-check/) |
 | 006 | Composite decay score quality: drop expectedReturn, cap mcDivergence, direction-aware scoring, netPl default | 2026-02-06 | b0e4a54 | — |
+| 007 | Margin-based ROM (pl/marginReq) for MC regime comparison with auto-detection | 2026-02-06 | 7cee4f7 | [007-margin-based-rom-for-mc-regime-comparis](./quick/007-margin-based-rom-for-mc-regime-comparis/) |
 
 ## Testing Infrastructure
 
@@ -59,5 +60,5 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call analyze_edge_decay '{"bl
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: v2.7 milestone complete, archived, tagged
+Stopped at: Completed quick task 007
 Resume file: None
