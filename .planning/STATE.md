@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** Make trading analytics accessible and understandable through web UI and AI-assisted workflows
-**Current focus:** v2.8 Market Data Consolidation
+**Current focus:** v2.8 Market Data Consolidation - Phase 51 PineScript Consolidation
 
 ## Current Position
 
 Milestone: v2.8 Market Data Consolidation
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-06 — Milestone v2.8 started
+Phase: 51 of 54 (PineScript Consolidation)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-02-06 — Roadmap created for v2.8 (4 phases, 23 requirements)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -39,7 +39,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 |---|-------------|------|--------|-----------|
 | 001 | Expose parameterRanges in run_walk_forward MCP tool | 2026-01-30 | d1de196 | [001-expose-parameterranges-in-run-walk-forwa](./quick/001-expose-parameterranges-in-run-walk-forwa/) |
 | 002 | Add reporting_data SQL table and legs to backtest comparison | 2026-02-04 | 2788a65 | [002-add-reporting-data-sql-table-and-legs-to](./quick/002-add-reporting-data-sql-table-and-legs-to/) |
-| 003 | MCP tooling improvements (7 items: daily log filtering, rolling metrics trim, health check sample sizes, edge decay sorting + composite score, stress test pre-filter, pl→netPl naming) | 2026-02-06 | ce5f73b | [003-mcp-tooling-improvements](./quick/003-mcp-tooling-improvements/) |
+| 003 | MCP tooling improvements (7 items: daily log filtering, rolling metrics trim, health check sample sizes, edge decay sorting + composite score, stress test pre-filter, pl->netPl naming) | 2026-02-06 | ce5f73b | [003-mcp-tooling-improvements](./quick/003-mcp-tooling-improvements/) |
 | 004 | MCP tooling feedback fixes (5 items: dollar-metric filtering, composite score accuracy, per-pair tail risk n=, netPl enum, severity label removal) | 2026-02-06 | 37d871c | [004-mcp-tooling-feedback-fixes](./quick/004-mcp-tooling-feedback-fixes/) |
 | 005 | Health check dual MC resampling: detect position sizing inflation | 2026-02-06 | e29731b | [005-mc-dual-resampling-health-check](./quick/005-mc-dual-resampling-health-check/) |
 | 006 | Composite decay score quality: drop expectedReturn, cap mcDivergence, direction-aware scoring, netPl default | 2026-02-06 | b0e4a54 | — |
@@ -56,13 +56,8 @@ CLI test mode available for MCP tool verification:
 TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call <tool> '<json-args>'
 ```
 
-Example:
-```bash
-TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call analyze_edge_decay '{"blockId":"main-port"}'
-```
-
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Defining v2.8 requirements
+Stopped at: Roadmap created for v2.8 (4 phases, 23 requirements mapped)
 Resume file: None

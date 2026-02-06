@@ -65,35 +65,35 @@ Requirements for Market Data Consolidation milestone. Consolidate 6 PineScripts 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PINE-01 | — | Pending |
-| PINE-02 | — | Pending |
-| PINE-03 | — | Pending |
-| PINE-04 | — | Pending |
-| PINE-05 | — | Pending |
-| PINE-06 | — | Pending |
-| PINE-07 | — | Pending |
-| PINE-08 | — | Pending |
-| PINE-09 | — | Pending |
-| SCHEMA-01 | — | Pending |
-| SCHEMA-02 | — | Pending |
-| SCHEMA-03 | — | Pending |
-| SCHEMA-04 | — | Pending |
-| SYNC-01 | — | Pending |
-| SYNC-02 | — | Pending |
-| SYNC-03 | — | Pending |
-| IMPORT-01 | — | Pending |
-| IMPORT-02 | — | Pending |
-| IMPORT-03 | — | Pending |
-| IMPORT-04 | — | Pending |
-| IMPORT-05 | — | Pending |
-| DOCS-01 | — | Pending |
-| DOCS-02 | — | Pending |
+| PINE-01 | Phase 51 | Pending |
+| PINE-02 | Phase 51 | Pending |
+| PINE-03 | Phase 51 | Pending |
+| PINE-04 | Phase 51 | Pending |
+| PINE-05 | Phase 51 | Pending |
+| PINE-06 | Phase 51 | Pending |
+| PINE-07 | Phase 51 | Pending |
+| PINE-08 | Phase 51 | Pending |
+| PINE-09 | Phase 51 | Pending |
+| SCHEMA-01 | Phase 52 | Pending |
+| SCHEMA-02 | Phase 52 | Pending |
+| SCHEMA-03 | Phase 52 | Pending |
+| SCHEMA-04 | Phase 52 | Pending |
+| SYNC-01 | Phase 52 | Pending |
+| SYNC-02 | Phase 52 | Pending |
+| SYNC-03 | Phase 52 | Pending |
+| IMPORT-01 | Phase 53 | Pending |
+| IMPORT-02 | Phase 53 | Pending |
+| IMPORT-03 | Phase 53 | Pending |
+| IMPORT-04 | Phase 53 | Pending |
+| IMPORT-05 | Phase 53 | Pending |
+| DOCS-01 | Phase 54 | Pending |
+| DOCS-02 | Phase 54 | Pending |
 
 **Coverage:**
 - v2.8 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23 (awaiting roadmap)
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-06*
-*Last updated: 2026-02-06 after initial definition*
+*Last updated: 2026-02-06 after roadmap creation*
