@@ -211,6 +211,15 @@ export function registerHealthBlockTools(
         const mcResult = runMonteCarloSimulation(trades, mcParams);
         const mcStats = mcResult.statistics;
 
+        // Run a second MC with percentage-based resampling to detect position sizing inflation
+        const mcPctParams: MonteCarloParams = {
+          ...mcParams,
+          resampleMethod: "percentage",
+          worstCaseEnabled: false, // Not needed for comparison
+        };
+        const mcPctResult = runMonteCarloSimulation(trades, mcPctParams);
+        const mcPctStats = mcPctResult.statistics;
+
         // Run WFA if possible (try 5 IS windows, 1 OOS)
         let wfeResult: number | null = null;
         let wfaSkipped = false;
@@ -292,7 +301,7 @@ export function registerHealthBlockTools(
 
         // Build flags array
         type Flag = {
-          type: "warning" | "pass";
+          type: "warning" | "pass" | "info";
           dimension:
             | "diversification"
             | "tailRisk"
@@ -401,7 +410,26 @@ export function registerHealthBlockTools(
           historicalMddDecimal > 0
             ? mcStats.medianMaxDrawdown / historicalMddDecimal
             : null;
-        if (mcMddMultiplier !== null && mcMddMultiplier > mddMultThresh) {
+        const mcPctMddMultiplier =
+          historicalMddDecimal > 0
+            ? mcPctStats.medianMaxDrawdown / historicalMddDecimal
+            : null;
+
+        // Detect position sizing inflation: dollar-mode MDD much higher than percentage-mode
+        const sizingInflated =
+          mcMddMultiplier !== null &&
+          mcPctMddMultiplier !== null &&
+          mcMddMultiplier > 2 * mcPctMddMultiplier;
+
+        if (sizingInflated) {
+          // Dollar-mode MDD is inflated by position sizing growth — report both
+          const pctExceeds = mcPctMddMultiplier! > mddMultThresh;
+          flags.push({
+            type: pctExceeds ? "warning" : "info",
+            dimension: "consistency",
+            message: `Monte Carlo MDD: dollar-mode ${formatPercent(mcStats.medianMaxDrawdown * 100)} (${mcMddMultiplier!.toFixed(1)}x historical) is inflated by position sizing growth. Percentage-mode ${formatPercent(mcPctStats.medianMaxDrawdown * 100)} (${mcPctMddMultiplier!.toFixed(1)}x historical) is more representative for % scaling portfolios`,
+          });
+        } else if (mcMddMultiplier !== null && mcMddMultiplier > mddMultThresh) {
           flags.push({
             type: "warning",
             dimension: "consistency",
@@ -508,6 +536,9 @@ export function registerHealthBlockTools(
           mcProbabilityOfProfit: mcStats.probabilityOfProfit,
           mcMedianMdd: mcStats.medianMaxDrawdown,
           mcMddMultiplier,
+          mcPctMedianMdd: mcPctStats.medianMaxDrawdown,
+          mcPctMddMultiplier,
+          mcSizingInflated: sizingInflated,
           wfe: wfeResult,
         };
 
