@@ -18,8 +18,6 @@ import {
   applyStrategyFilter,
   applyDateRangeFilter,
   matchTrades,
-  getCorrelationInterpretation,
-  getConfidenceLevel,
   type MatchedTradeData,
 } from "./slippage-helpers.js";
 import { withSyncedBlock } from "../middleware/sync-middleware.js";
@@ -167,7 +165,6 @@ export function registerDiscrepancyTool(
           metric: string;
           value: number;
           sampleSize: number;
-          confidence: "low" | "moderate" | "high";
         }
 
         // Pattern detection function
@@ -193,7 +190,6 @@ export function registerDiscrepancyTool(
               metric: "positive_slippage_rate",
               value: positiveRate,
               sampleSize: tradeSlippages.length,
-              confidence: getConfidenceLevel(tradeSlippages.length),
             });
           } else if (negativeRate >= patternThreshold) {
             patterns.push({
@@ -201,7 +197,6 @@ export function registerDiscrepancyTool(
               metric: "negative_slippage_rate",
               value: negativeRate,
               sampleSize: tradeSlippages.length,
-              confidence: getConfidenceLevel(tradeSlippages.length),
             });
           }
 
@@ -256,7 +251,6 @@ export function registerDiscrepancyTool(
                     metric: "time_clustering_rate",
                     value: bucketRate,
                     sampleSize: outlierTrades.length,
-                    confidence: getConfidenceLevel(outlierTrades.length),
                   });
                   break; // Only report strongest time pattern
                 }
@@ -286,7 +280,6 @@ export function registerDiscrepancyTool(
                 metric: "vix_correlation",
                 value: correlation,
                 sampleSize: vixTrades.length,
-                confidence: getConfidenceLevel(vixTrades.length),
               });
             }
           }
@@ -301,13 +294,11 @@ export function registerDiscrepancyTool(
           field: string;
           coefficient: number;
           sampleSize: number;
-          interpretation: string;
         }> => {
           const results: Array<{
             field: string;
             coefficient: number;
             sampleSize: number;
-            interpretation: string;
           }> = [];
 
           const correlationFields: Array<{
@@ -354,7 +345,6 @@ export function registerDiscrepancyTool(
                   field: name,
                   coefficient: Math.round(coefficient * 10000) / 10000,
                   sampleSize: validPairs.length,
-                  interpretation: getCorrelationInterpretation(coefficient),
                 });
               }
             }

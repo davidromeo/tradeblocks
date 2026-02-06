@@ -18,6 +18,4 @@ export {
   applyStrategyFilter,
   calculateScaledPl,
   matchTrades,
-  getCorrelationInterpretation,
-  getConfidenceLevel,
 } from "@tradeblocks/lib";

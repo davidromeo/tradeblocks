@@ -16,7 +16,6 @@ import {
   matchTrades,
   getIsoWeekKey,
   getMonthKey,
-  getCorrelationInterpretation,
   type MatchedTradeData,
 } from "./slippage-helpers.js";
 import { withSyncedBlock } from "../middleware/sync-middleware.js";
@@ -32,7 +31,7 @@ export function registerSlippageTrendsTool(
     "analyze_slippage_trends",
     {
       description:
-        "Analyze slippage trends over time with statistical significance testing. Detects improvement/degradation patterns using linear regression on time-aggregated slippage data. Provides slope, R-squared, p-value, and interpretation. Requires both tradelog.csv (backtest) and reportinglog.csv (actual). Limitation: Trade matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
+        "Analyze slippage trends over time with statistical significance testing. Detects improvement/degradation patterns using linear regression on time-aggregated slippage data. Provides slope, R-squared, and p-value. Requires both tradelog.csv (backtest) and reportinglog.csv (actual). Limitation: Trade matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
@@ -218,8 +217,6 @@ export function registerSlippageTrendsTool(
           rSquared: number;
           pValue: number;
           stderr: number;
-          interpretation: "improving" | "stable" | "degrading";
-          confidence: "high" | "moderate" | "low";
         }
 
         // Linear regression with statistics
@@ -261,25 +258,12 @@ export function registerSlippageTrendsTool(
           // Two-tailed p-value using normal approximation
           const pValue = 2 * (1 - normalCDF(Math.abs(tStat)));
 
-          // Interpretation
-          const isSignificant = pValue < 0.05;
-          let interpretation: "improving" | "stable" | "degrading";
-          if (!isSignificant) {
-            interpretation = "stable";
-          } else if (slope < 0) {
-            interpretation = "improving"; // Slippage decreasing over time
-          } else {
-            interpretation = "degrading"; // Slippage increasing over time
-          }
-
           return {
             slope: Math.round(slope * 10000) / 10000,
             intercept: Math.round(intercept * 100) / 100,
             rSquared: Math.round(rSquared * 10000) / 10000,
             pValue: Math.round(pValue * 10000) / 10000,
             stderr: Math.round(stderr * 10000) / 10000,
-            interpretation,
-            confidence: n >= 30 ? "high" : n >= 10 ? "moderate" : "low",
           };
         };
 
@@ -364,7 +348,6 @@ export function registerSlippageTrendsTool(
         interface ExternalFactorResult {
           factor: string;
           coefficient: number;
-          interpretation: string;
           sampleSize: number;
         }
 
@@ -393,7 +376,6 @@ export function registerSlippageTrendsTool(
                 {
                   factor: "openingVix",
                   coefficient: Math.round(coefficient * 10000) / 10000,
-                  interpretation: getCorrelationInterpretation(coefficient),
                   sampleSize: vixTrades.length,
                 },
               ],
@@ -409,7 +391,7 @@ export function registerSlippageTrendsTool(
 
         if (blockTrend) {
           summaryParts.push(
-            `Trend: ${blockTrend.interpretation} (p=${blockTrend.pValue.toFixed(3)})`
+            `Trend: slope=${blockTrend.slope} (p=${blockTrend.pValue.toFixed(3)})`
           );
         }
 
