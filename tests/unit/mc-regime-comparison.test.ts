@@ -112,8 +112,8 @@ describe('runRegimeComparison', () => {
     expect(result.recentWindow).toHaveProperty('tradeCount')
     expect(result.recentWindow).toHaveProperty('dateRange')
 
-    // Check divergence structure
-    expect(result.divergence).toHaveProperty('severity')
+    // Check divergence structure (no severity -- only compositeScore and scoreDescription)
+    expect(result.divergence).not.toHaveProperty('severity')
     expect(result.divergence).toHaveProperty('compositeScore')
     expect(result.divergence).toHaveProperty('scoreDescription')
 
@@ -262,7 +262,7 @@ describe('classifyDivergence', () => {
     ]
 
     const result = classifyDivergence(comparisons)
-    expect(result.severity).toBe('aligned')
+    expect(result).not.toHaveProperty('severity')
     expect(result.compositeScore).toBeLessThan(0.30)
   })
 
@@ -275,7 +275,6 @@ describe('classifyDivergence', () => {
     ]
 
     const result = classifyDivergence(comparisons)
-    expect(result.severity).toBe('mild_divergence')
     expect(result.compositeScore).toBeGreaterThanOrEqual(0.30)
     expect(result.compositeScore).toBeLessThan(0.60)
   })
@@ -289,7 +288,6 @@ describe('classifyDivergence', () => {
     ]
 
     const result = classifyDivergence(comparisons)
-    expect(result.severity).toBe('significant_divergence')
     expect(result.compositeScore).toBeGreaterThanOrEqual(0.60)
     expect(result.compositeScore).toBeLessThan(1.00)
   })
@@ -303,7 +301,6 @@ describe('classifyDivergence', () => {
     ]
 
     const result = classifyDivergence(comparisons)
-    expect(result.severity).toBe('regime_break')
     expect(result.compositeScore).toBeGreaterThanOrEqual(1.00)
   })
 
@@ -327,7 +324,7 @@ describe('classifyDivergence', () => {
 
   test('16. Empty comparisons returns aligned', () => {
     const result = classifyDivergence([])
-    expect(result.severity).toBe('aligned')
+    expect(result).not.toHaveProperty('severity')
     expect(result.compositeScore).toBe(0)
   })
 })
@@ -356,7 +353,6 @@ describe('edge cases', () => {
       result2.recentWindow.statistics.meanTotalReturn,
     )
     expect(result1.divergence.compositeScore).toBe(result2.divergence.compositeScore)
-    expect(result1.divergence.severity).toBe(result2.divergence.severity)
   })
 
   test('18. All winning trades: high P(Profit) for both pools, low divergence', () => {
@@ -372,7 +368,7 @@ describe('edge cases', () => {
     expect(result.recentWindow.statistics.probabilityOfProfit).toBeGreaterThan(0.9)
 
     // Divergence should be low since both pools draw from same distribution
-    expect(result.divergence.severity).toBe('aligned')
+    expect(result.divergence.compositeScore).toBeLessThan(0.30)
   })
 
   test('19. Recent window much worse: detects divergence', () => {
@@ -404,10 +400,7 @@ describe('edge cases', () => {
       randomSeed: 42,
     })
 
-    // The recent window is much worse, so divergence should be at least mild
-    expect(['mild_divergence', 'significant_divergence', 'regime_break']).toContain(
-      result.divergence.severity,
-    )
+    // The recent window is much worse, so divergence score should be above aligned threshold
     expect(result.divergence.compositeScore).toBeGreaterThan(0.3)
   })
 

@@ -245,7 +245,7 @@ export function registerEdgeDecayTools(
     "analyze_regime_comparison",
     {
       description:
-        "Run dual Monte Carlo simulations comparing full trade history vs recent window to detect regime divergence. Compares P(Profit), expected return, Sharpe ratio, and median max drawdown between the two periods. Classifies divergence severity as aligned, mild_divergence, significant_divergence, or regime_break.",
+        "Run dual Monte Carlo simulations comparing full trade history vs recent window to detect regime divergence. Compares P(Profit), expected return, Sharpe ratio, and median max drawdown between the two periods. Returns a composite divergence score (0 = aligned, higher = more divergent).",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
@@ -330,10 +330,9 @@ export function registerEdgeDecayTools(
             result.fullHistory.statistics.meanSharpeRatio.toFixed(2);
           const recentSharpe =
             result.recentWindow.statistics.meanSharpeRatio.toFixed(2);
-          const severity = result.divergence.severity.replace(/_/g, " ");
           const score = result.divergence.compositeScore.toFixed(2);
 
-          const summary = `Regime comparison for ${blockId}${strategy ? ` (${strategy})` : ""}: ${result.fullHistory.tradeCount} full / ${result.recentWindow.tradeCount} recent trades\nP(Profit): ${fullPProfit}% (full) vs ${recentPProfit}% (recent) | Sharpe: ${fullSharpe} (full) vs ${recentSharpe} (recent)\nDivergence: ${severity} (score: ${score})`;
+          const summary = `Regime comparison for ${blockId}${strategy ? ` (${strategy})` : ""}: ${result.fullHistory.tradeCount} full / ${result.recentWindow.tradeCount} recent trades\nP(Profit): ${fullPProfit}% (full) vs ${recentPProfit}% (recent) | Sharpe: ${fullSharpe} (full) vs ${recentSharpe} (recent)\nDivergence: score ${score}`;
 
           const structuredData = {
             blockId,

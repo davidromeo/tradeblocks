@@ -479,7 +479,6 @@ export function synthesizeEdgeDecay(
     regimeSignal = {
       available: true,
       summary: {
-        severity: regimeResult.divergence.severity,
         compositeScore: regimeResult.divergence.compositeScore,
       },
       detail: regimeDetail,

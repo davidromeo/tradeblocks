@@ -19,12 +19,6 @@ import { calculateDefaultRecentWindow } from './rolling-metrics'
 // Types
 // ---------------------------------------------------------------------------
 
-export type DivergenceSeverity =
-  | 'aligned'
-  | 'mild_divergence'
-  | 'significant_divergence'
-  | 'regime_break'
-
 export interface MetricComparison {
   metric: string
   fullHistoryValue: number
@@ -66,7 +60,6 @@ export interface MCRegimeComparisonResult {
   }
   comparison: MetricComparison[]
   divergence: {
-    severity: DivergenceSeverity
     compositeScore: number
     /** Brief factual description of the composite score */
     scoreDescription: string
@@ -125,7 +118,7 @@ function formatLocalDate(date: Date): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Classify divergence severity from metric comparisons.
+ * Compute composite divergence score from metric comparisons.
  *
  * Per-metric divergence scores (normalized to comparable scales):
  * - probabilityOfProfit: |delta| / 0.10  (10pp difference = score 1.0)
@@ -134,19 +127,13 @@ function formatLocalDate(date: Date): string {
  * - medianMaxDrawdown: |delta| / max(0.01, fullValue)  (100% relative change = 1.0), cap 5.0
  *
  * Composite score = mean of the four per-metric divergence scores.
- *
- * Thresholds:
- * - compositeScore < 0.30 -> aligned
- * - compositeScore < 0.60 -> mild_divergence
- * - compositeScore < 1.00 -> significant_divergence
- * - compositeScore >= 1.00 -> regime_break
+ * Returns score and description only -- no severity labels.
  */
 export function classifyDivergence(
   comparisons: MetricComparison[]
-): { severity: DivergenceSeverity; compositeScore: number; scoreDescription: string } {
+): { compositeScore: number; scoreDescription: string } {
   if (comparisons.length === 0) {
     return {
-      severity: 'aligned',
       compositeScore: 0,
       scoreDescription: 'Composite divergence score 0.00 (no metrics to compare)',
     }
@@ -155,20 +142,9 @@ export function classifyDivergence(
   const totalScore = comparisons.reduce((sum, c) => sum + c.divergenceScore, 0)
   const compositeScore = totalScore / comparisons.length
 
-  let severity: DivergenceSeverity
-  if (compositeScore < 0.30) {
-    severity = 'aligned'
-  } else if (compositeScore < 0.60) {
-    severity = 'mild_divergence'
-  } else if (compositeScore < 1.00) {
-    severity = 'significant_divergence'
-  } else {
-    severity = 'regime_break'
-  }
-
   const scoreDescription = `Composite divergence score ${compositeScore.toFixed(2)} (mean of ${comparisons.length} metric divergences)`
 
-  return { severity, compositeScore, scoreDescription }
+  return { compositeScore, scoreDescription }
 }
 
 // ---------------------------------------------------------------------------
