@@ -1,0 +1,602 @@
+/**
+ * Edge Decay Synthesis Engine
+ *
+ * Calls all 5 edge decay signal engines, aggregates their outputs into
+ * a structured result with a top-level summary, per-signal detail,
+ * exhaustive factual observations, and metadata.
+ *
+ * This is a pure function in lib (not MCP) -- testable, reusable,
+ * framework-agnostic. The MCP tool is a thin wrapper around this.
+ *
+ * All outputs are factual, numerical data. No verdicts, grades, or
+ * interpretive labels. The LLM consuming the output decides what's notable.
+ */
+
+import type { Trade } from '../models/trade'
+import type { ReportingTrade } from '../models/reporting-trade'
+import {
+  segmentByPeriod,
+  type PeriodSegmentationResult,
+  type PeriodMetrics,
+} from './period-segmentation'
+import {
+  computeRollingMetrics,
+  calculateDefaultRecentWindow,
+  type RollingMetricsResult,
+  type RecentVsHistoricalComparison,
+  type SeasonalAverages,
+} from './rolling-metrics'
+import {
+  runRegimeComparison,
+  type MCRegimeComparisonResult,
+  type MetricComparison,
+} from './mc-regime-comparison'
+import {
+  analyzeWalkForwardDegradation,
+  type WFDResult,
+  type WFDConfig,
+  type WFDMetricSet,
+  type WFDPeriodResult,
+} from './walk-forward-degradation'
+import {
+  analyzeLiveAlignment,
+  type LiveAlignmentOutput,
+  type LiveAlignmentResult,
+  type DirectionAgreementResult,
+  type ExecutionEfficiencyResult,
+  type AlignmentTrendResult,
+  type AlignmentDataQuality,
+} from './live-alignment'
+import type { TrendAnalysis, TrendResult } from './trend-detection'
+
+// ---------------------------------------------------------------------------
+// Public Types
+// ---------------------------------------------------------------------------
+
+export interface EdgeDecaySynthesisOptions {
+  /** Number of recent trades for comparison. Default: auto-calculated via calculateDefaultRecentWindow. */
+  recentWindow?: number
+}
+
+export interface FactualObservation {
+  /** Which signal category produced this observation */
+  signal: string
+  /** Metric name, e.g. "profitFactor", "winRate", "sharpeEfficiency" */
+  metric: string
+  /** Current/recent value */
+  current: number
+  /** Comparison/historical value */
+  comparison: number
+  /** current - comparison */
+  delta: number
+  /** Relative change as percentage, null if comparison is 0 */
+  percentChange: number | null
+}
+
+/** Per-signal wrapper. detail is the engine output (pruned as needed). */
+export interface SignalOutput<T> {
+  available: boolean
+  reason?: string
+  summary: Record<string, number | string | null>
+  detail: T | null
+}
+
+// ---------------------------------------------------------------------------
+// Detail types (pruned versions of engine results)
+// ---------------------------------------------------------------------------
+
+export interface PeriodDetail {
+  yearly: PeriodMetrics[]
+  quarterly: PeriodMetrics[]
+  /** At most the most recent 12 monthly periods */
+  monthly: PeriodMetrics[]
+  trends: {
+    yearly: TrendAnalysis
+    quarterly: TrendAnalysis
+  }
+  worstConsecutiveLosingMonths: PeriodSegmentationResult['worstConsecutiveLosingMonths']
+  dataQuality: PeriodSegmentationResult['dataQuality']
+}
+
+export interface RollingDetail {
+  /** NO series -- excluded for size */
+  recentVsHistorical: RecentVsHistoricalComparison
+  seasonalAverages: SeasonalAverages
+  dataQuality: RollingMetricsResult['dataQuality']
+  windowSize: number
+}
+
+export interface RegimeDetail {
+  fullHistory: MCRegimeComparisonResult['fullHistory']
+  recentWindow: MCRegimeComparisonResult['recentWindow']
+  comparison: MetricComparison[]
+  divergence: MCRegimeComparisonResult['divergence']
+  parameters: MCRegimeComparisonResult['parameters']
+}
+
+export interface WFDetail {
+  periods: WFDPeriodResult[]
+  efficiencyTrends: {
+    sharpe: TrendResult | null
+    winRate: TrendResult | null
+    profitFactor: TrendResult | null
+  }
+  recentVsHistorical: {
+    recentPeriodCount: number
+    recentAvgEfficiency: WFDMetricSet
+    historicalAvgEfficiency: WFDMetricSet
+    delta: WFDMetricSet
+  }
+  config: WFDConfig
+  dataQuality: WFDResult['dataQuality']
+}
+
+export interface AlignmentDetail {
+  overlapDateRange: { from: string; to: string } | null
+  directionAgreement: DirectionAgreementResult
+  executionEfficiency: ExecutionEfficiencyResult
+  alignmentTrend: AlignmentTrendResult
+  dataQuality: AlignmentDataQuality
+}
+
+// ---------------------------------------------------------------------------
+// Summary + Result types
+// ---------------------------------------------------------------------------
+
+export interface EdgeDecaySummary {
+  totalTrades: number
+  recentWindow: number
+  recentWinRate: number
+  historicalWinRate: number
+  recentProfitFactor: number
+  historicalProfitFactor: number
+  recentSharpe: number | null
+  historicalSharpe: number | null
+  mcProbabilityOfProfit: { full: number; recent: number } | null
+  wfAvgEfficiency: { sharpe: number | null; winRate: number | null; profitFactor: number | null } | null
+  liveDirectionAgreement: number | null
+  liveExecutionEfficiency: number | null
+  observationCount: number
+  structuralFlagCount: number
+}
+
+export interface EdgeDecayMetadata {
+  totalTrades: number
+  recentWindow: number
+  signalsRun: number
+  signalsSkipped: number
+  dateRange: { start: string; end: string }
+}
+
+export interface EdgeDecaySynthesisResult {
+  summary: EdgeDecaySummary
+  observations: FactualObservation[]
+  signals: {
+    periodMetrics: SignalOutput<PeriodDetail>
+    rollingMetrics: SignalOutput<RollingDetail>
+    regimeComparison: SignalOutput<RegimeDetail>
+    walkForward: SignalOutput<WFDetail>
+    liveAlignment: SignalOutput<AlignmentDetail>
+  }
+  metadata: EdgeDecayMetadata
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function sortTradesChronologically(trades: Trade[]): Trade[] {
+  return [...trades].sort((a, b) => {
+    const dateA = new Date(a.dateOpened)
+    const dateB = new Date(b.dateOpened)
+    const numA = dateA.getFullYear() * 10000 + dateA.getMonth() * 100 + dateA.getDate()
+    const numB = dateB.getFullYear() * 10000 + dateB.getMonth() * 100 + dateB.getDate()
+    if (numA !== numB) return numA - numB
+    return (a.timeOpened || '').localeCompare(b.timeOpened || '')
+  })
+}
+
+/**
+ * Compute percentChange safely (null if comparison is zero).
+ */
+function safePercentChange(current: number, comparison: number): number | null {
+  if (comparison === 0) return null
+  return ((current - comparison) / Math.abs(comparison)) * 100
+}
+
+// ---------------------------------------------------------------------------
+// Observation extraction -- EXHAUSTIVE, no threshold filtering
+// ---------------------------------------------------------------------------
+
+function extractObservations(
+  periodResult: PeriodSegmentationResult,
+  rollingResult: RollingMetricsResult,
+  regimeResult: MCRegimeComparisonResult | null,
+  wfResult: WFDResult,
+  liveResult: LiveAlignmentOutput,
+): FactualObservation[] {
+  const observations: FactualObservation[] = []
+
+  // -------------------------------------------------------------------------
+  // From rolling recentVsHistorical: ALL metric comparisons
+  // -------------------------------------------------------------------------
+  for (const m of rollingResult.recentVsHistorical.metrics) {
+    observations.push({
+      signal: 'rollingMetrics',
+      metric: m.metric,
+      current: m.recentValue,
+      comparison: m.historicalValue,
+      delta: m.delta,
+      percentChange: m.percentChange,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // From MC regime comparison: ALL comparison metrics
+  // -------------------------------------------------------------------------
+  if (regimeResult) {
+    for (const c of regimeResult.comparison) {
+      observations.push({
+        signal: 'regimeComparison',
+        metric: c.metric,
+        current: c.recentWindowValue,
+        comparison: c.fullHistoryValue,
+        delta: c.delta,
+        percentChange: c.percentChange,
+      })
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // From WF recentVsHistorical: ALL efficiency metrics
+  // -------------------------------------------------------------------------
+  const wfMetrics: (keyof WFDMetricSet)[] = ['sharpe', 'winRate', 'profitFactor']
+  for (const metric of wfMetrics) {
+    const recent = wfResult.recentVsHistorical.recentAvgEfficiency[metric]
+    const historical = wfResult.recentVsHistorical.historicalAvgEfficiency[metric]
+    if (recent !== null && historical !== null) {
+      observations.push({
+        signal: 'walkForward',
+        metric: `${metric}Efficiency`,
+        current: recent,
+        comparison: historical,
+        delta: recent - historical,
+        percentChange: safePercentChange(recent, historical),
+      })
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // From period trends: ALL yearly trend slopes
+  // -------------------------------------------------------------------------
+  const yearlyTrends = periodResult.trends.yearly
+  for (const [metricName, trendResult] of Object.entries(yearlyTrends)) {
+    if (trendResult && typeof trendResult === 'object' && 'slope' in trendResult) {
+      const trend = trendResult as TrendResult
+      observations.push({
+        signal: 'periodMetrics',
+        metric: `${metricName}YearlyTrend`,
+        current: trend.slope,
+        comparison: 0,
+        delta: trend.slope,
+        percentChange: null, // comparison is 0
+      })
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // From live alignment (if available)
+  // -------------------------------------------------------------------------
+  if (liveResult.available) {
+    const live = liveResult as LiveAlignmentResult
+    // Direction agreement rate
+    observations.push({
+      signal: 'liveAlignment',
+      metric: 'directionAgreementRate',
+      current: live.directionAgreement.overallRate,
+      comparison: 1.0,
+      delta: live.directionAgreement.overallRate - 1.0,
+      percentChange: (live.directionAgreement.overallRate - 1.0) * 100,
+    })
+    // Execution efficiency
+    if (live.executionEfficiency.overallEfficiency !== null) {
+      observations.push({
+        signal: 'liveAlignment',
+        metric: 'executionEfficiency',
+        current: live.executionEfficiency.overallEfficiency,
+        comparison: 1.0,
+        delta: live.executionEfficiency.overallEfficiency - 1.0,
+        percentChange: (live.executionEfficiency.overallEfficiency - 1.0) * 100,
+      })
+    }
+  }
+
+  return observations
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
+
+/**
+ * Synthesize edge decay analysis by calling all 5 signal engines and
+ * aggregating their outputs into a structured result.
+ *
+ * @param trades - Array of backtest Trade objects
+ * @param actualTrades - Optional array of actual (reporting log) trades for live alignment
+ * @param options - Optional configuration (recentWindow)
+ * @returns EdgeDecaySynthesisResult with summary, observations, signals, and metadata
+ */
+export function synthesizeEdgeDecay(
+  trades: Trade[],
+  actualTrades: ReportingTrade[] | undefined,
+  options?: EdgeDecaySynthesisOptions,
+): EdgeDecaySynthesisResult {
+  const sorted = sortTradesChronologically(trades)
+  const totalTrades = sorted.length
+
+  // Resolve recentWindow
+  const recentWindow = options?.recentWindow ?? calculateDefaultRecentWindow(totalTrades)
+
+  // Compute date range
+  const dateRange = totalTrades > 0
+    ? {
+        start: formatLocalDate(new Date(sorted[0].dateOpened)),
+        end: formatLocalDate(new Date(sorted[totalTrades - 1].dateOpened)),
+      }
+    : { start: '', end: '' }
+
+  let signalsRun = 0
+  let signalsSkipped = 0
+
+  // -----------------------------------------------------------------------
+  // 1. Period segmentation -- always runs
+  // -----------------------------------------------------------------------
+  const periodResult = segmentByPeriod(trades)
+  signalsRun++
+
+  // Truncate monthly to most recent 12
+  const allMonthly = periodResult.monthly
+  const truncatedMonthly = allMonthly.length > 12
+    ? allMonthly.slice(allMonthly.length - 12)
+    : allMonthly
+
+  const periodDetail: PeriodDetail = {
+    yearly: periodResult.yearly,
+    quarterly: periodResult.quarterly,
+    monthly: truncatedMonthly,
+    trends: periodResult.trends,
+    worstConsecutiveLosingMonths: periodResult.worstConsecutiveLosingMonths,
+    dataQuality: periodResult.dataQuality,
+  }
+
+  const periodSignal: SignalOutput<PeriodDetail> = {
+    available: true,
+    summary: {
+      yearCount: periodResult.yearly.length,
+      quarterCount: periodResult.quarterly.length,
+      monthCount: periodResult.monthly.length,
+      sufficientForTrends: periodResult.dataQuality.sufficientForTrends ? 1 : 0,
+    },
+    detail: periodDetail,
+  }
+
+  // -----------------------------------------------------------------------
+  // 2. Rolling metrics -- always runs
+  // -----------------------------------------------------------------------
+  const rollingResult = computeRollingMetrics(trades, {
+    recentWindowSize: recentWindow,
+  })
+  signalsRun++
+
+  const rollingDetail: RollingDetail = {
+    recentVsHistorical: rollingResult.recentVsHistorical,
+    seasonalAverages: rollingResult.seasonalAverages,
+    dataQuality: rollingResult.dataQuality,
+    windowSize: rollingResult.windowSize,
+  }
+
+  const rollingSignal: SignalOutput<RollingDetail> = {
+    available: true,
+    summary: {
+      windowSize: rollingResult.windowSize,
+      structuralFlagCount: rollingResult.recentVsHistorical.structuralFlags.length,
+    },
+    detail: rollingDetail,
+  }
+
+  // -----------------------------------------------------------------------
+  // 3. MC regime comparison -- skip if < 30 trades
+  // -----------------------------------------------------------------------
+  let regimeResult: MCRegimeComparisonResult | null = null
+  let regimeSignal: SignalOutput<RegimeDetail>
+
+  try {
+    regimeResult = runRegimeComparison(trades, {
+      recentWindowSize: recentWindow,
+    })
+    signalsRun++
+
+    const regimeDetail: RegimeDetail = {
+      fullHistory: regimeResult.fullHistory,
+      recentWindow: regimeResult.recentWindow,
+      comparison: regimeResult.comparison,
+      divergence: regimeResult.divergence,
+      parameters: regimeResult.parameters,
+    }
+
+    regimeSignal = {
+      available: true,
+      summary: {
+        severity: regimeResult.divergence.severity,
+        compositeScore: regimeResult.divergence.compositeScore,
+      },
+      detail: regimeDetail,
+    }
+  } catch (e: unknown) {
+    signalsSkipped++
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    regimeSignal = {
+      available: false,
+      reason: message,
+      summary: {},
+      detail: null,
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // 4. Walk-forward degradation -- always runs
+  // -----------------------------------------------------------------------
+  const wfResult = analyzeWalkForwardDegradation(trades)
+  signalsRun++
+
+  const wfDetail: WFDetail = {
+    periods: wfResult.periods,
+    efficiencyTrends: wfResult.efficiencyTrends,
+    recentVsHistorical: wfResult.recentVsHistorical,
+    config: wfResult.config,
+    dataQuality: wfResult.dataQuality,
+  }
+
+  const wfSignal: SignalOutput<WFDetail> = {
+    available: true,
+    summary: {
+      totalPeriods: wfResult.dataQuality.totalPeriods,
+      sufficientPeriods: wfResult.dataQuality.sufficientPeriods,
+      sufficientForTrends: wfResult.dataQuality.sufficientForTrends ? 1 : 0,
+    },
+    detail: wfDetail,
+  }
+
+  // -----------------------------------------------------------------------
+  // 5. Live alignment -- skip if no actualTrades
+  // -----------------------------------------------------------------------
+  let liveResult: LiveAlignmentOutput
+  let liveSignal: SignalOutput<AlignmentDetail>
+
+  if (actualTrades && actualTrades.length > 0) {
+    liveResult = analyzeLiveAlignment(trades, actualTrades, { scaling: 'perContract' })
+    signalsRun++
+
+    if (liveResult.available) {
+      const live = liveResult as LiveAlignmentResult
+      const alignmentDetail: AlignmentDetail = {
+        overlapDateRange: live.overlapDateRange,
+        directionAgreement: live.directionAgreement,
+        executionEfficiency: live.executionEfficiency,
+        alignmentTrend: live.alignmentTrend,
+        dataQuality: live.dataQuality,
+      }
+      liveSignal = {
+        available: true,
+        summary: {
+          directionAgreementRate: live.directionAgreement.overallRate,
+          executionEfficiency: live.executionEfficiency.overallEfficiency,
+          matchedTrades: live.dataQuality.matchedTradeCount,
+        },
+        detail: alignmentDetail,
+      }
+    } else {
+      signalsSkipped++
+      signalsRun-- // undo the run++ above since it's actually skipped
+      liveSignal = {
+        available: false,
+        reason: liveResult.reason,
+        summary: {},
+        detail: null,
+      }
+    }
+  } else {
+    signalsSkipped++
+    liveResult = { available: false, reason: 'no reporting log' }
+    liveSignal = {
+      available: false,
+      reason: 'no reporting log',
+      summary: {},
+      detail: null,
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Extract observations -- EXHAUSTIVE
+  // -----------------------------------------------------------------------
+  const observations = extractObservations(
+    periodResult,
+    rollingResult,
+    regimeResult,
+    wfResult,
+    liveResult,
+  )
+
+  // -----------------------------------------------------------------------
+  // Build summary
+  // -----------------------------------------------------------------------
+  // Extract rolling recent vs historical metrics
+  const findMetric = (metrics: typeof rollingResult.recentVsHistorical.metrics, name: string) =>
+    metrics.find((m) => m.metric === name)
+
+  const winRateComp = findMetric(rollingResult.recentVsHistorical.metrics, 'winRate')
+  const pfComp = findMetric(rollingResult.recentVsHistorical.metrics, 'profitFactor')
+  const sharpeComp = findMetric(rollingResult.recentVsHistorical.metrics, 'sharpeRatio')
+
+  const summary: EdgeDecaySummary = {
+    totalTrades,
+    recentWindow,
+    recentWinRate: winRateComp?.recentValue ?? 0,
+    historicalWinRate: winRateComp?.historicalValue ?? 0,
+    recentProfitFactor: pfComp?.recentValue ?? 0,
+    historicalProfitFactor: pfComp?.historicalValue ?? 0,
+    recentSharpe: sharpeComp?.recentValue ?? null,
+    historicalSharpe: sharpeComp?.historicalValue ?? null,
+    mcProbabilityOfProfit: regimeResult
+      ? {
+          full: regimeResult.fullHistory.statistics.probabilityOfProfit,
+          recent: regimeResult.recentWindow.statistics.probabilityOfProfit,
+        }
+      : null,
+    wfAvgEfficiency: wfResult.dataQuality.sufficientPeriods > 0
+      ? {
+          sharpe: wfResult.recentVsHistorical.recentAvgEfficiency.sharpe,
+          winRate: wfResult.recentVsHistorical.recentAvgEfficiency.winRate,
+          profitFactor: wfResult.recentVsHistorical.recentAvgEfficiency.profitFactor,
+        }
+      : null,
+    liveDirectionAgreement:
+      liveResult.available ? (liveResult as LiveAlignmentResult).directionAgreement.overallRate : null,
+    liveExecutionEfficiency:
+      liveResult.available ? (liveResult as LiveAlignmentResult).executionEfficiency.overallEfficiency : null,
+    observationCount: observations.length,
+    structuralFlagCount: rollingResult.recentVsHistorical.structuralFlags.length,
+  }
+
+  // -----------------------------------------------------------------------
+  // Build metadata
+  // -----------------------------------------------------------------------
+  const metadata: EdgeDecayMetadata = {
+    totalTrades,
+    recentWindow,
+    signalsRun,
+    signalsSkipped,
+    dateRange,
+  }
+
+  return {
+    summary,
+    observations,
+    signals: {
+      periodMetrics: periodSignal,
+      rollingMetrics: rollingSignal,
+      regimeComparison: regimeSignal,
+      walkForward: wfSignal,
+      liveAlignment: liveSignal,
+    },
+    metadata,
+  }
+}

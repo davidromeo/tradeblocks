@@ -178,27 +178,27 @@ describe('synthesizeEdgeDecay', () => {
   })
 
   test('8. Observations are exhaustive (no threshold filtering) -- all metric comparisons included', () => {
-    // 60 trades, no reporting log: should get observations from
-    // rolling (8 recentVsHistorical metrics), MC (4 comparison metrics),
-    // WF (up to 3 efficiency metrics), period trends (up to 7 yearly trend metrics)
-    const trades = generateTradeSet(60)
-    const result = synthesizeEdgeDecay(trades, undefined)
+    // Use 500 trades with explicit recentWindow=50 so there's a clear
+    // recent vs historical split for rolling metrics
+    const trades = generateTradeSet(500, {
+      startDate: new Date(2022, 0, 1),
+    })
+    const result = synthesizeEdgeDecay(trades, undefined, { recentWindow: 50 })
 
     // Should have a substantial number of observations -- at least from rolling and MC
     // Rolling: 8 metrics in recentVsHistorical
-    // MC: 4 metrics (if available, which it is for 60 trades)
+    // MC: 4 metrics (always available for 500 trades)
     // That's at least 12 minimum. With WF and period trends, likely more.
-    expect(result.observations.length).toBeGreaterThanOrEqual(8)
+    expect(result.observations.length).toBeGreaterThanOrEqual(12)
 
     // Verify all rolling recentVsHistorical metrics are present as observations
     const rollingObs = result.observations.filter((o) => o.signal === 'rollingMetrics')
     expect(rollingObs.length).toBeGreaterThanOrEqual(8) // all 8 metrics
 
-    // If MC available, verify all MC comparison metrics present
-    if (result.signals.regimeComparison.available) {
-      const mcObs = result.observations.filter((o) => o.signal === 'regimeComparison')
-      expect(mcObs.length).toBe(4) // all 4 MC metrics
-    }
+    // Verify all MC comparison metrics present (500 trades always qualifies)
+    expect(result.signals.regimeComparison.available).toBe(true)
+    const mcObs = result.observations.filter((o) => o.signal === 'regimeComparison')
+    expect(mcObs.length).toBe(4) // all 4 MC metrics
   })
 
   test('9. recentWindow option honored', () => {
