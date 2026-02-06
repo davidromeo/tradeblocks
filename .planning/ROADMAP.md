@@ -88,14 +88,14 @@ Plans:
 - [x] 49-02-PLAN.md — MCP tool registration (analyze_live_alignment) + graceful skip + CLI verification
 
 ### Phase 50: Verdict Synthesis & Tool Registration
-**Goal**: Users can run a single `analyze_edge_decay` MCP tool that produces a structured verdict combining all signal categories
+**Goal**: Users can run a single `analyze_edge_decay` MCP tool that aggregates all 5 signal categories into structured factual data for LLM interpretation (no verdicts, no grades -- data only)
 **Depends on**: Phases 46, 47, 48, 49 (combines all signal outputs)
 **Requirements**: VERD-01, VERD-02, VERD-03, VERD-04, VERD-05, API-01, API-02, API-03, API-04
 **Success Criteria** (what must be TRUE):
   1. Tool accepts blockId (required), recentWindow (optional with auto-calculation), and strategy filter via Zod-validated schema
-  2. Tool produces a top-line verdict (Healthy / Seasonal Dip / Possible Regime Change / Active Deterioration / Severe Decay) with component grades (A-F) per signal category
-  3. Tool produces actionable flags and key numbers summary (recent vs historical Sharpe, WR, PF, MC P(Profit), WFE trend)
-  4. Tool includes detailed supporting data for each signal (period breakdowns, rolling series, MC comparison, WF details)
+  2. Tool produces a structured top-level summary of key numbers and per-signal key metrics (no verdict labels, no grades -- raw data for LLM interpretation)
+  3. Tool surfaces factual observations as structured data objects (metric, current, comparison, delta) when notable thresholds are crossed
+  4. Tool includes detailed supporting data for each signal (period breakdowns, rolling metric summaries, MC comparison, WF details)
   5. Tool works with CLI --call mode for testing and is registered in the MCP server
 **Known constraint**: Rolling metrics series produces ~N-W+1 data points (e.g., 3200+ for a 3425-trade block). This exceeds MCP output limits. The unified tool will need to either downsample the rolling series or return summary statistics with an option to fetch the full series separately.
 **Plans**: TBD

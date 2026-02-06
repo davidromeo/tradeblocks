@@ -39,13 +39,13 @@
 - [x] **LIVE-03**: When reporting log exists, tool identifies strategies where actual significantly underperforms backtest (potential execution decay)
 - [x] **LIVE-04**: Tool gracefully skips live alignment when no reporting log exists
 
-### Verdict & Output
+### Data Aggregation & Output
 
-- [ ] **VERD-01**: Tool produces a top-line verdict: Healthy / Seasonal Dip / Possible Regime Change / Active Deterioration / Severe Decay
-- [ ] **VERD-02**: Tool produces component grades (A-F) for each signal category (period trend, rolling metrics, MC regime, walk-forward, live alignment)
-- [ ] **VERD-03**: Tool produces actionable flags (e.g., "avg loss > avg win in last 200 trades", "walk-forward efficiency below 30%", "MC P(Profit) < 50% on recent window")
+- [ ] **VERD-01**: Tool produces a structured top-level summary of key numbers from each signal category (no verdict labels, no interpretation -- data only)
+- [ ] **VERD-02**: Tool produces per-signal key metrics summaries for each of the 5 signal categories (no grades -- raw data for LLM interpretation)
+- [ ] **VERD-03**: Tool surfaces factual observations as structured data objects (metric, current value, comparison value, delta) when notable thresholds are crossed (no "actionable" framing -- facts only)
 - [ ] **VERD-04**: Tool produces key numbers summary (recent vs historical Sharpe, WR, PF, MC P(Profit), WFE trend)
-- [ ] **VERD-05**: Tool includes detailed supporting data for each signal (period breakdowns, rolling metric time series, MC comparison table, WF period details)
+- [ ] **VERD-05**: Tool includes detailed supporting data for each signal (period breakdowns, rolling metric summaries, MC comparison table, WF period details)
 
 ### Tool API
 
@@ -115,4 +115,4 @@
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-06 after Phase 49 completion*
+*Last updated: 2026-02-06 after Phase 50 context discussion (VERD-01/02/03 revised: data-not-interpretation)*
