@@ -7,16 +7,16 @@
 
 ### Period Segmentation
 
-- [ ] **PSEG-01**: Tool segments trades by year and quarter, calculating win rate, profit factor, Kelly %, and avg monthly return as % of equity for each period
-- [ ] **PSEG-02**: Tool detects year-over-year trend direction in key metrics (improving, stable, deteriorating) with simple linear regression
-- [ ] **PSEG-03**: Tool identifies the worst consecutive-month stretch and compares it to historical worst
+- [x] **PSEG-01**: Tool segments trades by year and quarter, calculating win rate, profit factor, Kelly %, and avg monthly return as % of equity for each period
+- [x] **PSEG-02**: Tool detects year-over-year trend direction in key metrics (improving, stable, deteriorating) with simple linear regression
+- [x] **PSEG-03**: Tool identifies the worst consecutive-month stretch and compares it to historical worst
 
 ### Rolling Metrics Analysis
 
-- [ ] **ROLL-01**: Tool computes rolling Sharpe, win rate, and profit factor over a configurable window (default 50 trades)
-- [ ] **ROLL-02**: Tool calculates quarterly averages of rolling metrics to identify seasonal patterns (H1 vs H2, Q4 weakness)
-- [ ] **ROLL-03**: Tool compares last N trades (recent window) to full history for rolling Sharpe, win rate, and profit factor averages
-- [ ] **ROLL-04**: Tool detects when avg loss exceeds avg win (payoff structure inversion) in recent window
+- [x] **ROLL-01**: Tool computes rolling Sharpe, win rate, and profit factor over a configurable window (default 50 trades)
+- [x] **ROLL-02**: Tool calculates quarterly averages of rolling metrics to identify seasonal patterns (H1 vs H2, Q4 weakness)
+- [x] **ROLL-03**: Tool compares last N trades (recent window) to full history for rolling Sharpe, win rate, and profit factor averages
+- [x] **ROLL-04**: Tool detects when avg loss exceeds avg win (payoff structure inversion) in recent window
 
 ### Monte Carlo Regime Comparison
 
@@ -41,18 +41,18 @@
 
 ### Data Aggregation & Output
 
-- [ ] **VERD-01**: Tool produces a structured top-level summary of key numbers from each signal category (no verdict labels, no interpretation -- data only)
-- [ ] **VERD-02**: Tool produces per-signal key metrics summaries for each of the 5 signal categories (no grades -- raw data for LLM interpretation)
-- [ ] **VERD-03**: Tool surfaces factual observations as structured data objects (metric, current value, comparison value, delta) when notable thresholds are crossed (no "actionable" framing -- facts only)
-- [ ] **VERD-04**: Tool produces key numbers summary (recent vs historical Sharpe, WR, PF, MC P(Profit), WFE trend)
-- [ ] **VERD-05**: Tool includes detailed supporting data for each signal (period breakdowns, rolling metric summaries, MC comparison table, WF period details)
+- [x] **VERD-01**: Tool produces a structured top-level summary of key numbers from each signal category (no verdict labels, no interpretation -- data only)
+- [x] **VERD-02**: Tool produces per-signal key metrics summaries for each of the 5 signal categories (no grades -- raw data for LLM interpretation)
+- [x] **VERD-03**: Tool surfaces factual observations as structured data objects (metric, current value, comparison value, delta) when notable thresholds are crossed (no "actionable" framing -- facts only)
+- [x] **VERD-04**: Tool produces key numbers summary (recent vs historical Sharpe, WR, PF, MC P(Profit), WFE trend)
+- [x] **VERD-05**: Tool includes detailed supporting data for each signal (period breakdowns, rolling metric summaries, MC comparison table, WF period details)
 
 ### Tool API
 
-- [ ] **API-01**: Tool accepts blockId (required), recentWindow (optional, default auto-calculated), strategy (optional filter)
-- [ ] **API-02**: Tool auto-calculates default recentWindow as ~20% of total trades or last 200, whichever is larger
-- [ ] **API-03**: Tool registered in MCP server with Zod schema validation and proper description
-- [ ] **API-04**: Tool works with CLI --call mode for testing
+- [x] **API-01**: Tool accepts blockId (required), recentWindow (optional, default auto-calculated), strategy (optional filter)
+- [x] **API-02**: Tool auto-calculates default recentWindow as ~20% of total trades or last 200, whichever is larger
+- [x] **API-03**: Tool registered in MCP server with Zod schema validation and proper description
+- [x] **API-04**: Tool works with CLI --call mode for testing
 
 ## Future Requirements
 
@@ -98,15 +98,15 @@
 | LIVE-02 | Phase 49 | Complete |
 | LIVE-03 | Phase 49 | Complete |
 | LIVE-04 | Phase 49 | Complete |
-| VERD-01 | Phase 50 | Pending |
-| VERD-02 | Phase 50 | Pending |
-| VERD-03 | Phase 50 | Pending |
-| VERD-04 | Phase 50 | Pending |
-| VERD-05 | Phase 50 | Pending |
-| API-01 | Phase 50 | Pending |
-| API-02 | Phase 50 | Pending |
-| API-03 | Phase 50 | Pending |
-| API-04 | Phase 50 | Pending |
+| VERD-01 | Phase 50 | Complete |
+| VERD-02 | Phase 50 | Complete |
+| VERD-03 | Phase 50 | Complete |
+| VERD-04 | Phase 50 | Complete |
+| VERD-05 | Phase 50 | Complete |
+| API-01 | Phase 50 | Complete |
+| API-02 | Phase 50 | Complete |
+| API-03 | Phase 50 | Complete |
+| API-04 | Phase 50 | Complete |
 
 **Coverage:**
 - v2.7 requirements: 28 total

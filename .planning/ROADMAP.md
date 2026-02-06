@@ -25,7 +25,7 @@ Five phases deliver the edge decay analysis tool bottom-up: two foundational cal
 - [x] **Phase 47: Monte Carlo Regime Comparison** - Dual MC simulation comparing full history vs recent window (completed 2026-02-05)
 - [x] **Phase 48: Walk-Forward Degradation** - Progressive walk-forward with OOS efficiency tracking (completed 2026-02-05)
 - [x] **Phase 49: Live Alignment Signal** - Backtest vs actual comparison when reporting log exists (completed 2026-02-06)
-- [ ] **Phase 50: Verdict Synthesis & Tool Registration** - Combine all signals into unified MCP tool
+- [x] **Phase 50: Verdict Synthesis & Tool Registration** - Combine all signals into unified MCP tool (completed 2026-02-06)
 
 ## Phase Details
 
@@ -100,8 +100,8 @@ Plans:
 **Known constraint**: Rolling metrics series produces ~N-W+1 data points (e.g., 3200+ for a 3425-trade block). This exceeds MCP output limits. The unified tool will need to either downsample the rolling series or return summary statistics with an option to fetch the full series separately.
 **Plans:** 2 plans
 Plans:
-- [ ] 50-01-PLAN.md -- Edge decay synthesis engine (pure lib function) + TDD tests
-- [ ] 50-02-PLAN.md -- MCP tool registration (analyze_edge_decay) + CLI verification + version bump
+- [x] 50-01-PLAN.md -- Edge decay synthesis engine (pure lib function) + TDD tests
+- [x] 50-02-PLAN.md -- MCP tool registration (analyze_edge_decay) + CLI verification + version bump
 
 ## Progress
 
@@ -114,4 +114,4 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 | 47. MC Regime Comparison | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
 | 48. WF Degradation | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
 | 49. Live Alignment | v2.7 | 2/2 | ✓ Complete | 2026-02-06 |
-| 50. Verdict & Tool API | v2.7 | 0/2 | Not started | - |
+| 50. Verdict & Tool API | v2.7 | 2/2 | ✓ Complete | 2026-02-06 |
