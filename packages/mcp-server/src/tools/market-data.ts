@@ -730,12 +730,16 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         let totalMatched = 0;
         let totalWins = 0;
         let totalPl = 0;
+        const unmatchedDates: string[] = [];
 
         for (const trade of trades) {
           const tradeDate = formatTradeDate(trade.dateOpened);
           const marketData = daily.get(tradeDate);
 
-          if (!marketData) continue;
+          if (!marketData) {
+            unmatchedDates.push(tradeDate);
+            continue;
+          }
 
           totalMatched++;
           const isWin = trade.pl > 0;
@@ -845,21 +849,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             return String(a.segmentValue).localeCompare(String(b.segmentValue));
           });
 
-        // Generate insight
-        const bestSegment = segmentStats.reduce((best, seg) =>
-          seg.winRate > best.winRate ? seg : best
-        );
-        const worstSegment = segmentStats.reduce((worst, seg) =>
-          seg.winRate < worst.winRate && seg.tradeCount >= 3 ? seg : worst
-        );
-
-        let insight = "";
-        if (bestSegment.tradeCount >= 3 && worstSegment.tradeCount >= 3) {
-          insight = `Best performance in ${bestSegment.segment} (${formatPercent(bestSegment.winRate)} win rate, ${bestSegment.tradeCount} trades). `;
-          if (worstSegment.segment !== bestSegment.segment) {
-            insight += `Weakest in ${worstSegment.segment} (${formatPercent(worstSegment.winRate)} win rate, ${worstSegment.tradeCount} trades).`;
-          }
-        }
+        const sortedUnmatchedDates = [...new Set(unmatchedDates)].sort();
 
         const summary = `Regime analysis: ${blockId} by ${segmentBy} | ${totalMatched} trades across ${segmentStats.length} segments`;
 
@@ -867,14 +857,16 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           blockId,
           segmentBy,
           strategy: strategy || null,
+          tradesTotal: trades.length,
           tradesMatched: totalMatched,
+          tradesUnmatched: trades.length - totalMatched,
+          unmatchedDates: sortedUnmatchedDates,
           overall: {
             winRate: Math.round(overallWinRate * 100) / 100,
             avgPl: Math.round(overallAvgPl * 100) / 100,
             totalPl: Math.round(totalPl * 100) / 100,
           },
           segments: segmentStats,
-          insight,
         });
       } catch (error) {
         return {
