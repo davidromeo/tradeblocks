@@ -548,10 +548,11 @@ export function registerAnalysisBlockTools(
 
         // Edge case: single strategy portfolio
         if (strategies.length === 1) {
+          // Use daily logs for baseline when available (consistent with get_statistics)
+          const dailyLogs = block.dailyLogs && block.dailyLogs.length > 0 ? block.dailyLogs : undefined;
           const baselineStats = calculator.calculatePortfolioStats(
             trades,
-            undefined, // No daily logs per Phase 17 constraint
-            true // Force trade-based calculations
+            dailyLogs,
           );
 
           const summary = `Marginal Contribution: ${blockId} | Single strategy portfolio - cannot calculate marginal contribution`;
@@ -571,7 +572,6 @@ export function registerAnalysisBlockTools(
                 trades: trades.length,
                 marginalSharpe: null,
                 marginalSortino: null,
-                interpretation: "only-strategy",
               },
             ],
             summary: {
@@ -586,10 +586,11 @@ export function registerAnalysisBlockTools(
         }
 
         // Calculate baseline portfolio metrics using ALL trades
+        // Use daily logs for baseline when available (consistent with get_statistics)
+        const dailyLogs = block.dailyLogs && block.dailyLogs.length > 0 ? block.dailyLogs : undefined;
         const baselineStats = calculator.calculatePortfolioStats(
           trades,
-          undefined, // No daily logs per Phase 17 constraint
-          true // Force trade-based calculations
+          dailyLogs,
         );
 
         // Determine which strategies to analyze
@@ -600,7 +601,10 @@ export function registerAnalysisBlockTools(
           : strategies;
 
         // Calculate marginal contribution for each strategy
-        type Contribution = { strategy: string; trades: number; marginalSharpe: number | null; marginalSortino: number | null; interpretation: string };
+        // NOTE: Baseline uses daily-log Sharpe (matching get_statistics), but "without" uses
+        // trade-based Sharpe because daily logs include the removed strategy's impact.
+        // This means marginal deltas are mixed-basis, but the baseline values match get_statistics.
+        type Contribution = { strategy: string; trades: number; marginalSharpe: number | null; marginalSortino: number | null };
         const contributions: Contribution[] = [];
 
         for (const strategy of strategiesToAnalyze) {
@@ -619,16 +623,16 @@ export function registerAnalysisBlockTools(
               trades: strategyTrades.length,
               marginalSharpe: null,
               marginalSortino: null,
-              interpretation: "only-strategy",
             });
             continue;
           }
 
           // Calculate "without" portfolio metrics
+          // Trade-based: daily logs include the removed strategy's impact so can't be used here
           const withoutStats = calculator.calculatePortfolioStats(
             tradesWithout,
             undefined,
-            true
+            true // Force trade-based - daily logs include the removed strategy's impact
           );
 
           // Marginal contribution = baseline - without (positive = improves, negative = hurts)
@@ -637,24 +641,11 @@ export function registerAnalysisBlockTools(
           const marginalSharpe = hasValidSharpe ? baselineStats.sharpeRatio! - withoutStats.sharpeRatio! : null;
           const marginalSortino = hasValidSortino ? baselineStats.sortinoRatio! - withoutStats.sortinoRatio! : null;
 
-          // Determine interpretation based on marginal Sharpe
-          let interpretation: string;
-          if (marginalSharpe === null) {
-            interpretation = "unknown";
-          } else if (Math.abs(marginalSharpe) < 0.01) {
-            interpretation = "negligible";
-          } else if (marginalSharpe > 0) {
-            interpretation = "improves";
-          } else {
-            interpretation = "hurts";
-          }
-
           contributions.push({
             strategy,
             trades: strategyTrades.length,
             marginalSharpe,
             marginalSortino,
-            interpretation,
           });
         }
 

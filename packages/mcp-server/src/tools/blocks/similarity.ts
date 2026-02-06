@@ -18,7 +18,10 @@ import {
   performTailRiskAnalysis,
 } from "@tradeblocks/lib";
 import type { Trade } from "@tradeblocks/lib";
-import { filterByDateRange } from "../shared/filters.js";
+import {
+  filterByDateRange,
+  filterDailyLogsByDateRange,
+} from "../shared/filters.js";
 import { withSyncedBlock } from "../middleware/sync-middleware.js";
 
 const SIMILARITY_DEFAULTS = {
@@ -424,11 +427,14 @@ export function registerSimilarityBlockTools(
           };
         }
 
-        // Calculate original (baseline) portfolio metrics using trade-based calculations
+        // Calculate original (baseline) portfolio metrics
+        // Use daily logs for baseline when available (consistent with get_statistics)
+        const dailyLogs = block.dailyLogs && block.dailyLogs.length > 0
+          ? filterDailyLogsByDateRange(block.dailyLogs, startDate, endDate)
+          : undefined;
         const baselineStats = calculator.calculatePortfolioStats(
           trades,
-          undefined, // No daily logs per Phase 17 constraint
-          true // Force trade-based calculations
+          dailyLogs && dailyLogs.length > 0 ? dailyLogs : undefined,
         );
 
         // Build scaled trades: scale P/L and commissions proportionally
@@ -508,10 +514,11 @@ export function registerSimilarityBlockTools(
         }));
 
         // Calculate scaled portfolio metrics
+        // Trade-based: daily logs don't reflect the P&L scaling applied to trades
         const scaledStats = calculator.calculatePortfolioStats(
           modifiedTrades,
           undefined,
-          true
+          true // Force trade-based - daily logs don't reflect the scaling
         );
 
         // Calculate comparison deltas
