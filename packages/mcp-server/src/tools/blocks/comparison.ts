@@ -52,7 +52,7 @@ export function registerComparisonBlockTools(
         sortBy: z
           .enum(["pl", "winRate", "trades", "profitFactor", "name"])
           .default("pl")
-          .describe("Sort strategies by metric (default: pl for total P&L)"),
+          .describe("Sort strategies by metric (default: pl for net P&L)"),
         sortOrder: z
           .enum(["asc", "desc"])
           .default("desc")
@@ -161,7 +161,7 @@ export function registerComparisonBlockTools(
             name: s.strategyName,
             trades: s.tradeCount,
             winRate: s.winRate,
-            pl: s.totalPl,
+            netPl: s.totalPl,
             avgWin: s.avgWin,
             avgLoss: s.avgLoss,
             profitFactor: s.profitFactor,
@@ -483,7 +483,7 @@ export function registerComparisonBlockTools(
           const entryA = blockAStats
             ? {
                 trades: blockAStats.tradeCount,
-                pl: blockAStats.totalPl,
+                netPl: blockAStats.totalPl,
                 winRate: blockAStats.winRate,
                 profitFactor: blockAStats.profitFactor,
               }
@@ -492,7 +492,7 @@ export function registerComparisonBlockTools(
           const entryB = blockBStats
             ? {
                 trades: blockBStats.tradeCount,
-                pl: blockBStats.totalPl,
+                netPl: blockBStats.totalPl,
                 winRate: blockBStats.winRate,
                 profitFactor: blockBStats.profitFactor,
               }
@@ -503,7 +503,7 @@ export function registerComparisonBlockTools(
             entryA && entryB
               ? {
                   trades: entryB.trades - entryA.trades,
-                  pl: entryB.pl - entryA.pl,
+                  netPl: entryB.netPl - entryA.netPl,
                   winRate: entryB.winRate - entryA.winRate,
                 }
               : null;
