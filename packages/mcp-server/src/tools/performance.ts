@@ -13,7 +13,15 @@ import {
   formatCurrency,
 } from "../utils/output-formatter.js";
 import type { Trade, ReportingTrade } from "@tradeblocks/lib";
-import { normalizeToOneLot, calculateDailyExposure as calculateDailyExposureShared } from "@tradeblocks/lib";
+import {
+  normalizeToOneLot,
+  calculateDailyExposure as calculateDailyExposureShared,
+  formatDateKey,
+  truncateTimeToMinute,
+  calculateScaledPl,
+  applyStrategyFilter,
+  applyDateRangeFilter,
+} from "@tradeblocks/lib";
 
 /**
  * MFE/MAE data point for a single trade's excursion metrics
@@ -216,16 +224,6 @@ function filterByStrategy(trades: Trade[], strategy?: string): Trade[] {
   return trades.filter(
     (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
   );
-}
-
-/**
- * Format date key to YYYY-MM-DD
- */
-function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -1865,32 +1863,12 @@ export function registerPerformanceTools(
         }
 
         // Apply strategy filter to both
-        if (strategy) {
-          backtestTrades = backtestTrades.filter(
-            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
-          );
-          actualTrades = actualTrades.filter(
-            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
-          );
-        }
+        backtestTrades = applyStrategyFilter(backtestTrades, strategy);
+        actualTrades = applyStrategyFilter(actualTrades, strategy);
 
         // Apply date range filter to both
-        if (dateRange) {
-          if (dateRange.from || dateRange.to) {
-            backtestTrades = backtestTrades.filter((t) => {
-              const tradeDate = formatDateKey(new Date(t.dateOpened));
-              if (dateRange.from && tradeDate < dateRange.from) return false;
-              if (dateRange.to && tradeDate > dateRange.to) return false;
-              return true;
-            });
-            actualTrades = actualTrades.filter((t) => {
-              const tradeDate = formatDateKey(new Date(t.dateOpened));
-              if (dateRange.from && tradeDate < dateRange.from) return false;
-              if (dateRange.to && tradeDate > dateRange.to) return false;
-              return true;
-            });
-          }
-        }
+        backtestTrades = applyDateRangeFilter(backtestTrades, dateRange);
+        actualTrades = applyDateRangeFilter(actualTrades, dateRange);
 
         if (backtestTrades.length === 0) {
           return {
@@ -1915,16 +1893,6 @@ export function registerPerformanceTools(
             isError: true,
           };
         }
-
-        // Helper to truncate time to minute precision for matching
-        const truncateTimeToMinute = (time: string | undefined): string => {
-          if (!time) return "00:00";
-          const parts = time.split(":");
-          if (parts.length >= 2) {
-            return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
-          }
-          return "00:00";
-        };
 
         // Helper to get group key based on groupBy parameter
         const getGroupKey = (
@@ -2033,27 +2001,14 @@ export function registerPerformanceTools(
               // Calculate scaling
               const btContracts = btTrade.numContracts;
               const actualContracts = actualTrade.numContracts;
-              let scalingFactor = 1;
-              let scaledBtPl = btTrade.pl;
-
-              if (scaling === "perContract") {
-                scaledBtPl = btContracts > 0 ? btTrade.pl / btContracts : 0;
-                // For per-contract, we normalize both sides
-              } else if (scaling === "toReported") {
-                // Scale backtest DOWN to match actual contract count
-                if (btContracts > 0 && actualContracts > 0) {
-                  scalingFactor = actualContracts / btContracts;
-                  scaledBtPl = btTrade.pl * scalingFactor;
-                } else if (btContracts === 0) {
-                  scalingFactor = 0;
-                  scaledBtPl = 0;
-                }
-              }
-
-              const actualPl =
-                scaling === "perContract" && actualContracts > 0
-                  ? actualTrade.pl / actualContracts
-                  : actualTrade.pl;
+              const { scaledBtPl, scaledActualPl: actualPl } = calculateScaledPl(
+                btTrade.pl, actualTrade.pl,
+                btContracts, actualContracts,
+                scaling
+              );
+              const scalingFactor = scaling === "toReported" && btContracts > 0 && actualContracts > 0
+                ? actualContracts / btContracts
+                : scaling === "toReported" && btContracts === 0 ? 0 : 1;
 
               const slippage = actualPl - scaledBtPl;
               const slippagePercent =
@@ -2262,23 +2217,14 @@ export function registerPerformanceTools(
             if (actualData) {
               processedActual.add(key);
 
-              let scaledBtPl = btData.totalPl;
-              let scaledActualPl = actualData.totalPl;
-              let scalingFactor = 1;
-
-              if (scaling === "perContract") {
-                scaledBtPl =
-                  btData.contracts > 0 ? btData.totalPl / btData.contracts : 0;
-                scaledActualPl =
-                  actualData.contracts > 0
-                    ? actualData.totalPl / actualData.contracts
-                    : 0;
-              } else if (scaling === "toReported") {
-                if (btData.contracts > 0 && actualData.contracts > 0) {
-                  scalingFactor = actualData.contracts / btData.contracts;
-                  scaledBtPl = btData.totalPl * scalingFactor;
-                }
-              }
+              const { scaledBtPl, scaledActualPl } = calculateScaledPl(
+                btData.totalPl, actualData.totalPl,
+                btData.contracts, actualData.contracts,
+                scaling
+              );
+              const scalingFactor = scaling === "toReported" && btData.contracts > 0 && actualData.contracts > 0
+                ? actualData.contracts / btData.contracts
+                : 1;
 
               const slippage = scaledActualPl - scaledBtPl;
               const slippagePercent =
