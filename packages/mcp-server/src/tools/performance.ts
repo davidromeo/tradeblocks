@@ -1269,6 +1269,14 @@ export function registerPerformanceTools(
           .describe(
             "Bucket size (in %) for MFE/MAE distribution histogram (default: 10%)"
           ),
+        maxDataPoints: z
+          .number()
+          .min(50)
+          .max(10000)
+          .default(500)
+          .describe(
+            "Maximum data points for per-trade chart types (volatility_regimes, mfe_mae, trade_sequence, holding_periods, premium_efficiency, margin_utilization, rom_timeline). When exceeded, data is truncated with a flag. Default: 500."
+          ),
       }),
     },
     async ({
@@ -1280,6 +1288,7 @@ export function registerPerformanceTools(
       bucketCount,
       rollingWindowSize,
       mfeMaeBucketSize,
+      maxDataPoints,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -1316,6 +1325,19 @@ export function registerPerformanceTools(
         // Build requested chart data
         const chartData: Record<string, unknown> = {};
         let dataPoints = 0;
+        let anyTruncated = false;
+
+        // Helper to truncate per-trade arrays when they exceed maxDataPoints
+        function truncateArray<T>(arr: T[]): T[] | { data: T[]; truncated: true; totalPoints: number } {
+          if (arr.length <= maxDataPoints) return arr;
+          anyTruncated = true;
+          return { data: arr.slice(0, maxDataPoints), truncated: true as const, totalPoints: arr.length };
+        }
+
+        // Helper to count actual output length from possibly-truncated data
+        function outputLength<T>(result: T[] | { data: T[]; truncated: true; totalPoints: number }): number {
+          return Array.isArray(result) ? result.length : result.data.length;
+        }
 
         if (charts.includes("equity_curve")) {
           chartData.equityCurve = buildEquityCurve(trades);
@@ -1384,13 +1406,15 @@ export function registerPerformanceTools(
         }
 
         if (charts.includes("trade_sequence")) {
-          chartData.tradeSequence = buildTradeSequence(trades);
-          dataPoints += (chartData.tradeSequence as unknown[]).length;
+          const result = truncateArray(buildTradeSequence(trades));
+          chartData.tradeSequence = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("rom_timeline")) {
-          chartData.romTimeline = buildRomTimeline(trades);
-          dataPoints += (chartData.romTimeline as unknown[]).length;
+          const result = truncateArray(buildRomTimeline(trades));
+          chartData.romTimeline = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("rolling_metrics")) {
@@ -1407,13 +1431,15 @@ export function registerPerformanceTools(
         }
 
         if (charts.includes("holding_periods")) {
-          chartData.holdingPeriods = buildHoldingPeriods(trades);
-          dataPoints += (chartData.holdingPeriods as unknown[]).length;
+          const result = truncateArray(buildHoldingPeriods(trades));
+          chartData.holdingPeriods = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("premium_efficiency")) {
-          chartData.premiumEfficiency = buildPremiumEfficiency(trades);
-          dataPoints += (chartData.premiumEfficiency as unknown[]).length;
+          const result = truncateArray(buildPremiumEfficiency(trades));
+          chartData.premiumEfficiency = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("margin_utilization")) {
@@ -1425,13 +1451,15 @@ export function registerPerformanceTools(
               equity: number;
               tradeNumber: number;
             }>) || buildEquityCurve(trades);
-          chartData.marginUtilization = buildMarginUtilization(trades, equityCurve);
-          dataPoints += (chartData.marginUtilization as unknown[]).length;
+          const result = truncateArray(buildMarginUtilization(trades, equityCurve));
+          chartData.marginUtilization = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("volatility_regimes")) {
-          chartData.volatilityRegimes = buildVolatilityRegimes(trades);
-          dataPoints += (chartData.volatilityRegimes as unknown[]).length;
+          const result = truncateArray(buildVolatilityRegimes(trades));
+          chartData.volatilityRegimes = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("mfe_mae")) {
@@ -1485,8 +1513,20 @@ export function registerPerformanceTools(
             isWinner: d.isWinner,
           }));
 
+          // Truncate dataPoints array if needed
+          let mfeDataPointsOutput: unknown;
+          let mfeOutputCount: number;
+          if (simplifiedData.length > maxDataPoints) {
+            anyTruncated = true;
+            mfeDataPointsOutput = { data: simplifiedData.slice(0, maxDataPoints), truncated: true, totalPoints: simplifiedData.length };
+            mfeOutputCount = maxDataPoints;
+          } else {
+            mfeDataPointsOutput = simplifiedData;
+            mfeOutputCount = simplifiedData.length;
+          }
+
           chartData.mfeMae = {
-            dataPoints: simplifiedData,
+            dataPoints: mfeDataPointsOutput,
             distribution,
             statistics: {
               totalTrades: mfeData.length,
@@ -1498,7 +1538,7 @@ export function registerPerformanceTools(
               avgExcursionRatio,
             },
           };
-          dataPoints += simplifiedData.length + distribution.length;
+          dataPoints += mfeOutputCount + distribution.length;
         }
 
         if (charts.includes("daily_exposure")) {
@@ -1571,8 +1611,10 @@ export function registerPerformanceTools(
           bucketCount,
           rollingWindowSize,
           mfeMaeBucketSize,
+          maxDataPoints,
           tradesAnalyzed: trades.length,
           chartsIncluded: charts,
+          truncationApplied: anyTruncated,
           ...chartData,
         };
 
