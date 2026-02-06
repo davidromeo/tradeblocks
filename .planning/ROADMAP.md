@@ -24,7 +24,7 @@ Five phases deliver the edge decay analysis tool bottom-up: two foundational cal
 - [x] **Phase 46: Core Calculation Engines** - Period segmentation and rolling metrics analysis (completed 2026-02-05)
 - [x] **Phase 47: Monte Carlo Regime Comparison** - Dual MC simulation comparing full history vs recent window (completed 2026-02-05)
 - [x] **Phase 48: Walk-Forward Degradation** - Progressive walk-forward with OOS efficiency tracking (completed 2026-02-05)
-- [ ] **Phase 49: Live Alignment Signal** - Backtest vs actual comparison when reporting log exists
+- [x] **Phase 49: Live Alignment Signal** - Backtest vs actual comparison when reporting log exists (completed 2026-02-06)
 - [ ] **Phase 50: Verdict Synthesis & Tool Registration** - Combine all signals into unified MCP tool
 
 ## Phase Details
@@ -84,8 +84,8 @@ Plans:
   4. When no reporting log exists, live alignment is gracefully skipped with clear indication
 **Plans:** 2 plans
 Plans:
-- [ ] 49-01-PLAN.md — Live alignment calculation engine + trade matching + direction agreement + execution efficiency + trend detection + tests
-- [ ] 49-02-PLAN.md — MCP tool registration (analyze_live_alignment) + graceful skip + CLI verification
+- [x] 49-01-PLAN.md — Live alignment calculation engine + trade matching + direction agreement + execution efficiency + trend detection + tests
+- [x] 49-02-PLAN.md — MCP tool registration (analyze_live_alignment) + graceful skip + CLI verification
 
 ### Phase 50: Verdict Synthesis & Tool Registration
 **Goal**: Users can run a single `analyze_edge_decay` MCP tool that produces a structured verdict combining all signal categories
@@ -110,5 +110,5 @@ Note: Phases 47, 48, 49 are independent of each other but all feed into Phase 50
 | 46. Core Calculation Engines | v2.7 | 3/3 | ✓ Complete | 2026-02-05 |
 | 47. MC Regime Comparison | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
 | 48. WF Degradation | v2.7 | 2/2 | ✓ Complete | 2026-02-05 |
-| 49. Live Alignment | v2.7 | 0/2 | In progress | - |
+| 49. Live Alignment | v2.7 | 2/2 | ✓ Complete | 2026-02-06 |
 | 50. Verdict & Tool API | v2.7 | 0/TBD | Not started | - |

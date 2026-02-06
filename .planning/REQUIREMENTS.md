@@ -34,10 +34,10 @@
 
 ### Live Alignment Signal
 
-- [ ] **LIVE-01**: When reporting log exists, tool compares backtest vs actual direction agreement rate
-- [ ] **LIVE-02**: When reporting log exists, tool calculates per-contract gap between backtest and actual by strategy
-- [ ] **LIVE-03**: When reporting log exists, tool identifies strategies where actual significantly underperforms backtest (potential execution decay)
-- [ ] **LIVE-04**: Tool gracefully skips live alignment when no reporting log exists
+- [x] **LIVE-01**: When reporting log exists, tool compares backtest vs actual direction agreement rate
+- [x] **LIVE-02**: When reporting log exists, tool calculates per-contract gap between backtest and actual by strategy
+- [x] **LIVE-03**: When reporting log exists, tool identifies strategies where actual significantly underperforms backtest (potential execution decay)
+- [x] **LIVE-04**: Tool gracefully skips live alignment when no reporting log exists
 
 ### Verdict & Output
 
@@ -94,10 +94,10 @@
 | WFD-02 | Phase 48 | Complete |
 | WFD-03 | Phase 48 | Complete |
 | WFD-04 | Phase 48 | Complete |
-| LIVE-01 | Phase 49 | Pending |
-| LIVE-02 | Phase 49 | Pending |
-| LIVE-03 | Phase 49 | Pending |
-| LIVE-04 | Phase 49 | Pending |
+| LIVE-01 | Phase 49 | Complete |
+| LIVE-02 | Phase 49 | Complete |
+| LIVE-03 | Phase 49 | Complete |
+| LIVE-04 | Phase 49 | Complete |
 | VERD-01 | Phase 50 | Pending |
 | VERD-02 | Phase 50 | Pending |
 | VERD-03 | Phase 50 | Pending |
@@ -115,4 +115,4 @@
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-05 after Phase 48 completion*
+*Last updated: 2026-02-06 after Phase 49 completion*
