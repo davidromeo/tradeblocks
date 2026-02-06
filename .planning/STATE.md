@@ -47,6 +47,7 @@ All decisions now captured in PROJECT.md Key Decisions table.
 | 008 | Signed MC divergence scores + WF 1-lot normalization | 2026-02-06 | fcb5905 | [008-signed-mc-divergence-wf-1lot-normalizati](./quick/008-signed-mc-divergence-wf-1lot-normalizati/) |
 | 009 | Margin return floor -99%, negative IS Sharpe guard, MDD docs | 2026-02-06 | 829e8dd | [009-fix-margin-return-floor-wf-neg-sharpe-md](./quick/009-fix-margin-return-floor-wf-neg-sharpe-md/) |
 | 010 | MC additive mode, minSamples guard, remove recs, null fallback | 2026-02-06 | 17e4f1d | [010-fix-mcp-mc-additive-minsample-recs-null](./quick/010-fix-mcp-mc-additive-minsample-recs-null/) |
+| 011-03 | Daily-log Sharpe consistency for block_diff, marginal_contribution, what_if_scaling + remove interpretation | 2026-02-06 | b222b3c | [011-fix-mcp-output-size-ethos-sharpe-bugs](./quick/011-fix-mcp-output-size-ethos-sharpe-bugs/) |
 
 ## Testing Infrastructure
 
