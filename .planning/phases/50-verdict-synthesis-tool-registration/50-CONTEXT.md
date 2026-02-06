@@ -31,19 +31,19 @@ Combine all 5 edge decay signal categories (period metrics, rolling metrics, MC 
 
 ### Factual Observations
 - Format: structured data objects the LLM can reason about (not string descriptions)
-- Example shape: `{metric, current, comparison, delta, ...}` — pure numbers and facts
-- Trigger logic: Claude's discretion on what warrants an observation
-- Source traceability: Claude's discretion on whether to include signal category reference
+- Example shape: `{signal, metric, current, comparison, delta, percentChange}` — pure numbers and facts
+- Exhaustive: include ALL metric comparisons from every signal (~19-21 total, ~3KB JSON). No threshold filtering — the LLM decides what's notable, not the tool. This avoids baking interpretation into threshold choices.
+- Source traceability: each observation includes `signal` field referencing the source category
 
 ### Claude's Discretion
-- Call strategy: whether to call lib engines directly or MCP tools (likely direct for efficiency)
-- Signal selection: whether all 5 always run or caller can pick (likely always-all with graceful skip)
-- Sub-tool parameters: whether to expose MC/WF params or use defaults (likely defaults-only for simplicity)
-- Response shape: by signal category vs other grouping (likely by signal category to match engines)
+- Call strategy: whether to call lib engines directly or MCP tools
+- Signal selection: whether all 5 always run or caller can pick
+- Sub-tool parameters: whether to expose MC/WF params or use defaults
+- Response shape: by signal category vs other grouping
 - Rolling metrics handling: summary stats only vs downsampled series (constraint: ~3200 points for large blocks)
 - Detail level per signal: full detail vs summaries with reference to standalone tools
 - Metadata section inclusion
-- Top-level summary structure (key numbers + deltas likely)
+- Top-level summary structure
 - Per-signal summary structure
 
 </decisions>
