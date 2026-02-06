@@ -26,6 +26,7 @@ export * from './rolling-metrics'
 export * from './mc-regime-comparison'
 export * from './walk-forward-degradation'
 export * from './trade-matching'
+export * from './live-alignment'
 // Re-export from cumulative-distribution excluding conflicting name
 export {
   type CumulativeDistributionPoint,
