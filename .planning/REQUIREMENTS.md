@@ -21,16 +21,16 @@ Requirements for Market Data Consolidation milestone. Consolidate 6 PineScripts 
 
 ### DuckDB Schema
 
-- [ ] **SCHEMA-01**: `spx_daily` table includes all 13 highlow columns (High_Time, Low_Time, etc.)
-- [ ] **SCHEMA-02**: `spx_daily` table includes new VIX export columns (VIX_Gap_Pct, VIX9D_Open, etc.)
-- [ ] **SCHEMA-03**: `spx_highlow` table retired (dropped from schema)
-- [ ] **SCHEMA-04**: `describe_database` column descriptions updated for new fields
+- [x] **SCHEMA-01**: `spx_daily` table includes all 13 highlow columns (High_Time, Low_Time, etc.)
+- [x] **SCHEMA-02**: `spx_daily` table includes new VIX export columns (VIX_Gap_Pct, VIX9D_Open, etc.)
+- [x] **SCHEMA-03**: `spx_highlow` table retired (dropped from schema)
+- [x] **SCHEMA-04**: `describe_database` column descriptions updated for new fields
 
 ### Market Data Sync
 
-- [ ] **SYNC-01**: Market sync handles combined daily CSV with highlow + new VIX columns
-- [ ] **SYNC-02**: `spx_highlow.csv` file mapping removed from sync
-- [ ] **SYNC-03**: Existing `spx_daily.csv` data re-importable after schema change (purge + re-sync)
+- [x] **SYNC-01**: Market sync handles combined daily CSV with highlow + new VIX columns
+- [x] **SYNC-02**: `spx_highlow.csv` file mapping removed from sync
+- [x] **SYNC-03**: Existing `spx_daily.csv` data re-importable after schema change (purge + re-sync)
 
 ### Import Consolidation
 
@@ -74,13 +74,13 @@ Requirements for Market Data Consolidation milestone. Consolidate 6 PineScripts 
 | PINE-07 | Phase 51 | Pending |
 | PINE-08 | Phase 51 | Pending |
 | PINE-09 | Phase 51 | Pending |
-| SCHEMA-01 | Phase 52 | Pending |
-| SCHEMA-02 | Phase 52 | Pending |
-| SCHEMA-03 | Phase 52 | Pending |
-| SCHEMA-04 | Phase 52 | Pending |
-| SYNC-01 | Phase 52 | Pending |
-| SYNC-02 | Phase 52 | Pending |
-| SYNC-03 | Phase 52 | Pending |
+| SCHEMA-01 | Phase 52 | Complete |
+| SCHEMA-02 | Phase 52 | Complete |
+| SCHEMA-03 | Phase 52 | Complete |
+| SCHEMA-04 | Phase 52 | Complete |
+| SYNC-01 | Phase 52 | Complete |
+| SYNC-02 | Phase 52 | Complete |
+| SYNC-03 | Phase 52 | Complete |
 | IMPORT-01 | Phase 53 | Pending |
 | IMPORT-02 | Phase 53 | Pending |
 | IMPORT-03 | Phase 53 | Pending |

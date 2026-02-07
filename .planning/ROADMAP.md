@@ -11,7 +11,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
 **Phase Numbering:** Continues from v2.7 (phases 46-50). v2.8 starts at phase 51.
 
 - [x] **Phase 51: PineScript Consolidation** - Merge highlow into daily script, export new VIX fields, remove dead scripts
-- [ ] **Phase 52: DuckDB Schema + Sync** - Update schema for combined CSV, update sync logic, retire highlow table
+- [x] **Phase 52: DuckDB Schema + Sync** - Update schema for combined CSV, update sync logic, retire highlow table
 - [ ] **Phase 53: Import Consolidation** - Migrate 3 market data tools from in-memory CSV to DuckDB queries
 - [ ] **Phase 54: Documentation + Cleanup** - Update docs for new 3-script workflow, remove PoC files
 
@@ -44,7 +44,7 @@ Plans:
   5. Existing `spx_daily.csv` data can be purged and re-imported cleanly after schema change
 **Plans**: 1 plan
 Plans:
-- [ ] 52-01-PLAN.md -- Schema migration, sync config, reference cleanup, version bump
+- [x] 52-01-PLAN.md -- Schema migration, sync config, reference cleanup, version bump
 
 ### Phase 53: Import Consolidation
 **Goal**: All market data tools query DuckDB exclusively, eliminating the in-memory CSV loading path
@@ -73,6 +73,6 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 51. PineScript Consolidation | v2.8 | 2/2 | Complete | 2026-02-07 |
-| 52. DuckDB Schema + Sync | v2.8 | 0/1 | Not started | - |
+| 52. DuckDB Schema + Sync | v2.8 | 1/1 | Complete | 2026-02-07 |
 | 53. Import Consolidation | v2.8 | 0/TBD | Not started | - |
 | 54. Documentation + Cleanup | v2.8 | 0/TBD | Not started | - |
