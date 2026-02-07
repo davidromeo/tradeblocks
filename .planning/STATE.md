@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v2.8 Market Data Consolidation
 Phase: 51 of 54 (PineScript Consolidation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-07 — Completed 51-01-PLAN.md (highlow timing + enriched VIX consolidation)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-07 — Completed 51-02-PLAN.md (delete obsolete scripts + update README)
 
-Progress: [█░░░░░░░░░] ~10%
+Progress: [███░░░░░░░] ~25%
 
 ## Historical Context
 
@@ -59,5 +59,5 @@ TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call <tool> '<json-args>'
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 51-01 (spx-daily.pine highlow + VIX consolidation)
-Resume file: .planning/phases/51-pinescript-consolidation/51-02-PLAN.md
+Stopped at: Phase 51 complete (both plans executed). Ready for Phase 52 (DuckDB Schema + Sync)
+Resume file: None

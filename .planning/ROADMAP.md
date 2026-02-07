@@ -10,7 +10,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
 
 **Phase Numbering:** Continues from v2.7 (phases 46-50). v2.8 starts at phase 51.
 
-- [ ] **Phase 51: PineScript Consolidation** - Merge highlow into daily script, export new VIX fields, remove dead scripts
+- [x] **Phase 51: PineScript Consolidation** - Merge highlow into daily script, export new VIX fields, remove dead scripts
 - [ ] **Phase 52: DuckDB Schema + Sync** - Update schema for combined CSV, update sync logic, retire highlow table
 - [ ] **Phase 53: Import Consolidation** - Migrate 3 market data tools from in-memory CSV to DuckDB queries
 - [ ] **Phase 54: Documentation + Cleanup** - Update docs for new 3-script workflow, remove PoC files
@@ -29,8 +29,8 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
   5. Scripts README documents the new 3-script workflow (daily, 15min, VIX intraday)
 **Plans**: 2 plans
 Plans:
-- [ ] 51-01-PLAN.md -- Merge highlow timing + enriched VIX exports into spx-daily.pine
-- [ ] 51-02-PLAN.md -- Delete obsolete scripts + update README for 3-script workflow
+- [x] 51-01-PLAN.md -- Merge highlow timing + enriched VIX exports into spx-daily.pine
+- [x] 51-02-PLAN.md -- Delete obsolete scripts + update README for 3-script workflow
 
 ### Phase 52: DuckDB Schema + Sync
 **Goal**: DuckDB schema absorbs highlow and new VIX columns into `spx_daily`, sync handles the combined CSV, and the `spx_highlow` table is retired
@@ -70,7 +70,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 51. PineScript Consolidation | v2.8 | 0/2 | Planned | - |
+| 51. PineScript Consolidation | v2.8 | 2/2 | Complete | 2026-02-07 |
 | 52. DuckDB Schema + Sync | v2.8 | 0/TBD | Not started | - |
 | 53. Import Consolidation | v2.8 | 0/TBD | Not started | - |
 | 54. Documentation + Cleanup | v2.8 | 0/TBD | Not started | - |
