@@ -14,13 +14,14 @@ indicator("SPX Daily Market Data", overlay=false, max_labels_count=500)
 //
 // Features:
 //   - SPX daily OHLC and gap/return metrics
-//   - VIX term structure (VIX, VIX9D, VIX3M)
+//   - VIX term structure (VIX, VIX9D, VIX3M) with enriched fields
 //   - Volatility regime classification (1-6)
 //   - Technical indicators (RSI, ATR, trend score)
 //   - Calendar context (day of week, OPEX)
+//   - High/low timing via 5-min intrabar data (request.security_lower_tf)
 //
-// Note: This is DAILY data. For intraday checkpoints, use the separate
-//       spx-15min, spx-30min, or spx-hourly scripts.
+// Note: High/low timing data requires ~1,282 recent trading days (non-pro)
+//       to ~2,564 days (Ultimate plan). Older bars will show na.
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -64,37 +65,6 @@ float bodySize = math.abs(close - open)
 float upperWick = high - math.max(open, close)
 float lowerWick = math.min(open, close) - low
 float bodyRatio = safeDiv(bodySize, intradayRange, 0.5)
-
-// -----------------------------------------------------------------------------
-// INTRADAY PRICE CHECKPOINTS
-// -----------------------------------------------------------------------------
-// Fetch specific times from intraday data (5-min resolution for accuracy)
-// Times are in exchange timezone (ET for SPX)
-
-// Helper to get price at specific time
-getIntradayPrice(int targetHour, int targetMinute) =>
-    request.security(syminfo.tickerid, "5", close, lookahead=barmerge.lookahead_on)[0]
-
-// Since we can't easily request specific times in Pine v6 on daily chart,
-// we'll calculate approximate checkpoint prices using the daily bar
-// For more accurate intraday data, use a separate intraday export script
-
-// Approximate checkpoints based on typical intraday patterns
-// These are estimates - for precise values, export from intraday chart
-float price_open = open
-float price_high = high
-float price_low = low
-float price_close = close
-
-// Estimate mid-day price as VWAP proxy (simple average for daily)
-float price_midday_est = (open + high + low + close) / 4
-
-// Morning range (first ~2 hours estimate)
-float morningRangeEst = intradayRange * 0.6  // Typical: 60% of range in morning
-
-// Afternoon continuation
-float afternoonMove = close - price_midday_est
-float afternoonMovePct = safePct(afternoonMove, price_midday_est)
 
 // -----------------------------------------------------------------------------
 // VIX TERM STRUCTURE
@@ -265,6 +235,76 @@ float prev2Return = priorClose - prev2Close
 float prev2ReturnPct = safePct(prev2Return, prev2Close)
 
 // -----------------------------------------------------------------------------
+// HIGH/LOW TIMING (via intrabar data)
+// -----------------------------------------------------------------------------
+// Uses request.security_lower_tf() to get 5-min data from the daily chart
+// Note: Data available for recent ~1,282 days (non-pro) to ~2,564 days (Ultimate)
+
+float[] ltfHigh = request.security_lower_tf(syminfo.tickerid, "5", high)
+float[] ltfLow  = request.security_lower_tf(syminfo.tickerid, "5", low)
+int[]   ltfTime = request.security_lower_tf(syminfo.tickerid, "5", time)
+
+int ltfSize = array.size(ltfHigh)
+
+float intradayHighHL = na
+float intradayLowHL = na
+int highHourHL = na
+int highMinuteHL = na
+int lowHourHL = na
+int lowMinuteHL = na
+
+if ltfSize > 0
+    float maxH = na
+    float minL = na
+    int maxHTime = na
+    int minLTime = na
+
+    for i = 0 to ltfSize - 1
+        float h = array.get(ltfHigh, i)
+        float l = array.get(ltfLow, i)
+        int t = array.get(ltfTime, i)
+
+        if na(maxH) or h > maxH
+            maxH := h
+            maxHTime := t
+
+        if na(minL) or l < minL
+            minL := l
+            minLTime := t
+
+    intradayHighHL := maxH
+    intradayLowHL := minL
+    highHourHL := hour(maxHTime, "America/New_York")
+    highMinuteHL := minute(maxHTime, "America/New_York")
+    lowHourHL := hour(minLTime, "America/New_York")
+    lowMinuteHL := minute(minLTime, "America/New_York")
+
+// Computed highlow metrics
+float highTimeHL = highHourHL + highMinuteHL / 60.0
+float lowTimeHL = lowHourHL + lowMinuteHL / 60.0
+bool highBeforeLowHL = highTimeHL < lowTimeHL
+
+bool highInFirstHourHL = highHourHL == 9 or (highHourHL == 10 and highMinuteHL <= 30)
+bool lowInFirstHourHL = lowHourHL == 9 or (lowHourHL == 10 and lowMinuteHL <= 30)
+bool highInLastHourHL = highHourHL >= 15
+bool lowInLastHourHL = lowHourHL >= 15
+
+bool highInMorningHL = highHourHL < 12
+bool lowInMorningHL = lowHourHL < 12
+bool highInAfternoonHL = highHourHL >= 12
+bool lowInAfternoonHL = lowHourHL >= 12
+
+int reversalTypeHL = 0
+if highInMorningHL and lowInAfternoonHL
+    reversalTypeHL := 1
+else if lowInMorningHL and highInAfternoonHL
+    reversalTypeHL := -1
+
+float highLowSpreadHL = math.abs(highTimeHL - lowTimeHL)
+bool earlyExtremeHL = (highHourHL == 9) or (lowHourHL == 9) or (highHourHL == 10 and highMinuteHL == 0) or (lowHourHL == 10 and lowMinuteHL == 0)
+bool lateExtremeHL = (highHourHL == 15 and highMinuteHL >= 30) or (lowHourHL == 15 and lowMinuteHL >= 30)
+
+// -----------------------------------------------------------------------------
 // EXPORT PLOTS - Core Price Data
 // -----------------------------------------------------------------------------
 // Note: TradingView already exports open, high, low, close as default columns.
@@ -328,6 +368,34 @@ plot(isOpex ? 1 : 0, "Is_Opex", display=display.data_window)
 // EXPORT PLOTS - Prior Day Context
 // -----------------------------------------------------------------------------
 plot(prevReturnPct, "Prev_Return_Pct", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - Enriched VIX Fields
+// -----------------------------------------------------------------------------
+plot(vixGapPct, "VIX_Gap_Pct", display=display.data_window)
+plot(vix9dOpen, "VIX9D_Open", display=display.data_window)
+plot(vix9dChangePct, "VIX9D_Change_Pct", display=display.data_window)
+plot(vixHigh, "VIX_High", display=display.data_window)
+plot(vixLow, "VIX_Low", display=display.data_window)
+plot(vix3mOpen, "VIX3M_Open", display=display.data_window)
+plot(vix3mChangePct, "VIX3M_Change_Pct", display=display.data_window)
+
+// -----------------------------------------------------------------------------
+// EXPORT PLOTS - High/Low Timing
+// -----------------------------------------------------------------------------
+plot(highTimeHL, "High_Time", display=display.data_window)
+plot(lowTimeHL, "Low_Time", display=display.data_window)
+plot(highBeforeLowHL ? 1 : 0, "High_Before_Low", display=display.data_window)
+plot(highInFirstHourHL ? 1 : 0, "High_In_First_Hour", display=display.data_window)
+plot(lowInFirstHourHL ? 1 : 0, "Low_In_First_Hour", display=display.data_window)
+plot(highInLastHourHL ? 1 : 0, "High_In_Last_Hour", display=display.data_window)
+plot(lowInLastHourHL ? 1 : 0, "Low_In_Last_Hour", display=display.data_window)
+plot(reversalTypeHL, "Reversal_Type", display=display.data_window)
+plot(highLowSpreadHL, "High_Low_Spread", display=display.data_window)
+plot(earlyExtremeHL ? 1 : 0, "Early_Extreme", display=display.data_window)
+plot(lateExtremeHL ? 1 : 0, "Late_Extreme", display=display.data_window)
+plot(intradayHighHL, "Intraday_High", display=display.data_window)
+plot(intradayLowHL, "Intraday_Low", display=display.data_window)
 
 // -----------------------------------------------------------------------------
 // VISUAL DISPLAY (uses already-exported VIX data, no extra plot count)
