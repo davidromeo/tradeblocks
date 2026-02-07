@@ -12,7 +12,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
 
 - [x] **Phase 51: PineScript Consolidation** - Merge highlow into daily script, export new VIX fields, remove dead scripts
 - [x] **Phase 52: DuckDB Schema + Sync** - Update schema for combined CSV, update sync logic, retire highlow table
-- [ ] **Phase 53: Import Consolidation** - Migrate 3 market data tools from in-memory CSV to DuckDB queries
+- [x] **Phase 53: Import Consolidation** - Migrate 3 market data tools from in-memory CSV to DuckDB queries
 - [ ] **Phase 54: Documentation + Cleanup** - Update docs for new 3-script workflow, remove PoC files
 
 ## Phase Details
@@ -57,7 +57,7 @@ Plans:
   4. In-memory CSV loading functions and 5-min TTL cache are removed from market-data.ts
 **Plans**: 1 plan
 Plans:
-- [ ] 53-01-PLAN.md -- Migrate 3 tools to DuckDB queries, remove CSV loading infrastructure, version bump
+- [x] 53-01-PLAN.md -- Migrate 3 tools to DuckDB queries, remove CSV loading infrastructure, version bump
 
 ### Phase 54: Documentation + Cleanup
 **Goal**: All documentation reflects the new 3-script, DuckDB-only architecture and PoC artifacts are removed
@@ -76,5 +76,5 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 51. PineScript Consolidation | v2.8 | 2/2 | Complete | 2026-02-07 |
 | 52. DuckDB Schema + Sync | v2.8 | 1/1 | Complete | 2026-02-07 |
-| 53. Import Consolidation | v2.8 | 0/1 | Not started | - |
+| 53. Import Consolidation | v2.8 | 1/1 | Complete | 2026-02-07 |
 | 54. Documentation + Cleanup | v2.8 | 0/TBD | Not started | - |

@@ -34,11 +34,11 @@ Requirements for Market Data Consolidation milestone. Consolidate 6 PineScripts 
 
 ### Import Consolidation
 
-- [ ] **IMPORT-01**: `analyze_regime_performance` queries DuckDB instead of in-memory CSV
-- [ ] **IMPORT-02**: `suggest_filters` queries DuckDB instead of in-memory CSV
-- [ ] **IMPORT-03**: `calculate_orb` queries DuckDB instead of in-memory CSV
-- [ ] **IMPORT-04**: In-memory CSV loading code removed from market-data.ts
-- [ ] **IMPORT-05**: CSV file caching (5-min TTL Map) removed
+- [x] **IMPORT-01**: `analyze_regime_performance` queries DuckDB instead of in-memory CSV
+- [x] **IMPORT-02**: `suggest_filters` queries DuckDB instead of in-memory CSV
+- [x] **IMPORT-03**: `calculate_orb` queries DuckDB instead of in-memory CSV
+- [x] **IMPORT-04**: In-memory CSV loading code removed from market-data.ts
+- [x] **IMPORT-05**: CSV file caching (5-min TTL Map) removed
 
 ### Documentation
 
@@ -81,11 +81,11 @@ Requirements for Market Data Consolidation milestone. Consolidate 6 PineScripts 
 | SYNC-01 | Phase 52 | Complete |
 | SYNC-02 | Phase 52 | Complete |
 | SYNC-03 | Phase 52 | Complete |
-| IMPORT-01 | Phase 53 | Pending |
-| IMPORT-02 | Phase 53 | Pending |
-| IMPORT-03 | Phase 53 | Pending |
-| IMPORT-04 | Phase 53 | Pending |
-| IMPORT-05 | Phase 53 | Pending |
+| IMPORT-01 | Phase 53 | Complete |
+| IMPORT-02 | Phase 53 | Complete |
+| IMPORT-03 | Phase 53 | Complete |
+| IMPORT-04 | Phase 53 | Complete |
+| IMPORT-05 | Phase 53 | Complete |
 | DOCS-01 | Phase 54 | Pending |
 | DOCS-02 | Phase 54 | Pending |
 
