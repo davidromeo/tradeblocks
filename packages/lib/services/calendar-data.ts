@@ -1089,12 +1089,18 @@ function calculateMetricsFromDailyLogs(
     : null
 
   // Calculate Sortino Ratio
+  // Downside deviation = sqrt( (1/N) * sum( min(excessReturn_i, 0)^2 ) )
+  // Uses ALL N observations; positive excess returns contribute 0 to the sum.
   const excessReturns = dailyReturns.map(ret => ret - dailyRiskFreeRate)
   const avgExcessReturn = mean(excessReturns) as number
-  const negativeExcessReturns = excessReturns.filter(ret => ret < 0)
+  const N = excessReturns.length
+  const sumSquaredDownside = excessReturns.reduce((sum, ret) => {
+    const downside = Math.min(ret, 0)
+    return sum + downside * downside
+  }, 0)
   let sortino: number | null = null
-  if (negativeExcessReturns.length > 0) {
-    const downsideDeviation = std(negativeExcessReturns, 'biased') as number
+  if (sumSquaredDownside > 0) {
+    const downsideDeviation = Math.sqrt(sumSquaredDownside / N)
     if (downsideDeviation > 1e-10) {
       sortino = (avgExcessReturn / downsideDeviation) * Math.sqrt(ANNUALIZATION_FACTOR)
     }

@@ -59,8 +59,7 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 
 **Math.js for Statistical Calculations**: All statistics use `math.js` library to ensure consistency:
 - Sharpe Ratio: Uses sample standard deviation (N-1) via `std(data, 'uncorrected')`
-- Sortino Ratio: Uses population standard deviation (N) via `std(data, 'biased')` to match numpy
-- This ensures exact parity with Python calculations
+- Sortino Ratio: Uses standard downside deviation = sqrt((1/N) * sum(min(excess_i, 0)^2)) where N = total observations. This is the RMS of negative excess returns from zero, NOT std() of only the negative returns.
 
 ### Directory Structure
 
