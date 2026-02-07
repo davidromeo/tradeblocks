@@ -4,10 +4,9 @@
  * MCP tools for analyzing market context (VIX, term structure, regimes)
  * and correlating with trade performance.
  *
- * Data source: TradingView exports in ~/backtests/_marketdata/
- * - spx_daily.csv: Daily context (55 fields incl. highlow timing + VIX enrichment)
- * - spx_15min.csv: 15-minute intraday checkpoints (primary)
- * - vix_intraday.csv: VIX intraday data (optional)
+ * Data source: DuckDB analytics database (synced from TradingView exports)
+ * - market.spx_daily: Daily context (55 fields incl. highlow timing + VIX enrichment)
+ * - market.spx_15min: 15-minute intraday checkpoints
  */
 
 import { z } from "zod";
@@ -25,9 +24,7 @@ import { withFullSync } from "./middleware/sync-middleware.js";
 // Types
 // =============================================================================
 
-/**
- * Daily market data record from TradingView export
- */
+/** Daily market data columns in market.spx_daily DuckDB table. Kept as documentation reference. */
 export interface DailyMarketData {
   date: string; // YYYY-MM-DD
   // Core price
@@ -75,9 +72,7 @@ export interface DailyMarketData {
   Prev_Return_Pct: number;
 }
 
-/**
- * 15-minute intraday checkpoint data from spx_15min.csv
- */
+/** 15-minute intraday columns in market.spx_15min DuckDB table. Kept as documentation reference. */
 export interface Intraday15MinData {
   date: string; // YYYY-MM-DD
   // OHLC
@@ -124,480 +119,6 @@ export interface Intraday15MinData {
   MOC_60min: number;
   // Afternoon action
   Afternoon_Move: number;
-}
-
-/**
- * High/low timing data from spx_highlow.csv (optional)
- */
-export interface HighLowTimingData {
-  date: string; // YYYY-MM-DD
-  // OHLC
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  // Timing (in hours, e.g., 9.5 = 9:30 AM)
-  High_Time: number;
-  Low_Time: number;
-  // Flags
-  High_Before_Low: number; // 0 or 1
-  High_In_First_Hour: number;
-  Low_In_First_Hour: number;
-  High_In_Last_Hour: number;
-  Low_In_Last_Hour: number;
-  // Reversal type
-  Reversal_Type: number;
-  // Range metrics
-  High_Low_Spread: number;
-  Early_Extreme: number;
-  Late_Extreme: number;
-  Intraday_High: number;
-  Intraday_Low: number;
-}
-
-/**
- * VIX intraday data from vix_intraday.csv (optional)
- */
-export interface VixIntradayData {
-  date: string; // YYYY-MM-DD
-  // OHLC
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  // Checkpoint values
-  VIX_0930: number;
-  VIX_1000: number;
-  VIX_1030: number;
-  VIX_1100: number;
-  VIX_1130: number;
-  VIX_1200: number;
-  VIX_1230: number;
-  VIX_1300: number;
-  VIX_1330: number;
-  VIX_1400: number;
-  VIX_1430: number;
-  VIX_1500: number;
-  VIX_1530: number;
-  VIX_1545: number;
-  // High/low
-  VIX_Day_High: number;
-  VIX_Day_Low: number;
-  // Moves
-  VIX_Morning_Move: number;
-  VIX_Afternoon_Move: number;
-  VIX_Power_Hour_Move: number;
-  VIX_Last_30min_Move: number;
-  VIX_Full_Day_Move: number;
-  VIX_First_Hour_Move: number;
-  // Range and spike metrics
-  VIX_Intraday_Range_Pct: number;
-  VIX_Spike_From_Open: number;
-  VIX_Spike_Flag: number;
-  VIX_Crush_From_Open: number;
-  VIX_Crush_Flag: number;
-  VIX_Close_In_Range: number;
-}
-
-/**
- * Legacy interface alias for backwards compatibility
- * @deprecated Use Intraday15MinData instead
- */
-export type IntradayMarketData = Intraday15MinData;
-
-/**
- * Combined market data (daily + intraday + optional highlow + optional vix)
- */
-export interface MarketDataRecord extends DailyMarketData {
-  intraday?: Intraday15MinData;
-  highlow?: HighLowTimingData;
-  vix?: VixIntradayData;
-}
-
-
-// =============================================================================
-// Data Loading & Caching
-// =============================================================================
-
-// In-memory cache for market data
-let dailyDataCache: Map<string, DailyMarketData> | null = null;
-let intradayDataCache: Map<string, Intraday15MinData> | null = null;
-let highlowDataCache: Map<string, HighLowTimingData> | null = null;
-let vixIntradayDataCache: Map<string, VixIntradayData> | null = null;
-let cacheTimestamp: number = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Parse TradingView timestamp to YYYY-MM-DD date string in Eastern Time.
- * Trading data is always in ET, so we must format dates in that timezone.
- */
-function parseTimestamp(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
-  // Format as YYYY-MM-DD in Eastern Time (America/New_York)
-  // This handles both EST and EDT automatically
-  const formatted = date.toLocaleDateString("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return formatted; // Returns YYYY-MM-DD format
-}
-
-/**
- * Parse a numeric value, handling NaN/undefined
- */
-function parseNum(value: string | undefined): number {
-  if (!value || value === "NaN" || value === "NA" || value === "") {
-    return NaN;
-  }
-  return parseFloat(value);
-}
-
-/**
- * Load daily market data CSV
- */
-async function loadDailyData(baseDir: string): Promise<Map<string, DailyMarketData>> {
-  const filePath = path.join(baseDir, "_marketdata", "spx_daily.csv");
-  const content = await fs.readFile(filePath, "utf-8");
-  const lines = content.trim().split("\n");
-
-  if (lines.length < 2) {
-    throw new Error("Daily market data file is empty or has no data rows");
-  }
-
-  const headers = lines[0].split(",");
-  const data = new Map<string, DailyMarketData>();
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",");
-    const timestamp = parseInt(values[0], 10);
-    const date = parseTimestamp(timestamp);
-
-    // Map columns by header name
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h] = values[idx];
-    });
-
-    const record: DailyMarketData = {
-      date,
-      Prior_Close: parseNum(row["Prior_Close"]),
-      Open: parseNum(row["Open"]),
-      High: parseNum(row["High"]),
-      Low: parseNum(row["Low"]),
-      Close: parseNum(row["Close"]),
-      Gap_Pct: parseNum(row["Gap_Pct"]),
-      Intraday_Range_Pct: parseNum(row["Intraday_Range_Pct"]),
-      Intraday_Return_Pct: parseNum(row["Intraday_Return_Pct"]),
-      Total_Return_Pct: parseNum(row["Total_Return_Pct"]),
-      Close_Position_In_Range: parseNum(row["Close_Position_In_Range"]),
-      Gap_Filled: parseNum(row["Gap_Filled"]),
-      VIX_Open: parseNum(row["VIX_Open"]),
-      VIX_Close: parseNum(row["VIX_Close"]),
-      VIX_Change_Pct: parseNum(row["VIX_Change_Pct"]),
-      VIX_Spike_Pct: parseNum(row["VIX_Spike_Pct"]),
-      VIX_Percentile: parseNum(row["VIX_Percentile"]),
-      Vol_Regime: parseNum(row["Vol_Regime"]),
-      VIX9D_Close: parseNum(row["VIX9D_Close"]),
-      VIX3M_Close: parseNum(row["VIX3M_Close"]),
-      VIX9D_VIX_Ratio: parseNum(row["VIX9D_VIX_Ratio"]),
-      VIX_VIX3M_Ratio: parseNum(row["VIX_VIX3M_Ratio"]),
-      Term_Structure_State: parseNum(row["Term_Structure_State"]),
-      ATR_Pct: parseNum(row["ATR_Pct"]),
-      RSI_14: parseNum(row["RSI_14"]),
-      Price_vs_EMA21_Pct: parseNum(row["Price_vs_EMA21_Pct"]),
-      Price_vs_SMA50_Pct: parseNum(row["Price_vs_SMA50_Pct"]),
-      Trend_Score: parseNum(row["Trend_Score"]),
-      BB_Position: parseNum(row["BB_Position"]),
-      Return_5D: parseNum(row["Return_5D"]),
-      Return_20D: parseNum(row["Return_20D"]),
-      Consecutive_Days: parseNum(row["Consecutive_Days"]),
-      Day_of_Week: parseNum(row["Day_of_Week"]),
-      Month: parseNum(row["Month"]),
-      Is_Opex: parseNum(row["Is_Opex"]),
-      Prev_Return_Pct: parseNum(row["Prev_Return_Pct"]),
-    };
-
-    data.set(date, record);
-  }
-
-  return data;
-}
-
-/**
- * Load 15-minute intraday market data CSV (aggregated to one row per day)
- */
-async function loadIntradayData(baseDir: string): Promise<Map<string, Intraday15MinData>> {
-  const filePath = path.join(baseDir, "_marketdata", "spx_15min.csv");
-
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    const lines = content.trim().split("\n");
-
-    if (lines.length < 2) {
-      return new Map();
-    }
-
-    const headers = lines[0].split(",");
-    const data = new Map<string, Intraday15MinData>();
-
-    // Process lines - take the last row for each date (has complete data)
-    const dateRows = new Map<string, string[]>();
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",");
-      const timestamp = parseInt(values[0], 10);
-      const date = parseTimestamp(timestamp);
-      dateRows.set(date, values); // Overwrites, keeping last row
-    }
-
-    // Convert to Intraday15MinData records
-    for (const [date, values] of dateRows) {
-      const row: Record<string, string> = {};
-      headers.forEach((h, idx) => {
-        row[h] = values[idx];
-      });
-
-      const record: Intraday15MinData = {
-        date,
-        open: parseNum(row["open"]),
-        high: parseNum(row["high"]),
-        low: parseNum(row["low"]),
-        close: parseNum(row["close"]),
-        // 15-minute checkpoint prices
-        P_0930: parseNum(row["P_0930"]),
-        P_0945: parseNum(row["P_0945"]),
-        P_1000: parseNum(row["P_1000"]),
-        P_1015: parseNum(row["P_1015"]),
-        P_1030: parseNum(row["P_1030"]),
-        P_1045: parseNum(row["P_1045"]),
-        P_1100: parseNum(row["P_1100"]),
-        P_1115: parseNum(row["P_1115"]),
-        P_1130: parseNum(row["P_1130"]),
-        P_1145: parseNum(row["P_1145"]),
-        P_1200: parseNum(row["P_1200"]),
-        P_1215: parseNum(row["P_1215"]),
-        P_1230: parseNum(row["P_1230"]),
-        P_1245: parseNum(row["P_1245"]),
-        P_1300: parseNum(row["P_1300"]),
-        P_1315: parseNum(row["P_1315"]),
-        P_1330: parseNum(row["P_1330"]),
-        P_1345: parseNum(row["P_1345"]),
-        P_1400: parseNum(row["P_1400"]),
-        P_1415: parseNum(row["P_1415"]),
-        P_1430: parseNum(row["P_1430"]),
-        P_1445: parseNum(row["P_1445"]),
-        P_1500: parseNum(row["P_1500"]),
-        P_1515: parseNum(row["P_1515"]),
-        P_1530: parseNum(row["P_1530"]),
-        P_1545: parseNum(row["P_1545"]),
-        // Percentage moves
-        Pct_0930_to_1000: parseNum(row["Pct_0930_to_1000"]),
-        Pct_0930_to_1200: parseNum(row["Pct_0930_to_1200"]),
-        Pct_0930_to_1500: parseNum(row["Pct_0930_to_1500"]),
-        Pct_0930_to_Close: parseNum(row["Pct_0930_to_Close"]),
-        // Market-on-close moves
-        MOC_15min: parseNum(row["MOC_15min"]),
-        MOC_30min: parseNum(row["MOC_30min"]),
-        MOC_45min: parseNum(row["MOC_45min"]),
-        MOC_60min: parseNum(row["MOC_60min"]),
-        // Afternoon action
-        Afternoon_Move: parseNum(row["Afternoon_Move"]),
-      };
-
-      data.set(date, record);
-    }
-
-    return data;
-  } catch {
-    // Intraday file is optional
-    return new Map();
-  }
-}
-
-/**
- * Load high/low timing data CSV (optional, one row per day)
- */
-async function loadHighLowData(baseDir: string): Promise<Map<string, HighLowTimingData>> {
-  const filePath = path.join(baseDir, "_marketdata", "spx_highlow.csv");
-
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    const lines = content.trim().split("\n");
-
-    if (lines.length < 2) {
-      return new Map();
-    }
-
-    const headers = lines[0].split(",");
-    const data = new Map<string, HighLowTimingData>();
-
-    // Process lines - take the last row for each date (has complete data)
-    const dateRows = new Map<string, string[]>();
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",");
-      const timestamp = parseInt(values[0], 10);
-      const date = parseTimestamp(timestamp);
-      dateRows.set(date, values); // Overwrites, keeping last row
-    }
-
-    // Convert to HighLowTimingData records
-    for (const [date, values] of dateRows) {
-      const row: Record<string, string> = {};
-      headers.forEach((h, idx) => {
-        row[h] = values[idx];
-      });
-
-      const record: HighLowTimingData = {
-        date,
-        open: parseNum(row["open"]),
-        high: parseNum(row["high"]),
-        low: parseNum(row["low"]),
-        close: parseNum(row["close"]),
-        High_Time: parseNum(row["High_Time"]),
-        Low_Time: parseNum(row["Low_Time"]),
-        High_Before_Low: parseNum(row["High_Before_Low"]),
-        High_In_First_Hour: parseNum(row["High_In_First_Hour"]),
-        Low_In_First_Hour: parseNum(row["Low_In_First_Hour"]),
-        High_In_Last_Hour: parseNum(row["High_In_Last_Hour"]),
-        Low_In_Last_Hour: parseNum(row["Low_In_Last_Hour"]),
-        Reversal_Type: parseNum(row["Reversal_Type"]),
-        High_Low_Spread: parseNum(row["High_Low_Spread"]),
-        Early_Extreme: parseNum(row["Early_Extreme"]),
-        Late_Extreme: parseNum(row["Late_Extreme"]),
-        Intraday_High: parseNum(row["Intraday_High"]),
-        Intraday_Low: parseNum(row["Intraday_Low"]),
-      };
-
-      data.set(date, record);
-    }
-
-    return data;
-  } catch {
-    // High/low file is optional - return empty Map if missing
-    return new Map();
-  }
-}
-
-/**
- * Load VIX intraday data CSV (optional, one row per day)
- */
-async function loadVixIntradayData(baseDir: string): Promise<Map<string, VixIntradayData>> {
-  const filePath = path.join(baseDir, "_marketdata", "vix_intraday.csv");
-
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    const lines = content.trim().split("\n");
-
-    if (lines.length < 2) {
-      return new Map();
-    }
-
-    const headers = lines[0].split(",");
-    const data = new Map<string, VixIntradayData>();
-
-    // Process lines - take the last row for each date (has complete data)
-    const dateRows = new Map<string, string[]>();
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",");
-      const timestamp = parseInt(values[0], 10);
-      const date = parseTimestamp(timestamp);
-      dateRows.set(date, values); // Overwrites, keeping last row
-    }
-
-    // Convert to VixIntradayData records
-    for (const [date, values] of dateRows) {
-      const row: Record<string, string> = {};
-      headers.forEach((h, idx) => {
-        row[h] = values[idx];
-      });
-
-      const record: VixIntradayData = {
-        date,
-        open: parseNum(row["open"]),
-        high: parseNum(row["high"]),
-        low: parseNum(row["low"]),
-        close: parseNum(row["close"]),
-        VIX_0930: parseNum(row["VIX_0930"]),
-        VIX_1000: parseNum(row["VIX_1000"]),
-        VIX_1030: parseNum(row["VIX_1030"]),
-        VIX_1100: parseNum(row["VIX_1100"]),
-        VIX_1130: parseNum(row["VIX_1130"]),
-        VIX_1200: parseNum(row["VIX_1200"]),
-        VIX_1230: parseNum(row["VIX_1230"]),
-        VIX_1300: parseNum(row["VIX_1300"]),
-        VIX_1330: parseNum(row["VIX_1330"]),
-        VIX_1400: parseNum(row["VIX_1400"]),
-        VIX_1430: parseNum(row["VIX_1430"]),
-        VIX_1500: parseNum(row["VIX_1500"]),
-        VIX_1530: parseNum(row["VIX_1530"]),
-        VIX_1545: parseNum(row["VIX_1545"]),
-        VIX_Day_High: parseNum(row["VIX_Day_High"]),
-        VIX_Day_Low: parseNum(row["VIX_Day_Low"]),
-        VIX_Morning_Move: parseNum(row["VIX_Morning_Move"]),
-        VIX_Afternoon_Move: parseNum(row["VIX_Afternoon_Move"]),
-        VIX_Power_Hour_Move: parseNum(row["VIX_Power_Hour_Move"]),
-        VIX_Last_30min_Move: parseNum(row["VIX_Last_30min_Move"]),
-        VIX_Full_Day_Move: parseNum(row["VIX_Full_Day_Move"]),
-        VIX_First_Hour_Move: parseNum(row["VIX_First_Hour_Move"]),
-        VIX_Intraday_Range_Pct: parseNum(row["VIX_Intraday_Range_Pct"]),
-        VIX_Spike_From_Open: parseNum(row["VIX_Spike_From_Open"]),
-        VIX_Spike_Flag: parseNum(row["VIX_Spike_Flag"]),
-        VIX_Crush_From_Open: parseNum(row["VIX_Crush_From_Open"]),
-        VIX_Crush_Flag: parseNum(row["VIX_Crush_Flag"]),
-        VIX_Close_In_Range: parseNum(row["VIX_Close_In_Range"]),
-      };
-
-      data.set(date, record);
-    }
-
-    return data;
-  } catch {
-    // VIX intraday file is optional - return empty Map if missing
-    return new Map();
-  }
-}
-
-/**
- * Get market data with caching
- */
-async function getMarketData(baseDir: string): Promise<{
-  daily: Map<string, DailyMarketData>;
-  intraday: Map<string, Intraday15MinData>;
-  highlow: Map<string, HighLowTimingData>;
-  vixIntraday: Map<string, VixIntradayData>;
-}> {
-  const now = Date.now();
-
-  // Check if cache is valid
-  if (dailyDataCache && now - cacheTimestamp < CACHE_TTL_MS) {
-    return {
-      daily: dailyDataCache,
-      intraday: intradayDataCache || new Map(),
-      highlow: highlowDataCache || new Map(),
-      vixIntraday: vixIntradayDataCache || new Map(),
-    };
-  }
-
-  // Load fresh data (all in parallel)
-  const [daily, intraday, highlow, vixIntraday] = await Promise.all([
-    loadDailyData(baseDir),
-    loadIntradayData(baseDir),
-    loadHighLowData(baseDir),
-    loadVixIntradayData(baseDir),
-  ]);
-
-  // Update cache
-  dailyDataCache = daily;
-  intradayDataCache = intraday;
-  highlowDataCache = highlow;
-  vixIntradayDataCache = vixIntraday;
-  cacheTimestamp = now;
-
-  return { daily, intraday, highlow, vixIntraday };
 }
 
 // =============================================================================
@@ -1150,19 +671,26 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         limit: z.number().optional().describe("Max rows to return (default: 100)"),
       }),
     },
-    async ({ startTime, endTime, startDate, endDate, limit = 100 }) => {
+    withFullSync(baseDir, async ({ startTime, endTime, startDate, endDate, limit = 100 }) => {
       try {
-        const { intraday } = await getMarketData(baseDir);
+        // Query DuckDB for intraday data in the date range
+        const end = endDate || startDate;
+        const conn = await getConnection(baseDir);
+        const result = await conn.runAndReadAll(
+          `SELECT * FROM market.spx_15min WHERE date BETWEEN $1 AND $2 ORDER BY date`,
+          [startDate, end]
+        );
+        const intradayRecords = resultToRecords(result);
 
-        if (intraday.size === 0) {
+        if (intradayRecords.length === 0) {
           return {
-            content: [{ type: "text", text: "No 15-minute intraday data available (spx_15min.csv not found)" }],
+            content: [{ type: "text", text: "No 15-minute intraday data available for the specified date range" }],
             isError: true,
           };
         }
 
         // Map of available checkpoint times to their field names
-        const checkpointFields: Record<string, keyof Intraday15MinData> = {
+        const checkpointFields: Record<string, string> = {
           "0930": "P_0930",
           "0945": "P_0945",
           "1000": "P_1000",
@@ -1219,11 +747,6 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const orbTimes = allTimes.slice(startIdx, endIdx + 1);
 
-        // Get date range
-        const end = endDate || startDate;
-        const startD = new Date(startDate);
-        const endD = new Date(end);
-
         // Calculate ORB for each day in range
         interface OrbResult {
           date: string;
@@ -1238,15 +761,14 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const results: OrbResult[] = [];
 
-        for (const [date, intradayData] of intraday) {
-          const d = new Date(date);
-          if (d < startD || d > endD) continue;
+        for (const intradayData of intradayRecords) {
+          const date = intradayData["date"] as string;
 
           // Get prices at each checkpoint in the ORB range
           const prices: number[] = [];
           for (const time of orbTimes) {
             const field = checkpointFields[time];
-            const price = intradayData[field] as number;
+            const price = getNum(intradayData, field);
             if (!isNaN(price) && price > 0) {
               prices.push(price);
             }
@@ -1258,7 +780,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           const orbLow = Math.min(...prices);
           const orbRange = orbHigh - orbLow;
           const orbRangePct = (orbRange / orbLow) * 100;
-          const close = intradayData.close;
+          const close = getNum(intradayData, "close");
 
           // Calculate where close is relative to ORB
           let closePositionInOrb: number;
@@ -1332,6 +854,6 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           isError: true,
         };
       }
-    }
+    })
   );
 }
