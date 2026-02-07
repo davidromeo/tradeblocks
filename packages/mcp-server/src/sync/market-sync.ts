@@ -5,9 +5,8 @@
  * Uses merge/preserve strategy: INSERT new dates, keep existing dates.
  *
  * Market data CSV files:
- *   - spx_daily.csv    -> market.spx_daily
+ *   - spx_daily.csv    -> market.spx_daily (55 fields incl. highlow timing + VIX enrichment)
  *   - spx_15min.csv    -> market.spx_15min
- *   - spx_highlow.csv  -> market.spx_highlow
  *   - vix_intraday.csv -> market.vix_intraday
  */
 
@@ -27,7 +26,6 @@ import { getMarketSyncMetadata, upsertMarketSyncMetadata } from "./metadata.js";
 const MARKET_DATA_FILES: Record<string, { table: string; dateColumn: string }> = {
   "spx_daily.csv": { table: "market.spx_daily", dateColumn: "time" },
   "spx_15min.csv": { table: "market.spx_15min", dateColumn: "time" },
-  "spx_highlow.csv": { table: "market.spx_highlow", dateColumn: "time" },
   "vix_intraday.csv": { table: "market.vix_intraday", dateColumn: "time" },
 };
 

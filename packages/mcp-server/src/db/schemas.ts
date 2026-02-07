@@ -107,7 +107,28 @@ export async function ensureReportingDataTable(conn: DuckDBConnection): Promise<
  * @param conn - Active DuckDB connection
  */
 export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<void> {
-  // SPX daily market context data (35 fields)
+  // Check if spx_daily needs migration (sentinel: High_Time column)
+  try {
+    const tableCheck = await conn.runAndReadAll(`
+      SELECT 1 FROM duckdb_tables()
+      WHERE schema_name = 'market' AND table_name = 'spx_daily'
+    `);
+    if (tableCheck.getRows().length > 0) {
+      const colCheck = await conn.runAndReadAll(`
+        SELECT 1 FROM duckdb_columns()
+        WHERE schema_name = 'market' AND table_name = 'spx_daily' AND column_name = 'High_Time'
+      `);
+      if (colCheck.getRows().length === 0) {
+        // Old schema exists without new columns -- drop and recreate
+        await conn.run(`DROP TABLE market.spx_daily`);
+        await conn.run(`DELETE FROM market._sync_metadata WHERE file_name = 'spx_daily.csv'`);
+      }
+    }
+  } catch {
+    // Non-fatal: CREATE TABLE IF NOT EXISTS will handle fresh state
+  }
+
+  // SPX daily market context data (55 fields)
   // Note: open/high/low/close are lowercase to match TradingView's default export columns
   await conn.run(`
     CREATE TABLE IF NOT EXISTS market.spx_daily (
@@ -146,7 +167,27 @@ export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<vo
       Day_of_Week INTEGER,
       Month INTEGER,
       Is_Opex INTEGER,
-      Prev_Return_Pct DOUBLE
+      Prev_Return_Pct DOUBLE,
+      High_Time DOUBLE,
+      Low_Time DOUBLE,
+      High_Before_Low INTEGER,
+      High_In_First_Hour INTEGER,
+      Low_In_First_Hour INTEGER,
+      High_In_Last_Hour INTEGER,
+      Low_In_Last_Hour INTEGER,
+      Reversal_Type INTEGER,
+      High_Low_Spread DOUBLE,
+      Early_Extreme INTEGER,
+      Late_Extreme INTEGER,
+      Intraday_High DOUBLE,
+      Intraday_Low DOUBLE,
+      VIX_Gap_Pct DOUBLE,
+      VIX9D_Open DOUBLE,
+      VIX9D_Change_Pct DOUBLE,
+      VIX_High DOUBLE,
+      VIX_Low DOUBLE,
+      VIX3M_Open DOUBLE,
+      VIX3M_Change_Pct DOUBLE
     )
   `);
 
@@ -196,29 +237,9 @@ export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<vo
     )
   `);
 
-  // SPX high/low timing data
-  await conn.run(`
-    CREATE TABLE IF NOT EXISTS market.spx_highlow (
-      date VARCHAR PRIMARY KEY,
-      open DOUBLE,
-      high DOUBLE,
-      low DOUBLE,
-      close DOUBLE,
-      High_Time DOUBLE,
-      Low_Time DOUBLE,
-      High_Before_Low INTEGER,
-      High_In_First_Hour INTEGER,
-      Low_In_First_Hour INTEGER,
-      High_In_Last_Hour INTEGER,
-      Low_In_Last_Hour INTEGER,
-      Reversal_Type INTEGER,
-      High_Low_Spread DOUBLE,
-      Early_Extreme INTEGER,
-      Late_Extreme INTEGER,
-      Intraday_High DOUBLE,
-      Intraday_Low DOUBLE
-    )
-  `);
+  // Drop retired spx_highlow table (data now in spx_daily)
+  await conn.run(`DROP TABLE IF EXISTS market.spx_highlow`);
+  await conn.run(`DELETE FROM market._sync_metadata WHERE file_name = 'spx_highlow.csv'`);
 
   // VIX intraday data
   await conn.run(`
