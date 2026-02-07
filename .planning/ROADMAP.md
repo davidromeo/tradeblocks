@@ -27,7 +27,10 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
   3. Standalone highlow script file is deleted from the repository
   4. 30-min and hourly checkpoint scripts are deleted from the repository
   5. Scripts README documents the new 3-script workflow (daily, 15min, VIX intraday)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 51-01-PLAN.md -- Merge highlow timing + enriched VIX exports into spx-daily.pine
+- [ ] 51-02-PLAN.md -- Delete obsolete scripts + update README for 3-script workflow
 
 ### Phase 52: DuckDB Schema + Sync
 **Goal**: DuckDB schema absorbs highlow and new VIX columns into `spx_daily`, sync handles the combined CSV, and the `spx_highlow` table is retired
@@ -67,7 +70,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 51. PineScript Consolidation | v2.8 | 0/TBD | Not started | - |
+| 51. PineScript Consolidation | v2.8 | 0/2 | Planned | - |
 | 52. DuckDB Schema + Sync | v2.8 | 0/TBD | Not started | - |
 | 53. Import Consolidation | v2.8 | 0/TBD | Not started | - |
 | 54. Documentation + Cleanup | v2.8 | 0/TBD | Not started | - |
