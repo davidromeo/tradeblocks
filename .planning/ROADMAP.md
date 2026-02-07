@@ -42,7 +42,9 @@ Plans:
   3. Market sync ingests the combined daily CSV (with highlow + VIX fields) and populates `spx_daily` correctly
   4. `spx_highlow.csv` file mapping is gone from sync configuration
   5. Existing `spx_daily.csv` data can be purged and re-imported cleanly after schema change
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 52-01-PLAN.md -- Schema migration, sync config, reference cleanup, version bump
 
 ### Phase 53: Import Consolidation
 **Goal**: All market data tools query DuckDB exclusively, eliminating the in-memory CSV loading path
@@ -71,6 +73,6 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 51. PineScript Consolidation | v2.8 | 2/2 | Complete | 2026-02-07 |
-| 52. DuckDB Schema + Sync | v2.8 | 0/TBD | Not started | - |
+| 52. DuckDB Schema + Sync | v2.8 | 0/1 | Not started | - |
 | 53. Import Consolidation | v2.8 | 0/TBD | Not started | - |
 | 54. Documentation + Cleanup | v2.8 | 0/TBD | Not started | - |
