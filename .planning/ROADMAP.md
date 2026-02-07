@@ -55,7 +55,9 @@ Plans:
   2. `suggest_filters` returns correct results using DuckDB queries (no CSV loading)
   3. `calculate_orb` returns correct results using DuckDB queries (no CSV loading)
   4. In-memory CSV loading functions and 5-min TTL cache are removed from market-data.ts
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 53-01-PLAN.md -- Migrate 3 tools to DuckDB queries, remove CSV loading infrastructure, version bump
 
 ### Phase 54: Documentation + Cleanup
 **Goal**: All documentation reflects the new 3-script, DuckDB-only architecture and PoC artifacts are removed
@@ -74,5 +76,5 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 51. PineScript Consolidation | v2.8 | 2/2 | Complete | 2026-02-07 |
 | 52. DuckDB Schema + Sync | v2.8 | 1/1 | Complete | 2026-02-07 |
-| 53. Import Consolidation | v2.8 | 0/TBD | Not started | - |
+| 53. Import Consolidation | v2.8 | 0/1 | Not started | - |
 | 54. Documentation + Cleanup | v2.8 | 0/TBD | Not started | - |
