@@ -200,8 +200,8 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
     tables: {
       spx_daily: {
         description:
-          "Daily SPX data with technical indicators, VIX context, and regime classifications. JOIN with trades on date_opened = date.",
-        keyColumns: ["date", "Vol_Regime", "VIX_Close", "Total_Return_Pct", "Trend_Score"],
+          "Daily SPX data with technical indicators, VIX context, highlow timing, and regime classifications. JOIN with trades on date_opened = date.",
+        keyColumns: ["date", "Vol_Regime", "VIX_Close", "Total_Return_Pct", "Trend_Score", "High_Time", "Reversal_Type"],
         columns: {
           date: {
             description: "Trading date (VARCHAR, format YYYY-MM-DD). Primary key.",
@@ -349,6 +349,89 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           Prev_Return_Pct: {
             description: "Previous day's total return percentage",
+            hypothesis: true,
+          },
+          // Highlow timing columns (13)
+          High_Time: {
+            description: "Time of day high as decimal hours (e.g., 10.5 = 10:30 AM)",
+            hypothesis: true,
+          },
+          Low_Time: {
+            description: "Time of day low as decimal hours (e.g., 14.25 = 2:15 PM)",
+            hypothesis: true,
+          },
+          High_Before_Low: {
+            description: "Did high occur before low? (1=yes, 0=no)",
+            hypothesis: true,
+          },
+          High_In_First_Hour: {
+            description: "Did high occur in first hour? (1=yes, 0=no)",
+            hypothesis: true,
+          },
+          Low_In_First_Hour: {
+            description: "Did low occur in first hour? (1=yes, 0=no)",
+            hypothesis: true,
+          },
+          High_In_Last_Hour: {
+            description: "Did high occur in last hour? (1=yes, 0=no)",
+            hypothesis: true,
+          },
+          Low_In_Last_Hour: {
+            description: "Did low occur in last hour? (1=yes, 0=no)",
+            hypothesis: true,
+          },
+          Reversal_Type: {
+            description:
+              "Reversal pattern type (1=morning reversal up, -1=morning reversal down, 0=trend day)",
+            hypothesis: true,
+          },
+          High_Low_Spread: {
+            description: "Time spread between high and low in hours",
+            hypothesis: true,
+          },
+          Early_Extreme: {
+            description: "Was either extreme in first 30 min? (1=yes, 0=no)",
+            hypothesis: true,
+          },
+          Late_Extreme: {
+            description: "Was either extreme in last 30 min? (1=yes, 0=no)",
+            hypothesis: true,
+          },
+          Intraday_High: {
+            description: "Intraday high price (may differ from daily high on gap days)",
+            hypothesis: false,
+          },
+          Intraday_Low: {
+            description: "Intraday low price (may differ from daily low on gap days)",
+            hypothesis: false,
+          },
+          // VIX enrichment columns (7)
+          VIX_Gap_Pct: {
+            description: "VIX overnight gap percentage ((VIX_Open - prior VIX_Close) / prior VIX_Close * 100)",
+            hypothesis: true,
+          },
+          VIX9D_Open: {
+            description: "9-day VIX open value",
+            hypothesis: false,
+          },
+          VIX9D_Change_Pct: {
+            description: "9-day VIX open-to-close change percentage",
+            hypothesis: true,
+          },
+          VIX_High: {
+            description: "VIX intraday high",
+            hypothesis: false,
+          },
+          VIX_Low: {
+            description: "VIX intraday low",
+            hypothesis: false,
+          },
+          VIX3M_Open: {
+            description: "3-month VIX open value",
+            hypothesis: false,
+          },
+          VIX3M_Change_Pct: {
+            description: "3-month VIX open-to-close change percentage",
             hypothesis: true,
           },
         },
@@ -517,86 +600,6 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           Afternoon_Move: {
             description: "Afternoon session move (12:00 PM to close) percent",
             hypothesis: true,
-          },
-        },
-      },
-      spx_highlow: {
-        description:
-          "SPX high/low timing data. When did the day's high and low occur? Useful for reversal pattern analysis.",
-        keyColumns: ["date", "High_Time", "Low_Time", "Reversal_Type"],
-        columns: {
-          date: {
-            description: "Trading date (VARCHAR, format YYYY-MM-DD). Primary key.",
-            hypothesis: true,
-          },
-          open: {
-            description: "Day open price",
-            hypothesis: false,
-          },
-          high: {
-            description: "Day high price",
-            hypothesis: false,
-          },
-          low: {
-            description: "Day low price",
-            hypothesis: false,
-          },
-          close: {
-            description: "Day close price",
-            hypothesis: false,
-          },
-          High_Time: {
-            description: "Time of day high as decimal (e.g., 10.5 = 10:30 AM)",
-            hypothesis: true,
-          },
-          Low_Time: {
-            description: "Time of day low as decimal (e.g., 14.25 = 2:15 PM)",
-            hypothesis: true,
-          },
-          High_Before_Low: {
-            description: "Did high occur before low? (1=yes, 0=no)",
-            hypothesis: true,
-          },
-          High_In_First_Hour: {
-            description: "Did high occur in first hour? (1=yes, 0=no)",
-            hypothesis: true,
-          },
-          Low_In_First_Hour: {
-            description: "Did low occur in first hour? (1=yes, 0=no)",
-            hypothesis: true,
-          },
-          High_In_Last_Hour: {
-            description: "Did high occur in last hour? (1=yes, 0=no)",
-            hypothesis: true,
-          },
-          Low_In_Last_Hour: {
-            description: "Did low occur in last hour? (1=yes, 0=no)",
-            hypothesis: true,
-          },
-          Reversal_Type: {
-            description:
-              "Reversal pattern type (1=morning reversal up, -1=morning reversal down, 0=trend day)",
-            hypothesis: true,
-          },
-          High_Low_Spread: {
-            description: "Time spread between high and low in hours",
-            hypothesis: true,
-          },
-          Early_Extreme: {
-            description: "Was either extreme in first hour? (1=yes, 0=no)",
-            hypothesis: true,
-          },
-          Late_Extreme: {
-            description: "Was either extreme in last hour? (1=yes, 0=no)",
-            hypothesis: true,
-          },
-          Intraday_High: {
-            description: "Intraday high price (may differ from daily high on gap days)",
-            hypothesis: false,
-          },
-          Intraday_Low: {
-            description: "Intraday low price (may differ from daily low on gap days)",
-            hypothesis: false,
           },
         },
       },
@@ -850,10 +853,10 @@ ORDER BY t.date_opened`,
       description: "Trades on reversal days (high/low timing)",
       sql: `SELECT
   t.date_opened, t.strategy, t.pl,
-  h.Reversal_Type, h.High_Before_Low, h.High_In_First_Hour
+  m.Reversal_Type, m.High_Before_Low, m.High_In_First_Hour
 FROM trades.trade_data t
-JOIN market.spx_highlow h ON t.date_opened = h.date
-WHERE h.Reversal_Type != 0
+JOIN market.spx_daily m ON t.date_opened = m.date
+WHERE m.Reversal_Type != 0
   AND t.block_id = 'my-block'`,
     },
     {

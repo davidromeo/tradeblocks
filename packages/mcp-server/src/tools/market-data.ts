@@ -5,9 +5,8 @@
  * and correlating with trade performance.
  *
  * Data source: TradingView exports in ~/backtests/_marketdata/
- * - spx_daily.csv: Daily context (35 fields)
+ * - spx_daily.csv: Daily context (55 fields incl. highlow timing + VIX enrichment)
  * - spx_15min.csv: 15-minute intraday checkpoints (primary)
- * - spx_highlow.csv: High/low timing data (optional)
  * - vix_intraday.csv: VIX intraday data (optional)
  */
 

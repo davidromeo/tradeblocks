@@ -13,9 +13,8 @@
  *
  * Available tables:
  *   - trades.trade_data: Trade records from all blocks
- *   - market.spx_daily: Daily SPX market context
+ *   - market.spx_daily: Daily SPX market context (55 fields incl. highlow timing + VIX enrichment)
  *   - market.spx_15min: 15-minute intraday checkpoints
- *   - market.spx_highlow: High/low timing data
  *   - market.vix_intraday: VIX intraday data
  */
 
@@ -33,7 +32,6 @@ const AVAILABLE_TABLES = [
   "trades.trade_data",
   "market.spx_daily",
   "market.spx_15min",
-  "market.spx_highlow",
   "market.vix_intraday",
 ];
 
@@ -236,7 +234,7 @@ export function registerSQLTools(server: McpServer, baseDir: string): void {
       description:
         "Execute a SQL SELECT query against the DuckDB analytics database. " +
         "Query trades (trades.trade_data) and market data (market.spx_daily, " +
-        "market.spx_15min, market.spx_highlow, market.vix_intraday). " +
+        "market.spx_15min, market.vix_intraday). " +
         "Returns up to 1000 rows.",
       inputSchema: z.object({
         query: z.string().describe("SQL SELECT query to execute"),

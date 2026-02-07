@@ -67,7 +67,6 @@ interface DatabaseSchemaOutput {
 const MARKET_TABLE_FILES: Record<string, string> = {
   spx_daily: "spx_daily.csv",
   spx_15min: "spx_15min.csv",
-  spx_highlow: "spx_highlow.csv",
   vix_intraday: "vix_intraday.csv",
 };
 
@@ -211,10 +210,10 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
         "Delete all data from a market table and clear its sync metadata. " +
         "Use when market data is corrupted and needs to be re-imported from CSV. " +
         "After purging, the next query will trigger a fresh sync from the CSV file. " +
-        "Valid tables: spx_daily, spx_15min, spx_highlow, vix_intraday",
+        "Valid tables: spx_daily, spx_15min, vix_intraday",
       inputSchema: z.object({
         table: z
-          .enum(["spx_daily", "spx_15min", "spx_highlow", "vix_intraday"])
+          .enum(["spx_daily", "spx_15min", "vix_intraday"])
           .describe("Market table to purge (without 'market.' prefix)"),
       }),
     },
