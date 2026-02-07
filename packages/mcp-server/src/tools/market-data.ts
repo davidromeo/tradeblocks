@@ -12,14 +12,14 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import * as fs from "fs/promises";
-import * as path from "path";
 import { loadBlock } from "../utils/block-loader.js";
 import {
   createToolOutput,
   formatPercent,
 } from "../utils/output-formatter.js";
 import type { Trade } from "@tradeblocks/lib";
+import { getConnection } from "../db/connection.js";
+import { withFullSync } from "./middleware/sync-middleware.js";
 
 // =============================================================================
 // Types
@@ -621,6 +621,39 @@ function formatTradeDate(date: Date | string): string {
 }
 
 /**
+ * Convert DuckDB query result to an array of Record objects.
+ * Handles BigInt to Number conversion for JSON compatibility.
+ */
+function resultToRecords(result: { columnCount: number; columnName(i: number): string; getRows(): Iterable<unknown[]> }): Record<string, unknown>[] {
+  const columnCount = result.columnCount;
+  const colNames: string[] = [];
+  for (let i = 0; i < columnCount; i++) {
+    colNames.push(result.columnName(i));
+  }
+  const records: Record<string, unknown>[] = [];
+  for (const row of result.getRows()) {
+    const record: Record<string, unknown> = {};
+    for (let i = 0; i < columnCount; i++) {
+      const val = row[i];
+      record[colNames[i]] = typeof val === "bigint" ? Number(val) : val;
+    }
+    records.push(record);
+  }
+  return records;
+}
+
+/**
+ * Get a numeric value from a DuckDB record, handling null/undefined/BigInt.
+ * Returns NaN for null/undefined (matching behavior of parseNum for missing CSV values).
+ */
+function getNum(record: Record<string, unknown>, field: string): number {
+  const val = record[field];
+  if (val === null || val === undefined) return NaN;
+  if (typeof val === "bigint") return Number(val);
+  return val as number;
+}
+
+/**
  * Get volatility regime label
  */
 function getVolRegimeLabel(regime: number): string {
@@ -698,7 +731,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         strategy: z.string().optional().describe("Filter to specific strategy"),
       }),
     },
-    async ({ blockId, segmentBy, strategy }) => {
+    withFullSync(baseDir, async ({ blockId, segmentBy, strategy }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -716,7 +749,19 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           };
         }
 
-        const { daily } = await getMarketData(baseDir);
+        // Collect unique trade dates and query DuckDB for market data
+        const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
+
+        const conn = await getConnection(baseDir);
+        const dailyResult = await conn.runAndReadAll(
+          `SELECT * FROM market.spx_daily WHERE date IN (${tradeDates.map((_, i) => "$" + (i + 1)).join(", ")})`,
+          tradeDates
+        );
+        const dailyRecords = resultToRecords(dailyResult);
+        const daily = new Map<string, Record<string, unknown>>();
+        for (const record of dailyRecords) {
+          daily.set(record["date"] as string, record);
+        }
 
         // Match trades to market data and segment
         interface SegmentStats {
@@ -752,27 +797,29 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
           switch (segmentBy) {
             case "volRegime":
-              segmentValue = marketData.Vol_Regime;
+              segmentValue = getNum(marketData, "Vol_Regime");
               segmentKey = String(segmentValue);
-              segmentLabel = getVolRegimeLabel(marketData.Vol_Regime);
+              segmentLabel = getVolRegimeLabel(getNum(marketData, "Vol_Regime"));
               break;
             case "termStructure":
-              segmentValue = marketData.Term_Structure_State;
+              segmentValue = getNum(marketData, "Term_Structure_State");
               segmentKey = String(segmentValue);
-              segmentLabel = getTermStructureLabel(marketData.Term_Structure_State);
+              segmentLabel = getTermStructureLabel(getNum(marketData, "Term_Structure_State"));
               break;
             case "dayOfWeek":
-              segmentValue = marketData.Day_of_Week;
+              segmentValue = getNum(marketData, "Day_of_Week");
               segmentKey = String(segmentValue);
-              segmentLabel = getDayLabel(marketData.Day_of_Week);
+              segmentLabel = getDayLabel(getNum(marketData, "Day_of_Week"));
               break;
-            case "gapDirection":
-              segmentValue = marketData.Gap_Pct > 0.1 ? "up" : marketData.Gap_Pct < -0.1 ? "down" : "flat";
+            case "gapDirection": {
+              const gapPct = getNum(marketData, "Gap_Pct");
+              segmentValue = gapPct > 0.1 ? "up" : gapPct < -0.1 ? "down" : "flat";
               segmentKey = segmentValue;
               segmentLabel = `Gap ${segmentValue}`;
               break;
+            }
             case "trendScore":
-              segmentValue = marketData.Trend_Score;
+              segmentValue = getNum(marketData, "Trend_Score");
               segmentKey = String(segmentValue);
               segmentLabel = `Trend Score ${segmentValue}`;
               break;
@@ -873,7 +920,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           isError: true,
         };
       }
-    }
+    })
   );
 
   // ---------------------------------------------------------------------------
@@ -891,7 +938,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         minImprovementPct: z.number().optional().describe("Only suggest filters with >= X% win rate improvement (default: 3)"),
       }),
     },
-    async ({ blockId, strategy, minImprovementPct = 3 }) => {
+    withFullSync(baseDir, async ({ blockId, strategy, minImprovementPct = 3 }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -909,12 +956,24 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           };
         }
 
-        const { daily } = await getMarketData(baseDir);
+        // Collect unique trade dates and query DuckDB for market data
+        const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
+
+        const conn = await getConnection(baseDir);
+        const dailyResult = await conn.runAndReadAll(
+          `SELECT * FROM market.spx_daily WHERE date IN (${tradeDates.map((_, i) => "$" + (i + 1)).join(", ")})`,
+          tradeDates
+        );
+        const dailyRecords = resultToRecords(dailyResult);
+        const daily = new Map<string, Record<string, unknown>>();
+        for (const record of dailyRecords) {
+          daily.set(record["date"] as string, record);
+        }
 
         // Match trades to market data
         interface EnrichedTrade {
           trade: Trade;
-          market: DailyMarketData | null;
+          market: Record<string, unknown> | null;
         }
 
         const enrichedTrades: EnrichedTrade[] = trades.map((trade) => {
@@ -965,44 +1024,44 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           field: string;
           operator: string;
           value: number | number[] | string;
-          test: (m: DailyMarketData) => boolean;
+          test: (m: Record<string, unknown>) => boolean;
         }> = [
           // Gap filters
-          { name: "Skip when |Gap_Pct| > 0.5%", field: "Gap_Pct", operator: ">", value: 0.5, test: (m) => Math.abs(m.Gap_Pct) > 0.5 },
-          { name: "Skip when |Gap_Pct| > 0.8%", field: "Gap_Pct", operator: ">", value: 0.8, test: (m) => Math.abs(m.Gap_Pct) > 0.8 },
-          { name: "Skip when |Gap_Pct| > 1.0%", field: "Gap_Pct", operator: ">", value: 1.0, test: (m) => Math.abs(m.Gap_Pct) > 1.0 },
+          { name: "Skip when |Gap_Pct| > 0.5%", field: "Gap_Pct", operator: ">", value: 0.5, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.5 },
+          { name: "Skip when |Gap_Pct| > 0.8%", field: "Gap_Pct", operator: ">", value: 0.8, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.8 },
+          { name: "Skip when |Gap_Pct| > 1.0%", field: "Gap_Pct", operator: ">", value: 1.0, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 1.0 },
           // VIX filters
-          { name: "Skip when VIX > 25", field: "VIX_Close", operator: ">", value: 25, test: (m) => m.VIX_Close > 25 },
-          { name: "Skip when VIX > 30", field: "VIX_Close", operator: ">", value: 30, test: (m) => m.VIX_Close > 30 },
-          { name: "Skip when VIX < 14", field: "VIX_Close", operator: "<", value: 14, test: (m) => m.VIX_Close < 14 },
+          { name: "Skip when VIX > 25", field: "VIX_Close", operator: ">", value: 25, test: (m) => getNum(m, "VIX_Close") > 25 },
+          { name: "Skip when VIX > 30", field: "VIX_Close", operator: ">", value: 30, test: (m) => getNum(m, "VIX_Close") > 30 },
+          { name: "Skip when VIX < 14", field: "VIX_Close", operator: "<", value: 14, test: (m) => getNum(m, "VIX_Close") < 14 },
           // VIX spike filter
-          { name: "Skip when VIX_Spike_Pct > 5%", field: "VIX_Spike_Pct", operator: ">", value: 5, test: (m) => m.VIX_Spike_Pct > 5 },
-          { name: "Skip when VIX_Spike_Pct > 8%", field: "VIX_Spike_Pct", operator: ">", value: 8, test: (m) => m.VIX_Spike_Pct > 8 },
+          { name: "Skip when VIX_Spike_Pct > 5%", field: "VIX_Spike_Pct", operator: ">", value: 5, test: (m) => getNum(m, "VIX_Spike_Pct") > 5 },
+          { name: "Skip when VIX_Spike_Pct > 8%", field: "VIX_Spike_Pct", operator: ">", value: 8, test: (m) => getNum(m, "VIX_Spike_Pct") > 8 },
           // Term structure
-          { name: "Skip backwardation days", field: "Term_Structure_State", operator: "==", value: -1, test: (m) => m.Term_Structure_State === -1 },
+          { name: "Skip backwardation days", field: "Term_Structure_State", operator: "==", value: -1, test: (m) => getNum(m, "Term_Structure_State") === -1 },
           // Vol regime
-          { name: "Skip Vol Regime 5-6 (High/Extreme)", field: "Vol_Regime", operator: "in", value: [5, 6], test: (m) => m.Vol_Regime >= 5 },
-          { name: "Skip Vol Regime 1 (Very Low)", field: "Vol_Regime", operator: "==", value: 1, test: (m) => m.Vol_Regime === 1 },
+          { name: "Skip Vol Regime 5-6 (High/Extreme)", field: "Vol_Regime", operator: "in", value: [5, 6], test: (m) => getNum(m, "Vol_Regime") >= 5 },
+          { name: "Skip Vol Regime 1 (Very Low)", field: "Vol_Regime", operator: "==", value: 1, test: (m) => getNum(m, "Vol_Regime") === 1 },
           // Day of week
-          { name: "Skip Fridays", field: "Day_of_Week", operator: "==", value: 6, test: (m) => m.Day_of_Week === 6 },
-          { name: "Skip Mondays", field: "Day_of_Week", operator: "==", value: 2, test: (m) => m.Day_of_Week === 2 },
+          { name: "Skip Fridays", field: "Day_of_Week", operator: "==", value: 6, test: (m) => getNum(m, "Day_of_Week") === 6 },
+          { name: "Skip Mondays", field: "Day_of_Week", operator: "==", value: 2, test: (m) => getNum(m, "Day_of_Week") === 2 },
           // OPEX
-          { name: "Skip OPEX days", field: "Is_Opex", operator: "==", value: 1, test: (m) => m.Is_Opex === 1 },
+          { name: "Skip OPEX days", field: "Is_Opex", operator: "==", value: 1, test: (m) => getNum(m, "Is_Opex") === 1 },
           // Trend
-          { name: "Skip when Trend_Score <= 1", field: "Trend_Score", operator: "<=", value: 1, test: (m) => m.Trend_Score <= 1 },
-          { name: "Skip when Trend_Score >= 4", field: "Trend_Score", operator: ">=", value: 4, test: (m) => m.Trend_Score >= 4 },
+          { name: "Skip when Trend_Score <= 1", field: "Trend_Score", operator: "<=", value: 1, test: (m) => getNum(m, "Trend_Score") <= 1 },
+          { name: "Skip when Trend_Score >= 4", field: "Trend_Score", operator: ">=", value: 4, test: (m) => getNum(m, "Trend_Score") >= 4 },
           // Consecutive days
-          { name: "Skip after 4+ consecutive up days", field: "Consecutive_Days", operator: ">=", value: 4, test: (m) => m.Consecutive_Days >= 4 },
-          { name: "Skip after 4+ consecutive down days", field: "Consecutive_Days", operator: "<=", value: -4, test: (m) => m.Consecutive_Days <= -4 },
+          { name: "Skip after 4+ consecutive up days", field: "Consecutive_Days", operator: ">=", value: 4, test: (m) => getNum(m, "Consecutive_Days") >= 4 },
+          { name: "Skip after 4+ consecutive down days", field: "Consecutive_Days", operator: "<=", value: -4, test: (m) => getNum(m, "Consecutive_Days") <= -4 },
           // RSI
-          { name: "Skip when RSI > 70", field: "RSI_14", operator: ">", value: 70, test: (m) => m.RSI_14 > 70 },
-          { name: "Skip when RSI < 30", field: "RSI_14", operator: "<", value: 30, test: (m) => m.RSI_14 < 30 },
+          { name: "Skip when RSI > 70", field: "RSI_14", operator: ">", value: 70, test: (m) => getNum(m, "RSI_14") > 70 },
+          { name: "Skip when RSI < 30", field: "RSI_14", operator: "<", value: 30, test: (m) => getNum(m, "RSI_14") < 30 },
         ];
 
         for (const filterDef of testFilters) {
           // Identify trades that would be removed
-          const removed = matchedTrades.filter((t) => filterDef.test(t.market!));
-          const remaining = matchedTrades.filter((t) => !filterDef.test(t.market!));
+          const removed = matchedTrades.filter((t) => filterDef.test(t.market as Record<string, unknown>));
+          const remaining = matchedTrades.filter((t) => !filterDef.test(t.market as Record<string, unknown>));
 
           if (removed.length === 0 || remaining.length < 5) continue;
 
@@ -1070,7 +1129,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           isError: true,
         };
       }
-    }
+    })
   );
 
   // ---------------------------------------------------------------------------
