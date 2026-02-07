@@ -8,31 +8,28 @@ Pine Script indicators for exporting SPX/VIX market data. Export CSVs to `~/back
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `spx-daily.pine` | Comprehensive daily market context | `spx_daily.csv` |
+| `spx-daily.pine` | Daily market context with highlow timing and enriched VIX | `spx_daily.csv` |
 
-Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, trend score, calendar context.
+Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, trend score, calendar context, highlow timing (via `request.security_lower_tf`), and enriched VIX fields (gap, 9D/3M opens, high/low).
 
-### Intraday Price Checkpoints (apply to SPX 5-min chart)
+### 15-Minute Checkpoints (apply to SPX 5-min chart)
 
 | Script | Granularity | Checkpoints/Day | Best For |
 |--------|-------------|-----------------|----------|
 | `spx-15min-checkpoints.pine` | 15 min | 26 | MOC analysis, granular intraday |
-| `spx-30min-checkpoints.pine` | 30 min | 13 | Session analysis |
-| `spx-hourly-checkpoints.pine` | 1 hour | 7 | Long-term patterns |
 
-### Specialized Metrics
+### VIX Intraday (apply to VIX 5-min chart)
 
-| Script | Apply To | Chart | Purpose |
-|--------|----------|-------|---------|
-| `spx-highlow-timing.pine` | SPX | 5-min | When daily high/low occurred |
-| `vix-intraday.pine` | VIX | 5-min | VIX checkpoints and session moves |
+| Script | Purpose | Output |
+|--------|---------|--------|
+| `vix-intraday.pine` | VIX checkpoints and session moves | `vix_intraday.csv` |
 
 > **Note:** ORB (Opening Range Breakout) is calculated dynamically by the MCP server from checkpoint data, allowing flexible start/end times.
 
 ## Quick Start
 
 1. **Open TradingView** and load the appropriate chart (SPX or VIX)
-2. **Set timeframe**: Use 5-min chart for best accuracy
+2. **Set timeframe**: Daily for spx-daily, 5-min for others
 3. **Add indicator**: Pine Editor → paste script → Add to Chart
 4. **Set date range**: Click calendar icon, select range (2022+ recommended)
 5. **Export**: Right-click indicator pane → "Export chart data..."
@@ -44,9 +41,6 @@ Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, tr
 |--------|-----------------|
 | `spx-daily.pine` | `spx_daily.csv` |
 | `spx-15min-checkpoints.pine` | `spx_15min.csv` |
-| `spx-30min-checkpoints.pine` | `spx_30min.csv` |
-| `spx-hourly-checkpoints.pine` | `spx_hourly.csv` |
-| `spx-highlow-timing.pine` | `spx_highlow.csv` |
 | `vix-intraday.pine` | `vix_intraday.csv` |
 
 ## Data Fields
@@ -63,6 +57,12 @@ Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, tr
 - `VIX_Open`, `VIX_Close`, `VIX_Change_Pct`, `VIX_Spike_Pct`
 - `VIX_Percentile` - VIX vs last 252 days
 - `Vol_Regime` - 1=Very Low, 2=Low, 3=Normal, 4=Elevated, 5=High, 6=Extreme
+
+**Enriched VIX Fields**:
+- `VIX_Gap_Pct` - VIX open vs prior close gap (%)
+- `VIX9D_Open`, `VIX9D_Change_Pct` - 9-day VIX open and daily change
+- `VIX_High`, `VIX_Low` - Intraday VIX extremes
+- `VIX3M_Open`, `VIX3M_Change_Pct` - 3-month VIX open and daily change
 
 **VIX Term Structure**:
 - `VIX9D_Close`, `VIX3M_Close`
@@ -85,6 +85,19 @@ Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, tr
 - `Is_Opex` - 1 if monthly options expiration
 - `Prev_Return_Pct` - Prior day's return
 
+**Highlow Timing**:
+- `High_Time`, `Low_Time` - Decimal hours (15.5 = 3:30 PM)
+- `High_Before_Low` - 1 if high came first
+- `High_In_First_Hour`, `Low_In_First_Hour`
+- `High_In_Last_Hour`, `Low_In_Last_Hour`
+- `Reversal_Type` - 1=morning high/afternoon low, -1=opposite
+- `High_Low_Spread` - Time spread between high and low (hours)
+- `Early_Extreme` - 1 if both high and low in first 2 hours
+- `Late_Extreme` - 1 if both high and low in last 2 hours
+- `Intraday_High`, `Intraday_Low` - Intrabar high/low prices
+
+Note: Highlow timing fields use intrabar data and are available for the most recent ~5 years. Older dates will have na values for these fields.
+
 ### 15-Minute Checkpoints (`spx_15min.csv`)
 
 **Prices**: `P_0930` through `P_1545` (26 checkpoints)
@@ -95,34 +108,6 @@ Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, tr
 - `MOC_45min` - 3:15 → close
 - `MOC_60min` - 3:00 → close
 - `Afternoon_Move` - 12:00 → close
-
-### 30-Minute Checkpoints (`spx_30min.csv`)
-
-**Prices**: `P_0930` through `P_1530` (13 checkpoints)
-
-**Session Metrics**:
-- `Morning_Move` - 9:30 → 12:00
-- `Midday_Move` - 12:00 → 14:00
-- `Afternoon_Move` - 14:00 → close
-- `Power_Hour` - 15:00 → close
-- `First_Hour`, `Last_Hour`
-- `AM_vs_PM` - Morning minus afternoon
-
-### Hourly Checkpoints (`spx_hourly.csv`)
-
-**Prices**: `P_0930` through `P_1500` (7 checkpoints)
-
-**Hourly Returns**: `Hour1_Return` through `Hour7_Return`
-
-**Session Metrics**: `Morning`, `Midday`, `Afternoon`, `Reversal_Score`
-
-### High/Low Timing (`spx_highlow.csv`)
-
-- `High_Time`, `Low_Time` - Decimal hours (15.5 = 3:30 PM)
-- `High_Before_Low` - 1 if high came first
-- `High_In_First_Hour`, `Low_In_First_Hour`
-- `High_In_Last_Hour`, `Low_In_Last_Hour`
-- `Reversal_Type` - 1=morning high/afternoon low, -1=opposite
 
 ### VIX Intraday (`vix_intraday.csv`)
 
@@ -154,12 +139,10 @@ await get_market_context({
 
 ## Tips
 
-1. **Chart timeframe**: Use 5-min for all scripts (most accurate checkpoint capture)
+1. **Chart timeframe**: Use Daily for spx-daily, 5-min for checkpoint and VIX scripts.
 
 2. **Date range limits**: TradingView may limit export rows. For long history, export in yearly chunks.
 
 3. **Missing data**: Holidays and early closes will have `na` values for some checkpoints.
 
 4. **Timezone**: All times are US Eastern (ET). Scripts handle EST/EDT automatically.
-
-5. **Combining data**: The MCP server joins all files on date, so you can export multiple scripts and query across them.
