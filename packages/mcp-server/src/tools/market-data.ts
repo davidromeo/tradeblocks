@@ -19,6 +19,7 @@ import {
 import type { Trade } from "@tradeblocks/lib";
 import { getConnection } from "../db/connection.js";
 import { withFullSync } from "./middleware/sync-middleware.js";
+import { buildLookaheadFreeQuery } from "../utils/field-timing.js";
 
 // =============================================================================
 // Types
@@ -452,7 +453,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     {
       description:
         "Analyze a block's losing trades and suggest market-based filters that would have improved performance. " +
-        "Returns actionable filter suggestions with projected impact.",
+        "Returns actionable filter suggestions with projected impact. " +
+        "Close-derived fields use prior trading day values to prevent lookahead bias.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         strategy: z.string().optional().describe("Filter to specific strategy"),
@@ -481,10 +483,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
 
         const conn = await getConnection(baseDir);
-        const dailyResult = await conn.runAndReadAll(
-          `SELECT * FROM market.spx_daily WHERE date IN (${tradeDates.map((_, i) => "$" + (i + 1)).join(", ")})`,
-          tradeDates
-        );
+        const { sql, params } = buildLookaheadFreeQuery(tradeDates);
+        const dailyResult = await conn.runAndReadAll(sql, params);
         const dailyRecords = resultToRecords(dailyResult);
         const daily = new Map<string, Record<string, unknown>>();
         for (const record of dailyRecords) {
@@ -526,6 +526,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             field: string;
             operator: string;
             value: number | number[] | string;
+            lagged: boolean;
           };
           tradesRemoved: number;
           winnersRemoved: number;
@@ -546,37 +547,47 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           operator: string;
           value: number | number[] | string;
           test: (m: Record<string, unknown>) => boolean;
+          lagged: boolean;
         }> = [
+          // Open-known filters (same-day values)
           // Gap filters
-          { name: "Skip when |Gap_Pct| > 0.5%", field: "Gap_Pct", operator: ">", value: 0.5, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.5 },
-          { name: "Skip when |Gap_Pct| > 0.8%", field: "Gap_Pct", operator: ">", value: 0.8, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.8 },
-          { name: "Skip when |Gap_Pct| > 1.0%", field: "Gap_Pct", operator: ">", value: 1.0, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 1.0 },
-          // VIX filters
-          { name: "Skip when VIX > 25", field: "VIX_Close", operator: ">", value: 25, test: (m) => getNum(m, "VIX_Close") > 25 },
-          { name: "Skip when VIX > 30", field: "VIX_Close", operator: ">", value: 30, test: (m) => getNum(m, "VIX_Close") > 30 },
-          { name: "Skip when VIX < 14", field: "VIX_Close", operator: "<", value: 14, test: (m) => getNum(m, "VIX_Close") < 14 },
-          // VIX spike filter
-          { name: "Skip when VIX_Spike_Pct > 5%", field: "VIX_Spike_Pct", operator: ">", value: 5, test: (m) => getNum(m, "VIX_Spike_Pct") > 5 },
-          { name: "Skip when VIX_Spike_Pct > 8%", field: "VIX_Spike_Pct", operator: ">", value: 8, test: (m) => getNum(m, "VIX_Spike_Pct") > 8 },
-          // Term structure
-          { name: "Skip backwardation days", field: "Term_Structure_State", operator: "==", value: -1, test: (m) => getNum(m, "Term_Structure_State") === -1 },
-          // Vol regime
-          { name: "Skip Vol Regime 5-6 (High/Extreme)", field: "Vol_Regime", operator: "in", value: [5, 6], test: (m) => getNum(m, "Vol_Regime") >= 5 },
-          { name: "Skip Vol Regime 1 (Very Low)", field: "Vol_Regime", operator: "==", value: 1, test: (m) => getNum(m, "Vol_Regime") === 1 },
+          { name: "Skip when |Gap_Pct| > 0.5%", field: "Gap_Pct", operator: ">", value: 0.5, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.5, lagged: false },
+          { name: "Skip when |Gap_Pct| > 0.8%", field: "Gap_Pct", operator: ">", value: 0.8, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.8, lagged: false },
+          { name: "Skip when |Gap_Pct| > 1.0%", field: "Gap_Pct", operator: ">", value: 1.0, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 1.0, lagged: false },
           // Day of week
-          { name: "Skip Fridays", field: "Day_of_Week", operator: "==", value: 6, test: (m) => getNum(m, "Day_of_Week") === 6 },
-          { name: "Skip Mondays", field: "Day_of_Week", operator: "==", value: 2, test: (m) => getNum(m, "Day_of_Week") === 2 },
+          { name: "Skip Fridays", field: "Day_of_Week", operator: "==", value: 6, test: (m) => getNum(m, "Day_of_Week") === 6, lagged: false },
+          { name: "Skip Mondays", field: "Day_of_Week", operator: "==", value: 2, test: (m) => getNum(m, "Day_of_Week") === 2, lagged: false },
           // OPEX
-          { name: "Skip OPEX days", field: "Is_Opex", operator: "==", value: 1, test: (m) => getNum(m, "Is_Opex") === 1 },
-          // Trend
-          { name: "Skip when Trend_Score <= 1", field: "Trend_Score", operator: "<=", value: 1, test: (m) => getNum(m, "Trend_Score") <= 1 },
-          { name: "Skip when Trend_Score >= 4", field: "Trend_Score", operator: ">=", value: 4, test: (m) => getNum(m, "Trend_Score") >= 4 },
-          // Consecutive days
-          { name: "Skip after 4+ consecutive up days", field: "Consecutive_Days", operator: ">=", value: 4, test: (m) => getNum(m, "Consecutive_Days") >= 4 },
-          { name: "Skip after 4+ consecutive down days", field: "Consecutive_Days", operator: "<=", value: -4, test: (m) => getNum(m, "Consecutive_Days") <= -4 },
-          // RSI
-          { name: "Skip when RSI > 70", field: "RSI_14", operator: ">", value: 70, test: (m) => getNum(m, "RSI_14") > 70 },
-          { name: "Skip when RSI < 30", field: "RSI_14", operator: "<", value: 30, test: (m) => getNum(m, "RSI_14") < 30 },
+          { name: "Skip OPEX days", field: "Is_Opex", operator: "==", value: 1, test: (m) => getNum(m, "Is_Opex") === 1, lagged: false },
+          // VIX_Open filters (new, BIAS-05)
+          { name: "Skip when VIX_Open > 25", field: "VIX_Open", operator: ">", value: 25, test: (m) => getNum(m, "VIX_Open") > 25, lagged: false },
+          { name: "Skip when VIX_Open > 30", field: "VIX_Open", operator: ">", value: 30, test: (m) => getNum(m, "VIX_Open") > 30, lagged: false },
+          // VIX_Gap_Pct filters (new, BIAS-05)
+          { name: "Skip when |VIX_Gap_Pct| > 10%", field: "VIX_Gap_Pct", operator: ">", value: 10, test: (m) => Math.abs(getNum(m, "VIX_Gap_Pct")) > 10, lagged: false },
+          { name: "Skip when |VIX_Gap_Pct| > 15%", field: "VIX_Gap_Pct", operator: ">", value: 15, test: (m) => Math.abs(getNum(m, "VIX_Gap_Pct")) > 15, lagged: false },
+
+          // Close-derived filters (prior trading day values via LAG CTE)
+          // VIX (close-derived)
+          { name: "Skip when prior-day VIX > 25", field: "VIX_Close", operator: ">", value: 25, test: (m) => getNum(m, "prev_VIX_Close") > 25, lagged: true },
+          { name: "Skip when prior-day VIX > 30", field: "VIX_Close", operator: ">", value: 30, test: (m) => getNum(m, "prev_VIX_Close") > 30, lagged: true },
+          { name: "Skip when prior-day VIX < 14", field: "VIX_Close", operator: "<", value: 14, test: (m) => getNum(m, "prev_VIX_Close") < 14, lagged: true },
+          // VIX spike (close-derived)
+          { name: "Skip when prior-day VIX_Spike > 5%", field: "VIX_Spike_Pct", operator: ">", value: 5, test: (m) => getNum(m, "prev_VIX_Spike_Pct") > 5, lagged: true },
+          { name: "Skip when prior-day VIX_Spike > 8%", field: "VIX_Spike_Pct", operator: ">", value: 8, test: (m) => getNum(m, "prev_VIX_Spike_Pct") > 8, lagged: true },
+          // Term structure (close-derived)
+          { name: "Skip prior-day backwardation", field: "Term_Structure_State", operator: "==", value: -1, test: (m) => getNum(m, "prev_Term_Structure_State") === -1, lagged: true },
+          // Vol regime (close-derived)
+          { name: "Skip prior-day Vol Regime 5-6 (High/Extreme)", field: "Vol_Regime", operator: "in", value: [5, 6], test: (m) => getNum(m, "prev_Vol_Regime") >= 5, lagged: true },
+          { name: "Skip prior-day Vol Regime 1 (Very Low)", field: "Vol_Regime", operator: "==", value: 1, test: (m) => getNum(m, "prev_Vol_Regime") === 1, lagged: true },
+          // Trend (close-derived)
+          { name: "Skip when prior-day Trend_Score <= 1", field: "Trend_Score", operator: "<=", value: 1, test: (m) => getNum(m, "prev_Trend_Score") <= 1, lagged: true },
+          { name: "Skip when prior-day Trend_Score >= 4", field: "Trend_Score", operator: ">=", value: 4, test: (m) => getNum(m, "prev_Trend_Score") >= 4, lagged: true },
+          // Consecutive days (close-derived)
+          { name: "Skip after prior-day 4+ consecutive up", field: "Consecutive_Days", operator: ">=", value: 4, test: (m) => getNum(m, "prev_Consecutive_Days") >= 4, lagged: true },
+          { name: "Skip after prior-day 4+ consecutive down", field: "Consecutive_Days", operator: "<=", value: -4, test: (m) => getNum(m, "prev_Consecutive_Days") <= -4, lagged: true },
+          // RSI (close-derived)
+          { name: "Skip when prior-day RSI > 70", field: "RSI_14", operator: ">", value: 70, test: (m) => getNum(m, "prev_RSI_14") > 70, lagged: true },
+          { name: "Skip when prior-day RSI < 30", field: "RSI_14", operator: "<", value: 30, test: (m) => getNum(m, "prev_RSI_14") < 30, lagged: true },
         ];
 
         for (const filterDef of testFilters) {
@@ -612,6 +623,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
                 field: filterDef.field,
                 operator: filterDef.operator,
                 value: filterDef.value,
+                lagged: filterDef.lagged,
               },
               tradesRemoved: removed.length,
               winnersRemoved,
@@ -635,6 +647,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         return createToolOutput(summary, {
           blockId,
+          lagNote: "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Trend_Score, Consecutive_Days, VIX_Spike_Pct, Term_Structure_State) use prior trading day values to prevent lookahead bias. Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Day_of_Week, Is_Opex) use same-day values.",
           strategy: strategy || null,
           currentStats: {
             trades: matchedTrades.length,

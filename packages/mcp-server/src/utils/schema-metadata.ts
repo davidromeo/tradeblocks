@@ -271,7 +271,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           VIX_Open: {
             description: "VIX open value",
-            hypothesis: false,
+            hypothesis: true,
             timing: 'open',
           },
           VIX_Close: {
