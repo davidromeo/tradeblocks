@@ -1815,7 +1815,7 @@ export function registerPerformanceTools(
     "compare_backtest_to_actual",
     {
       description:
-        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. When no dateRange is specified, comparison is auto-limited to the reporting log's date range overlap. Unmatched trades are summarized separately (not listed individually). Supports trade-level detail, outlier detection, and flexible grouping. Limitation: Trade-level matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
+        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. When no dateRange is specified, comparison is auto-limited to the reporting log's date range overlap. By default, output includes matched and unmatched comparisons; set matchedOnly=true to include only matched rows. Supports trade-level detail, outlier detection, and flexible grouping. Limitation: Trade-level matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
@@ -1847,7 +1847,7 @@ export function registerPerformanceTools(
           .boolean()
           .default(false)
           .describe(
-            "Only include trades where both backtest and actual exist on the same date (excludes unmatched trades from totals)"
+            "Only include trades where both backtest and actual exist on the same date (excludes unmatched rows from output and totals)"
           ),
         detailLevel: z
           .enum(["summary", "trades"])
@@ -2017,7 +2017,7 @@ export function registerPerformanceTools(
           comparisons: DetailedComparison[];
         }
 
-        let comparisons: DetailedComparison[] = [];
+        const comparisons: DetailedComparison[] = [];
 
         if (detailLevel === "trades") {
           // Trade-level matching by date|strategy|time (minute precision)
@@ -2460,20 +2460,18 @@ export function registerPerformanceTools(
             }
           : null;
 
-        // Remove unmatched entries from comparisons (keep only matched for main array)
-        comparisons = comparisons.filter((c) => c.matched);
-
-        // Apply matchedOnly filter (now comparisons already contains only matched)
-        // matchedOnly parameter is kept for API backward compatibility but is now the default behavior
-        // for the comparisons array. Unmatched trades are always in the unmatchedSummary.
+        // Apply matchedOnly filter to the primary output set
+        let outputComparisons = matchedOnly
+          ? comparisons.filter((c) => c.matched)
+          : [...comparisons];
 
         // Apply outliersOnly filter if requested
         if (outliersOnly) {
-          comparisons = comparisons.filter((c) => c.isOutlier);
+          outputComparisons = outputComparisons.filter((c) => c.isOutlier);
         }
 
         // Sort by absolute slippage (worst first) to surface problem areas
-        comparisons.sort(
+        outputComparisons.sort(
           (a, b) => Math.abs(b.slippage) - Math.abs(a.slippage)
         );
 
@@ -2481,7 +2479,7 @@ export function registerPerformanceTools(
         let groups: GroupedResult[] | null = null;
         if (groupBy !== "none") {
           const groupMap = new Map<string, DetailedComparison[]>();
-          for (const comparison of comparisons) {
+          for (const comparison of outputComparisons) {
             const gKey = getGroupKey(comparison.date, comparison.strategy, groupBy);
             const existing = groupMap.get(gKey) || [];
             existing.push(comparison);
@@ -2515,13 +2513,17 @@ export function registerPerformanceTools(
             .sort((a, b) => Math.abs(b.totalSlippage) - Math.abs(a.totalSlippage));
         }
 
-        // Calculate summary statistics from matched comparisons only
-        const matchedForSummary = comparisons.filter((c) => c.matched);
-        const totalBacktestPl = matchedForSummary.reduce(
+        // Calculate summary statistics.
+        // matchedOnly=false includes unmatched rows in totals for backward compatibility.
+        const comparisonsForTotals = matchedOnly
+          ? outputComparisons.filter((c) => c.matched)
+          : outputComparisons;
+        const matchedForSummary = outputComparisons.filter((c) => c.matched);
+        const totalBacktestPl = comparisonsForTotals.reduce(
           (sum, c) => sum + c.scaledBacktestPl,
           0
         );
-        const totalActualPl = matchedForSummary.reduce(
+        const totalActualPl = comparisonsForTotals.reduce(
           (sum, c) => sum + (scaling === "perContract" && c.actualContracts > 0
             ? c.actualPl / c.actualContracts
             : c.actualPl),
@@ -2569,7 +2571,7 @@ export function registerPerformanceTools(
           outlierStats !== null
             ? ` | ${outlierStats.outlierCount} outliers`
             : "";
-        const summary = `Comparison: ${blockId}${filterStr} | ${scaling} scaling | ${matchedForSummary.length}/${comparisons.length} matched | ${slippageDisplay}${outlierDisplay}`;
+        const summary = `Comparison: ${blockId}${filterStr} | ${scaling} scaling | ${matchedForSummary.length}/${outputComparisons.length} matched | ${slippageDisplay}${outlierDisplay}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -2590,7 +2592,7 @@ export function registerPerformanceTools(
           backtestStrategies,
           actualStrategies,
           summary: {
-            totalComparisons: comparisons.length,
+            totalComparisons: outputComparisons.length,
             matchedComparisons: matchedForSummary.length,
             unmatchedBacktestCount: unmatchedBacktestEntries.length,
             unmatchedActualCount: unmatchedActualEntries.length,
@@ -2602,13 +2604,15 @@ export function registerPerformanceTools(
             avgSlippage,
             avgSlippagePercent,
             outlierStats,
-            note: "Summary stats are computed from matched comparisons only. Unmatched trades are reported separately.",
+            note: matchedOnly
+              ? "Summary stats are computed from matched rows only."
+              : "Summary stats include unmatched rows because matchedOnly=false. Unmatched trades are also reported in unmatchedSummary.",
           },
           unmatchedSummary: {
             backtest: unmatchedBacktestSummary,
             actual: unmatchedActualSummary,
           },
-          ...(groupBy === "none" ? { comparisons } : { groups }),
+          ...(groupBy === "none" ? { comparisons: outputComparisons } : { groups }),
         };
 
         return createToolOutput(summary, structuredData);

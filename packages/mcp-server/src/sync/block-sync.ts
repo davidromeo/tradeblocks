@@ -138,8 +138,13 @@ async function findTradelogFile(blockPath: string): Promise<string | null> {
     const csvFiles = entries
       .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".csv"))
       .map((e) => e.name);
-    if (csvFiles.length > 0) {
-      return csvFiles[0];
+    const candidateTradeCsvFiles = csvFiles
+      .filter((name) => {
+        const lower = name.toLowerCase();
+        return lower !== "dailylog.csv" && lower !== "reportinglog.csv";
+      });
+    if (candidateTradeCsvFiles.length > 0) {
+      return candidateTradeCsvFiles[0];
     }
   } catch {
     // Can't read directory
@@ -373,9 +378,33 @@ export async function syncBlockInternal(
   blockPath: string
 ): Promise<BlockSyncResult> {
   try {
+    // Get existing metadata early (needed for missing-file cleanup logic)
+    const existingMetadata = await getSyncMetadata(conn, blockId);
+
     // Find the tradelog file
     const tradelogFilename = await findTradelogFile(blockPath);
     if (!tradelogFilename) {
+      // Previously-synced block lost its tradelog: remove stale data/metadata
+      if (existingMetadata) {
+        await conn.run("BEGIN TRANSACTION");
+        try {
+          await conn.run(
+            "DELETE FROM trades.trade_data WHERE block_id = $1",
+            [blockId]
+          );
+          await conn.run(
+            "DELETE FROM trades.reporting_data WHERE block_id = $1",
+            [blockId]
+          );
+          await deleteSyncMetadata(conn, blockId);
+          await conn.run("COMMIT");
+          return { blockId, status: "deleted" };
+        } catch (err) {
+          await conn.run("ROLLBACK");
+          throw err;
+        }
+      }
+
       return {
         blockId,
         status: "error",
@@ -387,9 +416,6 @@ export async function syncBlockInternal(
 
     // Hash the tradelog file
     const tradelogHash = await hashFileContent(tradelogPath);
-
-    // Get existing metadata
-    const existingMetadata = await getSyncMetadata(conn, blockId);
 
     // Check if hash matches (unchanged)
     // Also check if reportinglog exists but hasn't been synced yet
@@ -405,7 +431,12 @@ export async function syncBlockInternal(
           return { blockId, status: "unchanged" };
         }
       } else {
-        return { blockId, status: "unchanged" };
+        // Reporting log was removed after previously being synced - clear stale data
+        if (existingMetadata.reportinglog_hash !== null) {
+          // Fall through to sync path, which will delete reporting_data and write null hash
+        } else {
+          return { blockId, status: "unchanged" };
+        }
       }
     }
 
@@ -506,6 +537,10 @@ export async function syncBlockInternal(
             "DELETE FROM trades.trade_data WHERE block_id = $1",
             [blockId]
           );
+          await conn.run(
+            "DELETE FROM trades.reporting_data WHERE block_id = $1",
+            [blockId]
+          );
           await deleteSyncMetadata(conn, blockId);
           await conn.run("COMMIT");
         } catch {
@@ -574,7 +609,8 @@ export async function detectBlockChanges(
     // Block exists in metadata - check if hash changed
     const tradelogFilename = await findTradelogFile(blockPath);
     if (!tradelogFilename) {
-      // No tradelog found - skip this folder
+      // Previously-synced block lost tradelog: mark for cleanup
+      toDelete.push(blockId);
       continue;
     }
 
@@ -595,6 +631,9 @@ export async function detectBlockChanges(
             // Reportinglog changed or was never synced
             toSync.push(blockId);
           }
+        } else if (metadata?.reportinglog_hash !== null) {
+          // Reportinglog was removed after being previously synced
+          toSync.push(blockId);
         }
       }
     } catch {

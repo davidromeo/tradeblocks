@@ -20,11 +20,13 @@ void path.dirname;
 
 // CSV headers matching the tradelog format
 const CSV_HEADERS = 'Date Opened,Time Opened,Date Closed,Time Closed,Opening Price,Closing Price,Legs,Premium,No. of Contracts,P/L,Strategy,Opening Commissions + Fees,Closing Commissions + Fees,Reason For Close,Funds at Close,Margin Req.';
+const REPORTING_HEADERS = 'Date Opened,Time Opened,Date Closed,Time Closed,Opening Price,Closing Price,Legs,Initial Premium,No. of Contracts,P/L,Strategy,Reason For Close,Avg. Closing Cost';
 
 // Sample trade rows for tests
 const SAMPLE_TRADE_ROW_1 = '2024-01-02,09:35:00,2024-01-02,15:30:00,2.50,0.50,SPX 4800P/4750P,250,1,200,Sync Test Strategy,1.50,1.50,Target,10200,5000';
 const SAMPLE_TRADE_ROW_2 = '2024-01-03,09:35:00,2024-01-03,15:45:00,2.75,0.25,SPX 4820P/4770P,275,1,250,Sync Test Strategy,1.50,1.50,Target,10450,5000';
 const SAMPLE_TRADE_ROW_3 = '2024-01-04,09:35:00,2024-01-04,14:00:00,2.25,0.10,SPX 4900P/4850P,225,2,430,Sync Test Strategy,3.00,3.00,Target,10680,5000';
+const SAMPLE_REPORTING_ROW_1 = '2024-01-02,09:35:00,2024-01-02,15:30:00,2.50,0.50,SPX 4800P/4750P,250,1,180,Sync Test Strategy,Target,0.50';
 
 /**
  * Create a tradelog.csv in a block directory with the given trade rows
@@ -35,6 +37,20 @@ async function createBlockWithTrades(testDir: string, blockId: string, tradeRows
   const csvContent = [CSV_HEADERS, ...tradeRows].join('\n');
   await fs.writeFile(path.join(blockPath, 'tradelog.csv'), csvContent);
   return blockPath;
+}
+
+/**
+ * Create reportinglog.csv in a block directory with given rows
+ */
+async function createReportingLog(
+  testDir: string,
+  blockId: string,
+  reportingRows: string[]
+): Promise<void> {
+  const blockPath = path.join(testDir, blockId);
+  await fs.mkdir(blockPath, { recursive: true });
+  const csvContent = [REPORTING_HEADERS, ...reportingRows].join('\n');
+  await fs.writeFile(path.join(blockPath, 'reportinglog.csv'), csvContent);
 }
 
 /**
@@ -49,6 +65,33 @@ async function getTradeCount(testDir: string, blockId: string): Promise<number> 
   );
   const rows = reader.getRows();
   return rows.length > 0 ? Number(rows[0][0]) : 0;
+}
+
+/**
+ * Query reporting trade count for a block from DuckDB
+ */
+async function getReportingCount(testDir: string, blockId: string): Promise<number> {
+  const conn = await getConnection(testDir);
+  const reader = await conn.runAndReadAll(
+    `SELECT COUNT(*) as count FROM trades.reporting_data WHERE block_id = $1`,
+    [blockId]
+  );
+  const rows = reader.getRows();
+  return rows.length > 0 ? Number(rows[0][0]) : 0;
+}
+
+/**
+ * Get reportinglog_hash from sync metadata (null when reporting log is not tracked)
+ */
+async function getReportingHash(testDir: string, blockId: string): Promise<string | null> {
+  const conn = await getConnection(testDir);
+  const reader = await conn.runAndReadAll(
+    `SELECT reportinglog_hash FROM trades._sync_metadata WHERE block_id = $1`,
+    [blockId]
+  );
+  const rows = reader.getRows();
+  if (rows.length === 0) return null;
+  return (rows[0][0] as string | null) ?? null;
 }
 
 /**
@@ -156,6 +199,62 @@ describe('Sync Layer Integration', () => {
       // Verify metadata removed
       hasMetadata = await hasBlockMetadata(testDir, 'to-delete');
       expect(hasMetadata).toBe(false);
+    });
+
+    it('cleans up stale data when tradelog is removed from a previously-synced block', async () => {
+      // Create and sync block with both tradelog and reportinglog
+      await createBlockWithTrades(testDir, 'missing-tradelog', [SAMPLE_TRADE_ROW_1]);
+      await createReportingLog(testDir, 'missing-tradelog', [SAMPLE_REPORTING_ROW_1]);
+      await syncAllBlocks(testDir);
+
+      let tradeCount = await getTradeCount(testDir, 'missing-tradelog');
+      let reportingCount = await getReportingCount(testDir, 'missing-tradelog');
+      expect(tradeCount).toBe(1);
+      expect(reportingCount).toBe(1);
+
+      // Remove tradelog only
+      await fs.rm(path.join(testDir, 'missing-tradelog', 'tradelog.csv'));
+
+      // Sync should treat this as deleted/stale and clean all synced rows
+      const result = await syncAllBlocks(testDir);
+      expect(result.blocksDeleted).toBe(1);
+      expect(result.errors).toHaveLength(0);
+
+      tradeCount = await getTradeCount(testDir, 'missing-tradelog');
+      reportingCount = await getReportingCount(testDir, 'missing-tradelog');
+      const hasMetadata = await hasBlockMetadata(testDir, 'missing-tradelog');
+      expect(tradeCount).toBe(0);
+      expect(reportingCount).toBe(0);
+      expect(hasMetadata).toBe(false);
+    });
+
+    it('clears reporting data when reportinglog is removed but tradelog is unchanged', async () => {
+      // Create and sync block with both logs
+      await createBlockWithTrades(testDir, 'missing-reportinglog', [SAMPLE_TRADE_ROW_1]);
+      await createReportingLog(testDir, 'missing-reportinglog', [SAMPLE_REPORTING_ROW_1]);
+      await syncAllBlocks(testDir);
+
+      let tradeCount = await getTradeCount(testDir, 'missing-reportinglog');
+      let reportingCount = await getReportingCount(testDir, 'missing-reportinglog');
+      let reportingHash = await getReportingHash(testDir, 'missing-reportinglog');
+      expect(tradeCount).toBe(1);
+      expect(reportingCount).toBe(1);
+      expect(reportingHash).not.toBeNull();
+
+      // Remove reportinglog only (tradelog hash remains unchanged)
+      await fs.rm(path.join(testDir, 'missing-reportinglog', 'reportinglog.csv'));
+
+      // Sync should resync this block to clear stale reporting_data and hash
+      const result = await syncAllBlocks(testDir);
+      expect(result.blocksSynced).toBe(1);
+      expect(result.errors).toHaveLength(0);
+
+      tradeCount = await getTradeCount(testDir, 'missing-reportinglog');
+      reportingCount = await getReportingCount(testDir, 'missing-reportinglog');
+      reportingHash = await getReportingHash(testDir, 'missing-reportinglog');
+      expect(tradeCount).toBe(1);
+      expect(reportingCount).toBe(0);
+      expect(reportingHash).toBeNull();
     });
 
     it('skips unchanged blocks (not reprocessed)', async () => {
