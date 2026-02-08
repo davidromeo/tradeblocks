@@ -69,6 +69,19 @@ Plans:
 Plans:
 - [x] 58-01-PLAN.md -- Extend ColumnInfo with timing, update example queries with LAG CTE patterns, add lagTemplate
 
+### Phase 59: Intraday Market Context Enrichment
+**Goal:** Extend enrich_trades with intraday market context from spx_15min (26 price checkpoints) and vix_intraday (14 VIX checkpoints) via time-based matching against trade entry timestamps
+**Depends on:** Phase 57 (needs enrich_trades tool as foundation)
+**Requirements**: EXT-02, EXT-03
+**Success Criteria** (what must be TRUE):
+  1. Calling enrich_trades with includeIntradayContext=true returns per-trade intraday SPX/VIX checkpoint data filtered to only checkpoints known at trade entry time
+  2. A trade entered at 09:35 sees only P_0930 (not P_0945+) and VIX_0930 (not VIX_1000+)
+  3. Without includeIntradayContext, output is identical to Phase 57 (backward compatible)
+  4. Intraday day-level aggregates (MOC moves, VIX spike flags) require BOTH includeIntradayContext and includeOutcomeFields
+**Plans:** 1 plan
+Plans:
+- [ ] 59-01-PLAN.md -- Create intraday-timing utility and extend enrich_trades with checkpoint context
+
 ## Progress
 
 **Execution Order:** 55 -> 56 -> 57 -> 58 -> 59
@@ -79,13 +92,4 @@ Plans:
 | 56. Fix Existing Tools | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 57. Restore enrich_trades | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
-| 59. Intraday Market Context Enrichment | v2.9 | 0/TBD | Not started | - |
-
-### Phase 59: Intraday market context enrichment
-
-**Goal:** Extend enrich_trades with intraday market context from spx_15min (26 price checkpoints) and vix_intraday (14 VIX checkpoints) via time-based matching against trade entry timestamps
-**Depends on:** Phase 57 (needs enrich_trades tool as foundation)
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 59 to break down)
+| 59. Intraday Market Context Enrichment | v2.9 | 0/1 | Not started | - |
