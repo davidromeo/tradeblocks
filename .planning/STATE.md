@@ -2,26 +2,26 @@
 
 ## Current Position
 
-Phase: 58 of 59 (Schema Metadata Documentation)
+Phase: 59 of 59 (Intraday Market Context Enrichment)
 Plan: 1 of 1 in current phase
-Status: Phase 58 complete
-Last activity: 2026-02-08 -- Completed 58-01 schema metadata and lag-aware example queries
+Status: Phase 59 complete -- milestone v2.9 complete
+Last activity: 2026-02-08 -- Completed 59-01 intraday market context enrichment
 
-Progress: [########..] 80%
+Progress: [##########] 100%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** v2.9 Lookahead-Free Market Analytics -- Phase 58 Schema Metadata Documentation
+**Current focus:** v2.9 Lookahead-Free Market Analytics -- Phase 59 Intraday Market Context Enrichment (COMPLETE)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4 (v2.9)
-- Average duration: 4.3min
-- Total execution time: 17min
+- Total plans completed: 5 (v2.9)
+- Average duration: 4.0min
+- Total execution time: 20min
 
 **By Phase:**
 
@@ -31,6 +31,7 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 | 56-fix-existing-tools | 1 | 5min | 5min |
 | 57-restore-enrich-trades | 1 | 3min | 3min |
 | 58-schema-metadata-documentation | 1 | 3min | 3min |
+| 59-intraday-market-context-enrichment | 1 | 3min | 3min |
 
 ## Accumulated Context
 
@@ -52,6 +53,11 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 - generateLagTemplate() in schema.ts (not schema-metadata.ts) to avoid circular imports
 - LAG template dynamically generated from field-timing sets (stays in sync automatically)
 - IS NOT NULL filter on LAG columns in hypothesis example queries (handles first-row NULL from LAG)
+- Checkpoint at time T is known AT time T (inclusive); trade at 09:30 sees P_0930
+- timeOpened=00:00:00 returns empty knownCheckpoints (not null intradayContext)
+- Intraday outcome fields require BOTH includeIntradayContext=true AND includeOutcomeFields=true
+- SPX outcome fields prefixed with spx_ to avoid collision; VIX OHLC prefixed with vix_
+- VIX open excluded from outcome fields (known at open, not end-of-day)
 
 ### Pending Todos
 
@@ -69,5 +75,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 58-01-PLAN.md (schema metadata and lag-aware example queries)
+Stopped at: Completed 59-01-PLAN.md (intraday market context enrichment)
 Resume file: None
