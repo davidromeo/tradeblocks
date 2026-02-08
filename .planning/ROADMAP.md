@@ -14,7 +14,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.8).
 - [x] **Phase 56: Fix Existing Tools** - Correct lookahead bias in suggest_filters and analyze_regime_performance with split join pattern
 - [x] **Phase 57: Restore enrich_trades** - New MCP tool returning trades enriched with lag-aware market context
 - [x] **Phase 58: Schema Metadata + Documentation** - Surface timing metadata in describe_database with lag-aware example queries
-- [ ] **Phase 59: Intraday Market Context Enrichment** - Enrich trades with spx_15min and vix_intraday data via time-based checkpoint matching
+- [x] **Phase 59: Intraday Market Context Enrichment** - Enrich trades with spx_15min and vix_intraday data via time-based checkpoint matching
 
 ## Phase Details
 
@@ -80,7 +80,7 @@ Plans:
   4. Intraday day-level aggregates (MOC moves, VIX spike flags) require BOTH includeIntradayContext and includeOutcomeFields
 **Plans:** 1 plan
 Plans:
-- [ ] 59-01-PLAN.md -- Create intraday-timing utility and extend enrich_trades with checkpoint context
+- [x] 59-01-PLAN.md -- Create intraday-timing utility and extend enrich_trades with checkpoint context
 
 ## Progress
 
@@ -92,4 +92,4 @@ Plans:
 | 56. Fix Existing Tools | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 57. Restore enrich_trades | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
-| 59. Intraday Market Context Enrichment | v2.9 | 0/1 | Not started | - |
+| 59. Intraday Market Context Enrichment | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
