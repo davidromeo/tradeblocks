@@ -240,7 +240,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     {
       description:
         "Break down a block's trade performance by market regime (volatility, term structure, day of week, etc.). " +
-        "Identifies which market conditions favor or hurt the strategy.",
+        "Identifies which market conditions favor or hurt the strategy. " +
+        "Close-derived fields (volRegime, termStructure, trendScore) use prior trading day values to prevent lookahead bias.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         segmentBy: z.enum([
@@ -275,10 +276,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
 
         const conn = await getConnection(baseDir);
-        const dailyResult = await conn.runAndReadAll(
-          `SELECT * FROM market.spx_daily WHERE date IN (${tradeDates.map((_, i) => "$" + (i + 1)).join(", ")})`,
-          tradeDates
-        );
+        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeDates);
+        const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
         const dailyRecords = resultToRecords(dailyResult);
         const daily = new Map<string, Record<string, unknown>>();
         for (const record of dailyRecords) {
@@ -318,16 +317,22 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           let segmentValue: number | string;
 
           switch (segmentBy) {
-            case "volRegime":
-              segmentValue = getNum(marketData, "Vol_Regime");
-              segmentKey = String(segmentValue);
-              segmentLabel = getVolRegimeLabel(getNum(marketData, "Vol_Regime"));
+            case "volRegime": {
+              const val = getNum(marketData, "prev_Vol_Regime");
+              if (isNaN(val)) continue; // No prior day data
+              segmentValue = val;
+              segmentKey = String(val);
+              segmentLabel = getVolRegimeLabel(val);
               break;
-            case "termStructure":
-              segmentValue = getNum(marketData, "Term_Structure_State");
-              segmentKey = String(segmentValue);
-              segmentLabel = getTermStructureLabel(getNum(marketData, "Term_Structure_State"));
+            }
+            case "termStructure": {
+              const val = getNum(marketData, "prev_Term_Structure_State");
+              if (isNaN(val)) continue; // No prior day data
+              segmentValue = val;
+              segmentKey = String(val);
+              segmentLabel = getTermStructureLabel(val);
               break;
+            }
             case "dayOfWeek":
               segmentValue = getNum(marketData, "Day_of_Week");
               segmentKey = String(segmentValue);
@@ -340,11 +345,14 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
               segmentLabel = `Gap ${segmentValue}`;
               break;
             }
-            case "trendScore":
-              segmentValue = getNum(marketData, "Trend_Score");
-              segmentKey = String(segmentValue);
-              segmentLabel = `Trend Score ${segmentValue}`;
+            case "trendScore": {
+              const val = getNum(marketData, "prev_Trend_Score");
+              if (isNaN(val)) continue; // No prior day data
+              segmentValue = val;
+              segmentKey = String(val);
+              segmentLabel = `Trend Score ${val}`;
               break;
+            }
             default:
               continue;
           }
@@ -421,9 +429,15 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const summary = `Regime analysis: ${blockId} by ${segmentBy} | ${totalMatched} trades across ${segmentStats.length} segments`;
 
+        const laggedSegments = ["volRegime", "termStructure", "trendScore"];
+        const lagNote = laggedSegments.includes(segmentBy)
+          ? `Segmentation by ${segmentBy} uses prior trading day values (close-derived field) to prevent lookahead bias.`
+          : `Segmentation by ${segmentBy} uses same-day values (${segmentBy === "dayOfWeek" ? "static" : "open-known"} field).`;
+
         return createToolOutput(summary, {
           blockId,
           segmentBy,
+          lagNote,
           strategy: strategy || null,
           tradesTotal: trades.length,
           tradesMatched: totalMatched,
