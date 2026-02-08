@@ -65,7 +65,9 @@ Plans:
   1. describe_database output shows a timing property (open/close/static) on each spx_daily column description
   2. Example queries in describe_database use lag-aware JOIN patterns instead of naive same-day joins
   3. A pre-built LAG() CTE template is included in describe_database output that users can copy for correct run_sql usage
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 58-01-PLAN.md -- Extend ColumnInfo with timing, update example queries with LAG CTE patterns, add lagTemplate
 
 ## Progress
 
@@ -76,7 +78,7 @@ Plans:
 | 55. Field Classification Foundation | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 56. Fix Existing Tools | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 57. Restore enrich_trades | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
-| 58. Schema Metadata + Documentation | v2.9 | 0/TBD | Not started | - |
+| 58. Schema Metadata + Documentation | v2.9 | 0/1 | Not started | - |
 | 59. Intraday Market Context Enrichment | v2.9 | 0/TBD | Not started | - |
 
 ### Phase 59: Intraday market context enrichment
