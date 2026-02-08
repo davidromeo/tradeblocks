@@ -299,8 +299,19 @@ Skills provide structured prompts for common analysis tasks.
 
 ---
 
+## Market Data Setup
+
+For market-aware analysis (VIX regimes, gap analysis, intraday timing), you'll need SPX/VIX data from TradingView:
+
+1. Add the 3 PineScript indicators to your TradingView charts
+2. Export CSVs to `~/backtests/_marketdata/`
+3. The MCP server auto-syncs them into DuckDB on first query
+
+See [scripts/README.md](../../../scripts/README.md) for the PineScript indicators, export instructions, and all 55+ available fields.
+
 ## Related Documentation
 
 - [README.md](../README.md) - Installation and setup
 - [Web Platforms Guide](./WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
+- [Market Data Scripts](../../../scripts/README.md) - TradingView PineScript indicators
 - [Agent Skills](../../agent-skills/README.md) - Conversational workflows

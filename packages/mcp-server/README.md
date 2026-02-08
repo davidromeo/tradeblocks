@@ -266,9 +266,16 @@ npm test
 npm run mcpb:pack
 ```
 
+## Market Data (Optional)
+
+For market context (VIX regimes, intraday timing, gap analysis), export SPX/VIX data from TradingView using the included PineScript indicators. The MCP server syncs these CSVs into DuckDB automatically.
+
+See [scripts/README.md](../../scripts/README.md) for setup instructions, field documentation, and the 3 PineScript indicators.
+
 ## Related
 
 - [Usage Guide](docs/USAGE.md) - Detailed usage examples and workflows
 - [Web Platforms Guide](docs/WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
 - [Agent Skills](../agent-skills/README.md) - Conversational workflows for guided analysis
+- [Market Data Scripts](../../scripts/README.md) - TradingView PineScript indicators for SPX/VIX data
 - [Main Application](../../README.md) - Web-based UI for TradeBlocks

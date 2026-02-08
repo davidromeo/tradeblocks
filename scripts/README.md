@@ -126,16 +126,19 @@ Note: Highlow timing fields use intrabar data and are available for the most rec
 
 ## MCP Server Integration
 
-The market data tools can load and join these files on date. Example query after exporting:
+After exporting, the MCP server automatically syncs CSVs into DuckDB. Use `run_sql` to query market data and join with trades:
 
-```typescript
-// Analyze MOC patterns Oct 2024 vs Oct 2025
-await get_market_context({
-  startDate: "2024-10-01",
-  endDate: "2025-10-31",
-  fields: ["MOC_15min", "MOC_30min", "Power_Hour"]
-})
+```sql
+-- Win rate by VIX regime
+SELECT m.Vol_Regime, COUNT(*) as trades,
+  ROUND(100.0 * SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) as win_rate
+FROM trades.trade_data t
+JOIN market.spx_daily m ON t.date_opened = m.date
+WHERE t.block_id = 'my-strategy'
+GROUP BY m.Vol_Regime ORDER BY m.Vol_Regime
 ```
+
+Dedicated tools (`analyze_regime_performance`, `suggest_filters`, `calculate_orb`) also query this data automatically.
 
 ## Tips
 
