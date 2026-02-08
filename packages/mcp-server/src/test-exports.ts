@@ -39,3 +39,15 @@ export {
 
 // Export DuckDB connection utilities for integration testing
 export { getConnection, closeConnection, isConnected } from './db/connection.js';
+
+// Export field timing utilities for testing
+export {
+  OPEN_KNOWN_FIELDS,
+  CLOSE_KNOWN_FIELDS,
+  STATIC_FIELDS,
+  buildLookaheadFreeQuery,
+} from './utils/field-timing.js';
+
+// Export schema metadata for classification completeness tests
+export { SCHEMA_DESCRIPTIONS } from './utils/schema-metadata.js';
+export type { ColumnDescription } from './utils/schema-metadata.js';
