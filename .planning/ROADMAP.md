@@ -66,7 +66,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. PoC test files in scripts/poc test/ are removed from the repository
   2. CLAUDE.md references 3 PineScripts (not 6) and reflects DuckDB-only market data access
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 54-01-PLAN.md -- Delete PoC files, update CLAUDE.md and planning docs, close v2.8 milestone
 
 ## Progress
 
@@ -77,4 +79,4 @@ Plans:
 | 51. PineScript Consolidation | v2.8 | 2/2 | Complete | 2026-02-07 |
 | 52. DuckDB Schema + Sync | v2.8 | 1/1 | Complete | 2026-02-07 |
 | 53. Import Consolidation | v2.8 | 1/1 | Complete | 2026-02-07 |
-| 54. Documentation + Cleanup | v2.8 | 0/TBD | Not started | - |
+| 54. Documentation + Cleanup | v2.8 | 0/1 | Not started | - |
