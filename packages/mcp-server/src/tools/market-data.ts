@@ -2,7 +2,8 @@
  * Market Data Tools
  *
  * MCP tools for analyzing market context (VIX, term structure, regimes)
- * and correlating with trade performance.
+ * and correlating with trade performance. Includes enrich_trades for
+ * lag-aware trade enrichment with market data.
  *
  * Data source: DuckDB analytics database (synced from TradingView exports)
  * - market.spx_daily: Daily context (55 fields incl. highlow timing + VIX enrichment)
@@ -230,8 +231,10 @@ function getDayLabel(dow: number): string {
  *
  * Note: The following tools were REMOVED in v0.6.0 - use run_sql instead:
  * - get_market_context: SELECT ... FROM market.spx_daily WHERE ...
- * - enrich_trades: SELECT t.*, m.* FROM trades.trade_data t JOIN market.spx_daily m ON ...
  * - find_similar_days: Use CTE with similarity conditions
+ *
+ * Restored in v1.1.0 with lookahead-free temporal joins:
+ * - enrich_trades: Returns trades enriched with lag-aware market context
  *
  * Kept tools (require TradeBlocks library computation):
  * - analyze_regime_performance: Statistical breakdown by regime
