@@ -2,26 +2,26 @@
 
 ## Current Position
 
-Phase: 56 of 58 (Fix Existing Tools)
+Phase: 57 of 59 (Restore Enrich Trades)
 Plan: 1 of 1 in current phase
-Status: Phase 56 complete
-Last activity: 2026-02-08 -- Completed 56-01 fix existing tools (lookahead-free queries)
+Status: Phase 57 complete
+Last activity: 2026-02-08 -- Completed 57-01 enrich_trades tool with lookahead-free temporal joins
 
-Progress: [#####.....] 50%
+Progress: [######....] 60%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** v2.9 Lookahead-Free Market Analytics -- Phase 56 Fix Existing Tools
+**Current focus:** v2.9 Lookahead-Free Market Analytics -- Phase 57 Restore Enrich Trades
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2 (v2.9)
-- Average duration: 5.5min
-- Total execution time: 11min
+- Total plans completed: 3 (v2.9)
+- Average duration: 4.7min
+- Total execution time: 14min
 
 **By Phase:**
 
@@ -29,6 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 |-------|-------|-------|----------|
 | 55-field-classification-foundation | 1 | 6min | 6min |
 | 56-fix-existing-tools | 1 | 5min | 5min |
+| 57-restore-enrich-trades | 1 | 3min | 3min |
 
 ## Accumulated Context
 
@@ -44,10 +45,17 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 - Filter field names kept canonical (VIX_Close not prev_VIX_Close) -- only test() reads prev_* columns
 - NaN handling via continue (skip trade) rather than fallback to same-day value
 - VIX_Open hypothesis flag set true now that it is used as filter candidate
+- Static fields (Day_of_Week, Month, Is_Opex) in entryContext.sameDay (known before open)
+- outcomeFields opt-in via includeOutcomeFields=true with explicit lookahead warning
+- Filter-before-paginate ordering: totalTrades reflects filtered count, DuckDB queried only for paginated dates
 
 ### Pending Todos
 
 None yet.
+
+### Roadmap Evolution
+
+- Phase 59 added: Intraday market context enrichment (spx_15min + vix_intraday time-based matching, deferred from Phase 57)
 
 ### Blockers/Concerns
 
@@ -57,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 56-01-PLAN.md (fix existing tools - lookahead-free queries)
+Stopped at: Completed 57-01-PLAN.md (enrich_trades tool with lookahead-free temporal joins)
 Resume file: None
