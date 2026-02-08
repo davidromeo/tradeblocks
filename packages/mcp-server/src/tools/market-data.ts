@@ -28,6 +28,12 @@ import {
   STATIC_FIELDS,
 } from "../utils/field-timing.js";
 import { filterByStrategy, filterByDateRange } from "./shared/filters.js";
+import {
+  buildIntradayContext,
+  SPX_15MIN_OUTCOME_FIELDS,
+  VIX_OUTCOME_FIELDS,
+  VIX_OHLC_OUTCOME_FIELDS,
+} from "../utils/intraday-timing.js";
 
 // =============================================================================
 // Types
@@ -700,18 +706,22 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         "Enrich trades with market context using correct temporal joins. " +
         "Open-known fields (Gap_Pct, VIX_Open) use same-day values. " +
         "Close-derived fields (VIX_Close, RSI_14, Vol_Regime) use prior trading day values to prevent lookahead bias. " +
-        "Use includeOutcomeFields=true for post-hoc analysis (with clear warning).",
+        "Use includeOutcomeFields=true for post-hoc analysis (with clear warning)." +
+        " Use includeIntradayContext=true for intraday SPX/VIX checkpoint data at trade entry time.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to enrich"),
         strategy: z.string().optional().describe("Filter to specific strategy (exact match)"),
         startDate: z.string().optional().describe("Start date filter (YYYY-MM-DD)"),
         endDate: z.string().optional().describe("End date filter (YYYY-MM-DD)"),
         includeOutcomeFields: z.boolean().default(false).describe("Include same-day close values (lookahead). Defaults to false for safety."),
+        includeIntradayContext: z.boolean().default(false).describe(
+          "Include intraday SPX/VIX checkpoint data. Only checkpoints known at trade entry time are returned (lookahead-free). Requires 2 additional DuckDB queries."
+        ),
         limit: z.number().min(1).max(500).default(50).describe("Max trades to return (default: 50, max: 500)"),
         offset: z.number().min(0).default(0).describe("Pagination offset (default: 0)"),
       }),
     },
-    withFullSync(baseDir, async ({ blockId, strategy, startDate, endDate, includeOutcomeFields, limit, offset }) => {
+    withFullSync(baseDir, async ({ blockId, strategy, startDate, endDate, includeOutcomeFields, includeIntradayContext, limit, offset }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -752,6 +762,36 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           outcomeMap = new Map<string, Record<string, unknown>>();
           for (const record of outcomeRecords) {
             outcomeMap.set(record["date"] as string, record);
+          }
+        }
+
+        // Optionally query intraday checkpoint data
+        let spxIntradayMap: Map<string, Record<string, unknown>> | null = null;
+        let vixIntradayMap: Map<string, Record<string, unknown>> | null = null;
+
+        if (includeIntradayContext) {
+          const placeholders = tradeDates.map((_, i) => `$${i + 1}`).join(', ');
+
+          // Query spx_15min
+          const spxResult = await conn.runAndReadAll(
+            `SELECT * FROM market.spx_15min WHERE date IN (${placeholders})`,
+            tradeDates
+          );
+          const spxRecords = resultToRecords(spxResult);
+          spxIntradayMap = new Map<string, Record<string, unknown>>();
+          for (const record of spxRecords) {
+            spxIntradayMap.set(record["date"] as string, record);
+          }
+
+          // Query vix_intraday
+          const vixResult = await conn.runAndReadAll(
+            `SELECT * FROM market.vix_intraday WHERE date IN (${placeholders})`,
+            tradeDates
+          );
+          const vixRecords = resultToRecords(vixResult);
+          vixIntradayMap = new Map<string, Record<string, unknown>>();
+          for (const record of vixRecords) {
+            vixIntradayMap.set(record["date"] as string, record);
           }
         }
 
@@ -821,6 +861,41 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             }
           }
 
+          // Intraday context (opt-in, per-trade checkpoint filtering)
+          if (includeIntradayContext && spxIntradayMap && vixIntradayMap) {
+            const spxIntraday = spxIntradayMap.get(tradeDate) || null;
+            const vixIntraday = vixIntradayMap.get(tradeDate) || null;
+            baseTrade.intradayContext = buildIntradayContext(
+              trade.timeOpened,
+              spxIntraday,
+              vixIntraday,
+            );
+
+            // Intraday outcome fields (day-level aggregates, requires BOTH flags)
+            if (includeOutcomeFields) {
+              const intradayOutcome: Record<string, unknown> = {};
+
+              if (spxIntraday) {
+                for (const field of SPX_15MIN_OUTCOME_FIELDS) {
+                  intradayOutcome[`spx_${field}`] = cleanVal(spxIntraday[field]);
+                }
+              }
+
+              if (vixIntraday) {
+                for (const field of VIX_OUTCOME_FIELDS) {
+                  intradayOutcome[field] = cleanVal(vixIntraday[field]);
+                }
+                for (const field of VIX_OHLC_OUTCOME_FIELDS) {
+                  intradayOutcome[`vix_${field}`] = cleanVal(vixIntraday[field]);
+                }
+              }
+
+              if (Object.keys(intradayOutcome).length > 0) {
+                baseTrade.intradayOutcomeFields = intradayOutcome;
+              }
+            }
+          }
+
           return baseTrade;
         });
 
@@ -831,6 +906,12 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           "Entry context uses lookahead-free temporal joins. Same-day fields (Gap_Pct, VIX_Open, Day_of_Week, etc.) are values known at market open. Prior-day fields (VIX_Close, RSI_14, Vol_Regime, etc.) use the previous trading day's close-derived values to prevent lookahead bias.";
         if (includeOutcomeFields) {
           lagNote += " Outcome fields contain same-day close-derived values and represent information NOT available at trade entry time.";
+        }
+        if (includeIntradayContext) {
+          lagNote += " Intraday context shows SPX/VIX checkpoint values known at trade entry time (filtered by timeOpened). Checkpoints after entry time are excluded to prevent lookahead bias.";
+          if (includeOutcomeFields) {
+            lagNote += " intradayOutcomeFields contain end-of-day intraday metrics (MOC moves, VIX spike/crush flags, etc.) NOT available at trade entry time.";
+          }
         }
 
         // Build response data
