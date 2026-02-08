@@ -18,6 +18,13 @@ export interface ColumnDescription {
   description: string;
   /** True if this column is useful for hypothesis testing (filtering, grouping, analysis) */
   hypothesis: boolean;
+  /** When this field's value is known relative to market open.
+   *  - 'open': Known at/before market open (Prior_Close, Gap_Pct, VIX_Open, etc.)
+   *  - 'close': Only known after market close (RSI_14, Vol_Regime, Close, etc.)
+   *  - 'static': Calendar/metadata facts known before the day (Day_of_Week, Month, Is_Opex)
+   *  Only applicable to market.spx_daily columns. Omit for non-market tables.
+   */
+  timing?: 'open' | 'close' | 'static';
 }
 
 export interface TableDescription {
@@ -210,229 +217,284 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           Prior_Close: {
             description: "Previous day's SPX close price",
             hypothesis: false,
+            timing: 'open',
           },
           open: {
             description: "SPX open price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'open',
           },
           high: {
             description: "SPX high price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'close',
           },
           low: {
             description: "SPX low price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'close',
           },
           close: {
             description: "SPX close price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'close',
           },
           Gap_Pct: {
             description: "Overnight gap percentage ((Open - Prior_Close) / Prior_Close * 100)",
             hypothesis: true,
+            timing: 'open',
           },
           Intraday_Range_Pct: {
             description: "Intraday range as percentage ((High - Low) / Open * 100)",
             hypothesis: true,
+            timing: 'close',
           },
           Intraday_Return_Pct: {
             description: "Open to close return percentage ((Close - Open) / Open * 100)",
             hypothesis: true,
+            timing: 'close',
           },
           Total_Return_Pct: {
             description: "Prior close to close return percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Close_Position_In_Range: {
             description: "Where close is in day's range (0 = low, 1 = high)",
             hypothesis: true,
+            timing: 'close',
           },
           Gap_Filled: {
             description: "Whether overnight gap was filled (1 = yes, 0 = no)",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Open: {
             description: "VIX open value",
             hypothesis: false,
+            timing: 'open',
           },
           VIX_Close: {
             description: "VIX close value - key volatility indicator",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Change_Pct: {
             description: "VIX percentage change from prior close",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Spike_Pct: {
             description: "VIX spike from open to high as percentage",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Percentile: {
             description: "VIX percentile rank (0-100) vs historical",
             hypothesis: true,
+            timing: 'close',
           },
           Vol_Regime: {
             description:
               "Volatility regime classification (1=low, 2=normal, 3=elevated, 4=high, 5=extreme)",
             hypothesis: true,
+            timing: 'close',
           },
           VIX9D_Close: {
             description: "9-day VIX close",
             hypothesis: false,
+            timing: 'close',
           },
           VIX3M_Close: {
             description: "3-month VIX close",
             hypothesis: false,
+            timing: 'close',
           },
           VIX9D_VIX_Ratio: {
             description: "VIX9D/VIX ratio - term structure indicator",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_VIX3M_Ratio: {
             description: "VIX/VIX3M ratio - term structure indicator",
             hypothesis: true,
+            timing: 'close',
           },
           Term_Structure_State: {
             description:
               "VIX term structure state (1=backwardation, 0=flat, -1=contango)",
             hypothesis: true,
+            timing: 'close',
           },
           ATR_Pct: {
             description: "Average True Range as percentage of price",
             hypothesis: true,
+            timing: 'close',
           },
           RSI_14: {
             description: "14-day RSI (0-100, >70 overbought, <30 oversold)",
             hypothesis: true,
+            timing: 'close',
           },
           Price_vs_EMA21_Pct: {
             description: "Price vs 21-day EMA as percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Price_vs_SMA50_Pct: {
             description: "Price vs 50-day SMA as percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Trend_Score: {
             description:
               "Trend strength indicator (-5 to +5, negative=downtrend, positive=uptrend)",
             hypothesis: true,
+            timing: 'close',
           },
           BB_Position: {
             description:
               "Bollinger Band position (0=lower band, 0.5=middle, 1=upper band)",
             hypothesis: true,
+            timing: 'close',
           },
           Return_5D: {
             description: "5-day cumulative return percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Return_20D: {
             description: "20-day cumulative return percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Consecutive_Days: {
             description: "Consecutive up/down days (positive=up, negative=down)",
             hypothesis: true,
+            timing: 'close',
           },
           Day_of_Week: {
             description: "Day of week (1=Monday through 5=Friday)",
             hypothesis: true,
+            timing: 'static',
           },
           Month: {
             description: "Month number (1-12)",
             hypothesis: true,
+            timing: 'static',
           },
           Is_Opex: {
             description: "Options expiration day flag (1=opex, 0=not)",
             hypothesis: true,
+            timing: 'static',
           },
           Prev_Return_Pct: {
             description: "Previous day's total return percentage",
             hypothesis: true,
+            timing: 'open',
           },
           // Highlow timing columns (13)
           High_Time: {
             description: "Time of day high as decimal hours (e.g., 10.5 = 10:30 AM)",
             hypothesis: true,
+            timing: 'close',
           },
           Low_Time: {
             description: "Time of day low as decimal hours (e.g., 14.25 = 2:15 PM)",
             hypothesis: true,
+            timing: 'close',
           },
           High_Before_Low: {
             description: "Did high occur before low? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           High_In_First_Hour: {
             description: "Did high occur in first hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Low_In_First_Hour: {
             description: "Did low occur in first hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           High_In_Last_Hour: {
             description: "Did high occur in last hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Low_In_Last_Hour: {
             description: "Did low occur in last hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Reversal_Type: {
             description:
               "Reversal pattern type (1=morning reversal up, -1=morning reversal down, 0=trend day)",
             hypothesis: true,
+            timing: 'close',
           },
           High_Low_Spread: {
             description: "Time spread between high and low in hours",
             hypothesis: true,
+            timing: 'close',
           },
           Early_Extreme: {
             description: "Was either extreme in first 30 min? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Late_Extreme: {
             description: "Was either extreme in last 30 min? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Intraday_High: {
             description: "Intraday high price (may differ from daily high on gap days)",
             hypothesis: false,
+            timing: 'close',
           },
           Intraday_Low: {
             description: "Intraday low price (may differ from daily low on gap days)",
             hypothesis: false,
+            timing: 'close',
           },
           // VIX enrichment columns (7)
           VIX_Gap_Pct: {
             description: "VIX overnight gap percentage ((VIX_Open - prior VIX_Close) / prior VIX_Close * 100)",
             hypothesis: true,
+            timing: 'open',
           },
           VIX9D_Open: {
             description: "9-day VIX open value",
             hypothesis: false,
+            timing: 'open',
           },
           VIX9D_Change_Pct: {
             description: "9-day VIX open-to-close change percentage",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_High: {
             description: "VIX intraday high",
             hypothesis: false,
+            timing: 'close',
           },
           VIX_Low: {
             description: "VIX intraday low",
             hypothesis: false,
+            timing: 'close',
           },
           VIX3M_Open: {
             description: "3-month VIX open value",
             hypothesis: false,
+            timing: 'open',
           },
           VIX3M_Change_Pct: {
             description: "3-month VIX open-to-close change percentage",
             hypothesis: true,
+            timing: 'close',
           },
         },
       },
