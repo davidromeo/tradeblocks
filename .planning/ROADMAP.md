@@ -12,7 +12,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.8).
 
 - [x] **Phase 55: Field Classification Foundation** - Classify all 55 spx_daily columns by temporal availability and build shared lag utilities
 - [x] **Phase 56: Fix Existing Tools** - Correct lookahead bias in suggest_filters and analyze_regime_performance with split join pattern
-- [ ] **Phase 57: Restore enrich_trades** - New MCP tool returning trades enriched with lag-aware market context
+- [x] **Phase 57: Restore enrich_trades** - New MCP tool returning trades enriched with lag-aware market context
 - [ ] **Phase 58: Schema Metadata + Documentation** - Surface timing metadata in describe_database with lag-aware example queries
 - [ ] **Phase 59: Intraday Market Context Enrichment** - Enrich trades with spx_15min and vix_intraday data via time-based checkpoint matching
 
@@ -55,7 +55,7 @@ Plans:
   4. Each field in the output includes metadata indicating its temporal source (same-day vs prior-day) so users know what was available at trade entry
 **Plans:** 1 plan
 Plans:
-- [ ] 57-01-PLAN.md -- Implement enrich_trades tool with lag-aware market context and buildOutcomeQuery
+- [x] 57-01-PLAN.md -- Implement enrich_trades tool with lag-aware market context and buildOutcomeQuery
 
 ### Phase 58: Schema Metadata + Documentation
 **Goal**: Users writing run_sql queries via describe_database get correct temporal guidance so ad-hoc queries avoid the same lookahead bias that was fixed in purpose-built tools
@@ -75,7 +75,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 55. Field Classification Foundation | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 56. Fix Existing Tools | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
-| 57. Restore enrich_trades | v2.9 | 0/1 | Not started | - |
+| 57. Restore enrich_trades | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 58. Schema Metadata + Documentation | v2.9 | 0/TBD | Not started | - |
 | 59. Intraday Market Context Enrichment | v2.9 | 0/TBD | Not started | - |
 
