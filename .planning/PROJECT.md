@@ -81,16 +81,18 @@ Make trading analytics accessible and understandable. Complex analysis should be
 - ✓ Live alignment signal (backtest vs actual) with direction agreement and execution efficiency — v2.7
 - ✓ Structured factual data output (observations, summaries, details) for LLM interpretation — v2.7
 
+**v2.8 Market Data Consolidation:**
+- ✓ Merge highlow timing into daily PineScript via `request.security_lower_tf()` (PoC validated: 100% match, 5x history) — v2.8
+- ✓ Export 7 already-computed VIX fields (gap, VIX9D open/change, VIX high/low, VIX3M open/change) — v2.8
+- ✓ Update DuckDB schema — absorb highlow columns into `spx_daily`, retire `spx_highlow` table — v2.8
+- ✓ Update market sync logic for combined CSV and new columns — v2.8
+- ✓ Retire in-memory CSV loading — consolidate to DuckDB-only for market data tools — v2.8
+- ✓ Remove dead 30-min and hourly checkpoint scripts — v2.8
+- ✓ Update scripts README and documentation — v2.8
+
 ### Active
 
-**v2.8 Market Data Consolidation:**
-- [ ] Merge highlow timing into daily PineScript via `request.security_lower_tf()` (PoC validated: 100% match, 5x history)
-- [ ] Export 7 already-computed VIX fields (gap, VIX9D open/change, VIX high/low, VIX3M open/change)
-- [ ] Update DuckDB schema — absorb highlow columns into `spx_daily`, retire `spx_highlow` table
-- [ ] Update market sync logic for combined CSV and new columns
-- [ ] Retire in-memory CSV loading — consolidate to DuckDB-only for market data tools
-- [ ] Remove dead 30-min and hourly checkpoint scripts
-- [ ] Update scripts README and documentation
+(No active requirements — v2.8 complete)
 
 ### Out of Scope
 
@@ -100,14 +102,14 @@ Make trading analytics accessible and understandable. Complex analysis should be
 
 ## Context
 
-**Current state (v2.8 in progress):**
+**Current state (v2.8 complete):**
 - Next.js 15 web application with client-side computation
-- MCP server (`tradeblocks-mcp` v0.8.0) with 40 tools at packages/mcp-server/
+- MCP server (`tradeblocks-mcp` v0.10.1) with 40 tools at packages/mcp-server/
 - Edge decay analysis: unified `analyze_edge_decay` tool + 5 standalone signal tools
 - DuckDB analytics layer with SQL query interface and schema discovery
-- CSV-to-DuckDB sync with hash-based change detection (trades + 4 market data tables)
-- 6 PineScripts for market data export (daily, 15min, 30min, hourly, highlow, VIX intraday)
-- Dual import system: in-memory CSV loading + DuckDB sync (to be consolidated)
+- CSV-to-DuckDB sync with hash-based change detection (trades + 3 market data tables)
+- 3 PineScripts for market data export (daily, 15min checkpoints, VIX intraday)
+- DuckDB-only market data access (CSV loading retired in v2.8)
 - 6 agent skills at packages/agent-skills/
 - Shared library at packages/lib/ (89 files, barrel exports)
 - 1177 tests across 71 suites
@@ -174,9 +176,9 @@ Make trading analytics accessible and understandable. Complex analysis should be
 | Trade matching extraction to lib | Shared utilities across MCP tools, single source of truth | ✓ Good |
 | 4-level divergence classification | Threshold-based (0.30/0.60/1.00) for regime change severity | ✓ Good |
 
-| Merge highlow into daily script via request.security_lower_tf() | 5x history depth, one fewer export for users, PoC validated 100% match | — Pending |
-| Export computed-but-hidden VIX fields aligned with Option Omega filters | Enables same entry/exit filter analysis OO supports | — Pending |
-| Consolidate dual import to DuckDB-only | Eliminate redundant in-memory CSV loading, single data path | — Pending |
+| Merge highlow into daily script via request.security_lower_tf() | 5x history depth, one fewer export for users, PoC validated 100% match | ✓ Good |
+| Export computed-but-hidden VIX fields aligned with Option Omega filters | Enables same entry/exit filter analysis OO supports | ✓ Good |
+| Consolidate dual import to DuckDB-only | Eliminate redundant in-memory CSV loading, single data path | ✓ Good |
 
 ---
-*Last updated: 2026-02-06 after v2.8 milestone started*
+*Last updated: 2026-02-07 after v2.8 milestone completed*

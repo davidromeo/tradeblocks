@@ -4,7 +4,7 @@
 
 See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
 
-## v2.8 Market Data Consolidation (In Progress)
+## v2.8 Market Data Consolidation (Shipped: 2026-02-07)
 
 **Milestone Goal:** Consolidate 6 PineScripts to 3, merge highlow timing into daily export, enrich with VIX fields, unify DuckDB import path, and retire in-memory CSV loading.
 
@@ -13,7 +13,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.7).
 - [x] **Phase 51: PineScript Consolidation** - Merge highlow into daily script, export new VIX fields, remove dead scripts
 - [x] **Phase 52: DuckDB Schema + Sync** - Update schema for combined CSV, update sync logic, retire highlow table
 - [x] **Phase 53: Import Consolidation** - Migrate 3 market data tools from in-memory CSV to DuckDB queries
-- [ ] **Phase 54: Documentation + Cleanup** - Update docs for new 3-script workflow, remove PoC files
+- [x] **Phase 54: Documentation + Cleanup** - Update docs for new 3-script workflow, remove PoC files
 
 ## Phase Details
 
@@ -68,7 +68,7 @@ Plans:
   2. CLAUDE.md references 3 PineScripts (not 6) and reflects DuckDB-only market data access
 **Plans**: 1 plan
 Plans:
-- [ ] 54-01-PLAN.md -- Delete PoC files, update CLAUDE.md and planning docs, close v2.8 milestone
+- [x] 54-01-PLAN.md -- Delete PoC files, update CLAUDE.md and planning docs, close v2.8 milestone
 
 ## Progress
 
@@ -79,4 +79,4 @@ Plans:
 | 51. PineScript Consolidation | v2.8 | 2/2 | Complete | 2026-02-07 |
 | 52. DuckDB Schema + Sync | v2.8 | 1/1 | Complete | 2026-02-07 |
 | 53. Import Consolidation | v2.8 | 1/1 | Complete | 2026-02-07 |
-| 54. Documentation + Cleanup | v2.8 | 0/1 | Not started | - |
+| 54. Documentation + Cleanup | v2.8 | 1/1 | Complete | 2026-02-07 |

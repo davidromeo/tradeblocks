@@ -1,5 +1,33 @@
 # Project Milestones: TradeBlocks
 
+## v2.8 Market Data Consolidation (Shipped: 2026-02-07)
+
+**Delivered:** Consolidated 6 PineScripts to 3, merged highlow timing into daily export with 7 new VIX fields, unified DuckDB import path (retiring in-memory CSV loading), and updated schema to absorb highlow data into spx_daily table.
+
+**Phases completed:** 51-54 (5 plans total)
+
+**Key accomplishments:**
+
+- Merged highlow timing computation into daily PineScript via `request.security_lower_tf()` (PoC validated: 100% match, 5x history depth)
+- Added 7 VIX enrichment fields (gap, VIX9D open/change, VIX high/low, VIX3M open/change) to daily export
+- Removed 3 dead PineScripts (highlow, 30-min checkpoints, hourly checkpoints)
+- Updated DuckDB schema: absorbed 13 highlow columns + 7 VIX columns into spx_daily, retired spx_highlow table
+- Migrated 3 market data tools (analyze_regime_performance, suggest_filters, calculate_orb) from in-memory CSV to DuckDB queries
+- Removed in-memory CSV loading infrastructure and 5-min TTL cache
+- Updated all documentation for 3-script, DuckDB-only architecture
+
+**Stats:**
+
+- 80 files changed, +8,900 / -1,700 lines
+- 4 phases, 5 plans
+- 2 days (Feb 7, 2026)
+
+**Git range:** `a1c73e8` -> `HEAD`
+
+**What's next:** Planning next milestone
+
+---
+
 ## v2.7 Edge Decay Analysis (Shipped: 2026-02-06)
 
 **Delivered:** Unified `analyze_edge_decay` MCP tool detecting strategy performance degradation through 5 signal engines (period segmentation, rolling metrics, Monte Carlo regime comparison, walk-forward degradation, live alignment) with structured factual data output for LLM interpretation.
@@ -24,7 +52,7 @@
 
 **Git range:** `297c2fe` → `4338396`
 
-**What's next:** Planning next milestone
+**What's next:** v2.8 Market Data Consolidation ✓
 
 ---
 
