@@ -16,6 +16,11 @@ import {
   EXAMPLE_QUERIES,
   type ColumnDescription,
 } from "../utils/schema-metadata.js";
+import {
+  OPEN_KNOWN_FIELDS,
+  CLOSE_KNOWN_FIELDS,
+  STATIC_FIELDS,
+} from "../utils/field-timing.js";
 
 // ============================================================================
 // Types for output structure
@@ -27,6 +32,7 @@ interface ColumnInfo {
   description: string;
   nullable: boolean;
   hypothesis: boolean;
+  timing?: 'open' | 'close' | 'static';
 }
 
 interface BlockBreakdown {
@@ -50,6 +56,15 @@ interface SchemaInfo {
 interface DatabaseSchemaOutput {
   schemas: Record<string, SchemaInfo>;
   examples: typeof EXAMPLE_QUERIES;
+  lagTemplate: {
+    description: string;
+    sql: string;
+    fieldCounts: {
+      openKnown: number;
+      static: number;
+      closeDerived: number;
+    };
+  };
   syncInfo: {
     blocksProcessed: number;
     marketFilesSynced: number;
@@ -69,6 +84,61 @@ const MARKET_TABLE_FILES: Record<string, string> = {
   spx_15min: "spx_15min.csv",
   vix_intraday: "vix_intraday.csv",
 };
+
+// ============================================================================
+// LAG Template Generator
+// ============================================================================
+
+/**
+ * Generate a reusable LAG() CTE template for lookahead-free queries.
+ * Dynamically built from OPEN_KNOWN_FIELDS, CLOSE_KNOWN_FIELDS, STATIC_FIELDS
+ * so it stays in sync with field-timing classifications automatically.
+ */
+function generateLagTemplate(): {
+  description: string;
+  sql: string;
+  fieldCounts: { openKnown: number; static: number; closeDerived: number };
+} {
+  const openCols = [...OPEN_KNOWN_FIELDS].map(f => `    ${f}`).join(',\n');
+  const staticCols = [...STATIC_FIELDS].map(f => `    ${f}`).join(',\n');
+  const lagCols = [...CLOSE_KNOWN_FIELDS]
+    .map(f => `    LAG(${f}) OVER (ORDER BY date) AS prev_${f}`)
+    .join(',\n');
+
+  const sql = `-- Lookahead-free CTE template for market.spx_daily
+-- Open-known fields: safe to use same-day (known at/before market open)
+-- Static fields: safe to use same-day (calendar facts)
+-- Close-derived fields: use LAG() for prior trading day values
+--
+-- Copy this CTE into your query, then JOIN on t.date_opened = m.date
+WITH lagged AS (
+  SELECT date,
+    -- Open-known fields (safe same-day)
+${openCols},
+    -- Static fields (safe same-day)
+${staticCols},
+    -- Close-derived fields (prior trading day via LAG)
+${lagCols}
+  FROM market.spx_daily
+)
+SELECT t.*, m.*
+FROM trades.trade_data t
+JOIN lagged m ON t.date_opened = m.date
+WHERE t.block_id = 'my-block'`;
+
+  return {
+    description:
+      'Reusable LAG() CTE for lookahead-free queries joining trades to spx_daily. ' +
+      'Close-derived fields (VIX_Close, Vol_Regime, RSI_14, etc.) use LAG() to get the prior trading day value, ' +
+      'preventing lookahead bias. Open-known and static fields are safe to use same-day.',
+    sql,
+    fieldCounts: {
+      openKnown: OPEN_KNOWN_FIELDS.size,
+      static: STATIC_FIELDS.size,
+      closeDerived: CLOSE_KNOWN_FIELDS.size,
+    },
+  };
+}
 
 // ============================================================================
 // Tool Implementation
@@ -152,6 +222,7 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
               description: colDesc?.description || "",
               nullable: isNullable,
               hypothesis: colDesc?.hypothesis || false,
+              timing: colDesc?.timing,
             };
           }
         );
@@ -186,6 +257,7 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
       const result: DatabaseSchemaOutput = {
         schemas,
         examples: EXAMPLE_QUERIES,
+        lagTemplate: generateLagTemplate(),
         syncInfo: {
           blocksProcessed: blockSyncResult.blocksProcessed,
           marketFilesSynced: marketSyncResult.filesSynced,
