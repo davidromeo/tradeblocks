@@ -127,7 +127,7 @@ When adding new metrics, calculations, or chart data to the UI, **consider wheth
 - `src/tools/performance.ts` - Chart data, period returns, backtest vs actual
 - `src/tools/analysis.ts` - Monte Carlo, walk-forward, correlations
 - `src/tools/reports.ts` - Custom queries, field statistics
-- `src/tools/market-data.ts` - Market context, intraday checkpoints, ORB calculation
+- `src/tools/market-data.ts` - Market regime analysis, filter suggestions, ORB calculation (all via DuckDB)
 
 ### Using MCP Tools Natively
 
@@ -138,7 +138,6 @@ The TradeBlocks MCP server is connected via `npm link`, making tools available d
 - `mcp__tradeblocks__get_statistics` - Get portfolio statistics for a block
 - `mcp__tradeblocks__get_trades` - Get individual trades
 - `mcp__tradeblocks__get_performance_charts` - Get chart data (equity curve, drawdown, etc.)
-- `mcp__tradeblocks__get_market_context` - Get market data with intraday fields
 - `mcp__tradeblocks__run_monte_carlo` - Run Monte Carlo simulations
 - `mcp__tradeblocks__compare_backtest_to_actual` - Compare theoretical vs actual results
 
@@ -149,10 +148,10 @@ The TradeBlocks MCP server is connected via `npm link`, making tools available d
 3. Call mcp__tradeblocks__get_statistics with a blockId
 ```
 
-**Market data tips:**
-- Use `includeIntraday: true` for MOC_*, P_* fields
-- Use `flatten: true` to merge intraday/highlow/vix into main record
-- Without `flatten`, data is nested under `intraday`, `highlow`, `vix` keys
+**Market data access:**
+- All market data is in DuckDB: `SELECT ... FROM market.spx_daily`, `market.spx_15min`, `market.vix_intraday`
+- Use `mcp__tradeblocks__run_sql` or `mcp__tradeblocks__describe_database` for schema discovery
+- Dedicated tools: `analyze_regime_performance`, `suggest_filters`, `calculate_orb` (all DuckDB-backed)
 
 ### Trading Calendar Data Model
 
