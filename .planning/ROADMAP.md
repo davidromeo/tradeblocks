@@ -13,7 +13,7 @@ See [MILESTONES.md](MILESTONES.md) for full history (v1.0 through v2.8).
 - [x] **Phase 55: Field Classification Foundation** - Classify all 55 spx_daily columns by temporal availability and build shared lag utilities
 - [x] **Phase 56: Fix Existing Tools** - Correct lookahead bias in suggest_filters and analyze_regime_performance with split join pattern
 - [x] **Phase 57: Restore enrich_trades** - New MCP tool returning trades enriched with lag-aware market context
-- [ ] **Phase 58: Schema Metadata + Documentation** - Surface timing metadata in describe_database with lag-aware example queries
+- [x] **Phase 58: Schema Metadata + Documentation** - Surface timing metadata in describe_database with lag-aware example queries
 - [ ] **Phase 59: Intraday Market Context Enrichment** - Enrich trades with spx_15min and vix_intraday data via time-based checkpoint matching
 
 ## Phase Details
@@ -67,7 +67,7 @@ Plans:
   3. A pre-built LAG() CTE template is included in describe_database output that users can copy for correct run_sql usage
 **Plans:** 1 plan
 Plans:
-- [ ] 58-01-PLAN.md -- Extend ColumnInfo with timing, update example queries with LAG CTE patterns, add lagTemplate
+- [x] 58-01-PLAN.md -- Extend ColumnInfo with timing, update example queries with LAG CTE patterns, add lagTemplate
 
 ## Progress
 
@@ -78,7 +78,7 @@ Plans:
 | 55. Field Classification Foundation | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 56. Fix Existing Tools | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 57. Restore enrich_trades | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
-| 58. Schema Metadata + Documentation | v2.9 | 0/1 | Not started | - |
+| 58. Schema Metadata + Documentation | v2.9 | 1/1 | ✓ Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 0/TBD | Not started | - |
 
 ### Phase 59: Intraday market context enrichment
