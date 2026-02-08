@@ -80,3 +80,20 @@ export function buildLookaheadFreeQuery(tradeDates: string[]): { sql: string; pa
 
   return { sql, params: tradeDates };
 }
+
+/**
+ * Builds a SQL query that returns same-day close-derived values (no LAG).
+ * Used for outcome/post-hoc analysis when includeOutcomeFields=true.
+ *
+ * These are values that were NOT available at trade entry time --
+ * they represent the end-of-day result for the trade date itself.
+ *
+ * @param tradeDates - Array of trade dates in 'YYYY-MM-DD' format
+ * @returns Object with `sql` (the query string) and `params` (the date values)
+ */
+export function buildOutcomeQuery(tradeDates: string[]): { sql: string; params: string[] } {
+  const closeColumns = [...CLOSE_KNOWN_FIELDS].map(f => `"${f}"`).join(', ');
+  const placeholders = tradeDates.map((_, i) => `$${i + 1}`).join(', ');
+  const sql = `SELECT date, ${closeColumns} FROM market.spx_daily WHERE date IN (${placeholders})`;
+  return { sql, params: tradeDates };
+}

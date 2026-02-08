@@ -19,7 +19,14 @@ import {
 import type { Trade } from "@tradeblocks/lib";
 import { getConnection } from "../db/connection.js";
 import { withFullSync } from "./middleware/sync-middleware.js";
-import { buildLookaheadFreeQuery } from "../utils/field-timing.js";
+import {
+  buildLookaheadFreeQuery,
+  buildOutcomeQuery,
+  OPEN_KNOWN_FIELDS,
+  CLOSE_KNOWN_FIELDS,
+  STATIC_FIELDS,
+} from "../utils/field-timing.js";
+import { filterByStrategy, filterByDateRange } from "./shared/filters.js";
 
 // =============================================================================
 // Types
@@ -671,6 +678,180 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           suggestedFilters: topSuggestions,
           minImprovementThreshold: minImprovementPct,
         });
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+          isError: true,
+        };
+      }
+    })
+  );
+
+  // ---------------------------------------------------------------------------
+  // enrich_trades - Return trades enriched with lag-aware market context
+  // ---------------------------------------------------------------------------
+  server.registerTool(
+    "enrich_trades",
+    {
+      description:
+        "Enrich trades with market context using correct temporal joins. " +
+        "Open-known fields (Gap_Pct, VIX_Open) use same-day values. " +
+        "Close-derived fields (VIX_Close, RSI_14, Vol_Regime) use prior trading day values to prevent lookahead bias. " +
+        "Use includeOutcomeFields=true for post-hoc analysis (with clear warning).",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block ID to enrich"),
+        strategy: z.string().optional().describe("Filter to specific strategy (exact match)"),
+        startDate: z.string().optional().describe("Start date filter (YYYY-MM-DD)"),
+        endDate: z.string().optional().describe("End date filter (YYYY-MM-DD)"),
+        includeOutcomeFields: z.boolean().default(false).describe("Include same-day close values (lookahead). Defaults to false for safety."),
+        limit: z.number().min(1).max(500).default(50).describe("Max trades to return (default: 50, max: 500)"),
+        offset: z.number().min(0).default(0).describe("Pagination offset (default: 0)"),
+      }),
+    },
+    withFullSync(baseDir, async ({ blockId, strategy, startDate, endDate, includeOutcomeFields, limit, offset }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Filter before paginate
+        trades = filterByStrategy(trades, strategy);
+        trades = filterByDateRange(trades, startDate, endDate);
+
+        if (trades.length === 0) {
+          return {
+            content: [{ type: "text", text: "No trades found matching filters" }],
+            isError: true,
+          };
+        }
+
+        const totalTrades = trades.length;
+        const paginated = trades.slice(offset, offset + limit);
+
+        // Collect unique dates from paginated trades only
+        const tradeDates = [...new Set(paginated.map(t => formatTradeDate(t.dateOpened)))];
+
+        // Query DuckDB for lookahead-free market data
+        const conn = await getConnection(baseDir);
+        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeDates);
+        const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
+        const dailyRecords = resultToRecords(dailyResult);
+        const daily = new Map<string, Record<string, unknown>>();
+        for (const record of dailyRecords) {
+          daily.set(record["date"] as string, record);
+        }
+
+        // Optionally query outcome (same-day close) data
+        let outcomeMap: Map<string, Record<string, unknown>> | null = null;
+        if (includeOutcomeFields) {
+          const { sql: outcomeSql, params: outcomeParams } = buildOutcomeQuery(tradeDates);
+          const outcomeResult = await conn.runAndReadAll(outcomeSql, outcomeParams);
+          const outcomeRecords = resultToRecords(outcomeResult);
+          outcomeMap = new Map<string, Record<string, unknown>>();
+          for (const record of outcomeRecords) {
+            outcomeMap.set(record["date"] as string, record);
+          }
+        }
+
+        // Helper: clean numeric value (BigInt -> Number, NaN -> null)
+        const cleanVal = (val: unknown): unknown => {
+          if (typeof val === "bigint") return Number(val);
+          if (typeof val === "number" && isNaN(val)) return null;
+          return val === undefined ? null : val;
+        };
+
+        // Build enriched trades
+        const unmatchedDates: string[] = [];
+        let matched = 0;
+
+        const enrichedTrades = paginated.map(trade => {
+          const tradeDate = formatTradeDate(trade.dateOpened);
+          const marketData = daily.get(tradeDate);
+
+          const commissions = trade.openingCommissionsFees + trade.closingCommissionsFees;
+
+          const baseTrade: Record<string, unknown> = {
+            dateOpened: tradeDate,
+            timeOpened: trade.timeOpened,
+            strategy: trade.strategy,
+            legs: trade.legs,
+            pl: trade.pl,
+            numContracts: trade.numContracts,
+            premium: trade.premium,
+            reasonForClose: trade.reasonForClose || null,
+            commissions,
+          };
+
+          if (!marketData) {
+            unmatchedDates.push(tradeDate);
+            baseTrade.entryContext = null;
+            return baseTrade;
+          }
+
+          matched++;
+
+          // Build sameDay: open-known + static fields
+          const sameDay: Record<string, unknown> = {};
+          for (const field of OPEN_KNOWN_FIELDS) {
+            sameDay[field] = cleanVal(marketData[field]);
+          }
+          for (const field of STATIC_FIELDS) {
+            sameDay[field] = cleanVal(marketData[field]);
+          }
+
+          // Build priorDay: close-derived fields (read prev_* columns)
+          const priorDay: Record<string, unknown> = {};
+          for (const field of CLOSE_KNOWN_FIELDS) {
+            priorDay[field] = cleanVal(marketData[`prev_${field}`]);
+          }
+
+          baseTrade.entryContext = { sameDay, priorDay };
+
+          // Outcome fields (opt-in, same-day close values)
+          if (includeOutcomeFields && outcomeMap) {
+            const outcomeData = outcomeMap.get(tradeDate);
+            if (outcomeData) {
+              const outcomeFields: Record<string, unknown> = {};
+              for (const field of CLOSE_KNOWN_FIELDS) {
+                outcomeFields[field] = cleanVal(outcomeData[field]);
+              }
+              baseTrade.outcomeFields = outcomeFields;
+            }
+          }
+
+          return baseTrade;
+        });
+
+        const sortedUnmatchedDates = [...new Set(unmatchedDates)].sort();
+
+        // Build lagNote
+        let lagNote =
+          "Entry context uses lookahead-free temporal joins. Same-day fields (Gap_Pct, VIX_Open, Day_of_Week, etc.) are values known at market open. Prior-day fields (VIX_Close, RSI_14, Vol_Regime, etc.) use the previous trading day's close-derived values to prevent lookahead bias.";
+        if (includeOutcomeFields) {
+          lagNote += " Outcome fields contain same-day close-derived values and represent information NOT available at trade entry time.";
+        }
+
+        // Build response data
+        const responseData: Record<string, unknown> = {
+          blockId,
+          strategy: strategy || null,
+          lagNote,
+          tradesTotal: totalTrades,
+          returned: paginated.length,
+          offset,
+          hasMore: offset + limit < totalTrades,
+          tradesMatched: matched,
+          unmatchedDates: sortedUnmatchedDates,
+          trades: enrichedTrades,
+        };
+
+        if (includeOutcomeFields) {
+          responseData.lookaheadWarning =
+            "WARNING: outcomeFields contain same-day close-derived values that were NOT available at trade entry time. Do not use these for entry signal analysis.";
+        }
+
+        const summary = `Enriched trades: ${blockId} | ${matched}/${paginated.length} matched | offset ${offset}, limit ${limit}`;
+
+        return createToolOutput(summary, responseData);
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
