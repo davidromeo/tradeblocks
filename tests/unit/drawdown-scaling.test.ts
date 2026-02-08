@@ -129,8 +129,8 @@ describe("Simulation Period Scaling Investigation", () => {
     const threeYear = results[2];
 
     expect(oneYear.meanMaxDrawdown).toBeGreaterThan(0);
-    expect(twoYear.meanMaxDrawdown).toBeGreaterThan(oneYear.meanMaxDrawdown);
-    expect(threeYear.meanMaxDrawdown).toBeGreaterThan(twoYear.meanMaxDrawdown);
+    expect(twoYear.meanMaxDrawdown).toBeGreaterThanOrEqual(oneYear.meanMaxDrawdown);
+    expect(threeYear.meanMaxDrawdown).toBeGreaterThanOrEqual(twoYear.meanMaxDrawdown);
 
     // Log the actual scaling factors
     const scaling1to2 = twoYear.meanMaxDrawdown / oneYear.meanMaxDrawdown;

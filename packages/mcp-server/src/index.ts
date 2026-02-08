@@ -20,6 +20,10 @@ import { registerAnalysisTools } from "./tools/analysis.js";
 import { registerPerformanceTools } from "./tools/performance.js";
 import { registerReportTools } from "./tools/reports.js";
 import { registerImportTools } from "./tools/imports.js";
+import { registerMarketDataTools } from "./tools/market-data.js";
+import { registerSQLTools } from "./tools/sql.js";
+import { registerSchemaTools } from "./tools/schema.js";
+import { registerEdgeDecayTools } from "./tools/edge-decay.js";
 import { registerResources } from "./resources/index.js";
 import {
   installSkills,
@@ -29,6 +33,7 @@ import {
   type Platform,
 } from "./skill-installer.js";
 import { handleDirectCall } from "./cli-handler.js";
+import { closeConnection } from "./db/index.js";
 
 // CLI usage help
 function printUsage(): void {
@@ -266,7 +271,7 @@ async function main(): Promise<void> {
   // Used by HTTP transport which needs fresh instances per request (stateless mode)
   const createServer = (): McpServer => {
     const server = new McpServer(
-      { name: "tradeblocks-mcp", version: "0.4.1" },
+      { name: "tradeblocks-mcp", version: "0.7.0" },
       { capabilities: { tools: {}, resources: {} } }
     );
     registerBlockTools(server, resolvedDir);
@@ -274,6 +279,10 @@ async function main(): Promise<void> {
     registerPerformanceTools(server, resolvedDir);
     registerReportTools(server, resolvedDir);
     registerImportTools(server, resolvedDir);
+    registerMarketDataTools(server, resolvedDir);
+    registerSQLTools(server, resolvedDir);
+    registerSchemaTools(server, resolvedDir);
+    registerEdgeDecayTools(server, resolvedDir);
     registerResources(server);
     return server;
   };
@@ -290,6 +299,16 @@ async function main(): Promise<void> {
     await server.connect(transport);
     console.error(`TradeBlocks MCP ready (stdio). Watching: ${resolvedDir}`);
   }
+
+  // Graceful shutdown for DuckDB connection
+  // The connection is lazily initialized, so this only does work if a tool
+  // actually opened the database during this session
+  const shutdown = async () => {
+    await closeConnection();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 main().catch((error) => {

@@ -59,8 +59,7 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 
 **Math.js for Statistical Calculations**: All statistics use `math.js` library to ensure consistency:
 - Sharpe Ratio: Uses sample standard deviation (N-1) via `std(data, 'uncorrected')`
-- Sortino Ratio: Uses population standard deviation (N) via `std(data, 'biased')` to match numpy
-- This ensures exact parity with Python calculations
+- Sortino Ratio: Uses standard downside deviation = sqrt((1/N) * sum(min(excess_i, 0)^2)) where N = total observations. This is the RMS of negative excess returns from zero, NOT std() of only the negative returns.
 
 ### Directory Structure
 
@@ -128,6 +127,31 @@ When adding new metrics, calculations, or chart data to the UI, **consider wheth
 - `src/tools/performance.ts` - Chart data, period returns, backtest vs actual
 - `src/tools/analysis.ts` - Monte Carlo, walk-forward, correlations
 - `src/tools/reports.ts` - Custom queries, field statistics
+- `src/tools/market-data.ts` - Market regime analysis, filter suggestions, ORB calculation (all via DuckDB)
+
+### Using MCP Tools Natively
+
+The TradeBlocks MCP server is connected via `npm link`, making tools available directly as `mcp__tradeblocks__*`. Use these native tools instead of CLI commands for querying portfolio data.
+
+**Available tools** (use `ToolSearch` to load before first use):
+- `mcp__tradeblocks__list_blocks` - List all portfolio blocks (START HERE)
+- `mcp__tradeblocks__get_statistics` - Get portfolio statistics for a block
+- `mcp__tradeblocks__get_trades` - Get individual trades
+- `mcp__tradeblocks__get_performance_charts` - Get chart data (equity curve, drawdown, etc.)
+- `mcp__tradeblocks__run_monte_carlo` - Run Monte Carlo simulations
+- `mcp__tradeblocks__compare_backtest_to_actual` - Compare theoretical vs actual results
+
+**Example workflow:**
+```
+1. ToolSearch: "select:mcp__tradeblocks__list_blocks"
+2. Call mcp__tradeblocks__list_blocks to see available blocks
+3. Call mcp__tradeblocks__get_statistics with a blockId
+```
+
+**Market data access:**
+- All market data is in DuckDB: `SELECT ... FROM market.spx_daily`, `market.spx_15min`, `market.vix_intraday`
+- Use `mcp__tradeblocks__run_sql` or `mcp__tradeblocks__describe_database` for schema discovery
+- Dedicated tools: `analyze_regime_performance`, `suggest_filters`, `calculate_orb` (all DuckDB-backed)
 
 ### Trading Calendar Data Model
 

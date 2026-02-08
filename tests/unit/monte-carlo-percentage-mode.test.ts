@@ -464,7 +464,8 @@ describe("Filtered strategy simulations", () => {
     };
 
     const runaway = runMonteCarloSimulation(trades, runawayParams);
-    expect(runaway.statistics.meanTotalReturn).toBeGreaterThan(1e6);
+    // Additive mode prevents multiplicative runaway even with inflated frequency
+    expect(runaway.statistics.meanTotalReturn).toBeLessThan(1000);
 
     const adjustedTradesPerYear = estimateTradesPerYear(
       trades,

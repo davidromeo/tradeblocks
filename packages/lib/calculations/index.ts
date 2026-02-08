@@ -20,6 +20,14 @@ export * from './regime-comparison'
 export * from './table-aggregation'
 export * from './threshold-analysis'
 export * from './static-dataset-matcher'
+export * from './trend-detection'
+export * from './period-segmentation'
+export * from './rolling-metrics'
+export * from './mc-regime-comparison'
+export * from './walk-forward-degradation'
+export * from './trade-matching'
+export * from './live-alignment'
+export * from './edge-decay-synthesis'
 // Re-export from cumulative-distribution excluding conflicting name
 export {
   type CumulativeDistributionPoint,

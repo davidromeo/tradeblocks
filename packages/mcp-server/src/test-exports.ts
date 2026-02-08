@@ -26,3 +26,16 @@ export { PortfolioStatsCalculator } from '@tradeblocks/lib';
 
 // Export correlation and tail-risk utilities for testing strategy_similarity
 export { calculateCorrelationMatrix, performTailRiskAnalysis } from '@tradeblocks/lib';
+
+// Export sync layer for integration testing
+export {
+  syncAllBlocks,
+  syncBlock,
+  syncMarketData,
+  type SyncResult,
+  type MarketSyncResult,
+  type BlockSyncResult,
+} from './sync/index.js';
+
+// Export DuckDB connection utilities for integration testing
+export { getConnection, closeConnection, isConnected } from './db/connection.js';

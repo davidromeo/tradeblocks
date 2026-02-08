@@ -1,3 +1,6 @@
+# Planning docs (kept local)
+.planning/
+
 # General ignores
 .DS_Store
 *.pem

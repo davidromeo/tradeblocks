@@ -395,6 +395,40 @@ describe("Portfolio Stats - Date-Based Risk-Free Rates", () => {
       expect(stats.sharpeRatio!).toBeGreaterThan(0);
       expect(stats.sharpeRatio!).toBeLessThan(20);
     });
+
+    it("should compute Sortino using standard downside deviation (RMS from zero over all N observations)", () => {
+      // Verify the Sortino formula: DD = sqrt( (1/N) * sum( min(excessReturn_i, 0)^2 ) )
+      //
+      // Use 10-day COVID period (March 16-27 2020) where risk-free rates are near zero
+      // so excess returns are approximately equal to raw returns.
+      //
+      // Daily P&L: [500, -200, 300, -100, 400, -150, 250, -300, 350, 100]
+      // Starting capital: $100,000
+      //
+      // The key property being tested:
+      // - Denominator uses ALL N observations (not just negatives)
+      // - Squared deviations are from zero (not from mean of negatives)
+      // - Sortino should be in a reasonable range relative to Sharpe (typically 1.0-3.0x)
+      const covidStart = new Date(2020, 2, 16);
+      const trades = createMockTradesForPeriod(covidStart, 10, standardDailyPls);
+      const dailyLogs = createMockDailyLogsForPeriod(
+        covidStart,
+        10,
+        standardDailyPls
+      );
+
+      const calculator = new PortfolioStatsCalculator();
+      const stats = calculator.calculatePortfolioStats(trades, dailyLogs);
+
+      expect(stats.sharpeRatio).toBeDefined();
+      expect(stats.sortinoRatio).toBeDefined();
+
+      // The Sortino-to-Sharpe ratio should be reasonable (typically 1.0x to 3.0x)
+      // The old buggy formula could produce 10-20x ratios due to inflated Sortino
+      const ratio = stats.sortinoRatio! / stats.sharpeRatio!;
+      expect(ratio).toBeGreaterThan(0.5);
+      expect(ratio).toBeLessThan(5.0);
+    });
   });
 
   describe("Edge Cases and Regression Tests", () => {

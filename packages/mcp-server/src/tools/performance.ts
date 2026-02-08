@@ -13,7 +13,15 @@ import {
   formatCurrency,
 } from "../utils/output-formatter.js";
 import type { Trade, ReportingTrade } from "@tradeblocks/lib";
-import { normalizeToOneLot, calculateDailyExposure as calculateDailyExposureShared } from "@tradeblocks/lib";
+import {
+  normalizeToOneLot,
+  calculateDailyExposure as calculateDailyExposureShared,
+  formatDateKey,
+  truncateTimeToMinute,
+  calculateScaledPl,
+  applyStrategyFilter,
+  applyDateRangeFilter,
+} from "@tradeblocks/lib";
 
 /**
  * MFE/MAE data point for a single trade's excursion metrics
@@ -216,16 +224,6 @@ function filterByStrategy(trades: Trade[], strategy?: string): Trade[] {
   return trades.filter(
     (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
   );
-}
-
-/**
- * Format date key to YYYY-MM-DD
- */
-function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -459,7 +457,6 @@ function buildStreakData(trades: Trade[]): {
     pValue: number;
     isNonRandom: boolean;
     patternType: "random" | "clustered" | "alternating";
-    interpretation: string;
   } | null;
 } {
   const sortedTrades = [...trades].sort(
@@ -542,7 +539,6 @@ function calculateRunsTest(trades: Trade[]): {
   pValue: number;
   isNonRandom: boolean;
   patternType: "random" | "clustered" | "alternating";
-  interpretation: string;
 } | null {
   if (trades.length < 20) return null;
 
@@ -573,17 +569,12 @@ function calculateRunsTest(trades: Trade[]): {
 
   const isNonRandom = pValue < 0.05;
   let patternType: "random" | "clustered" | "alternating" = "random";
-  let interpretation = "Results appear random (no significant pattern detected)";
 
   if (isNonRandom) {
     if (zScore < 0) {
       patternType = "clustered";
-      interpretation =
-        "Results show clustering (fewer runs than expected - wins/losses tend to group together)";
     } else {
       patternType = "alternating";
-      interpretation =
-        "Results show alternating pattern (more runs than expected - wins/losses tend to alternate)";
     }
   }
 
@@ -594,7 +585,6 @@ function calculateRunsTest(trades: Trade[]): {
     pValue,
     isNonRandom,
     patternType,
-    interpretation,
   };
 }
 
@@ -1271,6 +1261,14 @@ export function registerPerformanceTools(
           .describe(
             "Bucket size (in %) for MFE/MAE distribution histogram (default: 10%)"
           ),
+        maxDataPoints: z
+          .number()
+          .min(50)
+          .max(10000)
+          .default(500)
+          .describe(
+            "Maximum data points for per-trade chart types (volatility_regimes, mfe_mae, trade_sequence, holding_periods, premium_efficiency, margin_utilization, rom_timeline). When exceeded, data is truncated with a flag. Default: 500."
+          ),
       }),
     },
     async ({
@@ -1282,6 +1280,7 @@ export function registerPerformanceTools(
       bucketCount,
       rollingWindowSize,
       mfeMaeBucketSize,
+      maxDataPoints,
     }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
@@ -1318,6 +1317,19 @@ export function registerPerformanceTools(
         // Build requested chart data
         const chartData: Record<string, unknown> = {};
         let dataPoints = 0;
+        let anyTruncated = false;
+
+        // Helper to truncate per-trade arrays when they exceed maxDataPoints
+        function truncateArray<T>(arr: T[]): T[] | { data: T[]; truncated: true; totalPoints: number } {
+          if (arr.length <= maxDataPoints) return arr;
+          anyTruncated = true;
+          return { data: arr.slice(0, maxDataPoints), truncated: true as const, totalPoints: arr.length };
+        }
+
+        // Helper to count actual output length from possibly-truncated data
+        function outputLength<T>(result: T[] | { data: T[]; truncated: true; totalPoints: number }): number {
+          return Array.isArray(result) ? result.length : result.data.length;
+        }
 
         if (charts.includes("equity_curve")) {
           chartData.equityCurve = buildEquityCurve(trades);
@@ -1386,13 +1398,15 @@ export function registerPerformanceTools(
         }
 
         if (charts.includes("trade_sequence")) {
-          chartData.tradeSequence = buildTradeSequence(trades);
-          dataPoints += (chartData.tradeSequence as unknown[]).length;
+          const result = truncateArray(buildTradeSequence(trades));
+          chartData.tradeSequence = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("rom_timeline")) {
-          chartData.romTimeline = buildRomTimeline(trades);
-          dataPoints += (chartData.romTimeline as unknown[]).length;
+          const result = truncateArray(buildRomTimeline(trades));
+          chartData.romTimeline = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("rolling_metrics")) {
@@ -1409,13 +1423,15 @@ export function registerPerformanceTools(
         }
 
         if (charts.includes("holding_periods")) {
-          chartData.holdingPeriods = buildHoldingPeriods(trades);
-          dataPoints += (chartData.holdingPeriods as unknown[]).length;
+          const result = truncateArray(buildHoldingPeriods(trades));
+          chartData.holdingPeriods = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("premium_efficiency")) {
-          chartData.premiumEfficiency = buildPremiumEfficiency(trades);
-          dataPoints += (chartData.premiumEfficiency as unknown[]).length;
+          const result = truncateArray(buildPremiumEfficiency(trades));
+          chartData.premiumEfficiency = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("margin_utilization")) {
@@ -1427,13 +1443,15 @@ export function registerPerformanceTools(
               equity: number;
               tradeNumber: number;
             }>) || buildEquityCurve(trades);
-          chartData.marginUtilization = buildMarginUtilization(trades, equityCurve);
-          dataPoints += (chartData.marginUtilization as unknown[]).length;
+          const result = truncateArray(buildMarginUtilization(trades, equityCurve));
+          chartData.marginUtilization = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("volatility_regimes")) {
-          chartData.volatilityRegimes = buildVolatilityRegimes(trades);
-          dataPoints += (chartData.volatilityRegimes as unknown[]).length;
+          const result = truncateArray(buildVolatilityRegimes(trades));
+          chartData.volatilityRegimes = result;
+          dataPoints += outputLength(result);
         }
 
         if (charts.includes("mfe_mae")) {
@@ -1487,8 +1505,20 @@ export function registerPerformanceTools(
             isWinner: d.isWinner,
           }));
 
+          // Truncate dataPoints array if needed
+          let mfeDataPointsOutput: unknown;
+          let mfeOutputCount: number;
+          if (simplifiedData.length > maxDataPoints) {
+            anyTruncated = true;
+            mfeDataPointsOutput = { data: simplifiedData.slice(0, maxDataPoints), truncated: true, totalPoints: simplifiedData.length };
+            mfeOutputCount = maxDataPoints;
+          } else {
+            mfeDataPointsOutput = simplifiedData;
+            mfeOutputCount = simplifiedData.length;
+          }
+
           chartData.mfeMae = {
-            dataPoints: simplifiedData,
+            dataPoints: mfeDataPointsOutput,
             distribution,
             statistics: {
               totalTrades: mfeData.length,
@@ -1500,7 +1530,7 @@ export function registerPerformanceTools(
               avgExcursionRatio,
             },
           };
-          dataPoints += simplifiedData.length + distribution.length;
+          dataPoints += mfeOutputCount + distribution.length;
         }
 
         if (charts.includes("daily_exposure")) {
@@ -1573,8 +1603,10 @@ export function registerPerformanceTools(
           bucketCount,
           rollingWindowSize,
           mfeMaeBucketSize,
+          maxDataPoints,
           tradesAnalyzed: trades.length,
           chartsIncluded: charts,
+          truncationApplied: anyTruncated,
           ...chartData,
         };
 
@@ -1783,7 +1815,7 @@ export function registerPerformanceTools(
     "compare_backtest_to_actual",
     {
       description:
-        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. Supports trade-level detail, outlier detection, and flexible grouping. Limitation: Trade-level matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
+        "Compare backtest (tradelog.csv) results to actual reported trades (reportinglog.csv) with scaling options for fair comparison. Matches trades by date and strategy. When no dateRange is specified, comparison is auto-limited to the reporting log's date range overlap. By default, output includes matched and unmatched comparisons; set matchedOnly=true to include only matched rows. Supports trade-level detail, outlier detection, and flexible grouping. Limitation: Trade-level matching uses minute precision; if multiple trades share the same date+strategy+minute, matching is order-dependent.",
       inputSchema: z.object({
         blockId: z.string().describe("Block folder name"),
         strategy: z
@@ -1815,7 +1847,7 @@ export function registerPerformanceTools(
           .boolean()
           .default(false)
           .describe(
-            "Only include trades where both backtest and actual exist on the same date (excludes unmatched trades from totals)"
+            "Only include trades where both backtest and actual exist on the same date (excludes unmatched rows from output and totals)"
           ),
         detailLevel: z
           .enum(["summary", "trades"])
@@ -1865,32 +1897,12 @@ export function registerPerformanceTools(
         }
 
         // Apply strategy filter to both
-        if (strategy) {
-          backtestTrades = backtestTrades.filter(
-            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
-          );
-          actualTrades = actualTrades.filter(
-            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
-          );
-        }
+        backtestTrades = applyStrategyFilter(backtestTrades, strategy);
+        actualTrades = applyStrategyFilter(actualTrades, strategy);
 
         // Apply date range filter to both
-        if (dateRange) {
-          if (dateRange.from || dateRange.to) {
-            backtestTrades = backtestTrades.filter((t) => {
-              const tradeDate = formatDateKey(new Date(t.dateOpened));
-              if (dateRange.from && tradeDate < dateRange.from) return false;
-              if (dateRange.to && tradeDate > dateRange.to) return false;
-              return true;
-            });
-            actualTrades = actualTrades.filter((t) => {
-              const tradeDate = formatDateKey(new Date(t.dateOpened));
-              if (dateRange.from && tradeDate < dateRange.from) return false;
-              if (dateRange.to && tradeDate > dateRange.to) return false;
-              return true;
-            });
-          }
-        }
+        backtestTrades = applyDateRangeFilter(backtestTrades, dateRange);
+        actualTrades = applyDateRangeFilter(actualTrades, dateRange);
 
         if (backtestTrades.length === 0) {
           return {
@@ -1916,15 +1928,22 @@ export function registerPerformanceTools(
           };
         }
 
-        // Helper to truncate time to minute precision for matching
-        const truncateTimeToMinute = (time: string | undefined): string => {
-          if (!time) return "00:00";
-          const parts = time.split(":");
-          if (parts.length >= 2) {
-            return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+        // Auto-filter backtest trades to reporting log date range overlap
+        // when no explicit dateRange is provided
+        let autoFilterApplied = false;
+        if (!dateRange) {
+          const actualDates = actualTrades.map(t => formatDateKey(new Date(t.dateOpened)));
+          if (actualDates.length > 0) {
+            const minActualDate = actualDates.reduce((a, b) => a < b ? a : b);
+            const maxActualDate = actualDates.reduce((a, b) => a > b ? a : b);
+            const beforeCount = backtestTrades.length;
+            backtestTrades = backtestTrades.filter(t => {
+              const d = formatDateKey(new Date(t.dateOpened));
+              return d >= minActualDate && d <= maxActualDate;
+            });
+            autoFilterApplied = backtestTrades.length < beforeCount;
           }
-          return "00:00";
-        };
+        }
 
         // Helper to get group key based on groupBy parameter
         const getGroupKey = (
@@ -1966,6 +1985,8 @@ export function registerPerformanceTools(
           backtestContracts: number;
           actualContracts: number;
           scalingFactor: number;
+          backtestLegs: string | null;
+          actualLegs: string | null;
           differences: Array<{
             field: string;
             backtest: number | string | null;
@@ -1996,7 +2017,7 @@ export function registerPerformanceTools(
           comparisons: DetailedComparison[];
         }
 
-        let comparisons: DetailedComparison[] = [];
+        const comparisons: DetailedComparison[] = [];
 
         if (detailLevel === "trades") {
           // Trade-level matching by date|strategy|time (minute precision)
@@ -2005,7 +2026,7 @@ export function registerPerformanceTools(
           actualTrades.forEach((trade) => {
             const dateKey = formatDateKey(new Date(trade.dateOpened));
             const timeKey = truncateTimeToMinute(trade.timeOpened);
-            const key = `${dateKey}|${trade.strategy}|${timeKey}`;
+            const key = `${dateKey}\t${trade.strategy}\t${timeKey}`;
             const existing = actualByKey.get(key) || [];
             existing.push(trade);
             actualByKey.set(key, existing);
@@ -2015,7 +2036,7 @@ export function registerPerformanceTools(
           for (const btTrade of backtestTrades) {
             const dateKey = formatDateKey(new Date(btTrade.dateOpened));
             const timeKey = truncateTimeToMinute(btTrade.timeOpened);
-            const key = `${dateKey}|${btTrade.strategy}|${timeKey}`;
+            const key = `${dateKey}\t${btTrade.strategy}\t${timeKey}`;
 
             const actualMatches = actualByKey.get(key);
             const actualTrade = actualMatches?.[0]; // Take first match
@@ -2031,27 +2052,14 @@ export function registerPerformanceTools(
               // Calculate scaling
               const btContracts = btTrade.numContracts;
               const actualContracts = actualTrade.numContracts;
-              let scalingFactor = 1;
-              let scaledBtPl = btTrade.pl;
-
-              if (scaling === "perContract") {
-                scaledBtPl = btContracts > 0 ? btTrade.pl / btContracts : 0;
-                // For per-contract, we normalize both sides
-              } else if (scaling === "toReported") {
-                // Scale backtest DOWN to match actual contract count
-                if (btContracts > 0 && actualContracts > 0) {
-                  scalingFactor = actualContracts / btContracts;
-                  scaledBtPl = btTrade.pl * scalingFactor;
-                } else if (btContracts === 0) {
-                  scalingFactor = 0;
-                  scaledBtPl = 0;
-                }
-              }
-
-              const actualPl =
-                scaling === "perContract" && actualContracts > 0
-                  ? actualTrade.pl / actualContracts
-                  : actualTrade.pl;
+              const { scaledBtPl, scaledActualPl: actualPl } = calculateScaledPl(
+                btTrade.pl, actualTrade.pl,
+                btContracts, actualContracts,
+                scaling
+              );
+              const scalingFactor = scaling === "toReported" && btContracts > 0 && actualContracts > 0
+                ? actualContracts / btContracts
+                : scaling === "toReported" && btContracts === 0 ? 0 : 1;
 
               const slippage = actualPl - scaledBtPl;
               const slippagePercent =
@@ -2077,6 +2085,15 @@ export function registerPerformanceTools(
                   backtest: btTrade.openingPrice,
                   actual: actualTrade.openingPrice,
                   delta: actualTrade.openingPrice - btTrade.openingPrice,
+                });
+              }
+
+              // legs (strike differences)
+              if (btTrade.legs !== actualTrade.legs) {
+                differences.push({
+                  field: "legs",
+                  backtest: btTrade.legs,
+                  actual: actualTrade.legs,
                 });
               }
 
@@ -2126,6 +2143,8 @@ export function registerPerformanceTools(
                 backtestContracts: btContracts,
                 actualContracts: actualContracts,
                 scalingFactor,
+                backtestLegs: btTrade.legs,
+                actualLegs: actualTrade.legs,
                 differences,
                 isOutlier: false, // Will be set later
                 context: {
@@ -2157,6 +2176,8 @@ export function registerPerformanceTools(
                 backtestContracts: btTrade.numContracts,
                 actualContracts: 0,
                 scalingFactor: 0,
+                backtestLegs: btTrade.legs,
+                actualLegs: null,
                 differences: [],
                 isOutlier: false,
                 context: {
@@ -2189,6 +2210,8 @@ export function registerPerformanceTools(
                 backtestContracts: 0,
                 actualContracts: actualTrade.numContracts,
                 scalingFactor: 0,
+                backtestLegs: null,
+                actualLegs: actualTrade.legs,
                 differences: [],
                 isOutlier: false,
                 context: {
@@ -2210,7 +2233,7 @@ export function registerPerformanceTools(
 
           backtestTrades.forEach((trade) => {
             const dateKey = formatDateKey(new Date(trade.dateOpened));
-            const key = `${dateKey}|${trade.strategy}`;
+            const key = `${dateKey}\t${trade.strategy}`;
             const existing = backtestByDateStrategy.get(key) || {
               trades: [],
               totalPl: 0,
@@ -2224,7 +2247,7 @@ export function registerPerformanceTools(
 
           actualTrades.forEach((trade) => {
             const dateKey = formatDateKey(new Date(trade.dateOpened));
-            const key = `${dateKey}|${trade.strategy}`;
+            const key = `${dateKey}\t${trade.strategy}`;
             const existing = actualByDateStrategy.get(key) || {
               trades: [],
               totalPl: 0,
@@ -2239,29 +2262,20 @@ export function registerPerformanceTools(
           const processedActual = new Set<string>();
 
           for (const [key, btData] of backtestByDateStrategy) {
-            const [dateKey, strategyName] = key.split("|");
+            const [dateKey, strategyName] = key.split("\t");
             const actualData = actualByDateStrategy.get(key);
 
             if (actualData) {
               processedActual.add(key);
 
-              let scaledBtPl = btData.totalPl;
-              let scaledActualPl = actualData.totalPl;
-              let scalingFactor = 1;
-
-              if (scaling === "perContract") {
-                scaledBtPl =
-                  btData.contracts > 0 ? btData.totalPl / btData.contracts : 0;
-                scaledActualPl =
-                  actualData.contracts > 0
-                    ? actualData.totalPl / actualData.contracts
-                    : 0;
-              } else if (scaling === "toReported") {
-                if (btData.contracts > 0 && actualData.contracts > 0) {
-                  scalingFactor = actualData.contracts / btData.contracts;
-                  scaledBtPl = btData.totalPl * scalingFactor;
-                }
-              }
+              const { scaledBtPl, scaledActualPl } = calculateScaledPl(
+                btData.totalPl, actualData.totalPl,
+                btData.contracts, actualData.contracts,
+                scaling
+              );
+              const scalingFactor = scaling === "toReported" && btData.contracts > 0 && actualData.contracts > 0
+                ? actualData.contracts / btData.contracts
+                : 1;
 
               const slippage = scaledActualPl - scaledBtPl;
               const slippagePercent =
@@ -2280,6 +2294,8 @@ export function registerPerformanceTools(
                 backtestContracts: btData.contracts,
                 actualContracts: actualData.contracts,
                 scalingFactor,
+                backtestLegs: null, // Not available in summary mode (aggregated trades)
+                actualLegs: null,
                 differences: [],
                 isOutlier: false,
               });
@@ -2300,6 +2316,8 @@ export function registerPerformanceTools(
                 backtestContracts: btData.contracts,
                 actualContracts: 0,
                 scalingFactor: 0,
+                backtestLegs: null, // Not available in summary mode
+                actualLegs: null,
                 differences: [],
                 isOutlier: false,
               });
@@ -2310,7 +2328,7 @@ export function registerPerformanceTools(
           for (const [key, actualData] of actualByDateStrategy) {
             if (processedActual.has(key)) continue;
 
-            const [dateKey, strategyName] = key.split("|");
+            const [dateKey, strategyName] = key.split("\t");
             comparisons.push({
               date: dateKey,
               strategy: strategyName,
@@ -2324,6 +2342,8 @@ export function registerPerformanceTools(
               backtestContracts: 0,
               actualContracts: actualData.contracts,
               scalingFactor: 0,
+              backtestLegs: null, // Not available in summary mode
+              actualLegs: null,
               differences: [],
               isOutlier: false,
             });
@@ -2408,13 +2428,50 @@ export function registerPerformanceTools(
           }
         }
 
+        // Build unmatched summaries before filtering
+        const unmatchedBacktestEntries = comparisons.filter(
+          (c) => !c.matched && c.backtestPl !== 0
+        );
+        const unmatchedActualEntries = comparisons.filter(
+          (c) => !c.matched && c.actualPl !== 0
+        );
+
+        const unmatchedBacktestSummary = unmatchedBacktestEntries.length > 0
+          ? {
+              count: unmatchedBacktestEntries.length,
+              dateRange: {
+                from: unmatchedBacktestEntries.reduce((a, b) => a.date < b.date ? a : b).date,
+                to: unmatchedBacktestEntries.reduce((a, b) => a.date > b.date ? a : b).date,
+              },
+              totalPl: unmatchedBacktestEntries.reduce((sum, c) => sum + c.backtestPl, 0),
+              strategies: Array.from(new Set(unmatchedBacktestEntries.map(c => c.strategy))).sort(),
+            }
+          : null;
+
+        const unmatchedActualSummary = unmatchedActualEntries.length > 0
+          ? {
+              count: unmatchedActualEntries.length,
+              dateRange: {
+                from: unmatchedActualEntries.reduce((a, b) => a.date < b.date ? a : b).date,
+                to: unmatchedActualEntries.reduce((a, b) => a.date > b.date ? a : b).date,
+              },
+              totalPl: unmatchedActualEntries.reduce((sum, c) => sum + c.actualPl, 0),
+              strategies: Array.from(new Set(unmatchedActualEntries.map(c => c.strategy))).sort(),
+            }
+          : null;
+
+        // Apply matchedOnly filter to the primary output set
+        let outputComparisons = matchedOnly
+          ? comparisons.filter((c) => c.matched)
+          : [...comparisons];
+
         // Apply outliersOnly filter if requested
         if (outliersOnly) {
-          comparisons = comparisons.filter((c) => c.isOutlier);
+          outputComparisons = outputComparisons.filter((c) => c.isOutlier);
         }
 
         // Sort by absolute slippage (worst first) to surface problem areas
-        comparisons.sort(
+        outputComparisons.sort(
           (a, b) => Math.abs(b.slippage) - Math.abs(a.slippage)
         );
 
@@ -2422,7 +2479,7 @@ export function registerPerformanceTools(
         let groups: GroupedResult[] | null = null;
         if (groupBy !== "none") {
           const groupMap = new Map<string, DetailedComparison[]>();
-          for (const comparison of comparisons) {
+          for (const comparison of outputComparisons) {
             const gKey = getGroupKey(comparison.date, comparison.strategy, groupBy);
             const existing = groupMap.get(gKey) || [];
             existing.push(comparison);
@@ -2456,10 +2513,12 @@ export function registerPerformanceTools(
             .sort((a, b) => Math.abs(b.totalSlippage) - Math.abs(a.totalSlippage));
         }
 
-        // Calculate summary statistics
+        // Calculate summary statistics.
+        // matchedOnly=false includes unmatched rows in totals for backward compatibility.
         const comparisonsForTotals = matchedOnly
-          ? comparisons.filter((c) => c.matched)
-          : comparisons;
+          ? outputComparisons.filter((c) => c.matched)
+          : outputComparisons;
+        const matchedForSummary = outputComparisons.filter((c) => c.matched);
         const totalBacktestPl = comparisonsForTotals.reduce(
           (sum, c) => sum + c.scaledBacktestPl,
           0
@@ -2471,11 +2530,10 @@ export function registerPerformanceTools(
           0
         );
         const totalSlippage = totalActualPl - totalBacktestPl;
-        const matchedForStats = comparisons.filter((c) => c.matched);
         const avgSlippage =
-          matchedForStats.length > 0
-            ? matchedForStats.reduce((sum, c) => sum + c.slippage, 0) /
-              matchedForStats.length
+          matchedForSummary.length > 0
+            ? matchedForSummary.reduce((sum, c) => sum + c.slippage, 0) /
+              matchedForSummary.length
             : 0;
         const avgSlippagePercent =
           totalBacktestPl !== 0
@@ -2498,6 +2556,7 @@ export function registerPerformanceTools(
             `date=${dateRange.from ?? "start"} to ${dateRange.to ?? "end"}`
           );
         }
+        if (autoFilterApplied) filters.push("auto-date-overlap");
         if (matchedOnly) filters.push("matched-only");
         if (outliersOnly) filters.push("outliers-only");
         if (detailLevel === "trades") filters.push("trade-level");
@@ -2512,7 +2571,7 @@ export function registerPerformanceTools(
           outlierStats !== null
             ? ` | ${outlierStats.outlierCount} outliers`
             : "";
-        const summary = `Comparison: ${blockId}${filterStr} | ${scaling} scaling | ${matchedForStats.length}/${comparisons.length} matched | ${slippageDisplay}${outlierDisplay}`;
+        const summary = `Comparison: ${blockId}${filterStr} | ${scaling} scaling | ${matchedForSummary.length}/${outputComparisons.length} matched | ${slippageDisplay}${outlierDisplay}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -2520,6 +2579,7 @@ export function registerPerformanceTools(
           strategy: strategy ?? null,
           scalingMode: scaling,
           dateRange: dateRange ?? null,
+          autoFilterApplied,
           filters: {
             matchedOnly,
             detailLevel,
@@ -2532,14 +2592,12 @@ export function registerPerformanceTools(
           backtestStrategies,
           actualStrategies,
           summary: {
-            totalComparisons: comparisons.length,
-            matchedComparisons: matchedForStats.length,
-            unmatchedBacktest: comparisons.filter(
-              (c) => !c.matched && c.backtestPl !== 0
-            ).length,
-            unmatchedActual: comparisons.filter(
-              (c) => !c.matched && c.actualPl !== 0
-            ).length,
+            totalComparisons: outputComparisons.length,
+            matchedComparisons: matchedForSummary.length,
+            unmatchedBacktestCount: unmatchedBacktestEntries.length,
+            unmatchedActualCount: unmatchedActualEntries.length,
+            unmatchedBacktestPl: unmatchedBacktestSummary?.totalPl ?? 0,
+            unmatchedActualPl: unmatchedActualSummary?.totalPl ?? 0,
             totalBacktestPl,
             totalActualPl,
             totalSlippage,
@@ -2547,10 +2605,14 @@ export function registerPerformanceTools(
             avgSlippagePercent,
             outlierStats,
             note: matchedOnly
-              ? "Totals include matched comparisons only"
-              : "Totals include all comparisons (matched and unmatched)",
+              ? "Summary stats are computed from matched rows only."
+              : "Summary stats include unmatched rows because matchedOnly=false. Unmatched trades are also reported in unmatchedSummary.",
           },
-          ...(groupBy === "none" ? { comparisons } : { groups }),
+          unmatchedSummary: {
+            backtest: unmatchedBacktestSummary,
+            actual: unmatchedActualSummary,
+          },
+          ...(groupBy === "none" ? { comparisons: outputComparisons } : { groups }),
         };
 
         return createToolOutput(summary, structuredData);

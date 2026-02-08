@@ -7,7 +7,8 @@
  *
  * Key improvements for consistency:
  * - Sharpe Ratio: Uses sample std (N-1) via math.js 'uncorrected' parameter
- * - Sortino Ratio: Uses population std (N) via math.js 'biased' parameter to match numpy.std()
+ * - Sortino Ratio: Uses standard downside deviation = sqrt((1/N) * sum(min(excess_i, 0)^2))
+ *   where N = total observations (RMS of negative excess returns from zero, not std of negatives)
  * - Mean calculations: Replaced manual reduce operations with math.js mean()
  * - Min/Max calculations: Using math.js min/max functions
  * - Daily returns: Fixed to use previous day's portfolio value as denominator
@@ -447,8 +448,16 @@ export class PortfolioStatsCalculator {
    * Uses historical 3-month T-bill rates from Phase 25 utility for each day's
    * excess return calculation instead of a fixed rate.
    *
-   * Formula: (mean(excessReturns) / std(negativeExcessReturns)) * sqrt(252)
-   * Where excessReturn[i] = return[i] - (getRiskFreeRate(date[i]) / 100 / 252)
+   * Formula: (mean(excessReturns) / downsideDeviation) * sqrt(252)
+   * Where:
+   *   excessReturn[i] = return[i] - (getRiskFreeRate(date[i]) / 100 / 252)
+   *   downsideDeviation = sqrt( (1/N) * sum( min(excessReturn[i], 0)^2 ) )
+   *   N = total number of observations (all days, not just down days)
+   *
+   * The downside deviation is the RMS of negative excess returns from zero,
+   * computed over ALL observations (positive excess returns contribute 0).
+   * This differs from std(negativeReturns) which measures dispersion around
+   * the mean of negatives — that approach inflates Sortino by understating risk.
    */
   private calculateSortinoRatio(trades: Trade[], dailyLogEntries?: DailyLogEntry[]): number | undefined {
     if (trades.length < 2) return undefined
@@ -470,16 +479,21 @@ export class PortfolioStatsCalculator {
 
     const avgExcessReturn = mean(excessReturns) as number
 
-    // Only consider negative excess returns for downside deviation
-    const negativeExcessReturns = excessReturns.filter(ret => ret < 0)
-    if (negativeExcessReturns.length === 0) return undefined
+    // Calculate downside deviation: RMS of negative excess returns from zero
+    // using ALL N observations. Positive excess returns contribute 0 to the sum.
+    const N = excessReturns.length
+    const sumSquaredDownside = excessReturns.reduce((sum, ret) => {
+      const downside = Math.min(ret, 0)
+      return sum + downside * downside
+    }, 0)
 
-    // Calculate downside deviation using math.js to match numpy.std behavior
-    // Use 'biased' for population std (divide by N) to match numpy default
-    const downsideDeviation = std(negativeExcessReturns, 'biased') as number
+    // If no negative excess returns, downside deviation is 0 — return undefined
+    if (sumSquaredDownside === 0) return undefined
 
-    // Check for zero or near-zero downside deviation to prevent overflow
-    if (downsideDeviation === 0 || downsideDeviation < 1e-10) return undefined
+    const downsideDeviation = Math.sqrt(sumSquaredDownside / N)
+
+    // Check for near-zero downside deviation to prevent overflow
+    if (downsideDeviation < 1e-10) return undefined
 
     const sortinoRatio = (avgExcessReturn / downsideDeviation) * Math.sqrt(this.config.annualizationFactor)
 

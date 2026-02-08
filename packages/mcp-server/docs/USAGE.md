@@ -74,15 +74,23 @@ Your AI assistant will:
 3. Assess diversification benefit
 4. Provide ADD/CONSIDER/SKIP recommendation
 
-### Optimize Parameters
+### Explore with SQL
 
 "What's the best day of week to enter trades?"
 
 Your AI assistant will:
-1. `list_available_fields` - Find filterable fields
-2. `aggregate_by_field` - Group by day of week
-3. `get_field_statistics` - Compare performance
-4. Present findings with overfitting warnings
+1. `describe_database` - Discover available tables and columns
+2. `run_sql` - Query trades grouped by day of week
+3. Present findings with overfitting warnings
+
+Example SQL:
+```sql
+SELECT DAYOFWEEK(date_opened) as dow, COUNT(*) as trades,
+       SUM(CASE WHEN pl > 0 THEN 1 ELSE 0 END)::FLOAT / COUNT(*) as win_rate
+FROM trades.trade_data
+WHERE block_id = 'my-strategy'
+GROUP BY dow ORDER BY dow
+```
 
 ---
 
@@ -96,7 +104,6 @@ Your AI assistant will:
 | `get_statistics` | Performance metrics for a block |
 | `get_strategy_comparison` | Compare strategies within a block |
 | `compare_blocks` | Compare statistics across multiple blocks |
-| `get_trades` | Raw trade data with filtering and pagination |
 
 ### Analysis Tools
 | Tool | Purpose |
@@ -114,13 +121,11 @@ Your AI assistant will:
 | `get_period_returns` | Returns by time period |
 | `compare_backtest_to_actual` | Backtest vs live comparison |
 
-### Report Builder Tools
+### SQL Tools
 | Tool | Purpose |
 |------|---------|
-| `list_available_fields` | Filterable trade fields |
-| `run_filtered_query` | Query trades with filters |
-| `get_field_statistics` | Statistics for a field |
-| `aggregate_by_field` | Group and aggregate trades |
+| `run_sql` | Execute SQL queries against trades and market data |
+| `describe_database` | Schema discovery with table info and examples |
 
 ### Import Tools
 | Tool | Purpose |
@@ -243,6 +248,35 @@ Consider using `run_monte_carlo` for additional robustness testing.
 |----------|-------------|---------|
 | `BLOCKS_DIRECTORY` | Path to blocks folder | (required) |
 
+### SQL Queries
+
+Use `describe_database` to see available tables, columns, and example queries. Then use `run_sql` for flexible data exploration:
+
+```sql
+-- Filter trades by strategy and P/L
+SELECT date_opened, strategy, pl, num_contracts
+FROM trades.trade_data
+WHERE block_id = 'my-strategy' AND pl > 0
+ORDER BY date_opened DESC
+LIMIT 50
+
+-- Join trades with market data
+SELECT t.date_opened, t.strategy, t.pl, m.VIX_Close, m.Vol_Regime
+FROM trades.trade_data t
+LEFT JOIN market.spx_daily m ON t.date_opened = m.date
+WHERE t.block_id = 'my-strategy'
+
+-- Aggregate by VIX bucket
+SELECT
+  CASE WHEN m.VIX_Close < 20 THEN 'Low' ELSE 'High' END as vix_level,
+  COUNT(*) as trades,
+  SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END)::FLOAT / COUNT(*) as win_rate
+FROM trades.trade_data t
+JOIN market.spx_daily m ON t.date_opened = m.date
+WHERE t.block_id = 'my-strategy'
+GROUP BY vix_level
+```
+
 ### Platform-Specific Configuration
 
 See [README.md](../README.md#configuration-by-platform) for configuration examples for:
@@ -265,8 +299,19 @@ Skills provide structured prompts for common analysis tasks.
 
 ---
 
+## Market Data Setup
+
+For market-aware analysis (VIX regimes, gap analysis, intraday timing), you'll need SPX/VIX data from TradingView:
+
+1. Add the 3 PineScript indicators to your TradingView charts
+2. Export CSVs to `~/backtests/_marketdata/`
+3. The MCP server auto-syncs them into DuckDB on first query
+
+See [scripts/README.md](../../../scripts/README.md) for the PineScript indicators, export instructions, and all 55+ available fields.
+
 ## Related Documentation
 
 - [README.md](../README.md) - Installation and setup
 - [Web Platforms Guide](./WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
+- [Market Data Scripts](../../../scripts/README.md) - TradingView PineScript indicators
 - [Agent Skills](../../agent-skills/README.md) - Conversational workflows
