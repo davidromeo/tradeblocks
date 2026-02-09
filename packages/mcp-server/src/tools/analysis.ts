@@ -26,6 +26,7 @@ import {
   calculateStrategyKellyMetrics,
 } from "@tradeblocks/lib";
 import type { Trade, MonteCarloParams } from "@tradeblocks/lib";
+import { filterByDateRange } from "./shared/filters.js";
 
 /**
  * Filter trades by strategy
@@ -262,14 +263,7 @@ export function registerAnalysisTools(
         }
 
         // Apply date range filter
-        if (dateRangeFrom) {
-          const fromDate = new Date(dateRangeFrom);
-          trades = trades.filter((t) => new Date(t.dateOpened) >= fromDate);
-        }
-        if (dateRangeTo) {
-          const toDate = new Date(dateRangeTo);
-          trades = trades.filter((t) => new Date(t.dateOpened) <= toDate);
-        }
+        trades = filterByDateRange(trades, dateRangeFrom, dateRangeTo);
 
         // Apply selectedStrategies filter if provided (in addition to single strategy filter)
         if (selectedStrategies && selectedStrategies.length > 0) {
@@ -816,14 +810,7 @@ export function registerAnalysisTools(
         }
 
         // Apply date range filter
-        if (dateRangeFrom) {
-          const fromDate = new Date(dateRangeFrom);
-          trades = trades.filter((t) => new Date(t.dateOpened) >= fromDate);
-        }
-        if (dateRangeTo) {
-          const toDate = new Date(dateRangeTo);
-          trades = trades.filter((t) => new Date(t.dateOpened) <= toDate);
-        }
+        trades = filterByDateRange(trades, dateRangeFrom, dateRangeTo);
 
         // Apply strategy filter
         if (strategyFilter && strategyFilter.length > 0) {
@@ -1021,23 +1008,17 @@ export function registerAnalysisTools(
           };
         }
 
-        // Build date range if provided
-        const dateRange = dateRangeFrom || dateRangeTo
-          ? {
-              from: dateRangeFrom ? new Date(dateRangeFrom) : undefined,
-              to: dateRangeTo ? new Date(dateRangeTo) : undefined,
-            }
-          : undefined;
+        // Apply date range filter before analysis (avoids UTC/local Date mismatch)
+        const filteredTrades = filterByDateRange(trades, dateRangeFrom, dateRangeTo);
 
         // Perform tail risk analysis with all options
-        const result = performTailRiskAnalysis(trades, {
+        const result = performTailRiskAnalysis(filteredTrades, {
           tailThreshold,
           minTradingDays,
           normalization,
           dateBasis,
           strategyFilter,
           tickerFilter,
-          dateRange,
           varianceThreshold,
         });
 
