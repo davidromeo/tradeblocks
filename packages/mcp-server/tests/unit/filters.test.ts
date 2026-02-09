@@ -171,23 +171,30 @@ describe('filterByDateRange', () => {
 
   // --- Timezone safety ---
 
-  test('date comparison uses Eastern Time calendar dates (not UTC)', () => {
-    // Trade created with UTC time that could cross date boundary in some timezones
-    // 2025-01-08T04:00:00Z = 2025-01-07T23:00:00 ET (still Jan 7 in Eastern)
-    const edgeTrade = makeTrade('2025-01-07');
-    edgeTrade.dateOpened = new Date('2025-01-08T04:00:00.000Z'); // midnight-ish UTC, still Jan 7 ET
+  test('local-midnight dates preserve calendar date (parseDatePreservingCalendarDay pattern)', () => {
+    // This is how dates are actually created: new Date(year, month, day) at local midnight
+    const trade = makeTrade('2025-01-07');
+    trade.dateOpened = new Date(2025, 0, 7); // local midnight Jan 7
 
-    const result = filterByDateRange([edgeTrade], '2025-01-07', '2025-01-07');
-    expect(result).toHaveLength(1); // Should be included as Jan 7 in Eastern
+    const result = filterByDateRange([trade], '2025-01-07', '2025-01-07');
+    expect(result).toHaveLength(1); // Must be Jan 7 regardless of server timezone
   });
 
-  test('late-evening ET trade stays on correct date', () => {
-    // 2025-01-08T03:59:00Z = 2025-01-07T22:59:00 ET
-    const lateTrade = makeTrade('2025-01-07');
-    lateTrade.dateOpened = new Date('2025-01-08T03:59:00.000Z');
+  test('string dateOpened extracts calendar date without timezone conversion', () => {
+    // After JSON serialization, dateOpened may be an ISO string
+    const trade = makeTrade('2025-01-07');
+    (trade as Record<string, unknown>).dateOpened = '2025-01-07T05:00:00.000Z';
 
-    const result = filterByDateRange([lateTrade], '2025-01-08', '2025-01-08');
-    expect(result).toHaveLength(0); // This is Jan 7 in ET, not Jan 8
+    const result = filterByDateRange([trade], '2025-01-07', '2025-01-07');
+    expect(result).toHaveLength(1); // Regex extracts 2025-01-07 from string
+  });
+
+  test('string dateOpened as plain YYYY-MM-DD works', () => {
+    const trade = makeTrade('2025-01-07');
+    (trade as Record<string, unknown>).dateOpened = '2025-01-07';
+
+    const result = filterByDateRange([trade], '2025-01-07', '2025-01-07');
+    expect(result).toHaveLength(1);
   });
 });
 

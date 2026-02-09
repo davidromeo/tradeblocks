@@ -27,16 +27,21 @@ function validateDateParam(date: string | undefined): string | undefined {
 }
 
 /**
- * Format a Date to YYYY-MM-DD in Eastern Time for string comparison.
- * Trades are stored in Eastern Time, so we compare calendar dates in that timezone.
+ * Extract YYYY-MM-DD calendar date from a Date or string.
+ * Trades are parsed via parseDatePreservingCalendarDay() which creates dates at
+ * local midnight. Use local date components to preserve the calendar date,
+ * avoiding timezone shift when the server runs in UTC.
  */
-function toEasternDateStr(d: Date): string {
-  return d.toLocaleDateString("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+function toCalendarDateStr(date: Date | string): string {
+  if (typeof date === "string") {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+  const d = typeof date === "string" ? new Date(date) : date;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -54,18 +59,18 @@ export function filterByDateRange(
   let filtered = trades;
 
   if (start) {
-    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) >= start);
+    filtered = filtered.filter((t) => toCalendarDateStr(t.dateOpened) >= start);
   }
 
   if (end) {
-    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) <= end);
+    filtered = filtered.filter((t) => toCalendarDateStr(t.dateOpened) <= end);
   }
 
   return filtered;
 }
 
 /**
- * Filter daily log entries by date range using string comparison on Eastern Time calendar dates.
+ * Filter daily log entries by date range using string comparison on calendar dates.
  * Mirrors filterByDateRange but uses entry.date (Date object) instead of t.dateOpened.
  * Malformed date inputs (not YYYY-MM-DD) are silently ignored.
  */
@@ -79,11 +84,11 @@ export function filterDailyLogsByDateRange(
   let filtered = dailyLogs;
 
   if (start) {
-    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) >= start);
+    filtered = filtered.filter((entry) => toCalendarDateStr(entry.date) >= start);
   }
 
   if (end) {
-    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) <= end);
+    filtered = filtered.filter((entry) => toCalendarDateStr(entry.date) <= end);
   }
 
   return filtered;
