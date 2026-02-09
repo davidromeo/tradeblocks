@@ -18,6 +18,13 @@ export interface ColumnDescription {
   description: string;
   /** True if this column is useful for hypothesis testing (filtering, grouping, analysis) */
   hypothesis: boolean;
+  /** When this field's value is known relative to market open.
+   *  - 'open': Known at/before market open (Prior_Close, Gap_Pct, VIX_Open, etc.)
+   *  - 'close': Only known after market close (RSI_14, Vol_Regime, Close, etc.)
+   *  - 'static': Calendar/metadata facts known before the day (Day_of_Week, Month, Is_Opex)
+   *  Only applicable to market.spx_daily columns. Omit for non-market tables.
+   */
+  timing?: 'open' | 'close' | 'static';
 }
 
 export interface TableDescription {
@@ -210,229 +217,284 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           Prior_Close: {
             description: "Previous day's SPX close price",
             hypothesis: false,
+            timing: 'open',
           },
           open: {
             description: "SPX open price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'open',
           },
           high: {
             description: "SPX high price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'close',
           },
           low: {
             description: "SPX low price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'close',
           },
           close: {
             description: "SPX close price (lowercase to match TradingView export)",
             hypothesis: false,
+            timing: 'close',
           },
           Gap_Pct: {
             description: "Overnight gap percentage ((Open - Prior_Close) / Prior_Close * 100)",
             hypothesis: true,
+            timing: 'open',
           },
           Intraday_Range_Pct: {
             description: "Intraday range as percentage ((High - Low) / Open * 100)",
             hypothesis: true,
+            timing: 'close',
           },
           Intraday_Return_Pct: {
             description: "Open to close return percentage ((Close - Open) / Open * 100)",
             hypothesis: true,
+            timing: 'close',
           },
           Total_Return_Pct: {
             description: "Prior close to close return percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Close_Position_In_Range: {
             description: "Where close is in day's range (0 = low, 1 = high)",
             hypothesis: true,
+            timing: 'close',
           },
           Gap_Filled: {
             description: "Whether overnight gap was filled (1 = yes, 0 = no)",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Open: {
             description: "VIX open value",
-            hypothesis: false,
+            hypothesis: true,
+            timing: 'open',
           },
           VIX_Close: {
             description: "VIX close value - key volatility indicator",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Change_Pct: {
             description: "VIX percentage change from prior close",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Spike_Pct: {
             description: "VIX spike from open to high as percentage",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_Percentile: {
             description: "VIX percentile rank (0-100) vs historical",
             hypothesis: true,
+            timing: 'close',
           },
           Vol_Regime: {
             description:
-              "Volatility regime classification (1=low, 2=normal, 3=elevated, 4=high, 5=extreme)",
+              "Volatility regime classification (1=very low, 2=low, 3=normal, 4=elevated, 5=high, 6=extreme)",
             hypothesis: true,
+            timing: 'close',
           },
           VIX9D_Close: {
             description: "9-day VIX close",
             hypothesis: false,
+            timing: 'close',
           },
           VIX3M_Close: {
             description: "3-month VIX close",
             hypothesis: false,
+            timing: 'close',
           },
           VIX9D_VIX_Ratio: {
             description: "VIX9D/VIX ratio - term structure indicator",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_VIX3M_Ratio: {
             description: "VIX/VIX3M ratio - term structure indicator",
             hypothesis: true,
+            timing: 'close',
           },
           Term_Structure_State: {
             description:
-              "VIX term structure state (1=backwardation, 0=flat, -1=contango)",
+              "VIX term structure state (-1=backwardation/inverted, 0=flat, 1=contango/normal)",
             hypothesis: true,
+            timing: 'close',
           },
           ATR_Pct: {
             description: "Average True Range as percentage of price",
             hypothesis: true,
+            timing: 'close',
           },
           RSI_14: {
             description: "14-day RSI (0-100, >70 overbought, <30 oversold)",
             hypothesis: true,
+            timing: 'close',
           },
           Price_vs_EMA21_Pct: {
             description: "Price vs 21-day EMA as percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Price_vs_SMA50_Pct: {
             description: "Price vs 50-day SMA as percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Trend_Score: {
             description:
               "Trend strength indicator (-5 to +5, negative=downtrend, positive=uptrend)",
             hypothesis: true,
+            timing: 'close',
           },
           BB_Position: {
             description:
               "Bollinger Band position (0=lower band, 0.5=middle, 1=upper band)",
             hypothesis: true,
+            timing: 'close',
           },
           Return_5D: {
             description: "5-day cumulative return percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Return_20D: {
             description: "20-day cumulative return percentage",
             hypothesis: true,
+            timing: 'close',
           },
           Consecutive_Days: {
             description: "Consecutive up/down days (positive=up, negative=down)",
             hypothesis: true,
+            timing: 'close',
           },
           Day_of_Week: {
-            description: "Day of week (1=Monday through 5=Friday)",
+            description: "Day of week (2=Monday through 6=Friday)",
             hypothesis: true,
+            timing: 'static',
           },
           Month: {
             description: "Month number (1-12)",
             hypothesis: true,
+            timing: 'static',
           },
           Is_Opex: {
             description: "Options expiration day flag (1=opex, 0=not)",
             hypothesis: true,
+            timing: 'static',
           },
           Prev_Return_Pct: {
             description: "Previous day's total return percentage",
             hypothesis: true,
+            timing: 'open',
           },
           // Highlow timing columns (13)
           High_Time: {
             description: "Time of day high as decimal hours (e.g., 10.5 = 10:30 AM)",
             hypothesis: true,
+            timing: 'close',
           },
           Low_Time: {
             description: "Time of day low as decimal hours (e.g., 14.25 = 2:15 PM)",
             hypothesis: true,
+            timing: 'close',
           },
           High_Before_Low: {
             description: "Did high occur before low? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           High_In_First_Hour: {
             description: "Did high occur in first hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Low_In_First_Hour: {
             description: "Did low occur in first hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           High_In_Last_Hour: {
             description: "Did high occur in last hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Low_In_Last_Hour: {
             description: "Did low occur in last hour? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Reversal_Type: {
             description:
               "Reversal pattern type (1=morning reversal up, -1=morning reversal down, 0=trend day)",
             hypothesis: true,
+            timing: 'close',
           },
           High_Low_Spread: {
             description: "Time spread between high and low in hours",
             hypothesis: true,
+            timing: 'close',
           },
           Early_Extreme: {
             description: "Was either extreme in first 30 min? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Late_Extreme: {
             description: "Was either extreme in last 30 min? (1=yes, 0=no)",
             hypothesis: true,
+            timing: 'close',
           },
           Intraday_High: {
             description: "Intraday high price (may differ from daily high on gap days)",
             hypothesis: false,
+            timing: 'close',
           },
           Intraday_Low: {
             description: "Intraday low price (may differ from daily low on gap days)",
             hypothesis: false,
+            timing: 'close',
           },
           // VIX enrichment columns (7)
           VIX_Gap_Pct: {
             description: "VIX overnight gap percentage ((VIX_Open - prior VIX_Close) / prior VIX_Close * 100)",
             hypothesis: true,
+            timing: 'open',
           },
           VIX9D_Open: {
             description: "9-day VIX open value",
             hypothesis: false,
+            timing: 'open',
           },
           VIX9D_Change_Pct: {
             description: "9-day VIX open-to-close change percentage",
             hypothesis: true,
+            timing: 'close',
           },
           VIX_High: {
             description: "VIX intraday high",
             hypothesis: false,
+            timing: 'close',
           },
           VIX_Low: {
             description: "VIX intraday low",
             hypothesis: false,
+            timing: 'close',
           },
           VIX3M_Open: {
             description: "3-month VIX open value",
             hypothesis: false,
+            timing: 'open',
           },
           VIX3M_Change_Pct: {
             description: "3-month VIX open-to-close change percentage",
             hypothesis: true,
+            timing: 'close',
           },
         },
       },
@@ -820,12 +882,21 @@ ORDER BY t.date_opened`,
   ],
   joins: [
     {
-      description: "Trade P&L with market context (VIX, regime)",
-      sql: `SELECT
+      description: "Trade P&L with market context (lag-aware: close-derived fields use prior trading day)",
+      sql: `WITH lagged AS (
+  SELECT date,
+    Gap_Pct, VIX_Open,
+    LAG(VIX_Close) OVER (ORDER BY date) AS prev_VIX_Close,
+    LAG(Vol_Regime) OVER (ORDER BY date) AS prev_Vol_Regime,
+    LAG(Total_Return_Pct) OVER (ORDER BY date) AS prev_Total_Return_Pct
+  FROM market.spx_daily
+)
+SELECT
   t.date_opened, t.strategy, t.pl,
-  m.VIX_Close, m.Vol_Regime, m.Total_Return_Pct
+  m.Gap_Pct, m.VIX_Open,
+  m.prev_VIX_Close, m.prev_Vol_Regime, m.prev_Total_Return_Pct
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
+JOIN lagged m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'
 ORDER BY t.date_opened DESC`,
     },
@@ -850,38 +921,58 @@ WHERE v.VIX_Spike_Flag = 1
 ORDER BY t.date_opened`,
     },
     {
-      description: "Trades on reversal days (high/low timing)",
-      sql: `SELECT
+      description: "Trades on reversal days (lag-aware: reversal fields use prior trading day)",
+      sql: `WITH lagged AS (
+  SELECT date,
+    LAG(Reversal_Type) OVER (ORDER BY date) AS prev_Reversal_Type,
+    LAG(High_Before_Low) OVER (ORDER BY date) AS prev_High_Before_Low,
+    LAG(High_In_First_Hour) OVER (ORDER BY date) AS prev_High_In_First_Hour
+  FROM market.spx_daily
+)
+SELECT
   t.date_opened, t.strategy, t.pl,
-  m.Reversal_Type, m.High_Before_Low, m.High_In_First_Hour
+  m.prev_Reversal_Type, m.prev_High_Before_Low, m.prev_High_In_First_Hour
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
-WHERE m.Reversal_Type != 0
+JOIN lagged m ON t.date_opened = m.date
+WHERE m.prev_Reversal_Type != 0
   AND t.block_id = 'my-block'`,
     },
     {
-      description: "Enrich trades with market data (replaces enrich_trades)",
-      sql: `SELECT t.date_opened, t.strategy, t.pl,
-       m.VIX_Close, m.Vol_Regime, m.Gap_Pct
+      description: "Enrich trades with market data (lag-aware: use enrich_trades tool for full enrichment)",
+      sql: `WITH lagged AS (
+  SELECT date,
+    Gap_Pct,
+    LAG(VIX_Close) OVER (ORDER BY date) AS prev_VIX_Close,
+    LAG(Vol_Regime) OVER (ORDER BY date) AS prev_Vol_Regime
+  FROM market.spx_daily
+)
+SELECT t.date_opened, t.strategy, t.pl,
+  m.Gap_Pct, m.prev_VIX_Close, m.prev_Vol_Regime
 FROM trades.trade_data t
-LEFT JOIN market.spx_daily m ON t.date_opened = m.date
+LEFT JOIN lagged m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'`,
     },
   ],
   hypothesis: [
     {
-      description: "Win rate by VIX regime",
-      sql: `SELECT
-  m.Vol_Regime,
+      description: "Win rate by VIX regime (lag-aware: uses prior day's regime)",
+      sql: `WITH lagged AS (
+  SELECT date,
+    LAG(Vol_Regime) OVER (ORDER BY date) AS prev_Vol_Regime
+  FROM market.spx_daily
+)
+SELECT
+  m.prev_Vol_Regime AS vol_regime,
   COUNT(*) as trades,
   SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END) as winners,
   ROUND(100.0 * SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) as win_rate,
   SUM(t.pl) as total_pl
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
+JOIN lagged m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'
-GROUP BY m.Vol_Regime
-ORDER BY m.Vol_Regime`,
+  AND m.prev_Vol_Regime IS NOT NULL
+GROUP BY m.prev_Vol_Regime
+ORDER BY m.prev_Vol_Regime`,
     },
     {
       description: "P&L by day of week",
@@ -897,49 +988,67 @@ GROUP BY m.Day_of_Week
 ORDER BY m.Day_of_Week`,
     },
     {
-      description: "Performance in trending vs range-bound markets",
-      sql: `SELECT
-  CASE WHEN m.Trend_Score >= 3 THEN 'Uptrend'
-       WHEN m.Trend_Score <= -3 THEN 'Downtrend'
+      description: "Performance in trending vs range-bound markets (lag-aware: uses prior day's trend)",
+      sql: `WITH lagged AS (
+  SELECT date,
+    LAG(Trend_Score) OVER (ORDER BY date) AS prev_Trend_Score
+  FROM market.spx_daily
+)
+SELECT
+  CASE WHEN m.prev_Trend_Score >= 3 THEN 'Uptrend'
+       WHEN m.prev_Trend_Score <= -3 THEN 'Downtrend'
        ELSE 'Range' END as market_condition,
   COUNT(*) as trades,
   SUM(t.pl) as total_pl,
   ROUND(AVG(t.pl), 2) as avg_pl
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
+JOIN lagged m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'
+  AND m.prev_Trend_Score IS NOT NULL
 GROUP BY market_condition`,
     },
     {
-      description: "Performance by VIX term structure",
-      sql: `SELECT
-  CASE WHEN m.Term_Structure_State = 1 THEN 'Backwardation'
-       WHEN m.Term_Structure_State = -1 THEN 'Contango'
+      description: "Performance by VIX term structure (lag-aware: uses prior day's term structure)",
+      sql: `WITH lagged AS (
+  SELECT date,
+    LAG(Term_Structure_State) OVER (ORDER BY date) AS prev_Term_Structure_State
+  FROM market.spx_daily
+)
+SELECT
+  CASE WHEN m.prev_Term_Structure_State = -1 THEN 'Backwardation'
+       WHEN m.prev_Term_Structure_State = 1 THEN 'Contango'
        ELSE 'Flat' END as term_structure,
   COUNT(*) as trades,
   SUM(t.pl) as total_pl,
   ROUND(AVG(t.pl), 2) as avg_pl,
   ROUND(100.0 * SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) as win_rate
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
+JOIN lagged m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'
+  AND m.prev_Term_Structure_State IS NOT NULL
 GROUP BY term_structure`,
     },
     {
-      description: "Aggregate by VIX buckets (replaces aggregate_by_field)",
-      sql: `SELECT
+      description: "Aggregate by VIX buckets (lag-aware: uses prior day's VIX close)",
+      sql: `WITH lagged AS (
+  SELECT date,
+    LAG(VIX_Close) OVER (ORDER BY date) AS prev_VIX_Close
+  FROM market.spx_daily
+)
+SELECT
   CASE
-    WHEN m.VIX_Close < 15 THEN '10-15'
-    WHEN m.VIX_Close < 20 THEN '15-20'
-    WHEN m.VIX_Close < 25 THEN '20-25'
+    WHEN m.prev_VIX_Close < 15 THEN '10-15'
+    WHEN m.prev_VIX_Close < 20 THEN '15-20'
+    WHEN m.prev_VIX_Close < 25 THEN '20-25'
     ELSE '25+'
   END as vix_bucket,
   COUNT(*) as trades,
   SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END)::FLOAT / COUNT(*) as win_rate,
   SUM(t.pl) as total_pl
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
+JOIN lagged m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'
+  AND m.prev_VIX_Close IS NOT NULL
 GROUP BY vix_bucket
 ORDER BY vix_bucket`,
     },

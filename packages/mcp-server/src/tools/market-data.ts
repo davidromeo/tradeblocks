@@ -2,7 +2,8 @@
  * Market Data Tools
  *
  * MCP tools for analyzing market context (VIX, term structure, regimes)
- * and correlating with trade performance.
+ * and correlating with trade performance. Includes enrich_trades for
+ * lag-aware trade enrichment with market data.
  *
  * Data source: DuckDB analytics database (synced from TradingView exports)
  * - market.spx_daily: Daily context (55 fields incl. highlow timing + VIX enrichment)
@@ -19,6 +20,20 @@ import {
 import type { Trade } from "@tradeblocks/lib";
 import { getConnection } from "../db/connection.js";
 import { withFullSync } from "./middleware/sync-middleware.js";
+import {
+  buildLookaheadFreeQuery,
+  buildOutcomeQuery,
+  OPEN_KNOWN_FIELDS,
+  CLOSE_KNOWN_FIELDS,
+  STATIC_FIELDS,
+} from "../utils/field-timing.js";
+import { filterByStrategy, filterByDateRange } from "./shared/filters.js";
+import {
+  buildIntradayContext,
+  SPX_15MIN_OUTCOME_FIELDS,
+  VIX_OUTCOME_FIELDS,
+  VIX_OHLC_OUTCOME_FIELDS,
+} from "../utils/intraday-timing.js";
 
 // =============================================================================
 // Types
@@ -130,15 +145,18 @@ export interface Intraday15MinData {
  * Trades are stored in Eastern Time, so we format in that timezone.
  */
 function formatTradeDate(date: Date | string): string {
+  if (typeof date === "string") {
+    // String dates are already in YYYY-MM-DD or similar calendar-date format.
+    // Parse components directly to avoid UTC-to-ET timezone shift.
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  }
   const d = typeof date === "string" ? new Date(date) : date;
-  // Format in Eastern Time to match market data
-  const formatted = d.toLocaleDateString("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return formatted; // Returns YYYY-MM-DD format
+  // For Date objects, use local date components (trades are stored in ET)
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -222,8 +240,10 @@ function getDayLabel(dow: number): string {
  *
  * Note: The following tools were REMOVED in v0.6.0 - use run_sql instead:
  * - get_market_context: SELECT ... FROM market.spx_daily WHERE ...
- * - enrich_trades: SELECT t.*, m.* FROM trades.trade_data t JOIN market.spx_daily m ON ...
  * - find_similar_days: Use CTE with similarity conditions
+ *
+ * Restored in v1.1.0 with lookahead-free temporal joins:
+ * - enrich_trades: Returns trades enriched with lag-aware market context
  *
  * Kept tools (require TradeBlocks library computation):
  * - analyze_regime_performance: Statistical breakdown by regime
@@ -239,7 +259,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     {
       description:
         "Break down a block's trade performance by market regime (volatility, term structure, day of week, etc.). " +
-        "Identifies which market conditions favor or hurt the strategy.",
+        "Identifies which market conditions favor or hurt the strategy. " +
+        "Close-derived fields (volRegime, termStructure, trendScore) use prior trading day values to prevent lookahead bias.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         segmentBy: z.enum([
@@ -274,10 +295,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
 
         const conn = await getConnection(baseDir);
-        const dailyResult = await conn.runAndReadAll(
-          `SELECT * FROM market.spx_daily WHERE date IN (${tradeDates.map((_, i) => "$" + (i + 1)).join(", ")})`,
-          tradeDates
-        );
+        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeDates);
+        const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
         const dailyRecords = resultToRecords(dailyResult);
         const daily = new Map<string, Record<string, unknown>>();
         for (const record of dailyRecords) {
@@ -295,6 +314,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         let totalMatched = 0;
         let totalWins = 0;
         let totalPl = 0;
+        let lagExcluded = 0;
         const unmatchedDates: string[] = [];
 
         for (const trade of trades) {
@@ -306,27 +326,30 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             continue;
           }
 
-          totalMatched++;
+          // Get segment value (must resolve before counting in totals,
+          // since lagged fields may be NaN and cause continue)
           const isWin = trade.pl > 0;
-          if (isWin) totalWins++;
-          totalPl += trade.pl;
-
-          // Get segment value
           let segmentKey: string;
           let segmentLabel: string;
           let segmentValue: number | string;
 
           switch (segmentBy) {
-            case "volRegime":
-              segmentValue = getNum(marketData, "Vol_Regime");
-              segmentKey = String(segmentValue);
-              segmentLabel = getVolRegimeLabel(getNum(marketData, "Vol_Regime"));
+            case "volRegime": {
+              const val = getNum(marketData, "prev_Vol_Regime");
+              if (isNaN(val)) { lagExcluded++; continue; }
+              segmentValue = val;
+              segmentKey = String(val);
+              segmentLabel = getVolRegimeLabel(val);
               break;
-            case "termStructure":
-              segmentValue = getNum(marketData, "Term_Structure_State");
-              segmentKey = String(segmentValue);
-              segmentLabel = getTermStructureLabel(getNum(marketData, "Term_Structure_State"));
+            }
+            case "termStructure": {
+              const val = getNum(marketData, "prev_Term_Structure_State");
+              if (isNaN(val)) { lagExcluded++; continue; }
+              segmentValue = val;
+              segmentKey = String(val);
+              segmentLabel = getTermStructureLabel(val);
               break;
+            }
             case "dayOfWeek":
               segmentValue = getNum(marketData, "Day_of_Week");
               segmentKey = String(segmentValue);
@@ -334,19 +357,28 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
               break;
             case "gapDirection": {
               const gapPct = getNum(marketData, "Gap_Pct");
+              if (isNaN(gapPct)) { lagExcluded++; continue; }
               segmentValue = gapPct > 0.1 ? "up" : gapPct < -0.1 ? "down" : "flat";
               segmentKey = segmentValue;
               segmentLabel = `Gap ${segmentValue}`;
               break;
             }
-            case "trendScore":
-              segmentValue = getNum(marketData, "Trend_Score");
-              segmentKey = String(segmentValue);
-              segmentLabel = `Trend Score ${segmentValue}`;
+            case "trendScore": {
+              const val = getNum(marketData, "prev_Trend_Score");
+              if (isNaN(val)) { lagExcluded++; continue; }
+              segmentValue = val;
+              segmentKey = String(val);
+              segmentLabel = `Trend Score ${val}`;
               break;
+            }
             default:
               continue;
           }
+
+          // Count in totals only after segment resolved (NaN-lag trades excluded)
+          totalMatched++;
+          if (isWin) totalWins++;
+          totalPl += trade.pl;
 
           if (!segments.has(segmentKey)) {
             segments.set(segmentKey, {
@@ -390,7 +422,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
             const grossWins = winningTrades.reduce((sum, t) => sum + t.pl, 0);
             const grossLosses = Math.abs(losingTrades.reduce((sum, t) => sum + t.pl, 0));
-            const profitFactor = grossLosses > 0 ? grossWins / grossLosses : grossWins > 0 ? Infinity : 0;
+            const profitFactor = grossLosses > 0 ? grossWins / grossLosses : grossWins > 0 ? null : 0;
 
             return {
               segment: seg.segment,
@@ -420,13 +452,20 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const summary = `Regime analysis: ${blockId} by ${segmentBy} | ${totalMatched} trades across ${segmentStats.length} segments`;
 
+        const laggedSegments = ["volRegime", "termStructure", "trendScore"];
+        const lagNote = laggedSegments.includes(segmentBy)
+          ? `Segmentation by ${segmentBy} uses prior trading day values (close-derived field) to prevent lookahead bias.`
+          : `Segmentation by ${segmentBy} uses same-day values (${segmentBy === "dayOfWeek" ? "static" : "open-known"} field).`;
+
         return createToolOutput(summary, {
           blockId,
           segmentBy,
+          lagNote,
           strategy: strategy || null,
           tradesTotal: trades.length,
           tradesMatched: totalMatched,
-          tradesUnmatched: trades.length - totalMatched,
+          tradesUnmatched: unmatchedDates.length,
+          tradesLagExcluded: lagExcluded,
           unmatchedDates: sortedUnmatchedDates,
           overall: {
             winRate: Math.round(overallWinRate * 100) / 100,
@@ -452,7 +491,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     {
       description:
         "Analyze a block's losing trades and suggest market-based filters that would have improved performance. " +
-        "Returns actionable filter suggestions with projected impact.",
+        "Returns actionable filter suggestions with projected impact. " +
+        "Close-derived fields use prior trading day values to prevent lookahead bias.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         strategy: z.string().optional().describe("Filter to specific strategy"),
@@ -481,10 +521,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
 
         const conn = await getConnection(baseDir);
-        const dailyResult = await conn.runAndReadAll(
-          `SELECT * FROM market.spx_daily WHERE date IN (${tradeDates.map((_, i) => "$" + (i + 1)).join(", ")})`,
-          tradeDates
-        );
+        const { sql, params } = buildLookaheadFreeQuery(tradeDates);
+        const dailyResult = await conn.runAndReadAll(sql, params);
         const dailyRecords = resultToRecords(dailyResult);
         const daily = new Map<string, Record<string, unknown>>();
         for (const record of dailyRecords) {
@@ -526,6 +564,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             field: string;
             operator: string;
             value: number | number[] | string;
+            lagged: boolean;
           };
           tradesRemoved: number;
           winnersRemoved: number;
@@ -546,45 +585,72 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           operator: string;
           value: number | number[] | string;
           test: (m: Record<string, unknown>) => boolean;
+          lagged: boolean;
         }> = [
+          // Open-known filters (same-day values)
           // Gap filters
-          { name: "Skip when |Gap_Pct| > 0.5%", field: "Gap_Pct", operator: ">", value: 0.5, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.5 },
-          { name: "Skip when |Gap_Pct| > 0.8%", field: "Gap_Pct", operator: ">", value: 0.8, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.8 },
-          { name: "Skip when |Gap_Pct| > 1.0%", field: "Gap_Pct", operator: ">", value: 1.0, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 1.0 },
-          // VIX filters
-          { name: "Skip when VIX > 25", field: "VIX_Close", operator: ">", value: 25, test: (m) => getNum(m, "VIX_Close") > 25 },
-          { name: "Skip when VIX > 30", field: "VIX_Close", operator: ">", value: 30, test: (m) => getNum(m, "VIX_Close") > 30 },
-          { name: "Skip when VIX < 14", field: "VIX_Close", operator: "<", value: 14, test: (m) => getNum(m, "VIX_Close") < 14 },
-          // VIX spike filter
-          { name: "Skip when VIX_Spike_Pct > 5%", field: "VIX_Spike_Pct", operator: ">", value: 5, test: (m) => getNum(m, "VIX_Spike_Pct") > 5 },
-          { name: "Skip when VIX_Spike_Pct > 8%", field: "VIX_Spike_Pct", operator: ">", value: 8, test: (m) => getNum(m, "VIX_Spike_Pct") > 8 },
-          // Term structure
-          { name: "Skip backwardation days", field: "Term_Structure_State", operator: "==", value: -1, test: (m) => getNum(m, "Term_Structure_State") === -1 },
-          // Vol regime
-          { name: "Skip Vol Regime 5-6 (High/Extreme)", field: "Vol_Regime", operator: "in", value: [5, 6], test: (m) => getNum(m, "Vol_Regime") >= 5 },
-          { name: "Skip Vol Regime 1 (Very Low)", field: "Vol_Regime", operator: "==", value: 1, test: (m) => getNum(m, "Vol_Regime") === 1 },
+          { name: "Skip when |Gap_Pct| > 0.5%", field: "Gap_Pct", operator: ">", value: 0.5, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.5, lagged: false },
+          { name: "Skip when |Gap_Pct| > 0.8%", field: "Gap_Pct", operator: ">", value: 0.8, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 0.8, lagged: false },
+          { name: "Skip when |Gap_Pct| > 1.0%", field: "Gap_Pct", operator: ">", value: 1.0, test: (m) => Math.abs(getNum(m, "Gap_Pct")) > 1.0, lagged: false },
           // Day of week
-          { name: "Skip Fridays", field: "Day_of_Week", operator: "==", value: 6, test: (m) => getNum(m, "Day_of_Week") === 6 },
-          { name: "Skip Mondays", field: "Day_of_Week", operator: "==", value: 2, test: (m) => getNum(m, "Day_of_Week") === 2 },
+          { name: "Skip Fridays", field: "Day_of_Week", operator: "==", value: 6, test: (m) => getNum(m, "Day_of_Week") === 6, lagged: false },
+          { name: "Skip Mondays", field: "Day_of_Week", operator: "==", value: 2, test: (m) => getNum(m, "Day_of_Week") === 2, lagged: false },
           // OPEX
-          { name: "Skip OPEX days", field: "Is_Opex", operator: "==", value: 1, test: (m) => getNum(m, "Is_Opex") === 1 },
-          // Trend
-          { name: "Skip when Trend_Score <= 1", field: "Trend_Score", operator: "<=", value: 1, test: (m) => getNum(m, "Trend_Score") <= 1 },
-          { name: "Skip when Trend_Score >= 4", field: "Trend_Score", operator: ">=", value: 4, test: (m) => getNum(m, "Trend_Score") >= 4 },
-          // Consecutive days
-          { name: "Skip after 4+ consecutive up days", field: "Consecutive_Days", operator: ">=", value: 4, test: (m) => getNum(m, "Consecutive_Days") >= 4 },
-          { name: "Skip after 4+ consecutive down days", field: "Consecutive_Days", operator: "<=", value: -4, test: (m) => getNum(m, "Consecutive_Days") <= -4 },
-          // RSI
-          { name: "Skip when RSI > 70", field: "RSI_14", operator: ">", value: 70, test: (m) => getNum(m, "RSI_14") > 70 },
-          { name: "Skip when RSI < 30", field: "RSI_14", operator: "<", value: 30, test: (m) => getNum(m, "RSI_14") < 30 },
+          { name: "Skip OPEX days", field: "Is_Opex", operator: "==", value: 1, test: (m) => getNum(m, "Is_Opex") === 1, lagged: false },
+          // VIX_Open filters (new, BIAS-05)
+          { name: "Skip when VIX_Open > 25", field: "VIX_Open", operator: ">", value: 25, test: (m) => getNum(m, "VIX_Open") > 25, lagged: false },
+          { name: "Skip when VIX_Open > 30", field: "VIX_Open", operator: ">", value: 30, test: (m) => getNum(m, "VIX_Open") > 30, lagged: false },
+          // VIX_Gap_Pct filters (new, BIAS-05)
+          { name: "Skip when |VIX_Gap_Pct| > 10%", field: "VIX_Gap_Pct", operator: ">", value: 10, test: (m) => Math.abs(getNum(m, "VIX_Gap_Pct")) > 10, lagged: false },
+          { name: "Skip when |VIX_Gap_Pct| > 15%", field: "VIX_Gap_Pct", operator: ">", value: 15, test: (m) => Math.abs(getNum(m, "VIX_Gap_Pct")) > 15, lagged: false },
+
+          // Close-derived filters (prior trading day values via LAG CTE)
+          // VIX (close-derived)
+          { name: "Skip when prior-day VIX > 25", field: "VIX_Close", operator: ">", value: 25, test: (m) => getNum(m, "prev_VIX_Close") > 25, lagged: true },
+          { name: "Skip when prior-day VIX > 30", field: "VIX_Close", operator: ">", value: 30, test: (m) => getNum(m, "prev_VIX_Close") > 30, lagged: true },
+          { name: "Skip when prior-day VIX < 14", field: "VIX_Close", operator: "<", value: 14, test: (m) => getNum(m, "prev_VIX_Close") < 14, lagged: true },
+          // VIX spike (close-derived)
+          { name: "Skip when prior-day VIX_Spike > 5%", field: "VIX_Spike_Pct", operator: ">", value: 5, test: (m) => getNum(m, "prev_VIX_Spike_Pct") > 5, lagged: true },
+          { name: "Skip when prior-day VIX_Spike > 8%", field: "VIX_Spike_Pct", operator: ">", value: 8, test: (m) => getNum(m, "prev_VIX_Spike_Pct") > 8, lagged: true },
+          // Term structure (close-derived)
+          { name: "Skip prior-day backwardation", field: "Term_Structure_State", operator: "==", value: -1, test: (m) => getNum(m, "prev_Term_Structure_State") === -1, lagged: true },
+          // Vol regime (close-derived)
+          { name: "Skip prior-day Vol Regime 5-6 (High/Extreme)", field: "Vol_Regime", operator: "in", value: [5, 6], test: (m) => getNum(m, "prev_Vol_Regime") >= 5, lagged: true },
+          { name: "Skip prior-day Vol Regime 1 (Very Low)", field: "Vol_Regime", operator: "==", value: 1, test: (m) => getNum(m, "prev_Vol_Regime") === 1, lagged: true },
+          // Trend (close-derived)
+          { name: "Skip when prior-day Trend_Score <= 1", field: "Trend_Score", operator: "<=", value: 1, test: (m) => getNum(m, "prev_Trend_Score") <= 1, lagged: true },
+          { name: "Skip when prior-day Trend_Score >= 4", field: "Trend_Score", operator: ">=", value: 4, test: (m) => getNum(m, "prev_Trend_Score") >= 4, lagged: true },
+          // Consecutive days (close-derived)
+          { name: "Skip after prior-day 4+ consecutive up", field: "Consecutive_Days", operator: ">=", value: 4, test: (m) => getNum(m, "prev_Consecutive_Days") >= 4, lagged: true },
+          { name: "Skip after prior-day 4+ consecutive down", field: "Consecutive_Days", operator: "<=", value: -4, test: (m) => getNum(m, "prev_Consecutive_Days") <= -4, lagged: true },
+          // RSI (close-derived)
+          { name: "Skip when prior-day RSI > 70", field: "RSI_14", operator: ">", value: 70, test: (m) => getNum(m, "prev_RSI_14") > 70, lagged: true },
+          { name: "Skip when prior-day RSI < 30", field: "RSI_14", operator: "<", value: 30, test: (m) => getNum(m, "prev_RSI_14") < 30, lagged: true },
         ];
 
         for (const filterDef of testFilters) {
+          // For lagged filters, exclude trades with NaN lag values from evaluation
+          // (prevents NaN comparisons from silently passing all tests and biasing results)
+          let pool = matchedTrades;
+          if (filterDef.lagged) {
+            const prevField = `prev_${filterDef.field}`;
+            pool = matchedTrades.filter((t) => {
+              const val = getNum(t.market as Record<string, unknown>, prevField);
+              return !isNaN(val);
+            });
+          }
+
+          if (pool.length < 10) continue;
+
           // Identify trades that would be removed
-          const removed = matchedTrades.filter((t) => filterDef.test(t.market as Record<string, unknown>));
-          const remaining = matchedTrades.filter((t) => !filterDef.test(t.market as Record<string, unknown>));
+          const removed = pool.filter((t) => filterDef.test(t.market as Record<string, unknown>));
+          const remaining = pool.filter((t) => !filterDef.test(t.market as Record<string, unknown>));
 
           if (removed.length === 0 || remaining.length < 5) continue;
+
+          const poolWins = pool.filter((t) => t.trade.pl > 0).length;
+          const poolWinRate = (poolWins / pool.length) * 100;
+          const poolTotalPl = pool.reduce((sum, t) => sum + t.trade.pl, 0);
 
           const winnersRemoved = removed.filter((t) => t.trade.pl > 0).length;
           const losersRemoved = removed.length - winnersRemoved;
@@ -593,8 +659,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           const newWinRate = (newWins / remaining.length) * 100;
           const newTotalPl = remaining.reduce((sum, t) => sum + t.trade.pl, 0);
 
-          const winRateDelta = newWinRate - currentWinRate;
-          const plDelta = newTotalPl - currentTotalPl;
+          const winRateDelta = newWinRate - poolWinRate;
+          const plDelta = newTotalPl - poolTotalPl;
 
           // Only include if improvement meets threshold
           if (winRateDelta >= minImprovementPct) {
@@ -612,6 +678,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
                 field: filterDef.field,
                 operator: filterDef.operator,
                 value: filterDef.value,
+                lagged: filterDef.lagged,
               },
               tradesRemoved: removed.length,
               winnersRemoved,
@@ -635,6 +702,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         return createToolOutput(summary, {
           blockId,
+          lagNote: "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Trend_Score, Consecutive_Days, VIX_Spike_Pct, Term_Structure_State) use prior trading day values to prevent lookahead bias. Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Day_of_Week, Is_Opex) use same-day values.",
           strategy: strategy || null,
           currentStats: {
             trades: matchedTrades.length,
@@ -644,6 +712,274 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           suggestedFilters: topSuggestions,
           minImprovementThreshold: minImprovementPct,
         });
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+          isError: true,
+        };
+      }
+    })
+  );
+
+  // ---------------------------------------------------------------------------
+  // enrich_trades - Return trades enriched with lag-aware market context
+  // ---------------------------------------------------------------------------
+  server.registerTool(
+    "enrich_trades",
+    {
+      description:
+        "Enrich trades with market context using correct temporal joins. " +
+        "Open-known fields (Gap_Pct, VIX_Open) use same-day values. " +
+        "Close-derived fields (VIX_Close, RSI_14, Vol_Regime) use prior trading day values to prevent lookahead bias. " +
+        "Use includeOutcomeFields=true for post-hoc analysis (with clear warning)." +
+        " Use includeIntradayContext=true for intraday SPX/VIX checkpoint data at trade entry time.",
+      inputSchema: z.object({
+        blockId: z.string().describe("Block ID to enrich"),
+        strategy: z.string().optional().describe("Filter to specific strategy (exact match)"),
+        startDate: z.string().optional().describe("Start date filter (YYYY-MM-DD)"),
+        endDate: z.string().optional().describe("End date filter (YYYY-MM-DD)"),
+        includeOutcomeFields: z.boolean().default(false).describe("Include same-day close values (lookahead). Defaults to false for safety."),
+        includeIntradayContext: z.boolean().default(false).describe(
+          "Include intraday SPX/VIX checkpoint data. Only checkpoints known at trade entry time are returned (lookahead-free). Requires 2 additional DuckDB queries."
+        ),
+        limit: z.number().min(1).max(500).default(50).describe("Max trades to return (default: 50, max: 500)"),
+        offset: z.number().min(0).default(0).describe("Pagination offset (default: 0)"),
+      }),
+    },
+    withFullSync(baseDir, async ({ blockId, strategy, startDate, endDate, includeOutcomeFields, includeIntradayContext, limit, offset }) => {
+      try {
+        const block = await loadBlock(baseDir, blockId);
+        let trades = block.trades;
+
+        // Filter before paginate
+        trades = filterByStrategy(trades, strategy);
+        trades = filterByDateRange(trades, startDate, endDate);
+
+        if (trades.length === 0) {
+          return {
+            content: [{ type: "text", text: "No trades found matching filters" }],
+            isError: true,
+          };
+        }
+
+        const totalTrades = trades.length;
+        const paginated = trades.slice(offset, offset + limit);
+
+        // Short-circuit if offset is past the end (empty page)
+        if (paginated.length === 0) {
+          return createToolOutput(
+            `Enriched trades: ${blockId} | 0/0 matched | offset ${offset}, limit ${limit}`,
+            {
+              blockId,
+              strategy: strategy || null,
+              lagNote: "",
+              tradesTotal: totalTrades,
+              returned: 0,
+              offset,
+              hasMore: false,
+              tradesMatched: 0,
+              unmatchedDates: [],
+              trades: [],
+            }
+          );
+        }
+
+        // Collect unique dates from paginated trades only
+        const tradeDates = [...new Set(paginated.map(t => formatTradeDate(t.dateOpened)))];
+
+        // Query DuckDB for lookahead-free market data
+        const conn = await getConnection(baseDir);
+        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeDates);
+        const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
+        const dailyRecords = resultToRecords(dailyResult);
+        const daily = new Map<string, Record<string, unknown>>();
+        for (const record of dailyRecords) {
+          daily.set(record["date"] as string, record);
+        }
+
+        // Optionally query outcome (same-day close) data
+        let outcomeMap: Map<string, Record<string, unknown>> | null = null;
+        if (includeOutcomeFields) {
+          const { sql: outcomeSql, params: outcomeParams } = buildOutcomeQuery(tradeDates);
+          const outcomeResult = await conn.runAndReadAll(outcomeSql, outcomeParams);
+          const outcomeRecords = resultToRecords(outcomeResult);
+          outcomeMap = new Map<string, Record<string, unknown>>();
+          for (const record of outcomeRecords) {
+            outcomeMap.set(record["date"] as string, record);
+          }
+        }
+
+        // Optionally query intraday checkpoint data
+        let spxIntradayMap: Map<string, Record<string, unknown>> | null = null;
+        let vixIntradayMap: Map<string, Record<string, unknown>> | null = null;
+
+        if (includeIntradayContext) {
+          const placeholders = tradeDates.map((_, i) => `$${i + 1}`).join(', ');
+
+          // Query spx_15min
+          const spxResult = await conn.runAndReadAll(
+            `SELECT * FROM market.spx_15min WHERE date IN (${placeholders})`,
+            tradeDates
+          );
+          const spxRecords = resultToRecords(spxResult);
+          spxIntradayMap = new Map<string, Record<string, unknown>>();
+          for (const record of spxRecords) {
+            spxIntradayMap.set(record["date"] as string, record);
+          }
+
+          // Query vix_intraday
+          const vixResult = await conn.runAndReadAll(
+            `SELECT * FROM market.vix_intraday WHERE date IN (${placeholders})`,
+            tradeDates
+          );
+          const vixRecords = resultToRecords(vixResult);
+          vixIntradayMap = new Map<string, Record<string, unknown>>();
+          for (const record of vixRecords) {
+            vixIntradayMap.set(record["date"] as string, record);
+          }
+        }
+
+        // Helper: clean numeric value (BigInt -> Number, NaN -> null)
+        const cleanVal = (val: unknown): unknown => {
+          if (typeof val === "bigint") return Number(val);
+          if (typeof val === "number" && isNaN(val)) return null;
+          return val === undefined ? null : val;
+        };
+
+        // Build enriched trades
+        const unmatchedDates: string[] = [];
+        let matched = 0;
+
+        const enrichedTrades = paginated.map(trade => {
+          const tradeDate = formatTradeDate(trade.dateOpened);
+          const marketData = daily.get(tradeDate);
+
+          const commissions = trade.openingCommissionsFees + trade.closingCommissionsFees;
+
+          const baseTrade: Record<string, unknown> = {
+            dateOpened: tradeDate,
+            timeOpened: trade.timeOpened,
+            strategy: trade.strategy,
+            legs: trade.legs,
+            pl: trade.pl,
+            numContracts: trade.numContracts,
+            premium: trade.premium,
+            reasonForClose: trade.reasonForClose || null,
+            commissions,
+          };
+
+          if (!marketData) {
+            unmatchedDates.push(tradeDate);
+            baseTrade.entryContext = null;
+            return baseTrade;
+          }
+
+          matched++;
+
+          // Build sameDay: open-known + static fields
+          const sameDay: Record<string, unknown> = {};
+          for (const field of OPEN_KNOWN_FIELDS) {
+            sameDay[field] = cleanVal(marketData[field]);
+          }
+          for (const field of STATIC_FIELDS) {
+            sameDay[field] = cleanVal(marketData[field]);
+          }
+
+          // Build priorDay: close-derived fields (read prev_* columns)
+          const priorDay: Record<string, unknown> = {};
+          for (const field of CLOSE_KNOWN_FIELDS) {
+            priorDay[field] = cleanVal(marketData[`prev_${field}`]);
+          }
+
+          baseTrade.entryContext = { sameDay, priorDay };
+
+          // Outcome fields (opt-in, same-day close values)
+          if (includeOutcomeFields && outcomeMap) {
+            const outcomeData = outcomeMap.get(tradeDate);
+            if (outcomeData) {
+              const outcomeFields: Record<string, unknown> = {};
+              for (const field of CLOSE_KNOWN_FIELDS) {
+                outcomeFields[field] = cleanVal(outcomeData[field]);
+              }
+              baseTrade.outcomeFields = outcomeFields;
+            }
+          }
+
+          // Intraday context (opt-in, per-trade checkpoint filtering)
+          if (includeIntradayContext && spxIntradayMap && vixIntradayMap) {
+            const spxIntraday = spxIntradayMap.get(tradeDate) || null;
+            const vixIntraday = vixIntradayMap.get(tradeDate) || null;
+            baseTrade.intradayContext = buildIntradayContext(
+              trade.timeOpened,
+              spxIntraday,
+              vixIntraday,
+            );
+
+            // Intraday outcome fields (day-level aggregates, requires BOTH flags)
+            if (includeOutcomeFields) {
+              const intradayOutcome: Record<string, unknown> = {};
+
+              if (spxIntraday) {
+                for (const field of SPX_15MIN_OUTCOME_FIELDS) {
+                  intradayOutcome[`spx_${field}`] = cleanVal(spxIntraday[field]);
+                }
+              }
+
+              if (vixIntraday) {
+                for (const field of VIX_OUTCOME_FIELDS) {
+                  intradayOutcome[field] = cleanVal(vixIntraday[field]);
+                }
+                for (const field of VIX_OHLC_OUTCOME_FIELDS) {
+                  intradayOutcome[`vix_${field}`] = cleanVal(vixIntraday[field]);
+                }
+              }
+
+              if (Object.keys(intradayOutcome).length > 0) {
+                baseTrade.intradayOutcomeFields = intradayOutcome;
+              }
+            }
+          }
+
+          return baseTrade;
+        });
+
+        const sortedUnmatchedDates = [...new Set(unmatchedDates)].sort();
+
+        // Build lagNote
+        let lagNote =
+          "Entry context uses lookahead-free temporal joins. Same-day fields (Gap_Pct, VIX_Open, Day_of_Week, etc.) are values known at market open. Prior-day fields (VIX_Close, RSI_14, Vol_Regime, etc.) use the previous trading day's close-derived values to prevent lookahead bias.";
+        if (includeOutcomeFields) {
+          lagNote += " Outcome fields contain same-day close-derived values and represent information NOT available at trade entry time.";
+        }
+        if (includeIntradayContext) {
+          lagNote += " Intraday context shows SPX/VIX checkpoint values known at trade entry time (filtered by timeOpened). Checkpoints after entry time are excluded to prevent lookahead bias.";
+          if (includeOutcomeFields) {
+            lagNote += " intradayOutcomeFields contain end-of-day intraday metrics (MOC moves, VIX spike/crush flags, etc.) NOT available at trade entry time.";
+          }
+        }
+
+        // Build response data
+        const responseData: Record<string, unknown> = {
+          blockId,
+          strategy: strategy || null,
+          lagNote,
+          tradesTotal: totalTrades,
+          returned: paginated.length,
+          offset,
+          hasMore: offset + limit < totalTrades,
+          tradesMatched: matched,
+          unmatchedDates: sortedUnmatchedDates,
+          trades: enrichedTrades,
+        };
+
+        if (includeOutcomeFields) {
+          responseData.lookaheadWarning =
+            "WARNING: outcomeFields contain same-day close-derived values that were NOT available at trade entry time. Do not use these for entry signal analysis.";
+        }
+
+        const summary = `Enriched trades: ${blockId} | ${matched}/${paginated.length} matched | offset ${offset}, limit ${limit}`;
+
+        return createToolOutput(summary, responseData);
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
@@ -668,7 +1004,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         endTime: z.string().describe("ORB end time in HHMM format (e.g., '1000' for 10:00 AM)"),
         startDate: z.string().describe("Start date (YYYY-MM-DD)"),
         endDate: z.string().optional().describe("End date (YYYY-MM-DD), defaults to startDate"),
-        limit: z.number().optional().describe("Max rows to return (default: 100)"),
+        limit: z.number().int().min(1).optional().describe("Max rows to return (default: 100)"),
       }),
     },
     withFullSync(baseDir, async ({ startTime, endTime, startDate, endDate, limit = 100 }) => {
@@ -781,19 +1117,24 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           const orbRange = orbHigh - orbLow;
           const orbRangePct = (orbRange / orbLow) * 100;
           const close = getNum(intradayData, "close");
+          if (isNaN(close)) continue;
 
           // Calculate where close is relative to ORB
           let closePositionInOrb: number;
           let closeVsOrb: "above" | "below" | "within";
 
-          if (close > orbHigh) {
+          if (orbRange === 0) {
+            // ORB range is zero (all checkpoint prices identical)
+            closePositionInOrb = close === orbHigh ? 0.5 : close > orbHigh ? 1 : 0;
+            closeVsOrb = close > orbHigh ? "above" : close < orbLow ? "below" : "within";
+          } else if (close > orbHigh) {
             closePositionInOrb = 1 + (close - orbHigh) / orbRange;
             closeVsOrb = "above";
           } else if (close < orbLow) {
             closePositionInOrb = (close - orbLow) / orbRange;
             closeVsOrb = "below";
           } else {
-            closePositionInOrb = orbRange > 0 ? (close - orbLow) / orbRange : 0.5;
+            closePositionInOrb = (close - orbLow) / orbRange;
             closeVsOrb = "within";
           }
 
@@ -821,8 +1162,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const aboveCount = results.filter((r) => r.Close_vs_ORB === "above").length;
         const belowCount = results.filter((r) => r.Close_vs_ORB === "below").length;
         const withinCount = results.filter((r) => r.Close_vs_ORB === "within").length;
-        const avgOrbRangePct = results.length > 0
-          ? results.reduce((sum, r) => sum + r.ORB_Range_Pct, 0) / results.length
+        const avgOrbRangePct = totalDays > 0
+          ? results.reduce((sum, r) => sum + r.ORB_Range_Pct, 0) / totalDays
           : 0;
 
         const summary = `ORB (${startTime}-${endTime}): ${startDate} to ${end} | ${totalDays} days, avg range ${formatPercent(avgOrbRangePct)}`;
@@ -841,9 +1182,9 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             closeAboveOrb: aboveCount,
             closeBelowOrb: belowCount,
             closeWithinOrb: withinCount,
-            closeAbovePct: Math.round((aboveCount / totalDays) * 10000) / 100,
-            closeBelowPct: Math.round((belowCount / totalDays) * 10000) / 100,
-            closeWithinPct: Math.round((withinCount / totalDays) * 10000) / 100,
+            closeAbovePct: totalDays > 0 ? Math.round((aboveCount / totalDays) * 10000) / 100 : 0,
+            closeBelowPct: totalDays > 0 ? Math.round((belowCount / totalDays) * 10000) / 100 : 0,
+            closeWithinPct: totalDays > 0 ? Math.round((withinCount / totalDays) * 10000) / 100 : 0,
           },
           returned: limitedResults.length,
           days: limitedResults,
