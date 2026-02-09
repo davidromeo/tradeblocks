@@ -89,15 +89,21 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 - Use `toLocaleDateString('en-US')` or manual string extraction instead of `.toISOString()` which converts to UTC
 - Static datasets in `tests/data/` explicitly handle Eastern Time with DST awareness
 
-**Date Comparison Rules (MCP Server)**: Trade dates are created at **local midnight** via `parseDatePreservingCalendarDay()` using `new Date(year, month, day)`. This means the internal UTC timestamp depends on the server's timezone. To avoid off-by-one bugs:
+**Date Comparison Rules (MCP Server)**: There are **two kinds of dates** in the MCP server, and they require different handling:
 
+1. **Calendar dates from CSVs** (Option Omega trade logs): These are Eastern Time trading dates like "2025-01-07" parsed via `parseDatePreservingCalendarDay()` → `new Date(year, month, day)`. The Date is created at **local midnight**, NOT Eastern midnight. The calendar date "7" is just temporarily stored inside a Date object — it's not a real timestamp. To read it back, you MUST use the same local-timezone methods (`getFullYear`/`getMonth`/`getDate`), which always return the original calendar date regardless of server timezone. This works because the write path (constructor) and read path (getters) both use local timezone — they're symmetric and cancel out.
+
+2. **Absolute timestamps** (TradingView Unix epoch in market CSVs): These ARE real UTC instants representing a specific moment in time. To get the correct Eastern trading date, you MUST convert to ET via `toLocaleDateString("en-CA", { timeZone: "America/New_York" })`. This is the one place ET conversion is correct.
+
+**The critical mistake** is mixing these two: creating a Date at local midnight (type 1) but then reading it with ET timezone conversion (type 2). On a UTC server, local midnight = 19:00 ET the previous day → off by one.
+
+Rules for type 1 (trade dates from CSVs):
 - **DO**: Use string comparison on YYYY-MM-DD for date range filtering. Use `filterByDateRange()` from `tools/shared/filters.ts` or `toCalendarDateStr()` / `formatTradeDate()`.
 - **DO**: Extract calendar date from strings via regex (`/^(\d{4})-(\d{2})-(\d{2})/`) before parsing to Date.
 - **DO**: Use local date components (`getFullYear()`, `getMonth()`, `getDate()`) when you need YYYY-MM-DD from a Date that came from `parseDatePreservingCalendarDay`.
 - **DON'T**: Use `new Date("YYYY-MM-DD")` for comparison boundaries — this creates UTC midnight, not local midnight, causing mismatch with trade dates.
-- **DON'T**: Use `toLocaleDateString()` with explicit `timeZone` on dates created at local midnight — this re-interprets the date in a different timezone and can shift it by a day.
-- **DON'T**: Use `.toISOString().split("T")[0]` on local-midnight dates — this converts to UTC first and can shift the calendar date in UTC-ahead timezones.
-- **EXCEPTION**: `toLocaleDateString` with `timeZone: "America/New_York"` IS correct for absolute timestamps (Unix epoch from TradingView), since those represent real UTC instants that need ET interpretation.
+- **DON'T**: Use `toLocaleDateString()` with explicit `timeZone` on these dates — this re-interprets the local-midnight date in a different timezone and can shift it by a day.
+- **DON'T**: Use `.toISOString().split("T")[0]` on these dates — this converts to UTC first and can shift the calendar date.
 
 **Market Data Lookahead Rules (MCP Server)**: When joining trades with `market.spx_daily`, close-derived fields (44 fields including `Trend_Score`, `RSI_14`, `VIX_Close`, `Vol_Regime`, `Return_5D`) are only known after market close and MUST use `LAG()` to get the prior trading day's value. Use `buildLookaheadFreeQuery()` from `utils/field-timing.ts`. Open-known fields (8 fields: `Gap_Pct`, `VIX_Open`, `Prior_Close`, etc.) and static fields (3: `Day_of_Week`, `Month`, `Is_Opex`) are safe to use same-day. See `utils/schema-metadata.ts` for the authoritative field classification.
 
