@@ -40,12 +40,20 @@ export {
 // Export DuckDB connection utilities for integration testing
 export { getConnection, closeConnection, isConnected } from './db/connection.js';
 
+// Export shared filter utilities for testing
+export {
+  filterByStrategy,
+  filterByDateRange,
+  filterDailyLogsByDateRange,
+} from './tools/shared/filters.js';
+
 // Export field timing utilities for testing
 export {
   OPEN_KNOWN_FIELDS,
   CLOSE_KNOWN_FIELDS,
   STATIC_FIELDS,
   buildLookaheadFreeQuery,
+  buildOutcomeQuery,
 } from './utils/field-timing.js';
 
 // Export intraday timing utilities for testing

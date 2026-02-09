@@ -15,6 +15,7 @@ import {
   CLOSE_KNOWN_FIELDS,
   STATIC_FIELDS,
   buildLookaheadFreeQuery,
+  buildOutcomeQuery,
   SCHEMA_DESCRIPTIONS,
 } from '../../dist/test-exports.js';
 
@@ -158,5 +159,49 @@ describe('buildLookaheadFreeQuery', () => {
     expect(sql).toContain('OVER (ORDER BY date)');
     expect(sql).not.toContain('DATEADD');
     expect(sql).not.toContain('INTERVAL');
+  });
+
+  test('produces valid SQL with empty dates array', () => {
+    const { sql, params } = buildLookaheadFreeQuery([]);
+    // Should still produce syntactically valid SQL (WHERE date IN ())
+    expect(sql).toContain('WITH lagged AS');
+    expect(sql).toContain('WHERE date IN');
+    expect(params).toEqual([]);
+  });
+});
+
+describe('buildOutcomeQuery', () => {
+  test('produces SELECT with only close-derived fields', () => {
+    const { sql } = buildOutcomeQuery(['2025-01-06']);
+    expect(sql).toContain('SELECT date,');
+    expect(sql).toContain('FROM market.spx_daily');
+    // Should include close-derived fields
+    expect(sql).toContain('"close"');
+    expect(sql).toContain('"RSI_14"');
+    expect(sql).toContain('"Vol_Regime"');
+    // Should NOT include open-known or static fields
+    expect(sql).not.toContain('"Gap_Pct"');
+    expect(sql).not.toContain('"Day_of_Week"');
+    expect(sql).not.toContain('"VIX_Open"');
+  });
+
+  test('uses parameterized placeholders', () => {
+    const { sql, params } = buildOutcomeQuery(['2025-01-06', '2025-01-07']);
+    expect(sql).toContain('$1, $2');
+    expect(params).toEqual(['2025-01-06', '2025-01-07']);
+  });
+
+  test('does NOT use LAG (returns same-day values)', () => {
+    const { sql } = buildOutcomeQuery(['2025-01-06']);
+    expect(sql).not.toContain('LAG(');
+    expect(sql).not.toContain('prev_');
+  });
+
+  test('includes all 44 close-derived fields', () => {
+    const { sql } = buildOutcomeQuery(['2025-01-06']);
+    // Count quoted field names (each CLOSE_KNOWN_FIELD appears as "fieldName")
+    for (const field of CLOSE_KNOWN_FIELDS) {
+      expect(sql).toContain(`"${field}"`);
+    }
   });
 });
