@@ -322,7 +322,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           Term_Structure_State: {
             description:
-              "VIX term structure state (1=backwardation, 0=flat, -1=contango)",
+              "VIX term structure state (-1=backwardation/inverted, 0=flat, 1=contango/normal)",
             hypothesis: true,
             timing: 'close',
           },
@@ -1015,8 +1015,8 @@ GROUP BY market_condition`,
   FROM market.spx_daily
 )
 SELECT
-  CASE WHEN m.prev_Term_Structure_State = 1 THEN 'Backwardation'
-       WHEN m.prev_Term_Structure_State = -1 THEN 'Contango'
+  CASE WHEN m.prev_Term_Structure_State = -1 THEN 'Backwardation'
+       WHEN m.prev_Term_Structure_State = 1 THEN 'Contango'
        ELSE 'Flat' END as term_structure,
   COUNT(*) as trades,
   SUM(t.pl) as total_pl,

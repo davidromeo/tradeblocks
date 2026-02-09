@@ -17,7 +17,21 @@ export function filterByStrategy(trades: Trade[], strategy?: string): Trade[] {
 }
 
 /**
- * Filter trades by date range
+ * Format a Date to YYYY-MM-DD in Eastern Time for string comparison.
+ * Trades are stored in Eastern Time, so we compare calendar dates in that timezone.
+ */
+function toEasternDateStr(d: Date): string {
+  return d.toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+/**
+ * Filter trades by date range using string comparison on Eastern Time calendar dates.
+ * Avoids timezone bugs from mixing UTC Date parsing with local time setHours.
  */
 export function filterByDateRange(
   trades: Trade[],
@@ -27,27 +41,19 @@ export function filterByDateRange(
   let filtered = trades;
 
   if (startDate) {
-    const start = new Date(startDate);
-    if (!isNaN(start.getTime())) {
-      filtered = filtered.filter((t) => new Date(t.dateOpened) >= start);
-    }
+    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) >= startDate);
   }
 
   if (endDate) {
-    const end = new Date(endDate);
-    if (!isNaN(end.getTime())) {
-      // Include entire end date
-      end.setHours(23, 59, 59, 999);
-      filtered = filtered.filter((t) => new Date(t.dateOpened) <= end);
-    }
+    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) <= endDate);
   }
 
   return filtered;
 }
 
 /**
- * Filter daily log entries by date range
- * Mirrors filterByDateRange but uses entry.date (Date object) instead of t.dateOpened
+ * Filter daily log entries by date range using string comparison on Eastern Time calendar dates.
+ * Mirrors filterByDateRange but uses entry.date (Date object) instead of t.dateOpened.
  */
 export function filterDailyLogsByDateRange(
   dailyLogs: DailyLogEntry[],
@@ -57,19 +63,11 @@ export function filterDailyLogsByDateRange(
   let filtered = dailyLogs;
 
   if (startDate) {
-    const start = new Date(startDate);
-    if (!isNaN(start.getTime())) {
-      filtered = filtered.filter((entry) => new Date(entry.date) >= start);
-    }
+    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) >= startDate);
   }
 
   if (endDate) {
-    const end = new Date(endDate);
-    if (!isNaN(end.getTime())) {
-      // Include entire end date
-      end.setHours(23, 59, 59, 999);
-      filtered = filtered.filter((entry) => new Date(entry.date) <= end);
-    }
+    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) <= endDate);
   }
 
   return filtered;
