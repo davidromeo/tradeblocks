@@ -296,7 +296,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           Vol_Regime: {
             description:
-              "Volatility regime classification (1=low, 2=normal, 3=elevated, 4=high, 5=extreme)",
+              "Volatility regime classification (1=very low, 2=low, 3=normal, 4=elevated, 5=high, 6=extreme)",
             hypothesis: true,
             timing: 'close',
           },
@@ -374,7 +374,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             timing: 'close',
           },
           Day_of_Week: {
-            description: "Day of week (1=Monday through 5=Friday)",
+            description: "Day of week (2=Monday through 6=Friday)",
             hypothesis: true,
             timing: 'static',
           },

@@ -145,15 +145,18 @@ export interface Intraday15MinData {
  * Trades are stored in Eastern Time, so we format in that timezone.
  */
 function formatTradeDate(date: Date | string): string {
+  if (typeof date === "string") {
+    // String dates are already in YYYY-MM-DD or similar calendar-date format.
+    // Parse components directly to avoid UTC-to-ET timezone shift.
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  }
   const d = typeof date === "string" ? new Date(date) : date;
-  // Format in Eastern Time to match market data
-  const formatted = d.toLocaleDateString("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return formatted; // Returns YYYY-MM-DD format
+  // For Date objects, use local date components (trades are stored in ET)
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -354,6 +357,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
               break;
             case "gapDirection": {
               const gapPct = getNum(marketData, "Gap_Pct");
+              if (isNaN(gapPct)) { lagExcluded++; continue; }
               segmentValue = gapPct > 0.1 ? "up" : gapPct < -0.1 ? "down" : "flat";
               segmentKey = segmentValue;
               segmentLabel = `Gap ${segmentValue}`;
@@ -418,7 +422,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
             const grossWins = winningTrades.reduce((sum, t) => sum + t.pl, 0);
             const grossLosses = Math.abs(losingTrades.reduce((sum, t) => sum + t.pl, 0));
-            const profitFactor = grossLosses > 0 ? grossWins / grossLosses : grossWins > 0 ? Infinity : 0;
+            const profitFactor = grossLosses > 0 ? grossWins / grossLosses : grossWins > 0 ? null : 0;
 
             return {
               segment: seg.segment,
@@ -460,7 +464,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           strategy: strategy || null,
           tradesTotal: trades.length,
           tradesMatched: totalMatched,
-          tradesUnmatched: sortedUnmatchedDates.length,
+          tradesUnmatched: unmatchedDates.length,
           tradesLagExcluded: lagExcluded,
           unmatchedDates: sortedUnmatchedDates,
           overall: {
@@ -1000,7 +1004,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         endTime: z.string().describe("ORB end time in HHMM format (e.g., '1000' for 10:00 AM)"),
         startDate: z.string().describe("Start date (YYYY-MM-DD)"),
         endDate: z.string().optional().describe("End date (YYYY-MM-DD), defaults to startDate"),
-        limit: z.number().optional().describe("Max rows to return (default: 100)"),
+        limit: z.number().int().min(1).optional().describe("Max rows to return (default: 100)"),
       }),
     },
     withFullSync(baseDir, async ({ startTime, endTime, startDate, endDate, limit = 100 }) => {
@@ -1113,19 +1117,24 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           const orbRange = orbHigh - orbLow;
           const orbRangePct = (orbRange / orbLow) * 100;
           const close = getNum(intradayData, "close");
+          if (isNaN(close)) continue;
 
           // Calculate where close is relative to ORB
           let closePositionInOrb: number;
           let closeVsOrb: "above" | "below" | "within";
 
-          if (close > orbHigh) {
+          if (orbRange === 0) {
+            // ORB range is zero (all checkpoint prices identical)
+            closePositionInOrb = close === orbHigh ? 0.5 : close > orbHigh ? 1 : 0;
+            closeVsOrb = close > orbHigh ? "above" : close < orbLow ? "below" : "within";
+          } else if (close > orbHigh) {
             closePositionInOrb = 1 + (close - orbHigh) / orbRange;
             closeVsOrb = "above";
           } else if (close < orbLow) {
             closePositionInOrb = (close - orbLow) / orbRange;
             closeVsOrb = "below";
           } else {
-            closePositionInOrb = orbRange > 0 ? (close - orbLow) / orbRange : 0.5;
+            closePositionInOrb = (close - orbLow) / orbRange;
             closeVsOrb = "within";
           }
 
@@ -1153,8 +1162,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const aboveCount = results.filter((r) => r.Close_vs_ORB === "above").length;
         const belowCount = results.filter((r) => r.Close_vs_ORB === "below").length;
         const withinCount = results.filter((r) => r.Close_vs_ORB === "within").length;
-        const avgOrbRangePct = results.length > 0
-          ? results.reduce((sum, r) => sum + r.ORB_Range_Pct, 0) / results.length
+        const avgOrbRangePct = totalDays > 0
+          ? results.reduce((sum, r) => sum + r.ORB_Range_Pct, 0) / totalDays
           : 0;
 
         const summary = `ORB (${startTime}-${endTime}): ${startDate} to ${end} | ${totalDays} days, avg range ${formatPercent(avgOrbRangePct)}`;
@@ -1173,9 +1182,9 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             closeAboveOrb: aboveCount,
             closeBelowOrb: belowCount,
             closeWithinOrb: withinCount,
-            closeAbovePct: Math.round((aboveCount / totalDays) * 10000) / 100,
-            closeBelowPct: Math.round((belowCount / totalDays) * 10000) / 100,
-            closeWithinPct: Math.round((withinCount / totalDays) * 10000) / 100,
+            closeAbovePct: totalDays > 0 ? Math.round((aboveCount / totalDays) * 10000) / 100 : 0,
+            closeBelowPct: totalDays > 0 ? Math.round((belowCount / totalDays) * 10000) / 100 : 0,
+            closeWithinPct: totalDays > 0 ? Math.round((withinCount / totalDays) * 10000) / 100 : 0,
           },
           returned: limitedResults.length,
           days: limitedResults,

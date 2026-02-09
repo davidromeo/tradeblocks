@@ -92,7 +92,9 @@ export const VIX_OHLC_OUTCOME_FIELDS = ['high', 'low', 'close'] as const;
  * @returns HHMM integer (e.g., 930 for 09:30, 1430 for 14:30)
  */
 export function parseTimeToHHMM(timeStr: string): number {
+  if (!timeStr || !/^\d{1,2}:\d{2}(:\d{2})?$/.test(timeStr)) return 0;
   const [hours, minutes] = timeStr.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return 0;
   return hours * 100 + minutes;
 }
 

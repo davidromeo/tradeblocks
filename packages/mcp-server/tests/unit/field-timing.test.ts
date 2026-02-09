@@ -163,9 +163,8 @@ describe('buildLookaheadFreeQuery', () => {
 
   test('produces valid SQL with empty dates array', () => {
     const { sql, params } = buildLookaheadFreeQuery([]);
-    // Should still produce syntactically valid SQL (WHERE date IN ())
-    expect(sql).toContain('WITH lagged AS');
-    expect(sql).toContain('WHERE date IN');
+    // Empty input returns a no-match query instead of invalid WHERE date IN ()
+    expect(sql).toContain('WHERE 1=0');
     expect(params).toEqual([]);
   });
 });

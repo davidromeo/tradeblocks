@@ -300,13 +300,18 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
       );
       const rowsBefore = Number(countResult.getRows()[0][0]);
 
-      // Delete all rows from the market table
-      await conn.run(`DELETE FROM ${fullTableName}`);
-
-      // Delete sync metadata so next sync will re-import
-      await conn.run(
-        `DELETE FROM market._sync_metadata WHERE file_name = '${fileName}'`
-      );
+      // Delete table data and sync metadata atomically
+      try {
+        await conn.run(`BEGIN TRANSACTION`);
+        await conn.run(`DELETE FROM ${fullTableName}`);
+        await conn.run(
+          `DELETE FROM market._sync_metadata WHERE file_name = '${fileName}'`
+        );
+        await conn.run(`COMMIT`);
+      } catch (e) {
+        await conn.run(`ROLLBACK`).catch(() => {});
+        throw e;
+      }
 
       const result = {
         table: fullTableName,

@@ -58,6 +58,10 @@ export const STATIC_FIELDS: ReadonlySet<string> = new Set(
  * @returns Object with `sql` (the query string) and `params` (the date values)
  */
 export function buildLookaheadFreeQuery(tradeDates: string[]): { sql: string; params: string[] } {
+  if (tradeDates.length === 0) {
+    return { sql: `SELECT * FROM market.spx_daily WHERE 1=0`, params: [] };
+  }
+
   // Quote all column names for safety (prevents reserved word conflicts)
   const openColumns = [...OPEN_KNOWN_FIELDS].map(f => `"${f}"`).join(', ');
   const staticColumns = [...STATIC_FIELDS].map(f => `"${f}"`).join(', ');
@@ -92,6 +96,10 @@ export function buildLookaheadFreeQuery(tradeDates: string[]): { sql: string; pa
  * @returns Object with `sql` (the query string) and `params` (the date values)
  */
 export function buildOutcomeQuery(tradeDates: string[]): { sql: string; params: string[] } {
+  if (tradeDates.length === 0) {
+    return { sql: `SELECT * FROM market.spx_daily WHERE 1=0`, params: [] };
+  }
+
   const closeColumns = [...CLOSE_KNOWN_FIELDS].map(f => `"${f}"`).join(', ');
   const placeholders = tradeDates.map((_, i) => `$${i + 1}`).join(', ');
   const sql = `SELECT date, ${closeColumns} FROM market.spx_daily WHERE date IN (${placeholders})`;
