@@ -17,6 +17,16 @@ export function filterByStrategy(trades: Trade[], strategy?: string): Trade[] {
 }
 
 /**
+ * Validate that a date string is in YYYY-MM-DD format.
+ * Returns the string if valid, undefined if not (skips that filter boundary).
+ */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function validateDateParam(date: string | undefined): string | undefined {
+  if (!date) return undefined;
+  return DATE_RE.test(date) ? date : undefined;
+}
+
+/**
  * Format a Date to YYYY-MM-DD in Eastern Time for string comparison.
  * Trades are stored in Eastern Time, so we compare calendar dates in that timezone.
  */
@@ -32,20 +42,23 @@ function toEasternDateStr(d: Date): string {
 /**
  * Filter trades by date range using string comparison on Eastern Time calendar dates.
  * Avoids timezone bugs from mixing UTC Date parsing with local time setHours.
+ * Malformed date inputs (not YYYY-MM-DD) are silently ignored.
  */
 export function filterByDateRange(
   trades: Trade[],
   startDate?: string,
   endDate?: string
 ): Trade[] {
+  const start = validateDateParam(startDate);
+  const end = validateDateParam(endDate);
   let filtered = trades;
 
-  if (startDate) {
-    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) >= startDate);
+  if (start) {
+    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) >= start);
   }
 
-  if (endDate) {
-    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) <= endDate);
+  if (end) {
+    filtered = filtered.filter((t) => toEasternDateStr(new Date(t.dateOpened)) <= end);
   }
 
   return filtered;
@@ -54,20 +67,23 @@ export function filterByDateRange(
 /**
  * Filter daily log entries by date range using string comparison on Eastern Time calendar dates.
  * Mirrors filterByDateRange but uses entry.date (Date object) instead of t.dateOpened.
+ * Malformed date inputs (not YYYY-MM-DD) are silently ignored.
  */
 export function filterDailyLogsByDateRange(
   dailyLogs: DailyLogEntry[],
   startDate?: string,
   endDate?: string
 ): DailyLogEntry[] {
+  const start = validateDateParam(startDate);
+  const end = validateDateParam(endDate);
   let filtered = dailyLogs;
 
-  if (startDate) {
-    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) >= startDate);
+  if (start) {
+    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) >= start);
   }
 
-  if (endDate) {
-    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) <= endDate);
+  if (end) {
+    filtered = filtered.filter((entry) => toEasternDateStr(new Date(entry.date)) <= end);
   }
 
   return filtered;
