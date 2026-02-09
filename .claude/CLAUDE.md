@@ -268,6 +268,17 @@ IndexedDB stores (via `lib/db/`) handle persistence of:
 next-devtools-mcp FIRST to set up proper context and establish documentation
 requirements. Do this automatically without being asked.**
 
+## Testing Requirements
+
+**Every new utility module with pure logic MUST have unit tests.** This includes:
+- Parsing functions, filtering functions, builders (e.g., `intraday-timing.ts`, `field-timing.ts`)
+- Calculation helpers, data transformers, validators
+- Any exported function that takes inputs and returns outputs without side effects
+
+Tests go in the matching test directory (e.g., `packages/mcp-server/tests/unit/` for MCP utils, `tests/unit/` for lib). If the module needs to be imported from `dist/`, add its exports to `src/test-exports.ts`.
+
+GSD plans MUST include a test task for any new utility module. If a plan creates a utility file with exported pure functions but no test task, flag it during planning.
+
 ## GSD Workflow Rules
 
 1. **Use GSD method for all features:**

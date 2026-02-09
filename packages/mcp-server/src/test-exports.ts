@@ -48,6 +48,20 @@ export {
   buildLookaheadFreeQuery,
 } from './utils/field-timing.js';
 
+// Export intraday timing utilities for testing
+export {
+  SPX_CHECKPOINTS,
+  VIX_CHECKPOINTS,
+  SPX_15MIN_OUTCOME_FIELDS,
+  VIX_OUTCOME_FIELDS,
+  VIX_OHLC_OUTCOME_FIELDS,
+  parseTimeToHHMM,
+  getKnownSpxCheckpoints,
+  getKnownVixCheckpoints,
+  buildIntradayContext,
+} from './utils/intraday-timing.js';
+export type { IntradayContext } from './utils/intraday-timing.js';
+
 // Export schema metadata for classification completeness tests
 export { SCHEMA_DESCRIPTIONS } from './utils/schema-metadata.js';
 export type { ColumnDescription } from './utils/schema-metadata.js';
