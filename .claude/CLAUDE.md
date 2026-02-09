@@ -89,6 +89,18 @@ npm test -- path/to/test-file.test.ts -t "test name pattern"
 - Use `toLocaleDateString('en-US')` or manual string extraction instead of `.toISOString()` which converts to UTC
 - Static datasets in `tests/data/` explicitly handle Eastern Time with DST awareness
 
+**Date Comparison Rules (MCP Server)**: Trade dates are created at **local midnight** via `parseDatePreservingCalendarDay()` using `new Date(year, month, day)`. This means the internal UTC timestamp depends on the server's timezone. To avoid off-by-one bugs:
+
+- **DO**: Use string comparison on YYYY-MM-DD for date range filtering. Use `filterByDateRange()` from `tools/shared/filters.ts` or `toCalendarDateStr()` / `formatTradeDate()`.
+- **DO**: Extract calendar date from strings via regex (`/^(\d{4})-(\d{2})-(\d{2})/`) before parsing to Date.
+- **DO**: Use local date components (`getFullYear()`, `getMonth()`, `getDate()`) when you need YYYY-MM-DD from a Date that came from `parseDatePreservingCalendarDay`.
+- **DON'T**: Use `new Date("YYYY-MM-DD")` for comparison boundaries — this creates UTC midnight, not local midnight, causing mismatch with trade dates.
+- **DON'T**: Use `toLocaleDateString()` with explicit `timeZone` on dates created at local midnight — this re-interprets the date in a different timezone and can shift it by a day.
+- **DON'T**: Use `.toISOString().split("T")[0]` on local-midnight dates — this converts to UTC first and can shift the calendar date in UTC-ahead timezones.
+- **EXCEPTION**: `toLocaleDateString` with `timeZone: "America/New_York"` IS correct for absolute timestamps (Unix epoch from TradingView), since those represent real UTC instants that need ET interpretation.
+
+**Market Data Lookahead Rules (MCP Server)**: When joining trades with `market.spx_daily`, close-derived fields (44 fields including `Trend_Score`, `RSI_14`, `VIX_Close`, `Vol_Regime`, `Return_5D`) are only known after market close and MUST use `LAG()` to get the prior trading day's value. Use `buildLookaheadFreeQuery()` from `utils/field-timing.ts`. Open-known fields (8 fields: `Gap_Pct`, `VIX_Open`, `Prior_Close`, etc.) and static fields (3: `Day_of_Week`, `Month`, `Is_Opex`) are safe to use same-day. See `utils/schema-metadata.ts` for the authoritative field classification.
+
 **Date Handling**: Trades use separate `dateOpened` (Date object) and `timeOpened` (string) fields. When processing CSVs, parse dates carefully and maintain consistency with legacy format.
 
 **Trade P&L Calculations**:
