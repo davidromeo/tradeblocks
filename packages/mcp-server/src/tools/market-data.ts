@@ -311,6 +311,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         let totalMatched = 0;
         let totalWins = 0;
         let totalPl = 0;
+        let lagExcluded = 0;
         const unmatchedDates: string[] = [];
 
         for (const trade of trades) {
@@ -332,7 +333,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           switch (segmentBy) {
             case "volRegime": {
               const val = getNum(marketData, "prev_Vol_Regime");
-              if (isNaN(val)) continue; // No prior day data
+              if (isNaN(val)) { lagExcluded++; continue; }
               segmentValue = val;
               segmentKey = String(val);
               segmentLabel = getVolRegimeLabel(val);
@@ -340,7 +341,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             }
             case "termStructure": {
               const val = getNum(marketData, "prev_Term_Structure_State");
-              if (isNaN(val)) continue; // No prior day data
+              if (isNaN(val)) { lagExcluded++; continue; }
               segmentValue = val;
               segmentKey = String(val);
               segmentLabel = getTermStructureLabel(val);
@@ -360,7 +361,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             }
             case "trendScore": {
               const val = getNum(marketData, "prev_Trend_Score");
-              if (isNaN(val)) continue; // No prior day data
+              if (isNaN(val)) { lagExcluded++; continue; }
               segmentValue = val;
               segmentKey = String(val);
               segmentLabel = `Trend Score ${val}`;
@@ -459,7 +460,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           strategy: strategy || null,
           tradesTotal: trades.length,
           tradesMatched: totalMatched,
-          tradesUnmatched: trades.length - totalMatched,
+          tradesUnmatched: sortedUnmatchedDates.length,
+          tradesLagExcluded: lagExcluded,
           unmatchedDates: sortedUnmatchedDates,
           overall: {
             winRate: Math.round(overallWinRate * 100) / 100,
@@ -623,11 +625,28 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         ];
 
         for (const filterDef of testFilters) {
+          // For lagged filters, exclude trades with NaN lag values from evaluation
+          // (prevents NaN comparisons from silently passing all tests and biasing results)
+          let pool = matchedTrades;
+          if (filterDef.lagged) {
+            const prevField = `prev_${filterDef.field}`;
+            pool = matchedTrades.filter((t) => {
+              const val = getNum(t.market as Record<string, unknown>, prevField);
+              return !isNaN(val);
+            });
+          }
+
+          if (pool.length < 10) continue;
+
           // Identify trades that would be removed
-          const removed = matchedTrades.filter((t) => filterDef.test(t.market as Record<string, unknown>));
-          const remaining = matchedTrades.filter((t) => !filterDef.test(t.market as Record<string, unknown>));
+          const removed = pool.filter((t) => filterDef.test(t.market as Record<string, unknown>));
+          const remaining = pool.filter((t) => !filterDef.test(t.market as Record<string, unknown>));
 
           if (removed.length === 0 || remaining.length < 5) continue;
+
+          const poolWins = pool.filter((t) => t.trade.pl > 0).length;
+          const poolWinRate = (poolWins / pool.length) * 100;
+          const poolTotalPl = pool.reduce((sum, t) => sum + t.trade.pl, 0);
 
           const winnersRemoved = removed.filter((t) => t.trade.pl > 0).length;
           const losersRemoved = removed.length - winnersRemoved;
@@ -636,8 +655,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           const newWinRate = (newWins / remaining.length) * 100;
           const newTotalPl = remaining.reduce((sum, t) => sum + t.trade.pl, 0);
 
-          const winRateDelta = newWinRate - currentWinRate;
-          const plDelta = newTotalPl - currentTotalPl;
+          const winRateDelta = newWinRate - poolWinRate;
+          const plDelta = newTotalPl - poolTotalPl;
 
           // Only include if improvement meets threshold
           if (winRateDelta >= minImprovementPct) {
