@@ -322,12 +322,9 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             continue;
           }
 
-          totalMatched++;
+          // Get segment value (must resolve before counting in totals,
+          // since lagged fields may be NaN and cause continue)
           const isWin = trade.pl > 0;
-          if (isWin) totalWins++;
-          totalPl += trade.pl;
-
-          // Get segment value
           let segmentKey: string;
           let segmentLabel: string;
           let segmentValue: number | string;
@@ -372,6 +369,11 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             default:
               continue;
           }
+
+          // Count in totals only after segment resolved (NaN-lag trades excluded)
+          totalMatched++;
+          if (isWin) totalWins++;
+          totalPl += trade.pl;
 
           if (!segments.has(segmentKey)) {
             segments.set(segmentKey, {
@@ -739,6 +741,25 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const totalTrades = trades.length;
         const paginated = trades.slice(offset, offset + limit);
+
+        // Short-circuit if offset is past the end (empty page)
+        if (paginated.length === 0) {
+          return createToolOutput(
+            `Enriched trades: ${blockId} | 0/0 matched | offset ${offset}, limit ${limit}`,
+            {
+              blockId,
+              strategy: strategy || null,
+              lagNote: "",
+              tradesTotal: totalTrades,
+              returned: 0,
+              offset,
+              hasMore: false,
+              tradesMatched: 0,
+              unmatchedDates: [],
+              trades: [],
+            }
+          );
+        }
 
         // Collect unique dates from paginated trades only
         const tradeDates = [...new Set(paginated.map(t => formatTradeDate(t.dateOpened)))];
