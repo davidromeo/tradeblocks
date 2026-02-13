@@ -25,7 +25,11 @@ export function normalizeTicker(value: string | null | undefined): string | null
   const firstToken = trimmed.split(/\s+/)[0];
   const stripped = firstToken.replace(/^[\^$]+/, "");
   const normalized = stripped.toUpperCase().replace(/[^A-Z0-9._-]/g, "");
-  return normalized || null;
+  if (!normalized) return null;
+  // Guard against contract-count tokens like "1" from Symbol/legs strings.
+  // Valid tickers should include at least one alphabetic character.
+  if (!/[A-Z]/.test(normalized)) return null;
+  return normalized;
 }
 
 /**

@@ -189,6 +189,31 @@ describe("Market Sync Multi-Ticker", () => {
     expect(dates.getRows()).toEqual([["2026-02-03", "2026-02-05"]]);
   });
 
+  it("ignores numeric Symbol contract prefixes when inferring ticker", async () => {
+    await writeCsv(
+      testDir,
+      "symbol-contract-prefix-block/tradelog.csv",
+      `${TRADE_HEADERS},Symbol`,
+      [
+        "2024-01-02,09:35:00,2024-01-02,15:30:00,414.21,398.51,1 Feb 6 405 P STO 2.00 | 1 Feb 11 405 P BTO 3.35,-230,1,14.76,,1.50,1.50,Target,10200,5000,1 Feb 6 405 P STO 2.00 | 1 Feb 11 405 P BTO 3.35",
+      ]
+    );
+
+    const blockSyncResult = await syncAllBlocks(testDir);
+    expect(blockSyncResult.blocksSynced).toBe(1);
+    expect(blockSyncResult.errors).toHaveLength(0);
+
+    const conn = await getConnection(testDir);
+    const tickers = await conn.runAndReadAll(`
+      SELECT DISTINCT ticker
+      FROM trades.trade_data
+      WHERE block_id = 'symbol-contract-prefix-block'
+      ORDER BY ticker
+    `);
+
+    expect(tickers.getRows()).toEqual([["SPX"]]);
+  });
+
   it("falls back to SPX when neither ticker columns nor legs provide a symbol", async () => {
     await writeCsv(
       testDir,

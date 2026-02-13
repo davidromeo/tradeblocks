@@ -514,6 +514,39 @@ describe('Sync Layer Integration', () => {
       expect(tradeCount).toBe(0);
     });
 
+    it('recreates required schemas when analytics DB is replaced in-process', async () => {
+      // Seed database and verify initial sync.
+      await createBlockWithTrades(testDir, 'schema-reinit-block', [SAMPLE_TRADE_ROW_1]);
+      const firstSync = await syncAllBlocks(testDir);
+      expect(firstSync.blocksSynced).toBe(1);
+
+      // Simulate external database replacement while process stays alive.
+      await closeConnection();
+      await fs.rm(path.join(testDir, 'analytics.duckdb'), { force: true });
+      await fs.rm(path.join(testDir, 'analytics.duckdb.wal'), { force: true });
+
+      // Reopen and verify required tables exist on the fresh DB file.
+      const conn = await getConnection(testDir);
+      const syncMetaCheck = await conn.runAndReadAll(`
+        SELECT COUNT(*)
+        FROM duckdb_tables()
+        WHERE schema_name = 'trades' AND table_name = '_sync_metadata'
+      `);
+      const tradeDataCheck = await conn.runAndReadAll(`
+        SELECT COUNT(*)
+        FROM duckdb_tables()
+        WHERE schema_name = 'trades' AND table_name = 'trade_data'
+      `);
+
+      expect(Number(syncMetaCheck.getRows()[0][0])).toBe(1);
+      expect(Number(tradeDataCheck.getRows()[0][0])).toBe(1);
+
+      // Confirm sync can proceed on the recreated DB without missing-table errors.
+      const secondSync = await syncAllBlocks(testDir);
+      expect(secondSync.blocksSynced).toBe(1);
+      expect(secondSync.errors).toHaveLength(0);
+    });
+
     it('hash is stable across multiple reads', async () => {
       // Create a block
       await createBlockWithTrades(testDir, 'hash-stability-block', [SAMPLE_TRADE_ROW_1]);

@@ -35,7 +35,6 @@ import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable, ensur
 let instance: DuckDBInstance | null = null;
 let connection: DuckDBConnection | null = null;
 let connectionMode: "read_write" | "read_only" | null = null;
-let schemaInitialized = false;
 let storedDbPath: string | null = null;
 let storedThreads: string | null = null;
 let storedMemoryLimit: string | null = null;
@@ -168,22 +167,15 @@ async function openReadWriteConnection(
     enable_external_access: "false",
   });
   connection = await instance.connect();
+  // Create schemas/tables every RW open. This keeps the process resilient if
+  // analytics.duckdb is deleted/recreated while the process remains alive.
+  await connection.run("CREATE SCHEMA IF NOT EXISTS trades");
+  await connection.run("CREATE SCHEMA IF NOT EXISTS market");
+  await ensureSyncTables(connection);
+  await ensureTradeDataTable(connection);
+  await ensureReportingDataTable(connection);
+  await ensureMarketDataTables(connection);
   connectionMode = "read_write";
-
-  if (!schemaInitialized) {
-    // Create schemas for organizing tables
-    // trades schema: block data, trade records, daily logs
-    // market schema: SPY prices, VIX data, market context
-    await connection.run("CREATE SCHEMA IF NOT EXISTS trades");
-    await connection.run("CREATE SCHEMA IF NOT EXISTS market");
-
-    // Ensure sync metadata and data tables exist
-    await ensureSyncTables(connection);
-    await ensureTradeDataTable(connection);
-    await ensureReportingDataTable(connection);
-    await ensureMarketDataTables(connection);
-    schemaInitialized = true;
-  }
 
   return connection;
 }
@@ -236,11 +228,6 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
   // Configuration from environment with sensible defaults
   const threads = process.env.DUCKDB_THREADS || "2";
   const memoryLimit = process.env.DUCKDB_MEMORY_LIMIT || "512MB";
-
-  // Reset schema flag if database path changed (different data directory)
-  if (storedDbPath && storedDbPath !== dbPath) {
-    schemaInitialized = false;
-  }
 
   // Store config for reuse by upgrade/downgrade
   storedDbPath = dbPath;
@@ -317,8 +304,6 @@ export async function closeConnection(): Promise<void> {
   // DuckDB instance doesn't have explicit close - releasing reference is sufficient
   instance = null;
   connectionMode = null;
-  // Note: schemaInitialized and stored config are NOT reset — schema persists on disk
-  // and config is needed for upgrade/downgrade cycles
 }
 
 /**
@@ -394,4 +379,3 @@ export function getConnectionMode(): "read_write" | "read_only" | null {
 export function isConnected(): boolean {
   return connection !== null;
 }
-
