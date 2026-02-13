@@ -263,7 +263,9 @@ LIMIT 50
 -- Join trades with market data
 SELECT t.date_opened, t.strategy, t.pl, m.VIX_Close, m.Vol_Regime
 FROM trades.trade_data t
-LEFT JOIN market.spx_daily m ON t.date_opened = m.date
+LEFT JOIN market.spx_daily m
+  ON COALESCE(NULLIF(t.ticker, ''), 'SPX') = m.ticker
+ AND CAST(t.date_opened AS VARCHAR) = m.date
 WHERE t.block_id = 'my-strategy'
 
 -- Aggregate by VIX bucket
@@ -272,7 +274,9 @@ SELECT
   COUNT(*) as trades,
   SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END)::FLOAT / COUNT(*) as win_rate
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
+JOIN market.spx_daily m
+  ON COALESCE(NULLIF(t.ticker, ''), 'SPX') = m.ticker
+ AND CAST(t.date_opened AS VARCHAR) = m.date
 WHERE t.block_id = 'my-strategy'
 GROUP BY vix_level
 ```
@@ -301,11 +305,17 @@ Skills provide structured prompts for common analysis tasks.
 
 ## Market Data Setup
 
-For market-aware analysis (VIX regimes, gap analysis, intraday timing), you'll need SPX/VIX data from TradingView:
+For market-aware analysis (VIX regimes, gap analysis, intraday timing), you'll need underlying/VIX data from TradingView:
 
 1. Add the 3 PineScript indicators to your TradingView charts
 2. Export CSVs to `~/backtests/_marketdata/`
 3. The MCP server auto-syncs them into DuckDB on first query
+
+Supported market filename patterns:
+- `<ticker>_daily.csv`
+- `<ticker>_15min.csv`
+- `<scope>_vix_intraday.csv`
+- `vix_intraday.csv` (global fallback scope `ALL`)
 
 See [scripts/README.md](../../../scripts/README.md) for the PineScript indicators, export instructions, and all 55+ available fields.
 

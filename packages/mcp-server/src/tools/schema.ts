@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getConnection } from "../db/connection.js";
+import { getConnection, upgradeToReadWrite, downgradeToReadOnly, getConnectionMode } from "../db/connection.js";
 import { withFullSync } from "./middleware/sync-middleware.js";
 import { createToolOutput } from "../utils/output-formatter.js";
 import {
@@ -79,10 +79,10 @@ interface DatabaseSchemaOutput {
  * Valid market tables and their corresponding CSV file names.
  * Used for purge_market_table validation.
  */
-const MARKET_TABLE_FILES: Record<string, string> = {
-  spx_daily: "spx_daily.csv",
-  spx_15min: "spx_15min.csv",
-  vix_intraday: "vix_intraday.csv",
+const MARKET_TABLE_FILE_PATTERNS: Record<string, string[]> = {
+  spx_daily: ["%_daily.csv"],
+  spx_15min: ["%_15min.csv"],
+  vix_intraday: ["%_vix_intraday.csv", "vix_intraday.csv"],
 };
 
 // ============================================================================
@@ -102,7 +102,7 @@ function generateLagTemplate(): {
   const openCols = [...OPEN_KNOWN_FIELDS].map(f => `    ${f}`).join(',\n');
   const staticCols = [...STATIC_FIELDS].map(f => `    ${f}`).join(',\n');
   const lagCols = [...CLOSE_KNOWN_FIELDS]
-    .map(f => `    LAG(${f}) OVER (ORDER BY date) AS prev_${f}`)
+    .map(f => `    LAG(${f}) OVER (PARTITION BY ticker ORDER BY date) AS prev_${f}`)
     .join(',\n');
 
   const sql = `-- Lookahead-free CTE template for market.spx_daily
@@ -110,9 +110,16 @@ function generateLagTemplate(): {
 -- Static fields: safe to use same-day (calendar facts)
 -- Close-derived fields: use LAG() for prior trading day values
 --
--- Copy this CTE into your query, then JOIN on t.date_opened = m.date
+-- Copy this CTE into your query, then JOIN on (ticker, date)
+WITH requested AS (
+  SELECT DISTINCT
+    COALESCE(NULLIF(ticker, ''), 'SPX') AS ticker,
+    CAST(date_opened AS VARCHAR) AS date
+  FROM trades.trade_data
+  WHERE block_id = 'my-block'
+),
 WITH lagged AS (
-  SELECT date,
+  SELECT ticker, date,
     -- Open-known fields (safe same-day)
 ${openCols},
     -- Static fields (safe same-day)
@@ -120,15 +127,18 @@ ${staticCols},
     -- Close-derived fields (prior trading day via LAG)
 ${lagCols}
   FROM market.spx_daily
+  WHERE ticker IN (SELECT ticker FROM requested)
 )
 SELECT t.*, m.*
 FROM trades.trade_data t
-JOIN lagged m ON t.date_opened = m.date
+JOIN lagged m
+  ON COALESCE(NULLIF(t.ticker, ''), 'SPX') = m.ticker
+ AND CAST(t.date_opened AS VARCHAR) = m.date
 WHERE t.block_id = 'my-block'`;
 
   return {
     description:
-      'Reusable LAG() CTE for lookahead-free queries joining trades to spx_daily. ' +
+      'Reusable LAG() CTE for lookahead-free queries joining trades to spx_daily by ticker+date. ' +
       'Close-derived fields (VIX_Close, Vol_Regime, RSI_14, etc.) use LAG() to get the prior trading day value, ' +
       'preventing lookahead bias. Open-known and static fields are safe to use same-day.',
     sql,
@@ -290,41 +300,55 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
       }),
     },
     async ({ table }) => {
-      const conn = await getConnection(baseDir);
-      const fullTableName = `market.${table}`;
-      const fileName = MARKET_TABLE_FILES[table];
-
-      // Get current row count before deletion
-      const countResult = await conn.runAndReadAll(
-        `SELECT COUNT(*) FROM ${fullTableName}`
-      );
-      const rowsBefore = Number(countResult.getRows()[0][0]);
-
-      // Delete table data and sync metadata atomically
-      try {
-        await conn.run(`BEGIN TRANSACTION`);
-        await conn.run(`DELETE FROM ${fullTableName}`);
-        await conn.run(
-          `DELETE FROM market._sync_metadata WHERE file_name = '${fileName}'`
+      const conn = await upgradeToReadWrite(baseDir);
+      if (getConnectionMode() !== "read_write") {
+        throw new Error(
+          "Cannot purge market table: another session holds the database write lock. " +
+          "Close other Claude Code sessions or wait for their sync to complete."
         );
-        await conn.run(`COMMIT`);
-      } catch (e) {
-        await conn.run(`ROLLBACK`).catch(() => {});
-        throw e;
       }
+      try {
+        const fullTableName = `market.${table}`;
+        const filePatterns = MARKET_TABLE_FILE_PATTERNS[table];
 
-      const result = {
-        table: fullTableName,
-        file: fileName,
-        rowsDeleted: rowsBefore,
-        syncMetadataCleared: true,
-        nextStep: "Next query will trigger fresh import from CSV",
-      };
+        // Get current row count before deletion
+        const countResult = await conn.runAndReadAll(
+          `SELECT COUNT(*) FROM ${fullTableName}`
+        );
+        const rowsBefore = Number(countResult.getRows()[0][0]);
 
-      return createToolOutput(
-        `Purged ${rowsBefore} rows from ${fullTableName}. Sync metadata cleared for ${fileName}.`,
-        result
-      );
+        // Delete table data and sync metadata atomically
+        try {
+          await conn.run(`BEGIN TRANSACTION`);
+          await conn.run(`DELETE FROM ${fullTableName}`);
+          const whereClause = filePatterns
+            .map((_, idx) => `LOWER(file_name) LIKE $${idx + 1}`)
+            .join(" OR ");
+          await conn.run(
+            `DELETE FROM market._sync_metadata WHERE ${whereClause}`,
+            filePatterns.map((p) => p.toLowerCase())
+          );
+          await conn.run(`COMMIT`);
+        } catch (e) {
+          await conn.run(`ROLLBACK`).catch(() => {});
+          throw e;
+        }
+
+        const result = {
+          table: fullTableName,
+          filePatterns,
+          rowsDeleted: rowsBefore,
+          syncMetadataCleared: true,
+          nextStep: "Next query will trigger fresh import from CSV",
+        };
+
+        return createToolOutput(
+          `Purged ${rowsBefore} rows from ${fullTableName}. Sync metadata cleared for matching market files.`,
+          result
+        );
+      } finally {
+        await downgradeToReadOnly(baseDir);
+      }
     }
   );
 }

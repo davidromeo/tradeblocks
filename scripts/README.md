@@ -1,18 +1,18 @@
 # TradingView Export Scripts
 
-Pine Script indicators for exporting SPX/VIX market data. Export CSVs to `~/backtests/_marketdata/` for use with the TradeBlocks MCP server.
+Pine Script indicators for exporting market data. Export CSVs to `~/backtests/_marketdata/` for use with the TradeBlocks MCP server.
 
 ## Script Overview
 
-### Daily Data (apply to SPX daily chart)
+### Daily Data (apply to your underlying's daily chart)
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `spx-daily.pine` | Daily market context with highlow timing and enriched VIX | `spx_daily.csv` |
+| `spx-daily.pine` | Daily market context with highlow timing and enriched VIX | `<ticker>_daily.csv` (example: `spx_daily.csv`, `msft_daily.csv`) |
 
 Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, trend score, calendar context, highlow timing (via `request.security_lower_tf`), and enriched VIX fields (gap, 9D/3M opens, high/low).
 
-### 15-Minute Checkpoints (apply to SPX 5-min chart)
+### 15-Minute Checkpoints (apply to your underlying's 5-min chart)
 
 | Script | Granularity | Checkpoints/Day | Best For |
 |--------|-------------|-----------------|----------|
@@ -22,13 +22,13 @@ Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, tr
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `vix-intraday.pine` | VIX checkpoints and session moves | `vix_intraday.csv` |
+| `vix-intraday.pine` | VIX checkpoints and session moves | `vix_intraday.csv` (global) or `<scope>_vix_intraday.csv` |
 
 > **Note:** ORB (Opening Range Breakout) is calculated dynamically by the MCP server from checkpoint data, allowing flexible start/end times.
 
 ## Quick Start
 
-1. **Open TradingView** and load the appropriate chart (SPX or VIX)
+1. **Open TradingView** and load the appropriate chart (underlying or VIX)
 2. **Set timeframe**: Daily for spx-daily, 5-min for others
 3. **Add indicator**: Pine Editor → paste script → Add to Chart
 4. **Set date range**: Click calendar icon, select range (2022+ recommended)
@@ -37,15 +37,37 @@ Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, tr
 
 ## Output Filenames
 
-| Script | Output Filename |
+| Script | Output Filename Pattern |
 |--------|-----------------|
-| `spx-daily.pine` | `spx_daily.csv` |
-| `spx-15min-checkpoints.pine` | `spx_15min.csv` |
-| `vix-intraday.pine` | `vix_intraday.csv` |
+| `spx-daily.pine` | `<ticker>_daily.csv` |
+| `spx-15min-checkpoints.pine` | `<ticker>_15min.csv` |
+| `vix-intraday.pine` | `vix_intraday.csv` or `<scope>_vix_intraday.csv` |
+
+### Naming Conventions (Required for Auto-Sync)
+
+The MCP server auto-discovers market files in `_marketdata` using these patterns:
+
+- `<ticker>_daily.csv` → `market.spx_daily`
+- `<ticker>_15min.csv` → `market.spx_15min`
+- `<scope>_vix_intraday.csv` → `market.vix_intraday`
+- `vix_intraday.csv` → `market.vix_intraday` with global scope `ALL`
+
+For VIX files, `<scope>` is a join namespace key (not a literal VIX ticker). In most cases, use the global `vix_intraday.csv`.
+
+Examples:
+
+```text
+_marketdata/
+  spx_daily.csv
+  spx_15min.csv
+  msft_daily.csv
+  msft_15min.csv
+  vix_intraday.csv
+```
 
 ## Data Fields
 
-### Daily Market Data (`spx_daily.csv`)
+### Daily Market Data (`<ticker>_daily.csv`)
 
 **Price & Movement**:
 - `Prior_Close`, `Open`, `High`, `Low`, `Close`
@@ -98,7 +120,7 @@ Includes: OHLC, gap/return metrics, VIX term structure, vol regime, RSI, ATR, tr
 
 Note: Highlow timing fields use intrabar data and are available for the most recent ~5 years. Older dates will have na values for these fields.
 
-### 15-Minute Checkpoints (`spx_15min.csv`)
+### 15-Minute Checkpoints (`<ticker>_15min.csv`)
 
 **Prices**: `P_0930` through `P_1545` (26 checkpoints)
 
@@ -109,7 +131,7 @@ Note: Highlow timing fields use intrabar data and are available for the most rec
 - `MOC_60min` - 3:00 → close
 - `Afternoon_Move` - 12:00 → close
 
-### VIX Intraday (`vix_intraday.csv`)
+### VIX Intraday (`vix_intraday.csv` or `<scope>_vix_intraday.csv`)
 
 **Prices**: `VIX_0930` through `VIX_1545` (14 checkpoints)
 
@@ -129,11 +151,13 @@ Note: Highlow timing fields use intrabar data and are available for the most rec
 After exporting, the MCP server automatically syncs CSVs into DuckDB. Use `run_sql` to query market data and join with trades:
 
 ```sql
--- Win rate by VIX regime
+-- Win rate by VIX regime (ticker-aware join)
 SELECT m.Vol_Regime, COUNT(*) as trades,
   ROUND(100.0 * SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) as win_rate
 FROM trades.trade_data t
-JOIN market.spx_daily m ON t.date_opened = m.date
+JOIN market.spx_daily m
+  ON COALESCE(NULLIF(t.ticker, ''), 'SPX') = m.ticker
+ AND CAST(t.date_opened AS VARCHAR) = m.date
 WHERE t.block_id = 'my-strategy'
 GROUP BY m.Vol_Regime ORDER BY m.Vol_Regime
 ```
@@ -142,10 +166,12 @@ Dedicated tools (`analyze_regime_performance`, `suggest_filters`, `calculate_orb
 
 ## Tips
 
-1. **Chart timeframe**: Use Daily for spx-daily, 5-min for checkpoint and VIX scripts.
+1. **Chart timeframe**: Use Daily for `spx-daily`, 5-min for checkpoint and VIX scripts.
 
 2. **Date range limits**: TradingView may limit export rows. For long history, export in yearly chunks.
 
 3. **Missing data**: Holidays and early closes will have `na` values for some checkpoints.
 
 4. **Timezone**: All times are US Eastern (ET). Scripts handle EST/EDT automatically.
+
+5. **Ticker naming**: Keep ticker prefixes consistent across files (`msft_daily.csv` with `msft_15min.csv`) so joins are accurate.

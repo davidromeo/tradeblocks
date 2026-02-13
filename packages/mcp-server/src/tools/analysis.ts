@@ -27,6 +27,7 @@ import {
 } from "@tradeblocks/lib";
 import type { Trade, MonteCarloParams } from "@tradeblocks/lib";
 import { filterByDateRange } from "./shared/filters.js";
+import { resolveTradeTicker } from "../utils/ticker.js";
 
 /**
  * Filter trades by strategy
@@ -253,13 +254,12 @@ export function registerAnalysisTools(
         // Apply strategy filter
         trades = filterByStrategy(trades, strategy);
 
-        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
+        // Apply ticker filter (supports both explicit ticker columns and legs-derived symbols)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter((t) => {
-            const ticker = t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
-            return typeof ticker === "string" && ticker.toLowerCase() === tickerLower;
-          });
+          trades = trades.filter(
+            (t) => resolveTradeTicker(t).toLowerCase() === tickerLower
+          );
         }
 
         // Apply date range filter
@@ -800,13 +800,12 @@ export function registerAnalysisTools(
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
-        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
+        // Apply ticker filter (supports both explicit ticker columns and legs-derived symbols)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter((t) => {
-            const ticker = t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
-            return typeof ticker === "string" && ticker.toLowerCase() === tickerLower;
-          });
+          trades = trades.filter(
+            (t) => resolveTradeTicker(t).toLowerCase() === tickerLower
+          );
         }
 
         // Apply date range filter

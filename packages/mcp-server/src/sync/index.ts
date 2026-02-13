@@ -7,7 +7,7 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import { getConnection, isReadOnlyConnection } from "../db/connection.js";
+import { getConnection } from "../db/connection.js";
 import {
   syncBlockInternal,
   detectBlockChanges,
@@ -74,20 +74,6 @@ export interface MarketSyncResult {
  */
 export async function syncAllBlocks(baseDir: string): Promise<SyncResult> {
   const conn = await getConnection(baseDir);
-
-  // When lock contention forces read-only fallback, skip sync writes.
-  // This allows concurrent MCP sessions to continue querying safely.
-  if (isReadOnlyConnection()) {
-    return {
-      blocksProcessed: 0,
-      blocksSynced: 0,
-      blocksUnchanged: 0,
-      blocksDeleted: 0,
-      errors: [],
-      results: [],
-    };
-  }
-
   const results: BlockSyncResult[] = [];
   const errors: Array<{ blockId: string; error: string }> = [];
 
@@ -140,7 +126,6 @@ export async function syncBlock(
   baseDir: string
 ): Promise<BlockSyncResult> {
   const conn = await getConnection(baseDir);
-  const readOnly = isReadOnlyConnection();
   const blockPath = path.join(baseDir, blockId);
 
   // Check if folder exists
@@ -150,16 +135,10 @@ export async function syncBlock(
     // Block folder doesn't exist - if it was synced before, clean it up
     const existing = await getSyncMetadata(conn, blockId);
     if (existing) {
-      if (!readOnly) {
-        await cleanupDeletedBlocks(conn, [blockId]);
-      }
+      await cleanupDeletedBlocks(conn, [blockId]);
       return { blockId, status: "deleted" };
     }
     return { blockId, status: "error", error: `Block folder not found: ${blockId}` };
-  }
-
-  if (readOnly) {
-    return { blockId, status: "unchanged" };
   }
 
   return syncBlockInternal(conn, blockId, blockPath);
@@ -178,16 +157,6 @@ export async function syncMarketData(
   baseDir: string
 ): Promise<MarketSyncResult> {
   const conn = await getConnection(baseDir);
-  if (isReadOnlyConnection()) {
-    return {
-      filesProcessed: 0,
-      filesSynced: 0,
-      filesUnchanged: 0,
-      rowsInserted: 0,
-      errors: [],
-    };
-  }
-
   const results = await syncMarketDataInternal(conn, baseDir);
 
   // Aggregate results
