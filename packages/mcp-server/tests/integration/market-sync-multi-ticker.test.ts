@@ -107,14 +107,14 @@ describe("Market Sync Multi-Ticker", () => {
     expect(vixTickers.getRows()).toEqual([["ALL"]]);
   });
 
-  it("infers trade tickers from legs during block sync", async () => {
+  it("infers trade tickers from explicit Ticker column during block sync", async () => {
     await writeCsv(
       testDir,
       "mixed-block/tradelog.csv",
-      TRADE_HEADERS,
+      `${TRADE_HEADERS},Ticker`,
       [
-        "2024-01-02,09:35:00,2024-01-02,15:30:00,2.50,0.50,SPX 4800P/4750P,250,1,200,Strat A,1.50,1.50,Target,10200,5000",
-        "2024-01-03,09:35:00,2024-01-03,15:30:00,3.00,0.70,MSFT 400P/390P,300,1,230,Strat B,1.50,1.50,Target,10430,10000",
+        "2024-01-02,09:35:00,2024-01-02,15:30:00,2.50,0.50,SPX 4800P/4750P,250,1,200,Strat A,1.50,1.50,Target,10200,5000,SPX",
+        "2024-01-03,09:35:00,2024-01-03,15:30:00,3.00,0.70,MSFT 400P/390P,300,1,230,Strat B,1.50,1.50,Target,10430,10000,MSFT",
       ]
     );
 

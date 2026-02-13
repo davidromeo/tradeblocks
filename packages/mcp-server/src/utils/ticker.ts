@@ -33,17 +33,6 @@ export function normalizeTicker(value: string | null | undefined): string | null
 }
 
 /**
- * Parse the underlying ticker from a legs/symbol string.
- * Example: "SPX 5200P/5150P" -> "SPX"
- */
-export function extractTickerFromLegs(legs: string | null | undefined): string | null {
-  if (!legs) return null;
-  const match = legs.trim().match(/^([A-Za-z\^$][A-Za-z0-9._\-$^]*)/);
-  if (!match) return null;
-  return normalizeTicker(match[1]);
-}
-
-/**
  * Resolve ticker from arbitrary object fields (case/alias tolerant).
  */
 export function resolveTickerFromFields(
@@ -64,12 +53,11 @@ export function resolveTickerFromFields(
  * Resolve ticker for a loaded trade.
  */
 export function resolveTradeTicker(
-  trade: Pick<Trade, "legs" | "customFields">,
+  trade: Pick<Trade, "customFields">,
   fallback: string = DEFAULT_MARKET_TICKER
 ): string {
   return (
     resolveTickerFromFields(trade.customFields as Record<string, unknown> | undefined) ??
-    extractTickerFromLegs(trade.legs) ??
     fallback
   );
 }
@@ -83,7 +71,6 @@ export function resolveTickerFromCsvRow(
 ): string {
   return (
     resolveTickerFromFields(row as Record<string, unknown>) ??
-    extractTickerFromLegs(row["Legs"] || row["Symbol"] || row["symbol"]) ??
     fallback
   );
 }

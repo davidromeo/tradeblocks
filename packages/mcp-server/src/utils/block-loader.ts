@@ -141,7 +141,6 @@ const KNOWN_TRADE_COLUMNS = new Set([
   "Time Opened",
   "Opening Price",
   "Legs",
-  "Symbol",
   "Premium",
   "Closing Price",
   "Date Closed",
