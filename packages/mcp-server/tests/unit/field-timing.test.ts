@@ -22,9 +22,9 @@ import {
 const spxColumns = SCHEMA_DESCRIPTIONS.market.tables.spx_daily.columns;
 
 describe('Field Classification', () => {
-  test('every spx_daily column except date has a timing annotation', () => {
+  test('every classified spx_daily column has a timing annotation', () => {
     for (const [name, desc] of Object.entries(spxColumns) as [string, { timing?: string }][]) {
-      if (name === 'date') {
+      if (name === 'date' || name === 'ticker') {
         expect(desc.timing).toBeUndefined();
         continue;
       }
@@ -46,14 +46,16 @@ describe('Derived Sets', () => {
       ...STATIC_FIELDS,
     ]);
 
-    // Get all non-date columns
-    const nonDateColumns = Object.keys(spxColumns).filter(name => name !== 'date');
+    // Get all classified columns (exclude key columns without timing classification)
+    const classifiedColumns = Object.keys(spxColumns).filter(
+      name => name !== 'date' && name !== 'ticker'
+    );
 
     expect(allClassified.size).toBe(55);
-    expect(allClassified.size).toBe(nonDateColumns.length);
+    expect(allClassified.size).toBe(classifiedColumns.length);
 
-    // Every non-date column should be in exactly one set
-    for (const col of nonDateColumns) {
+    // Every classified column should be in exactly one set
+    for (const col of classifiedColumns) {
       expect(allClassified.has(col)).toBe(true);
     }
   });
@@ -106,10 +108,13 @@ describe('Derived Sets', () => {
     expect(CLOSE_KNOWN_FIELDS.has('Consecutive_Days')).toBe(true);
   });
 
-  test('date is not in any derived set', () => {
+  test('date and ticker are not in any derived set', () => {
     expect(OPEN_KNOWN_FIELDS.has('date')).toBe(false);
     expect(CLOSE_KNOWN_FIELDS.has('date')).toBe(false);
     expect(STATIC_FIELDS.has('date')).toBe(false);
+    expect(OPEN_KNOWN_FIELDS.has('ticker')).toBe(false);
+    expect(CLOSE_KNOWN_FIELDS.has('ticker')).toBe(false);
+    expect(STATIC_FIELDS.has('ticker')).toBe(false);
   });
 });
 
@@ -167,6 +172,19 @@ describe('buildLookaheadFreeQuery', () => {
     expect(sql).toContain('WHERE 1=0');
     expect(params).toEqual([]);
   });
+
+  test('supports ticker+date lookup keys with ticker-partitioned LAG', () => {
+    const { sql, params } = buildLookaheadFreeQuery([
+      { ticker: 'SPX', date: '2025-01-06' },
+      { ticker: 'MSFT', date: '2025-01-06' },
+    ]);
+
+    expect(sql).toContain('WITH requested(ticker, date) AS');
+    expect(sql).toContain('PARTITION BY ticker ORDER BY date');
+    expect(sql).toContain('lagged.ticker = requested.ticker');
+    expect(sql).toContain('lagged.date = requested.date');
+    expect(params).toEqual(['SPX', '2025-01-06', 'MSFT', '2025-01-06']);
+  });
 });
 
 describe('buildOutcomeQuery', () => {
@@ -202,5 +220,18 @@ describe('buildOutcomeQuery', () => {
     for (const field of CLOSE_KNOWN_FIELDS) {
       expect(sql).toContain(`"${field}"`);
     }
+  });
+
+  test('supports ticker+date outcome queries', () => {
+    const { sql, params } = buildOutcomeQuery([
+      { ticker: 'SPX', date: '2025-01-06' },
+      { ticker: 'MSFT', date: '2025-01-07' },
+    ]);
+
+    expect(sql).toContain('WITH requested(ticker, date) AS');
+    expect(sql).toContain('SELECT m.ticker, m.date');
+    expect(sql).toContain('m.ticker = requested.ticker');
+    expect(sql).toContain('m.date = requested.date');
+    expect(params).toEqual(['SPX', '2025-01-06', 'MSFT', '2025-01-07']);
   });
 });

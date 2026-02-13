@@ -268,7 +268,14 @@ npm run mcpb:pack
 
 ## Market Data (Optional)
 
-For market context (VIX regimes, intraday timing, gap analysis), export SPX/VIX data from TradingView using the included PineScript indicators. The MCP server syncs these CSVs into DuckDB automatically.
+For market context (VIX regimes, intraday timing, gap analysis), export underlying/VIX data from TradingView using the included PineScript indicators. The MCP server syncs these CSVs into DuckDB automatically.
+
+Supported `_marketdata` filename patterns:
+- `<ticker>_daily.csv` (example: `spx_daily.csv`, `msft_daily.csv`)
+- `<ticker>_15min.csv` (example: `spx_15min.csv`, `msft_15min.csv`)
+- `<scope>_vix_intraday.csv` or `vix_intraday.csv` (global scope `ALL`)
+
+Market tables are keyed by `(ticker, date)`, and trade enrichment joins on ticker + date.
 
 See [scripts/README.md](../../scripts/README.md) for setup instructions, field documentation, and the 3 PineScript indicators.
 

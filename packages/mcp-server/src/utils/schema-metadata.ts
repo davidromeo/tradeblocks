@@ -207,11 +207,15 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
     tables: {
       spx_daily: {
         description:
-          "Daily SPX data with technical indicators, VIX context, highlow timing, and regime classifications. JOIN with trades on date_opened = date.",
-        keyColumns: ["date", "Vol_Regime", "VIX_Close", "Total_Return_Pct", "Trend_Score", "High_Time", "Reversal_Type"],
+          "Daily underlying data with technical indicators, VIX context, highlow timing, and regime classifications. JOIN with trades on ticker+date (e.g., t.ticker = m.ticker AND t.date_opened = m.date).",
+        keyColumns: ["ticker", "date", "Vol_Regime", "VIX_Close", "Total_Return_Pct", "Trend_Score", "High_Time", "Reversal_Type"],
         columns: {
+          ticker: {
+            description: "Underlying ticker symbol (part of composite primary key with date).",
+            hypothesis: true,
+          },
           date: {
-            description: "Trading date (VARCHAR, format YYYY-MM-DD). Primary key.",
+            description: "Trading date (VARCHAR, format YYYY-MM-DD). Composite primary key with ticker.",
             hypothesis: true,
           },
           Prior_Close: {
@@ -500,11 +504,15 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
       },
       spx_15min: {
         description:
-          "15-minute SPX intraday checkpoint data. Includes price at each 15-min interval and MOC (market-on-close) moves.",
-        keyColumns: ["date", "MOC_30min", "Afternoon_Move"],
+          "15-minute underlying intraday checkpoint data. Includes price at each 15-min interval and MOC (market-on-close) moves.",
+        keyColumns: ["ticker", "date", "MOC_30min", "Afternoon_Move"],
         columns: {
+          ticker: {
+            description: "Underlying ticker symbol (part of composite primary key with date).",
+            hypothesis: true,
+          },
           date: {
-            description: "Trading date (VARCHAR, format YYYY-MM-DD). Primary key.",
+            description: "Trading date (VARCHAR, format YYYY-MM-DD). Composite primary key with ticker.",
             hypothesis: true,
           },
           open: {
@@ -668,10 +676,14 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
       vix_intraday: {
         description:
           "VIX intraday data. 30-minute VIX checkpoints throughout the day plus movement metrics.",
-        keyColumns: ["date", "VIX_Spike_Flag", "VIX_Crush_Flag", "VIX_Full_Day_Move"],
+        keyColumns: ["ticker", "date", "VIX_Spike_Flag", "VIX_Crush_Flag", "VIX_Full_Day_Move"],
         columns: {
+          ticker: {
+            description: "Ticker namespace for VIX rows (e.g., ALL for global VIX files).",
+            hypothesis: true,
+          },
           date: {
-            description: "Trading date (VARCHAR, format YYYY-MM-DD). Primary key.",
+            description: "Trading date (VARCHAR, format YYYY-MM-DD). Composite primary key with ticker.",
             hypothesis: true,
           },
           open: {

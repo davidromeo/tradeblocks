@@ -2,12 +2,13 @@
  * Market Data Sync
  *
  * Synchronizes market data from _marketdata/ folder to DuckDB.
- * Uses merge/preserve strategy: INSERT new dates, keep existing dates.
+ * Uses merge/preserve strategy: INSERT new (ticker, date) keys, keep existing rows.
  *
- * Market data CSV files:
- *   - spx_daily.csv    -> market.spx_daily (55 fields incl. highlow timing + VIX enrichment)
- *   - spx_15min.csv    -> market.spx_15min
- *   - vix_intraday.csv -> market.vix_intraday
+ * Supported market data CSV filename patterns:
+ *   - <ticker>_daily.csv        -> market.spx_daily
+ *   - <ticker>_15min.csv        -> market.spx_15min
+ *   - <ticker>_vix_intraday.csv -> market.vix_intraday
+ *   - vix_intraday.csv          -> market.vix_intraday (ticker = ALL)
  */
 
 import type { DuckDBConnection } from "@duckdb/node-api";
@@ -15,19 +16,23 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { hashFileContent } from "./hasher.js";
 import { getMarketSyncMetadata, upsertMarketSyncMetadata } from "./metadata.js";
+import {
+  DEFAULT_MARKET_TICKER,
+  GLOBAL_MARKET_TICKER,
+  normalizeTicker,
+  resolveTickerFromCsvRow,
+} from "../utils/ticker.js";
 
 // =============================================================================
 // Types & Configuration
 // =============================================================================
 
-/**
- * Map CSV filenames to table names and CSV date column
- */
-const MARKET_DATA_FILES: Record<string, { table: string; dateColumn: string }> = {
-  "spx_daily.csv": { table: "market.spx_daily", dateColumn: "time" },
-  "spx_15min.csv": { table: "market.spx_15min", dateColumn: "time" },
-  "vix_intraday.csv": { table: "market.vix_intraday", dateColumn: "time" },
-};
+interface MarketFileConfig {
+  fileName: string;
+  table: string;
+  dateColumn: string;
+  defaultTicker: string;
+}
 
 /**
  * Result of syncing a single market data file
@@ -38,6 +43,72 @@ export interface SingleFileSyncResult {
   rowsInserted?: number;
   rowsSkipped?: number;
   error?: string;
+}
+
+// =============================================================================
+// File Discovery
+// =============================================================================
+
+function detectMarketFileConfig(fileName: string): MarketFileConfig | null {
+  const lowerName = fileName.toLowerCase();
+
+  const dailyMatch = lowerName.match(/^([a-z0-9._^$-]+)_daily\.csv$/i);
+  if (dailyMatch) {
+    return {
+      fileName,
+      table: "market.spx_daily",
+      dateColumn: "time",
+      defaultTicker: normalizeTicker(dailyMatch[1]) ?? DEFAULT_MARKET_TICKER,
+    };
+  }
+
+  const intradayMatch = lowerName.match(/^([a-z0-9._^$-]+)_15min\.csv$/i);
+  if (intradayMatch) {
+    return {
+      fileName,
+      table: "market.spx_15min",
+      dateColumn: "time",
+      defaultTicker: normalizeTicker(intradayMatch[1]) ?? DEFAULT_MARKET_TICKER,
+    };
+  }
+
+  const tickerVixMatch = lowerName.match(/^([a-z0-9._^$-]+)_vix_intraday\.csv$/i);
+  if (tickerVixMatch) {
+    return {
+      fileName,
+      table: "market.vix_intraday",
+      dateColumn: "time",
+      defaultTicker: normalizeTicker(tickerVixMatch[1]) ?? GLOBAL_MARKET_TICKER,
+    };
+  }
+
+  if (lowerName === "vix_intraday.csv") {
+    return {
+      fileName,
+      table: "market.vix_intraday",
+      dateColumn: "time",
+      defaultTicker: GLOBAL_MARKET_TICKER,
+    };
+  }
+
+  return null;
+}
+
+async function discoverMarketDataFiles(marketDataPath: string): Promise<MarketFileConfig[]> {
+  const entries = await fs.readdir(marketDataPath, { withFileTypes: true });
+  const csvFiles = entries
+    .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".csv"))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  const configs: MarketFileConfig[] = [];
+  for (const fileName of csvFiles) {
+    const config = detectMarketFileConfig(fileName);
+    if (config) {
+      configs.push(config);
+    }
+  }
+  return configs;
 }
 
 // =============================================================================
@@ -52,15 +123,13 @@ export interface SingleFileSyncResult {
  */
 function parseTimestampToDate(timestamp: number): string {
   const date = new Date(timestamp * 1000);
-  // Format as YYYY-MM-DD in Eastern Time (America/New_York)
-  // This handles both EST and EDT automatically
   const formatted = date.toLocaleDateString("en-CA", {
     timeZone: "America/New_York",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  return formatted; // Returns YYYY-MM-DD format
+  return formatted;
 }
 
 // =============================================================================
@@ -95,18 +164,25 @@ function parseCSV(content: string): { headers: string[]; rows: Record<string, st
 // Row Merging
 // =============================================================================
 
+interface MarketInsertRow {
+  ticker: string;
+  date: string;
+  row: Record<string, string>;
+}
+
 /**
  * Insert market data rows using ON CONFLICT DO NOTHING.
  *
- * Uses date as the primary key for conflict detection:
- * - New dates are inserted
- * - Existing dates are preserved (skipped)
+ * Uses (ticker, date) as primary key when ticker column exists:
+ * - New keys are inserted
+ * - Existing keys are preserved (skipped)
  *
  * @param conn - DuckDB connection
  * @param tableName - Fully qualified table name (e.g., "market.spx_daily")
  * @param rows - Parsed CSV rows with header-keyed values
  * @param headers - CSV headers (columns)
  * @param dateColumn - CSV column containing Unix timestamp
+ * @param defaultTicker - Fallback ticker for rows missing ticker fields
  * @returns Count of inserted and skipped rows
  */
 export async function mergeMarketDataRows(
@@ -114,82 +190,85 @@ export async function mergeMarketDataRows(
   tableName: string,
   rows: Record<string, string>[],
   headers: string[],
-  dateColumn: string
+  dateColumn: string,
+  defaultTicker: string
 ): Promise<{ inserted: number; skipped: number }> {
   if (rows.length === 0) {
     return { inserted: 0, skipped: 0 };
   }
 
-  // Get actual table columns from DuckDB schema
-  // This filters out CSV columns that don't exist in the table (e.g., marker columns)
   const [schemaName, tableNameOnly] = tableName.split(".");
   const columnsResult = await conn.runAndReadAll(`
     SELECT column_name
     FROM duckdb_columns()
     WHERE schema_name = '${schemaName}' AND table_name = '${tableNameOnly}'
   `);
-  const tableColumns = new Set(
-    columnsResult.getRows().map((row) => String(row[0]))
-  );
+  const tableColumns = new Set(columnsResult.getRows().map((row) => String(row[0])));
+  const hasTickerColumn = tableColumns.has("ticker");
 
-  // Build column list: only include CSV columns that exist in the table schema
-  // Replace date column with 'date', exclude original date column
+  // Build column list from CSV headers that exist in table schema.
+  // date/ticker are set explicitly and removed from source headers.
   const dbColumns = headers
     .filter((h) => h !== dateColumn)
-    .filter((h) => tableColumns.has(h)) // Only include columns that exist in table
-    .map((h) => {
-      // Column names are used as-is (they match CSV headers)
-      return h;
-    });
+    .filter((h) => !["ticker", "Ticker", "symbol", "Symbol", "underlying", "Underlying"].includes(h))
+    .filter((h) => tableColumns.has(h));
 
-  // Add 'date' as first column
-  const allColumns = ["date", ...dbColumns];
+  const allColumns = hasTickerColumn ? ["ticker", "date", ...dbColumns] : ["date", ...dbColumns];
 
-  // Track dates we're inserting to calculate skips
-  const dateRows = new Map<string, Record<string, string>>();
-
-  // Deduplicate by date: keep last row for each date (most complete data)
+  const dedupedRows = new Map<string, MarketInsertRow>();
   for (const row of rows) {
     const timestamp = parseInt(row[dateColumn], 10);
     if (isNaN(timestamp)) continue;
+
     const date = parseTimestampToDate(timestamp);
-    dateRows.set(date, row);
+    const ticker = hasTickerColumn
+      ? resolveTickerFromCsvRow(row, defaultTicker)
+      : defaultTicker;
+    const key = hasTickerColumn ? `${ticker}|${date}` : date;
+
+    // Keep the last row for each key (latest export row wins).
+    dedupedRows.set(key, { ticker, date, row });
   }
 
-  const uniqueRows = Array.from(dateRows.entries());
+  const uniqueRows = Array.from(dedupedRows.values());
   const totalRows = uniqueRows.length;
+  if (totalRows === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
 
-  // Get current row count (COUNT returns BigInt, convert to number)
   const beforeResult = await conn.runAndReadAll(`SELECT COUNT(*) FROM ${tableName}`);
   const beforeCount = Number(beforeResult.getRows()[0][0]);
 
-  // Process in batches of 500
   const BATCH_SIZE = 500;
-
   for (let i = 0; i < uniqueRows.length; i += BATCH_SIZE) {
     const batch = uniqueRows.slice(i, i + BATCH_SIZE);
 
-    // Build VALUES clause with parameterized placeholders
-    // DuckDB uses $1, $2, ... for parameters
     const values: (string | number | null)[] = [];
     const valuePlaceholders: string[] = [];
 
-    for (const [date, row] of batch) {
+    for (const item of batch) {
       const rowPlaceholders: string[] = [];
 
-      // Add date
-      values.push(date);
+      if (hasTickerColumn) {
+        values.push(item.ticker);
+        rowPlaceholders.push(`$${values.length}`);
+      }
+
+      values.push(item.date);
       rowPlaceholders.push(`$${values.length}`);
 
-      // Add other columns
       for (const col of dbColumns) {
-        const val = row[col];
-        if (val === "" || val === "NaN" || val === "NA" || val === undefined) {
+        const rawVal = item.row[col];
+        if (
+          rawVal === "" ||
+          rawVal === "NaN" ||
+          rawVal === "NA" ||
+          rawVal === undefined
+        ) {
           values.push(null);
         } else {
-          // Try to parse as number, otherwise keep as string
-          const numVal = parseFloat(val);
-          values.push(isNaN(numVal) ? val : numVal);
+          const numVal = parseFloat(rawVal);
+          values.push(isNaN(numVal) ? rawVal : numVal);
         }
         rowPlaceholders.push(`$${values.length}`);
       }
@@ -197,20 +276,20 @@ export async function mergeMarketDataRows(
       valuePlaceholders.push(`(${rowPlaceholders.join(", ")})`);
     }
 
-    // Build and execute INSERT with ON CONFLICT DO NOTHING
     const columnList = allColumns.join(", ");
-    const sql = `INSERT INTO ${tableName} (${columnList}) VALUES ${valuePlaceholders.join(", ")} ON CONFLICT (date) DO NOTHING`;
+    const conflictTarget = hasTickerColumn ? "(ticker, date)" : "(date)";
+    const sql =
+      `INSERT INTO ${tableName} (${columnList}) VALUES ${valuePlaceholders.join(", ")} ` +
+      `ON CONFLICT ${conflictTarget} DO NOTHING`;
 
     await conn.run(sql, values);
   }
 
-  // Get new row count to calculate actual insertions (COUNT returns BigInt, convert to number)
   const afterResult = await conn.runAndReadAll(`SELECT COUNT(*) FROM ${tableName}`);
   const afterCount = Number(afterResult.getRows()[0][0]);
 
   const inserted = afterCount - beforeCount;
   const skipped = totalRows - inserted;
-
   return { inserted, skipped };
 }
 
@@ -220,63 +299,43 @@ export async function mergeMarketDataRows(
 
 /**
  * Sync a single market data file to DuckDB.
- *
- * Flow:
- * 1. Hash the file content
- * 2. Compare with stored metadata hash
- * 3. If unchanged, return early
- * 4. If changed, parse CSV and merge rows
- * 5. Update metadata with new hash and max date
  */
 async function syncMarketFile(
   conn: DuckDBConnection,
   marketDataPath: string,
-  fileName: string
+  config: MarketFileConfig
 ): Promise<SingleFileSyncResult> {
-  const config = MARKET_DATA_FILES[fileName];
-  if (!config) {
-    return { file: fileName, status: "error", error: `Unknown market data file: ${fileName}` };
-  }
-
-  const filePath = path.join(marketDataPath, fileName);
+  const filePath = path.join(marketDataPath, config.fileName);
 
   try {
-    // Check if file exists
     try {
       await fs.access(filePath);
     } catch {
-      return { file: fileName, status: "error", error: `File not found: ${filePath}` };
+      return { file: config.fileName, status: "error", error: `File not found: ${filePath}` };
     }
 
-    // Hash the file
     const contentHash = await hashFileContent(filePath);
+    const existingMeta = await getMarketSyncMetadata(conn, config.fileName);
 
-    // Get existing metadata
-    const existingMeta = await getMarketSyncMetadata(conn, fileName);
-
-    // If hash matches, file is unchanged
     if (existingMeta && existingMeta.content_hash === contentHash) {
-      return { file: fileName, status: "unchanged" };
+      return { file: config.fileName, status: "unchanged" };
     }
 
-    // Parse CSV
     const content = await fs.readFile(filePath, "utf-8");
     const { headers, rows } = parseCSV(content);
-
     if (rows.length === 0) {
-      return { file: fileName, status: "error", error: "CSV has no data rows" };
+      return { file: config.fileName, status: "error", error: "CSV has no data rows" };
     }
 
-    // Merge rows into table
     const { inserted, skipped } = await mergeMarketDataRows(
       conn,
       config.table,
       rows,
       headers,
-      config.dateColumn
+      config.dateColumn,
+      config.defaultTicker
     );
 
-    // Calculate max date from the data
     let maxDate: string | null = null;
     for (const row of rows) {
       const timestamp = parseInt(row[config.dateColumn], 10);
@@ -288,23 +347,22 @@ async function syncMarketFile(
       }
     }
 
-    // Update metadata
     await upsertMarketSyncMetadata(conn, {
-      file_name: fileName,
+      file_name: config.fileName,
       content_hash: contentHash,
       max_date: maxDate,
       synced_at: new Date(),
     });
 
     return {
-      file: fileName,
+      file: config.fileName,
       status: "synced",
       rowsInserted: inserted,
       rowsSkipped: skipped,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    return { file: fileName, status: "error", error: msg };
+    return { file: config.fileName, status: "error", error: msg };
   }
 }
 
@@ -313,11 +371,11 @@ async function syncMarketFile(
 // =============================================================================
 
 /**
- * Sync all market data files from _marketdata folder.
+ * Sync all recognized market data files from _marketdata folder.
  *
  * @param conn - DuckDB connection
  * @param baseDir - Base data directory (contains _marketdata/)
- * @returns Array of sync results for each file
+ * @returns Array of sync results for each recognized file
  */
 export async function syncMarketDataInternal(
   conn: DuckDBConnection,
@@ -325,22 +383,20 @@ export async function syncMarketDataInternal(
 ): Promise<SingleFileSyncResult[]> {
   const marketDataPath = path.join(baseDir, "_marketdata");
 
-  // Check if _marketdata directory exists
   try {
     const stats = await fs.stat(marketDataPath);
     if (!stats.isDirectory()) {
       return [];
     }
   } catch {
-    // Directory doesn't exist - return empty results
     return [];
   }
 
-  // Sync each known market data file
+  const configs = await discoverMarketDataFiles(marketDataPath);
   const results: SingleFileSyncResult[] = [];
 
-  for (const fileName of Object.keys(MARKET_DATA_FILES)) {
-    const result = await syncMarketFile(conn, marketDataPath, fileName);
+  for (const config of configs) {
+    const result = await syncMarketFile(conn, marketDataPath, config);
     results.push(result);
   }
 

@@ -3,6 +3,12 @@
  *
  * Higher-order functions that wrap MCP tool handlers with automatic
  * sync-before-query behavior. Eliminates sync boilerplate from tools.
+ *
+ * Connection lifecycle per tool call:
+ *   1. upgradeToReadWrite (retries + RO fallback if another session holds the lock)
+ *   2. If RW: sync data → downgradeToReadOnly
+ *      If RO fallback: skip sync, use existing data
+ *   3. Handler runs on read-only connection
  */
 
 import {
@@ -13,6 +19,7 @@ import {
   type SyncResult,
   type MarketSyncResult,
 } from "../../sync/index.js";
+import { upgradeToReadWrite, downgradeToReadOnly, getConnectionMode } from "../../db/connection.js";
 
 // MCP tool response types - index signature required for SDK compatibility
 interface ToolError {
@@ -47,7 +54,19 @@ export function withSyncedBlock<TInput extends { blockId: string }, TOutput>(
   handler: (input: TInput, ctx: SingleBlockContext) => Promise<TOutput>
 ): (input: TInput) => Promise<TOutput | ToolError> {
   return async (input: TInput) => {
-    const syncResult = await syncBlock(input.blockId, baseDir);
+    await upgradeToReadWrite(baseDir);
+    let syncResult: BlockSyncResult;
+
+    if (getConnectionMode() === "read_write") {
+      try {
+        syncResult = await syncBlock(input.blockId, baseDir);
+      } finally {
+        await downgradeToReadOnly(baseDir);
+      }
+    } else {
+      // RO fallback — another session holds the write lock, skip sync
+      syncResult = { blockId: input.blockId, status: "unchanged" };
+    }
 
     if (syncResult.status === "deleted") {
       return {
@@ -97,34 +116,43 @@ export function withSyncedBlocks<
 
     const syncResults = new Map<string, BlockSyncResult>();
 
-    for (const blockId of blockIds) {
-      const result = await syncBlock(blockId, baseDir);
-      syncResults.set(blockId, result);
+    await upgradeToReadWrite(baseDir);
 
-      if (result.status === "deleted") {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Block '${blockId}' no longer exists (folder was deleted)`,
-            },
-          ],
-          isError: true as const,
-        };
-      }
+    if (getConnectionMode() === "read_write") {
+      try {
+        for (const blockId of blockIds) {
+          const result = await syncBlock(blockId, baseDir);
+          syncResults.set(blockId, result);
 
-      if (result.status === "error" && result.error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Sync error for block '${blockId}': ${result.error}`,
-            },
-          ],
-          isError: true as const,
-        };
+          if (result.status === "deleted") {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Block '${blockId}' no longer exists (folder was deleted)`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
+
+          if (result.status === "error" && result.error) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Sync error for block '${blockId}': ${result.error}`,
+                },
+              ],
+              isError: true as const,
+            };
+          }
+        }
+      } finally {
+        await downgradeToReadOnly(baseDir);
       }
     }
+    // RO fallback: syncResults stays empty — handler queries existing data
 
     return handler(input, { syncResults, baseDir });
   };
@@ -139,8 +167,35 @@ export function withFullSync<TInput, TOutput>(
   handler: (input: TInput, ctx: FullSyncContext) => Promise<TOutput>
 ): (input: TInput) => Promise<TOutput> {
   return async (input: TInput) => {
-    const blockSyncResult = await syncAllBlocks(baseDir);
-    const marketSyncResult = await syncMarketData(baseDir);
+    await upgradeToReadWrite(baseDir);
+    let blockSyncResult: SyncResult;
+    let marketSyncResult: MarketSyncResult;
+
+    if (getConnectionMode() === "read_write") {
+      try {
+        blockSyncResult = await syncAllBlocks(baseDir);
+        marketSyncResult = await syncMarketData(baseDir);
+      } finally {
+        await downgradeToReadOnly(baseDir);
+      }
+    } else {
+      // RO fallback — another session holds the write lock, skip sync
+      blockSyncResult = {
+        blocksProcessed: 0,
+        blocksSynced: 0,
+        blocksUnchanged: 0,
+        blocksDeleted: 0,
+        errors: [],
+        results: [],
+      };
+      marketSyncResult = {
+        filesProcessed: 0,
+        filesSynced: 0,
+        filesUnchanged: 0,
+        rowsInserted: 0,
+        errors: [],
+      };
+    }
 
     return handler(input, { blockSyncResult, marketSyncResult, baseDir });
   };

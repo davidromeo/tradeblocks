@@ -5,9 +5,16 @@
  * The connection is created on first getConnection() call and reused
  * for subsequent calls until closeConnection() is called.
  *
+ * DuckDB is single-process: only one process can open a database file at a time
+ * (even read-only fails when another process holds a write lock with an active WAL).
+ * Lock recovery handles stale processes from crashed Claude Code sessions by detecting
+ * orphaned MCP processes (PPID=1) and terminating them before retrying.
+ *
  * Configuration via environment variables:
  *   DUCKDB_MEMORY_LIMIT - Memory limit (default: 512MB)
  *   DUCKDB_THREADS      - Number of threads (default: 2)
+ *   DUCKDB_LOCK_RECOVERY - Force-kill ANY lock-holding tradeblocks-mcp (default: false)
+ *   DUCKDB_LOCK_RECOVERY_TIMEOUT_MS - Wait time for SIGTERM (default: 1500)
  *
  * Security:
  *   - enable_external_access is disabled to prevent remote URL fetching
@@ -28,6 +35,10 @@ import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable, ensur
 let instance: DuckDBInstance | null = null;
 let connection: DuckDBConnection | null = null;
 let connectionMode: "read_write" | "read_only" | null = null;
+let schemaInitialized = false;
+let storedDbPath: string | null = null;
+let storedThreads: string | null = null;
+let storedMemoryLimit: string | null = null;
 const execFileAsync = promisify(execFile);
 
 function isLockError(message: string): boolean {
@@ -55,6 +66,16 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+async function getProcessParentPid(pid: number): Promise<number | null> {
+  try {
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "ppid="]);
+    const ppid = parseInt(stdout.trim(), 10);
+    return Number.isFinite(ppid) ? ppid : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getProcessCommand(pid: number): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="]);
@@ -78,7 +99,8 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boole
 
 async function tryRecoverLockByTerminatingStaleProcess(
   errorMessage: string,
-  dbPath: string
+  dbPath: string,
+  forceRecovery: boolean
 ): Promise<boolean> {
   const lockHolderPid = parseLockHolderPid(errorMessage);
   if (!lockHolderPid || lockHolderPid === process.pid) {
@@ -103,6 +125,16 @@ async function tryRecoverLockByTerminatingStaleProcess(
     return false;
   }
 
+  // Check if the lock holder is orphaned (parent died, reparented to init/launchd PID 1).
+  // Orphaned processes are definitively stale — their Claude session is gone.
+  // Only kill non-orphaned processes if forceRecovery is explicitly enabled.
+  const ppid = await getProcessParentPid(lockHolderPid);
+  const orphaned = ppid === 1;
+  if (!orphaned && !forceRecovery) {
+    return false;
+  }
+
+  const reason = orphaned ? "orphaned" : "force-recovery";
   const timeoutMs = Number.parseInt(process.env.DUCKDB_LOCK_RECOVERY_TIMEOUT_MS || "1500", 10);
 
   try {
@@ -118,7 +150,7 @@ async function tryRecoverLockByTerminatingStaleProcess(
 
   if (exited) {
     console.error(
-      `Recovered DuckDB lock at ${dbPath} by stopping stale tradeblocks-mcp process PID ${lockHolderPid}.`
+      `Recovered DuckDB lock at ${dbPath} by stopping ${reason} tradeblocks-mcp process PID ${lockHolderPid}.`
     );
   }
 
@@ -136,19 +168,22 @@ async function openReadWriteConnection(
     enable_external_access: "false",
   });
   connection = await instance.connect();
-
-  // Create schemas for organizing tables
-  // trades schema: block data, trade records, daily logs
-  // market schema: SPY prices, VIX data, market context
-  await connection.run("CREATE SCHEMA IF NOT EXISTS trades");
-  await connection.run("CREATE SCHEMA IF NOT EXISTS market");
-
-  // Ensure sync metadata and data tables exist
-  await ensureSyncTables(connection);
-  await ensureTradeDataTable(connection);
-  await ensureReportingDataTable(connection);
-  await ensureMarketDataTables(connection);
   connectionMode = "read_write";
+
+  if (!schemaInitialized) {
+    // Create schemas for organizing tables
+    // trades schema: block data, trade records, daily logs
+    // market schema: SPY prices, VIX data, market context
+    await connection.run("CREATE SCHEMA IF NOT EXISTS trades");
+    await connection.run("CREATE SCHEMA IF NOT EXISTS market");
+
+    // Ensure sync metadata and data tables exist
+    await ensureSyncTables(connection);
+    await ensureTradeDataTable(connection);
+    await ensureReportingDataTable(connection);
+    await ensureMarketDataTables(connection);
+    schemaInitialized = true;
+  }
 
   return connection;
 }
@@ -201,8 +236,19 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
   // Configuration from environment with sensible defaults
   const threads = process.env.DUCKDB_THREADS || "2";
   const memoryLimit = process.env.DUCKDB_MEMORY_LIMIT || "512MB";
-  const readOnlyFallbackEnabled = (process.env.DUCKDB_READONLY_FALLBACK ?? "true") !== "false";
-  const lockRecoveryEnabled = (process.env.DUCKDB_LOCK_RECOVERY ?? "true") !== "false";
+
+  // Reset schema flag if database path changed (different data directory)
+  if (storedDbPath && storedDbPath !== dbPath) {
+    schemaInitialized = false;
+  }
+
+  // Store config for reuse by upgrade/downgrade
+  storedDbPath = dbPath;
+  storedThreads = threads;
+  storedMemoryLimit = memoryLimit;
+  // DUCKDB_LOCK_RECOVERY=true force-kills ANY lock-holding tradeblocks-mcp process.
+  // Without it, only orphaned processes (PPID=1, parent died) are auto-killed.
+  const forceRecovery = (process.env.DUCKDB_LOCK_RECOVERY ?? "false") !== "false";
 
   try {
     return await openReadWriteConnection(dbPath, threads, memoryLimit);
@@ -210,10 +256,10 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
     // Provide clear error message for common issues
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Optional lock recovery: if another stale tradeblocks-mcp process is holding the DB lock,
-    // terminate it and retry once in read-write mode.
-    if (lockRecoveryEnabled && isLockError(errorMessage)) {
-      const recovered = await tryRecoverLockByTerminatingStaleProcess(errorMessage, dbPath);
+    // Lock recovery: auto-kill orphaned tradeblocks-mcp processes (PPID=1) that hold the lock.
+    // With DUCKDB_LOCK_RECOVERY=true, also kills non-orphaned holders (force mode).
+    if (isLockError(errorMessage)) {
+      const recovered = await tryRecoverLockByTerminatingStaleProcess(errorMessage, dbPath, forceRecovery);
       if (recovered) {
         try {
           return await openReadWriteConnection(dbPath, threads, memoryLimit);
@@ -225,28 +271,6 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
             `Failed to initialize DuckDB at ${dbPath} after lock recovery: ${recoveryMessage}`
           );
         }
-      }
-    }
-
-    // Optional lock fallback: allow concurrent read access across multiple MCP processes
-    if (readOnlyFallbackEnabled && isLockError(errorMessage)) {
-      try {
-        await openReadOnlyConnection(dbPath, threads, memoryLimit);
-
-        console.error(
-          `DuckDB lock detected at ${dbPath}; opened in READ_ONLY fallback mode. ` +
-            `Sync/update operations will be skipped in this process.`
-        );
-        return connection as DuckDBConnection;
-      } catch (readOnlyError) {
-        // Fall through to normal error handling with the read-only failure context
-        const readOnlyErrorMessage =
-          readOnlyError instanceof Error ? readOnlyError.message : String(readOnlyError);
-        resetConnectionState();
-        throw new Error(
-          `Failed to initialize DuckDB at ${dbPath}: ${errorMessage}. ` +
-            `Read-only fallback also failed: ${readOnlyErrorMessage}`
-        );
       }
     }
 
@@ -293,6 +317,74 @@ export async function closeConnection(): Promise<void> {
   // DuckDB instance doesn't have explicit close - releasing reference is sufficient
   instance = null;
   connectionMode = null;
+  // Note: schemaInitialized and stored config are NOT reset — schema persists on disk
+  // and config is needed for upgrade/downgrade cycles
+}
+
+/**
+ * Upgrade the connection to read-write mode for sync/write operations.
+ * No-op if already in read-write mode.
+ * Retries with backoff if another session briefly holds the write lock (during sync).
+ * Falls back to read-only if the lock can't be acquired (another session is active).
+ * Callers should check getConnectionMode() to determine if sync should be skipped.
+ */
+export async function upgradeToReadWrite(dataDir: string): Promise<DuckDBConnection> {
+  if (connectionMode === "read_write" && connection) return connection;
+  await closeConnection();
+
+  // Try RW with retries — another session may briefly hold the lock during its own sync
+  const maxRetries = 2;
+  const retryDelayMs = 500;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await getConnection(dataDir);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!isLockError(msg)) throw error;
+      lastError = error instanceof Error ? error : new Error(msg);
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+      }
+    }
+  }
+
+  // RW retries exhausted — fall back to read-only (skip sync, use existing data)
+  if (storedDbPath && storedThreads && storedMemoryLimit) {
+    try {
+      await openReadOnlyConnection(storedDbPath, storedThreads, storedMemoryLimit);
+      if (connection) return connection;
+    } catch {
+      // RO also failed (WAL may still exist from active writer)
+    }
+  }
+
+  throw lastError || new Error("Failed to upgrade DuckDB connection to read-write");
+}
+
+/**
+ * Downgrade the connection to read-only mode after sync/write operations.
+ * No-op if already in read-only mode.
+ * Closes the RW connection (checkpoints WAL, releases write lock) and reopens as RO.
+ * Multiple processes can hold RO connections simultaneously.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function downgradeToReadOnly(dataDir: string): Promise<void> {
+  if (connectionMode === "read_only") return;
+  if (!connection) return;
+  await closeConnection();
+  if (storedDbPath && storedThreads && storedMemoryLimit) {
+    await openReadOnlyConnection(storedDbPath, storedThreads, storedMemoryLimit);
+  }
+}
+
+/**
+ * Get the current connection mode.
+ * Used by middleware to determine if sync should be skipped (RO fallback).
+ */
+export function getConnectionMode(): "read_write" | "read_only" | null {
+  return connectionMode;
 }
 
 /**
@@ -303,10 +395,3 @@ export function isConnected(): boolean {
   return connection !== null;
 }
 
-/**
- * Returns whether the active connection is in read-only fallback mode.
- * Useful for disabling sync/write operations when a lock conflict occurs.
- */
-export function isReadOnlyConnection(): boolean {
-  return connectionMode === "read_only";
-}

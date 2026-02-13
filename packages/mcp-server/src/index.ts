@@ -24,7 +24,7 @@ import { registerMarketDataTools } from "./tools/market-data.js";
 import { registerSQLTools } from "./tools/sql.js";
 import { registerSchemaTools } from "./tools/schema.js";
 import { registerEdgeDecayTools } from "./tools/edge-decay.js";
-import { registerResources } from "./resources/index.js";
+import { registerGuideTools } from "./tools/guides.js";
 import {
   installSkills,
   uninstallSkills,
@@ -271,8 +271,8 @@ async function main(): Promise<void> {
   // Used by HTTP transport which needs fresh instances per request (stateless mode)
   const createServer = (): McpServer => {
     const server = new McpServer(
-      { name: "tradeblocks-mcp", version: "0.7.0" },
-      { capabilities: { tools: {}, resources: {} } }
+      { name: "tradeblocks-mcp", version: "1.2.0" },
+      { capabilities: { tools: {} } }
     );
     registerBlockTools(server, resolvedDir);
     registerAnalysisTools(server, resolvedDir);
@@ -283,7 +283,7 @@ async function main(): Promise<void> {
     registerSQLTools(server, resolvedDir);
     registerSchemaTools(server, resolvedDir);
     registerEdgeDecayTools(server, resolvedDir);
-    registerResources(server);
+    registerGuideTools(server);
     return server;
   };
 
@@ -298,6 +298,15 @@ async function main(): Promise<void> {
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(`TradeBlocks MCP ready (stdio). Watching: ${resolvedDir}`);
+
+    // The MCP SDK's StdioServerTransport doesn't listen for stdin close/end.
+    // When the parent process (Claude Code) crashes or is force-quit, stdin EOF's
+    // but this process lingers — holding the DuckDB write lock indefinitely.
+    // Exit cleanly on stdin close so the lock is released.
+    process.stdin.on("end", async () => {
+      await closeConnection();
+      process.exit(0);
+    });
   }
 
   // Graceful shutdown for DuckDB connection

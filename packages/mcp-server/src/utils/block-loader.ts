@@ -136,6 +136,37 @@ function parseNumber(
   return isNaN(parsed) ? defaultValue ?? 0 : parsed;
 }
 
+const KNOWN_TRADE_COLUMNS = new Set([
+  "Date Opened",
+  "Time Opened",
+  "Opening Price",
+  "Legs",
+  "Symbol",
+  "Premium",
+  "Closing Price",
+  "Date Closed",
+  "Time Closed",
+  "Avg. Closing Cost",
+  "Reason For Close",
+  "P/L",
+  "No. of Contracts",
+  "Funds at Close",
+  "Margin Req.",
+  "Strategy",
+  "Opening Commissions + Fees",
+  "Opening comms & fees",
+  "Closing Commissions + Fees",
+  "Closing comms & fees",
+  "Opening Short/Long Ratio",
+  "Closing Short/Long Ratio",
+  "Opening VIX",
+  "Closing VIX",
+  "Gap",
+  "Movement",
+  "Max Profit",
+  "Max Loss",
+]);
+
 /**
  * Parse CSV content into array of record objects
  */
@@ -476,12 +507,13 @@ function convertToTrade(raw: Record<string, string>): Trade | null {
     const rawPremium = (raw["Premium"] || "").replace(/[$,]/g, "").trim();
     const premiumPrecision: Trade["premiumPrecision"] =
       rawPremium && !rawPremium.includes(".") ? "cents" : "dollars";
+    const legs = raw["Legs"] || raw["Symbol"] || "";
 
-    return {
+    const trade: Trade = {
       dateOpened,
       timeOpened: raw["Time Opened"] || "00:00:00",
       openingPrice: parseNumber(raw["Opening Price"]),
-      legs: raw["Legs"] || "",
+      legs,
       premium: parseNumber(raw["Premium"]),
       premiumPrecision,
       closingPrice: raw["Closing Price"]
@@ -523,6 +555,20 @@ function convertToTrade(raw: Record<string, string>): Trade | null {
         : undefined,
       maxLoss: raw["Max Loss"] ? parseNumber(raw["Max Loss"]) : undefined,
     };
+
+    const customFields: Record<string, number | string> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (!KNOWN_TRADE_COLUMNS.has(key) && value !== undefined && value.trim() !== "") {
+        const cleaned = value.replace(/[$,%]/g, "").trim();
+        const parsed = parseFloat(cleaned);
+        customFields[key] = !isNaN(parsed) && isFinite(parsed) ? parsed : value.trim();
+      }
+    }
+    if (Object.keys(customFields).length > 0) {
+      trade.customFields = customFields;
+    }
+
+    return trade;
   } catch {
     return null;
   }

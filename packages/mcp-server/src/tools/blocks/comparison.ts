@@ -12,6 +12,7 @@ import {
   formatCurrency,
 } from "../../utils/output-formatter.js";
 import { PortfolioStatsCalculator } from "@tradeblocks/lib";
+import { resolveTradeTicker } from "../../utils/ticker.js";
 import {
   filterByDateRange,
   filterDailyLogsByDateRange,
@@ -88,17 +89,12 @@ export function registerComparisonBlockTools(
         // Apply date filter
         trades = filterByDateRange(trades, startDate, endDate);
 
-        // Apply ticker filter (check customFields since Trade doesn't have ticker property)
+        // Apply ticker filter (supports both explicit ticker columns and legs-derived symbols)
         if (tickerFilter) {
           const tickerLower = tickerFilter.toLowerCase();
-          trades = trades.filter((t) => {
-            const ticker =
-              t.customFields?.["ticker"] ?? t.customFields?.["Ticker"];
-            return (
-              typeof ticker === "string" &&
-              ticker.toLowerCase() === tickerLower
-            );
-          });
+          trades = trades.filter(
+            (t) => resolveTradeTicker(t).toLowerCase() === tickerLower
+          );
         }
 
         if (trades.length === 0) {

@@ -7,6 +7,35 @@
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+async function tableExists(
+  conn: DuckDBConnection,
+  schemaName: string,
+  tableName: string
+): Promise<boolean> {
+  const result = await conn.runAndReadAll(`
+    SELECT 1
+    FROM duckdb_tables()
+    WHERE schema_name = '${schemaName}' AND table_name = '${tableName}'
+  `);
+  return result.getRows().length > 0;
+}
+
+async function hasColumn(
+  conn: DuckDBConnection,
+  schemaName: string,
+  tableName: string,
+  columnName: string
+): Promise<boolean> {
+  const result = await conn.runAndReadAll(`
+    SELECT 1
+    FROM duckdb_columns()
+    WHERE schema_name = '${schemaName}'
+      AND table_name = '${tableName}'
+      AND column_name = '${columnName}'
+  `);
+  return result.getRows().length > 0;
+}
+
 /**
  * Create sync metadata tables in both trades and market schemas.
  *
@@ -63,9 +92,15 @@ export async function ensureTradeDataTable(conn: DuckDBConnection): Promise<void
       reason_for_close VARCHAR,
       margin_req DOUBLE,
       opening_commissions DOUBLE,
-      closing_commissions DOUBLE
+      closing_commissions DOUBLE,
+      ticker VARCHAR
     )
   `);
+
+  // Backfill schema upgrades on existing databases.
+  if (!(await hasColumn(conn, "trades", "trade_data", "ticker"))) {
+    await conn.run(`ALTER TABLE trades.trade_data ADD COLUMN ticker VARCHAR`);
+  }
 }
 
 /**
@@ -92,47 +127,64 @@ export async function ensureReportingDataTable(conn: DuckDBConnection): Promise<
       closing_price DOUBLE,
       avg_closing_cost DOUBLE,
       reason_for_close VARCHAR,
-      opening_price DOUBLE
+      opening_price DOUBLE,
+      ticker VARCHAR
     )
   `);
+
+  // Backfill schema upgrades on existing databases.
+  if (!(await hasColumn(conn, "trades", "reporting_data", "ticker"))) {
+    await conn.run(`ALTER TABLE trades.reporting_data ADD COLUMN ticker VARCHAR`);
+  }
 }
 
 /**
  * Create market data tables for storing synced market data.
  *
- * Tables use date as PRIMARY KEY for merge/preserve strategy:
+ * Tables use (ticker, date) composite keys for merge/preserve strategy:
  * - New dates are inserted
  * - Existing dates are preserved (ON CONFLICT DO NOTHING)
  *
  * @param conn - Active DuckDB connection
  */
 export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<void> {
-  // Check if spx_daily needs migration (sentinel: High_Time column)
+  // Drop/recreate market tables when old single-ticker schema is detected.
+  // This is a data-safe migration because source CSVs are re-syncable.
   try {
-    const tableCheck = await conn.runAndReadAll(`
-      SELECT 1 FROM duckdb_tables()
-      WHERE schema_name = 'market' AND table_name = 'spx_daily'
-    `);
-    if (tableCheck.getRows().length > 0) {
-      const colCheck = await conn.runAndReadAll(`
-        SELECT 1 FROM duckdb_columns()
-        WHERE schema_name = 'market' AND table_name = 'spx_daily' AND column_name = 'High_Time'
-      `);
-      if (colCheck.getRows().length === 0) {
-        // Old schema exists without new columns -- drop and recreate
-        await conn.run(`DROP TABLE market.spx_daily`);
-        await conn.run(`DELETE FROM market._sync_metadata WHERE file_name = 'spx_daily.csv'`);
-      }
+    let requiresRecreate = false;
+
+    if (await tableExists(conn, "market", "spx_daily")) {
+      const hasHighTime = await hasColumn(conn, "market", "spx_daily", "High_Time");
+      const hasTicker = await hasColumn(conn, "market", "spx_daily", "ticker");
+      if (!hasHighTime || !hasTicker) requiresRecreate = true;
+    }
+
+    if (await tableExists(conn, "market", "spx_15min")) {
+      const hasTicker = await hasColumn(conn, "market", "spx_15min", "ticker");
+      if (!hasTicker) requiresRecreate = true;
+    }
+
+    if (await tableExists(conn, "market", "vix_intraday")) {
+      const hasTicker = await hasColumn(conn, "market", "vix_intraday", "ticker");
+      if (!hasTicker) requiresRecreate = true;
+    }
+
+    if (requiresRecreate) {
+      await conn.run(`DROP TABLE IF EXISTS market.spx_daily`);
+      await conn.run(`DROP TABLE IF EXISTS market.spx_15min`);
+      await conn.run(`DROP TABLE IF EXISTS market.vix_intraday`);
+      await conn.run(`DELETE FROM market._sync_metadata`);
     }
   } catch {
     // Non-fatal: CREATE TABLE IF NOT EXISTS will handle fresh state
   }
 
-  // SPX daily market context data (55 fields)
+  // Underlying daily market context data (55 fields)
   // Note: open/high/low/close are lowercase to match TradingView's default export columns
   await conn.run(`
     CREATE TABLE IF NOT EXISTS market.spx_daily (
-      date VARCHAR PRIMARY KEY,
+      ticker VARCHAR NOT NULL,
+      date VARCHAR NOT NULL,
       Prior_Close DOUBLE,
       open DOUBLE,
       high DOUBLE,
@@ -187,14 +239,16 @@ export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<vo
       VIX_High DOUBLE,
       VIX_Low DOUBLE,
       VIX3M_Open DOUBLE,
-      VIX3M_Change_Pct DOUBLE
+      VIX3M_Change_Pct DOUBLE,
+      PRIMARY KEY (ticker, date)
     )
   `);
 
-  // SPX 15-minute intraday checkpoint data
+  // Underlying 15-minute intraday checkpoint data
   await conn.run(`
     CREATE TABLE IF NOT EXISTS market.spx_15min (
-      date VARCHAR PRIMARY KEY,
+      ticker VARCHAR NOT NULL,
+      date VARCHAR NOT NULL,
       open DOUBLE,
       high DOUBLE,
       low DOUBLE,
@@ -233,7 +287,8 @@ export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<vo
       MOC_30min DOUBLE,
       MOC_45min DOUBLE,
       MOC_60min DOUBLE,
-      Afternoon_Move DOUBLE
+      Afternoon_Move DOUBLE,
+      PRIMARY KEY (ticker, date)
     )
   `);
 
@@ -244,7 +299,8 @@ export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<vo
   // VIX intraday data
   await conn.run(`
     CREATE TABLE IF NOT EXISTS market.vix_intraday (
-      date VARCHAR PRIMARY KEY,
+      ticker VARCHAR NOT NULL,
+      date VARCHAR NOT NULL,
       open DOUBLE,
       high DOUBLE,
       low DOUBLE,
@@ -276,7 +332,8 @@ export async function ensureMarketDataTables(conn: DuckDBConnection): Promise<vo
       VIX_Spike_Flag INTEGER,
       VIX_Crush_From_Open DOUBLE,
       VIX_Crush_Flag INTEGER,
-      VIX_Close_In_Range DOUBLE
+      VIX_Close_In_Range DOUBLE,
+      PRIMARY KEY (ticker, date)
     )
   `);
 }

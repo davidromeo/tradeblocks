@@ -23,6 +23,7 @@ import { withFullSync } from "./middleware/sync-middleware.js";
 import {
   buildLookaheadFreeQuery,
   buildOutcomeQuery,
+  type MarketLookupKey,
   OPEN_KNOWN_FIELDS,
   CLOSE_KNOWN_FIELDS,
   STATIC_FIELDS,
@@ -34,6 +35,13 @@ import {
   VIX_OUTCOME_FIELDS,
   VIX_OHLC_OUTCOME_FIELDS,
 } from "../utils/intraday-timing.js";
+import {
+  DEFAULT_MARKET_TICKER,
+  GLOBAL_MARKET_TICKER,
+  marketTickerDateKey,
+  normalizeTicker,
+  resolveTradeTicker,
+} from "../utils/ticker.js";
 
 // =============================================================================
 // Types
@@ -192,6 +200,45 @@ function getNum(record: Record<string, unknown>, field: string): number {
   return val as number;
 }
 
+function getTradeLookupKey(trade: Trade): MarketLookupKey {
+  return {
+    date: formatTradeDate(trade.dateOpened),
+    ticker: resolveTradeTicker(trade, DEFAULT_MARKET_TICKER),
+  };
+}
+
+function uniqueTradeLookupKeys(trades: Trade[]): MarketLookupKey[] {
+  const byKey = new Map<string, MarketLookupKey>();
+  for (const trade of trades) {
+    const lookup = getTradeLookupKey(trade);
+    byKey.set(marketTickerDateKey(lookup.ticker, lookup.date), lookup);
+  }
+  return Array.from(byKey.values());
+}
+
+function recordsByTickerDate(
+  records: Record<string, unknown>[]
+): Map<string, Record<string, unknown>> {
+  const mapped = new Map<string, Record<string, unknown>>();
+  for (const record of records) {
+    const date = String(record["date"] || "");
+    const ticker = String(record["ticker"] || DEFAULT_MARKET_TICKER);
+    mapped.set(marketTickerDateKey(ticker, date), record);
+  }
+  return mapped;
+}
+
+function buildRequestedPairsClause(
+  keys: MarketLookupKey[]
+): { valuesClause: string; params: string[] } {
+  const params: string[] = [];
+  const rows = keys.map((key) => {
+    params.push(key.ticker, key.date);
+    return `($${params.length - 1}, $${params.length})`;
+  });
+  return { valuesClause: rows.join(", "), params };
+}
+
 /**
  * Get volatility regime label
  */
@@ -291,17 +338,14 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           };
         }
 
-        // Collect unique trade dates and query DuckDB for market data
-        const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
+        // Collect unique trade keys (ticker+date) and query DuckDB for market data
+        const tradeKeys = uniqueTradeLookupKeys(trades);
 
         const conn = await getConnection(baseDir);
-        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeDates);
+        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeKeys);
         const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
         const dailyRecords = resultToRecords(dailyResult);
-        const daily = new Map<string, Record<string, unknown>>();
-        for (const record of dailyRecords) {
-          daily.set(record["date"] as string, record);
-        }
+        const daily = recordsByTickerDate(dailyRecords);
 
         // Match trades to market data and segment
         interface SegmentStats {
@@ -318,11 +362,11 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const unmatchedDates: string[] = [];
 
         for (const trade of trades) {
-          const tradeDate = formatTradeDate(trade.dateOpened);
-          const marketData = daily.get(tradeDate);
+          const lookup = getTradeLookupKey(trade);
+          const marketData = daily.get(marketTickerDateKey(lookup.ticker, lookup.date));
 
           if (!marketData) {
-            unmatchedDates.push(tradeDate);
+            unmatchedDates.push(`${lookup.date}|${lookup.ticker}`);
             continue;
           }
 
@@ -517,17 +561,14 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           };
         }
 
-        // Collect unique trade dates and query DuckDB for market data
-        const tradeDates = [...new Set(trades.map(t => formatTradeDate(t.dateOpened)))];
+        // Collect unique trade keys (ticker+date) and query DuckDB for market data
+        const tradeKeys = uniqueTradeLookupKeys(trades);
 
         const conn = await getConnection(baseDir);
-        const { sql, params } = buildLookaheadFreeQuery(tradeDates);
+        const { sql, params } = buildLookaheadFreeQuery(tradeKeys);
         const dailyResult = await conn.runAndReadAll(sql, params);
         const dailyRecords = resultToRecords(dailyResult);
-        const daily = new Map<string, Record<string, unknown>>();
-        for (const record of dailyRecords) {
-          daily.set(record["date"] as string, record);
-        }
+        const daily = recordsByTickerDate(dailyRecords);
 
         // Match trades to market data
         interface EnrichedTrade {
@@ -536,10 +577,11 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         }
 
         const enrichedTrades: EnrichedTrade[] = trades.map((trade) => {
-          const tradeDate = formatTradeDate(trade.dateOpened);
+          const lookup = getTradeLookupKey(trade);
           return {
             trade,
-            market: daily.get(tradeDate) || null,
+            market:
+              daily.get(marketTickerDateKey(lookup.ticker, lookup.date)) || null,
           };
         });
 
@@ -784,29 +826,23 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           );
         }
 
-        // Collect unique dates from paginated trades only
-        const tradeDates = [...new Set(paginated.map(t => formatTradeDate(t.dateOpened)))];
+        // Collect unique ticker+date keys from paginated trades only.
+        const tradeKeys = uniqueTradeLookupKeys(paginated);
 
         // Query DuckDB for lookahead-free market data
         const conn = await getConnection(baseDir);
-        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeDates);
+        const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeKeys);
         const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
         const dailyRecords = resultToRecords(dailyResult);
-        const daily = new Map<string, Record<string, unknown>>();
-        for (const record of dailyRecords) {
-          daily.set(record["date"] as string, record);
-        }
+        const daily = recordsByTickerDate(dailyRecords);
 
         // Optionally query outcome (same-day close) data
         let outcomeMap: Map<string, Record<string, unknown>> | null = null;
         if (includeOutcomeFields) {
-          const { sql: outcomeSql, params: outcomeParams } = buildOutcomeQuery(tradeDates);
+          const { sql: outcomeSql, params: outcomeParams } = buildOutcomeQuery(tradeKeys);
           const outcomeResult = await conn.runAndReadAll(outcomeSql, outcomeParams);
           const outcomeRecords = resultToRecords(outcomeResult);
-          outcomeMap = new Map<string, Record<string, unknown>>();
-          for (const record of outcomeRecords) {
-            outcomeMap.set(record["date"] as string, record);
-          }
+          outcomeMap = recordsByTickerDate(outcomeRecords);
         }
 
         // Optionally query intraday checkpoint data
@@ -814,29 +850,44 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         let vixIntradayMap: Map<string, Record<string, unknown>> | null = null;
 
         if (includeIntradayContext) {
-          const placeholders = tradeDates.map((_, i) => `$${i + 1}`).join(', ');
+          const { valuesClause: pairsClause, params: pairParams } = buildRequestedPairsClause(tradeKeys);
 
-          // Query spx_15min
+          // Query per-ticker underlying intraday data
           const spxResult = await conn.runAndReadAll(
-            `SELECT * FROM market.spx_15min WHERE date IN (${placeholders})`,
-            tradeDates
+            `WITH requested(ticker, date) AS (VALUES ${pairsClause})
+             SELECT s.*
+             FROM market.spx_15min s
+             JOIN requested r
+               ON s.ticker = r.ticker
+              AND s.date = r.date`,
+            pairParams
           );
           const spxRecords = resultToRecords(spxResult);
-          spxIntradayMap = new Map<string, Record<string, unknown>>();
-          for (const record of spxRecords) {
-            spxIntradayMap.set(record["date"] as string, record);
-          }
+          spxIntradayMap = recordsByTickerDate(spxRecords);
 
-          // Query vix_intraday
+          // Query VIX intraday for both ticker-specific rows and global fallback rows.
+          const byVixKey = new Map<string, MarketLookupKey>();
+          for (const key of tradeKeys) {
+            byVixKey.set(marketTickerDateKey(key.ticker, key.date), key);
+            byVixKey.set(
+              marketTickerDateKey(GLOBAL_MARKET_TICKER, key.date),
+              { ticker: GLOBAL_MARKET_TICKER, date: key.date }
+            );
+          }
+          const vixKeys = Array.from(byVixKey.values());
+          const { valuesClause: vixPairsClause, params: vixPairParams } =
+            buildRequestedPairsClause(vixKeys);
           const vixResult = await conn.runAndReadAll(
-            `SELECT * FROM market.vix_intraday WHERE date IN (${placeholders})`,
-            tradeDates
+            `WITH requested(ticker, date) AS (VALUES ${vixPairsClause})
+             SELECT v.*
+             FROM market.vix_intraday v
+             JOIN requested r
+               ON v.ticker = r.ticker
+              AND v.date = r.date`,
+            vixPairParams
           );
           const vixRecords = resultToRecords(vixResult);
-          vixIntradayMap = new Map<string, Record<string, unknown>>();
-          for (const record of vixRecords) {
-            vixIntradayMap.set(record["date"] as string, record);
-          }
+          vixIntradayMap = recordsByTickerDate(vixRecords);
         }
 
         // Helper: clean numeric value (BigInt -> Number, NaN -> null)
@@ -851,13 +902,15 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         let matched = 0;
 
         const enrichedTrades = paginated.map(trade => {
-          const tradeDate = formatTradeDate(trade.dateOpened);
-          const marketData = daily.get(tradeDate);
+          const lookup = getTradeLookupKey(trade);
+          const marketKey = marketTickerDateKey(lookup.ticker, lookup.date);
+          const marketData = daily.get(marketKey);
 
           const commissions = trade.openingCommissionsFees + trade.closingCommissionsFees;
 
           const baseTrade: Record<string, unknown> = {
-            dateOpened: tradeDate,
+            dateOpened: lookup.date,
+            ticker: lookup.ticker,
             timeOpened: trade.timeOpened,
             strategy: trade.strategy,
             legs: trade.legs,
@@ -869,7 +922,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           };
 
           if (!marketData) {
-            unmatchedDates.push(tradeDate);
+            unmatchedDates.push(`${lookup.date}|${lookup.ticker}`);
             baseTrade.entryContext = null;
             return baseTrade;
           }
@@ -895,7 +948,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
           // Outcome fields (opt-in, same-day close values)
           if (includeOutcomeFields && outcomeMap) {
-            const outcomeData = outcomeMap.get(tradeDate);
+            const outcomeData = outcomeMap.get(marketKey);
             if (outcomeData) {
               const outcomeFields: Record<string, unknown> = {};
               for (const field of CLOSE_KNOWN_FIELDS) {
@@ -907,8 +960,13 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
           // Intraday context (opt-in, per-trade checkpoint filtering)
           if (includeIntradayContext && spxIntradayMap && vixIntradayMap) {
-            const spxIntraday = spxIntradayMap.get(tradeDate) || null;
-            const vixIntraday = vixIntradayMap.get(tradeDate) || null;
+            const spxIntraday = spxIntradayMap.get(marketKey) || null;
+            const vixIntraday =
+              vixIntradayMap.get(marketKey) ||
+              vixIntradayMap.get(
+                marketTickerDateKey(GLOBAL_MARKET_TICKER, lookup.date)
+              ) ||
+              null;
             baseTrade.intradayContext = buildIntradayContext(
               trade.timeOpened,
               spxIntraday,
@@ -947,7 +1005,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         // Build lagNote
         let lagNote =
-          "Entry context uses lookahead-free temporal joins. Same-day fields (Gap_Pct, VIX_Open, Day_of_Week, etc.) are values known at market open. Prior-day fields (VIX_Close, RSI_14, Vol_Regime, etc.) use the previous trading day's close-derived values to prevent lookahead bias.";
+          "Entry context uses lookahead-free temporal joins on ticker+date. Same-day fields (Gap_Pct, VIX_Open, Day_of_Week, etc.) are values known at market open. Prior-day fields (VIX_Close, RSI_14, Vol_Regime, etc.) use the previous trading day's close-derived values to prevent lookahead bias.";
         if (includeOutcomeFields) {
           lagNote += " Outcome fields contain same-day close-derived values and represent information NOT available at trade entry time.";
         }
@@ -1000,6 +1058,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         "ORB is defined as the high/low range between specified start and end times. " +
         "Returns per-day ORB high, low, range percentage, and where close fell in that range.",
       inputSchema: z.object({
+        ticker: z.string().optional().describe("Underlying ticker to query (default: SPX)"),
         startTime: z.string().describe("ORB start time in HHMM format (e.g., '0930' for 9:30 AM)"),
         endTime: z.string().describe("ORB end time in HHMM format (e.g., '1000' for 10:00 AM)"),
         startDate: z.string().describe("Start date (YYYY-MM-DD)"),
@@ -1007,20 +1066,30 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         limit: z.number().int().min(1).optional().describe("Max rows to return (default: 100)"),
       }),
     },
-    withFullSync(baseDir, async ({ startTime, endTime, startDate, endDate, limit = 100 }) => {
+    withFullSync(baseDir, async ({ ticker, startTime, endTime, startDate, endDate, limit = 100 }) => {
       try {
         // Query DuckDB for intraday data in the date range
         const end = endDate || startDate;
+        const normalizedTicker = normalizeTicker(ticker || "") || DEFAULT_MARKET_TICKER;
         const conn = await getConnection(baseDir);
         const result = await conn.runAndReadAll(
-          `SELECT * FROM market.spx_15min WHERE date BETWEEN $1 AND $2 ORDER BY date`,
-          [startDate, end]
+          `SELECT *
+           FROM market.spx_15min
+           WHERE ticker = $1
+             AND date BETWEEN $2 AND $3
+           ORDER BY date`,
+          [normalizedTicker, startDate, end]
         );
         const intradayRecords = resultToRecords(result);
 
         if (intradayRecords.length === 0) {
           return {
-            content: [{ type: "text", text: "No 15-minute intraday data available for the specified date range" }],
+            content: [{
+              type: "text",
+              text:
+                `No 15-minute intraday data available for ticker ${normalizedTicker} ` +
+                "in the specified date range",
+            }],
             isError: true,
           };
         }
@@ -1166,10 +1235,13 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           ? results.reduce((sum, r) => sum + r.ORB_Range_Pct, 0) / totalDays
           : 0;
 
-        const summary = `ORB (${startTime}-${endTime}): ${startDate} to ${end} | ${totalDays} days, avg range ${formatPercent(avgOrbRangePct)}`;
+        const summary =
+          `ORB (${normalizedTicker}, ${startTime}-${endTime}): ${startDate} to ${end} | ` +
+          `${totalDays} days, avg range ${formatPercent(avgOrbRangePct)}`;
 
         return createToolOutput(summary, {
           query: {
+            ticker: normalizedTicker,
             startTime,
             endTime,
             startDate,

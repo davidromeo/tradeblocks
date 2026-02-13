@@ -16,6 +16,7 @@ import {
   getAllSyncedBlockIds,
   type BlockSyncMetadata,
 } from "./metadata.js";
+import { resolveTickerFromCsvRow } from "../utils/ticker.js";
 
 /**
  * Result of syncing a single block
@@ -41,6 +42,19 @@ interface CsvMappings {
  */
 interface BlockJson {
   csvMappings?: CsvMappings;
+}
+
+/**
+ * Read block.json metadata if present.
+ */
+async function readBlockJson(blockPath: string): Promise<BlockJson | null> {
+  try {
+    const blockJsonPath = path.join(blockPath, "block.json");
+    const blockJsonContent = await fs.readFile(blockJsonPath, "utf-8");
+    return JSON.parse(blockJsonContent) as BlockJson;
+  } catch {
+    return null;
+  }
 }
 
 // --- CSV Parsing Helpers (copied from block-loader.ts to avoid circular imports) ---
@@ -99,29 +113,68 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
+/**
+ * Normalize CSV date strings into DuckDB-friendly YYYY-MM-DD format.
+ *
+ * Supports:
+ * - YYYY-MM-DD (already normalized)
+ * - M/D/YY, MM/DD/YY
+ * - M/D/YYYY, MM/DD/YYYY
+ */
+function normalizeCsvDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const raw = value.trim();
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const mdyMatch = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
+  if (!mdyMatch) return raw;
+
+  const month = Number(mdyMatch[1]);
+  const day = Number(mdyMatch[2]);
+  let year = Number(mdyMatch[3]);
+
+  if (Number.isNaN(month) || Number.isNaN(day) || Number.isNaN(year)) {
+    return raw;
+  }
+  if (year < 100) {
+    year += year >= 70 ? 1900 : 2000;
+  }
+
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (
+    dt.getUTCFullYear() !== year ||
+    dt.getUTCMonth() + 1 !== month ||
+    dt.getUTCDate() !== day
+  ) {
+    return raw;
+  }
+
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
+}
+
 // --- Tradelog Discovery ---
 
 /**
  * Find the tradelog CSV file for a block.
  * Priority: block.json csvMappings > "tradelog.csv" > first *.csv file
  */
-async function findTradelogFile(blockPath: string): Promise<string | null> {
+async function findTradelogFile(
+  blockPath: string,
+  blockJson?: BlockJson | null
+): Promise<string | null> {
   // 1. Check block.json for csvMappings
-  try {
-    const blockJsonPath = path.join(blockPath, "block.json");
-    const blockJsonContent = await fs.readFile(blockJsonPath, "utf-8");
-    const blockJson = JSON.parse(blockJsonContent) as BlockJson;
-    if (blockJson.csvMappings?.tradelog) {
-      const mappedPath = path.join(blockPath, blockJson.csvMappings.tradelog);
-      try {
-        await fs.access(mappedPath);
-        return blockJson.csvMappings.tradelog;
-      } catch {
-        // Mapped file doesn't exist, continue to fallbacks
-      }
+  if (blockJson?.csvMappings?.tradelog) {
+    const mappedPath = path.join(blockPath, blockJson.csvMappings.tradelog);
+    try {
+      await fs.access(mappedPath);
+      return blockJson.csvMappings.tradelog;
+    } catch {
+      // Mapped file doesn't exist, continue to fallbacks
     }
-  } catch {
-    // No block.json or can't parse, continue to fallbacks
   }
 
   // 2. Check for standard "tradelog.csv"
@@ -157,35 +210,29 @@ async function findTradelogFile(blockPath: string): Promise<string | null> {
  * Find optional log files (dailylog, reportinglog) for a block
  */
 async function findOptionalLogFiles(
-  blockPath: string
+  blockPath: string,
+  blockJson?: BlockJson | null
 ): Promise<{ dailylog: string | null; reportinglog: string | null }> {
   const result = { dailylog: null as string | null, reportinglog: null as string | null };
 
   // Check block.json first
-  try {
-    const blockJsonPath = path.join(blockPath, "block.json");
-    const blockJsonContent = await fs.readFile(blockJsonPath, "utf-8");
-    const blockJson = JSON.parse(blockJsonContent) as BlockJson;
-    if (blockJson.csvMappings?.dailylog) {
-      const mappedPath = path.join(blockPath, blockJson.csvMappings.dailylog);
-      try {
-        await fs.access(mappedPath);
-        result.dailylog = blockJson.csvMappings.dailylog;
-      } catch {
-        // Mapped file doesn't exist
-      }
+  if (blockJson?.csvMappings?.dailylog) {
+    const mappedPath = path.join(blockPath, blockJson.csvMappings.dailylog);
+    try {
+      await fs.access(mappedPath);
+      result.dailylog = blockJson.csvMappings.dailylog;
+    } catch {
+      // Mapped file doesn't exist
     }
-    if (blockJson.csvMappings?.reportinglog) {
-      const mappedPath = path.join(blockPath, blockJson.csvMappings.reportinglog);
-      try {
-        await fs.access(mappedPath);
-        result.reportinglog = blockJson.csvMappings.reportinglog;
-      } catch {
-        // Mapped file doesn't exist
-      }
+  }
+  if (blockJson?.csvMappings?.reportinglog) {
+    const mappedPath = path.join(blockPath, blockJson.csvMappings.reportinglog);
+    try {
+      await fs.access(mappedPath);
+      result.reportinglog = blockJson.csvMappings.reportinglog;
+    } catch {
+      // Mapped file doesn't exist
     }
-  } catch {
-    // No block.json
   }
 
   // Check for standard names if not found in mappings
@@ -232,8 +279,8 @@ async function insertTradeBatch(
   if (batch.length === 0) return;
 
   // Build VALUES placeholders: ($1, $2, $3, ...), ($15, $16, $17, ...), ...
-  // Each row has 14 columns: block_id + 13 trade fields
-  const columnsPerRow = 14;
+  // Each row has 15 columns: block_id + 13 trade fields + ticker
+  const columnsPerRow = 15;
   const placeholders: string[] = [];
   const params: (string | number | null)[] = [];
 
@@ -253,23 +300,25 @@ async function insertTradeBatch(
     const marginReq = parseFloat(record["Margin Req."]);
     const openingCommissions = parseFloat(record["Opening Commissions + Fees"]);
     const closingCommissions = parseFloat(record["Closing Commissions + Fees"]);
+    const ticker = resolveTickerFromCsvRow(record);
 
     // Map CSV record to column values
     params.push(
       blockId, // block_id
-      record["Date Opened"] || null, // date_opened
+      normalizeCsvDate(record["Date Opened"]), // date_opened
       record["Time Opened"] || null, // time_opened
       record["Strategy"] || null, // strategy
       record["Legs"] || null, // legs
       isNaN(premium) ? null : premium, // premium
       isNaN(numContracts) ? 1 : numContracts, // num_contracts
       isNaN(pl) ? 0 : pl, // pl
-      record["Date Closed"] || null, // date_closed
+      normalizeCsvDate(record["Date Closed"]), // date_closed
       record["Time Closed"] || null, // time_closed
       record["Reason For Close"] || null, // reason_for_close
       isNaN(marginReq) ? null : marginReq, // margin_req
       isNaN(openingCommissions) ? 0 : openingCommissions, // opening_commissions
-      isNaN(closingCommissions) ? 0 : closingCommissions // closing_commissions
+      isNaN(closingCommissions) ? 0 : closingCommissions, // closing_commissions
+      ticker // ticker
     );
   }
 
@@ -277,7 +326,7 @@ async function insertTradeBatch(
     INSERT INTO trades.trade_data (
       block_id, date_opened, time_opened, strategy, legs, premium,
       num_contracts, pl, date_closed, time_closed, reason_for_close,
-      margin_req, opening_commissions, closing_commissions
+      margin_req, opening_commissions, closing_commissions, ticker
     ) VALUES ${placeholders.join(", ")}
   `;
 
@@ -304,8 +353,8 @@ async function insertReportingBatch(
   if (batch.length === 0) return;
 
   // Build VALUES placeholders: ($1, $2, $3, ...), ($15, $16, $17, ...), ...
-  // Each row has 14 columns: block_id + 13 reporting fields
-  const columnsPerRow = 14;
+  // Each row has 15 columns: block_id + 13 reporting fields + ticker
+  const columnsPerRow = 15;
   const placeholders: string[] = [];
   const params: (string | number | null)[] = [];
 
@@ -325,23 +374,25 @@ async function insertReportingBatch(
     const closingPrice = parseFloat(record["Closing Price"]);
     const avgClosingCost = parseFloat(record["Avg. Closing Cost"]);
     const openingPrice = parseFloat(record["Opening Price"]);
+    const ticker = resolveTickerFromCsvRow(record);
 
     // Map CSV record to column values
     params.push(
       blockId, // block_id
-      record["Date Opened"] || null, // date_opened
+      normalizeCsvDate(record["Date Opened"]), // date_opened
       record["Time Opened"] || null, // time_opened
       record["Strategy"] || null, // strategy
       record["Legs"] || null, // legs
       isNaN(initialPremium) ? null : initialPremium, // initial_premium
       isNaN(numContracts) ? 1 : numContracts, // num_contracts
       isNaN(pl) ? 0 : pl, // pl
-      record["Date Closed"] || null, // date_closed
+      normalizeCsvDate(record["Date Closed"]), // date_closed
       record["Time Closed"] || null, // time_closed
       isNaN(closingPrice) ? null : closingPrice, // closing_price
       isNaN(avgClosingCost) ? null : avgClosingCost, // avg_closing_cost
       record["Reason For Close"] || null, // reason_for_close
-      isNaN(openingPrice) ? null : openingPrice // opening_price
+      isNaN(openingPrice) ? null : openingPrice, // opening_price
+      ticker // ticker
     );
   }
 
@@ -349,7 +400,7 @@ async function insertReportingBatch(
     INSERT INTO trades.reporting_data (
       block_id, date_opened, time_opened, strategy, legs, initial_premium,
       num_contracts, pl, date_closed, time_closed, closing_price,
-      avg_closing_cost, reason_for_close, opening_price
+      avg_closing_cost, reason_for_close, opening_price, ticker
     ) VALUES ${placeholders.join(", ")}
   `;
 
@@ -380,9 +431,10 @@ export async function syncBlockInternal(
   try {
     // Get existing metadata early (needed for missing-file cleanup logic)
     const existingMetadata = await getSyncMetadata(conn, blockId);
+    const blockJson = await readBlockJson(blockPath);
 
     // Find the tradelog file
-    const tradelogFilename = await findTradelogFile(blockPath);
+    const tradelogFilename = await findTradelogFile(blockPath, blockJson);
     if (!tradelogFilename) {
       // Previously-synced block lost its tradelog: remove stale data/metadata
       if (existingMetadata) {
@@ -421,7 +473,7 @@ export async function syncBlockInternal(
     // Also check if reportinglog exists but hasn't been synced yet
     if (existingMetadata && existingMetadata.tradelog_hash === tradelogHash) {
       // Check if reporting log needs to be synced (new file or changed)
-      const optionalLogs = await findOptionalLogFiles(blockPath);
+      const optionalLogs = await findOptionalLogFiles(blockPath, blockJson);
       if (optionalLogs.reportinglog) {
         const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
         const reportinglogHash = await hashFileContent(reportinglogPath);
@@ -462,7 +514,7 @@ export async function syncBlockInternal(
       }
 
       // Hash optional log files if they exist
-      const optionalLogs = await findOptionalLogFiles(blockPath);
+      const optionalLogs = await findOptionalLogFiles(blockPath, blockJson);
       let dailylogHash: string | null = null;
       let reportinglogHash: string | null = null;
 
@@ -607,7 +659,8 @@ export async function detectBlockChanges(
     }
 
     // Block exists in metadata - check if hash changed
-    const tradelogFilename = await findTradelogFile(blockPath);
+    const blockJson = await readBlockJson(blockPath);
+    const tradelogFilename = await findTradelogFile(blockPath, blockJson);
     if (!tradelogFilename) {
       // Previously-synced block lost tradelog: mark for cleanup
       toDelete.push(blockId);
@@ -623,7 +676,7 @@ export async function detectBlockChanges(
         toSync.push(blockId);
       } else {
         // Tradelog unchanged - check if reportinglog needs syncing
-        const optionalLogs = await findOptionalLogFiles(blockPath);
+        const optionalLogs = await findOptionalLogFiles(blockPath, blockJson);
         if (optionalLogs.reportinglog) {
           const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
           const reportingHash = await hashFileContent(reportinglogPath);

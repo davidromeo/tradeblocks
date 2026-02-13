@@ -12,10 +12,10 @@
  *   - 30-second query timeout with clear error message
  *
  * Available tables:
- *   - trades.trade_data: Trade records from all blocks
- *   - market.spx_daily: Daily SPX market context (55 fields incl. highlow timing + VIX enrichment)
- *   - market.spx_15min: 15-minute intraday checkpoints
- *   - market.vix_intraday: VIX intraday data
+ *   - trades.trade_data: Trade records from all blocks (includes inferred ticker)
+ *   - market.spx_daily: Daily market context keyed by (ticker, date)
+ *   - market.spx_15min: 15-minute intraday checkpoints keyed by (ticker, date)
+ *   - market.vix_intraday: VIX intraday data keyed by (ticker, date)
  */
 
 import { z } from "zod";
