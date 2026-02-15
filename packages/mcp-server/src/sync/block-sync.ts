@@ -63,7 +63,8 @@ async function readBlockJson(blockPath: string): Promise<BlockJson | null> {
  * Parse CSV content into array of record objects
  */
 function parseCSV(content: string): Record<string, string>[] {
-  const lines = content.trim().split("\n");
+  // Strip UTF-8 BOM if present (common in Windows/Excel CSV exports)
+  const lines = content.replace(/^\uFEFF/, "").trim().split("\n");
   if (lines.length < 2) return [];
 
   const headers = parseCSVLine(lines[0]);
