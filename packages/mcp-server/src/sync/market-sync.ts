@@ -140,7 +140,8 @@ function parseTimestampToDate(timestamp: number): string {
  * Parse CSV content into rows with header mapping
  */
 function parseCSV(content: string): { headers: string[]; rows: Record<string, string>[] } {
-  const lines = content.trim().split("\n");
+  // Strip UTF-8 BOM if present (common in Windows/Excel CSV exports)
+  const lines = content.replace(/^\uFEFF/, "").trim().split("\n");
   if (lines.length < 2) {
     return { headers: [], rows: [] };
   }
