@@ -93,7 +93,7 @@ float vix3mChange = vix3mClose - vix3mOpen
 float vix3mChangePct = safePct(vix3mChange, vix3mOpen)
 
 // Term structure ratios (critical for calendar spreads)
-// Ratio > 1 = contango (normal), Ratio < 1 = backwardation (fear)
+// Ratio > 1 = backwardation (fear), Ratio < 1 = contango (normal)
 float vix9dVixRatio = safeDiv(vix9dClose, vixClose, 1.0)
 float vixVix3mRatio = safeDiv(vixClose, vix3mClose, 1.0)
 float vix9dVix3mRatio = safeDiv(vix9dClose, vix3mClose, 1.0)

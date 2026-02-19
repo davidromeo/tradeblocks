@@ -315,12 +315,12 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             timing: 'close',
           },
           VIX9D_VIX_Ratio: {
-            description: "VIX9D/VIX ratio - term structure indicator",
+            description: "VIX9D/VIX ratio (<1 = contango/normal, >1 = backwardation/fear)",
             hypothesis: true,
             timing: 'close',
           },
           VIX_VIX3M_Ratio: {
-            description: "VIX/VIX3M ratio - term structure indicator",
+            description: "VIX/VIX3M ratio (<1 = contango/normal, >1 = backwardation/fear)",
             hypothesis: true,
             timing: 'close',
           },
