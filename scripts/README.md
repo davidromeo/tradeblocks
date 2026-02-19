@@ -88,7 +88,7 @@ _marketdata/
 
 **VIX Term Structure**:
 - `VIX9D_Close`, `VIX3M_Close`
-- `VIX9D_VIX_Ratio`, `VIX_VIX3M_Ratio`
+- `VIX9D_VIX_Ratio`, `VIX_VIX3M_Ratio` - short/long ratios (<1 = contango, >1 = backwardation)
 - `Term_Structure_State` - -1=backwardation, 0=flat, 1=contango
 
 **Technical**:
