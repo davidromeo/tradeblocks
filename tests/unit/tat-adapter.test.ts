@@ -3,6 +3,7 @@ import {
   convertTatRowToReportingTrade,
   buildTatLegsString,
 } from '../../packages/lib/processing/tat-adapter'
+import { ReportingTradeProcessor } from '../../packages/lib/processing/reporting-trade-processor'
 
 // Sample TAT CSV row (from real export)
 const SAMPLE_TAT_ROW: Record<string, string> = {
@@ -240,5 +241,56 @@ describe('TAT Adapter', () => {
       const trade = convertTatRowToReportingTrade(row)
       expect(trade!.timeOpened).toBe('12:38 PM')
     })
+  })
+})
+
+describe('ReportingTradeProcessor TAT integration', () => {
+  it('processes a TAT CSV file into ReportingTrades', async () => {
+    const csvContent = [
+      'Account,Date,TimeOpened,TimeClosed,TradeType,StopType,StopMultiple,PriceOpen,PriceClose,PriceStopTarget,TotalPremium,Qty,Commission,ProfitLoss,Status,ShortPut,LongPut,ShortCall,LongCall,BuyingPower,StopMultipleResult,Slippage,StopTrigger,PutDelta,CallDelta,Template,Strategy,PriceLong,PriceShort,OpenDate,OpenTime,CloseDate,CloseTime,TradeID,ParentTaskID,ContractCount,UnderlyingSymbol,CustomLeg1,CustomLeg2,CustomLeg3,CustomLeg4',
+      'IB:U***1234,1/30/2026,10:04 AM,3:51 PM,DoubleCalendar,Vertical,0,-53.1,57.05,,-26550,5,45.65,1929.35,Manual Closed,6945,6945,6945,6945,26550,0,0,Single Bid,-0.504191198,0.495787545,MEDC 3/7,DC,113.872,60.772,2026-01-30,10:04:13,2026-01-30,15:51:13,15780,0,20,SPX,,,,',
+      'IB:U***1234,1/30/2026,11:04 AM,3:51 PM,DoubleCalendar,Vertical,0,-54.1,57.2,,-27050,5,45.65,1504.35,Manual Closed,6940,6940,6940,6940,27050,0,0,Single Bid,-0.471937343,0.528139003,MEDC 3/7,DC,109.77,55.67,2026-01-30,11:04:26,2026-01-30,15:51:37,15790,0,20,SPX,,,,',
+    ].join('\n')
+
+    const file = new File([csvContent], 'export-2026-02-04.csv', { type: 'text/csv' })
+    const processor = new ReportingTradeProcessor()
+    const result = await processor.processFile(file)
+
+    expect(result.validTrades).toBe(2)
+    expect(result.invalidTrades).toBe(0)
+    expect(result.trades).toHaveLength(2)
+
+    // Both trades are on the same date; sort is stable so insertion order is preserved
+    expect(result.trades[0].strategy).toBe('DC')
+    expect(result.trades[0].numContracts).toBe(5)
+    expect(result.trades[0].pl).toBe(1929.35)
+
+    expect(result.trades[1].strategy).toBe('DC')
+    expect(result.trades[1].numContracts).toBe(5)
+    expect(result.trades[1].pl).toBe(1504.35)
+
+    // Verify stats
+    expect(result.stats.strategies).toEqual(['DC'])
+    expect(result.stats.totalPL).toBeCloseTo(3433.70, 2)
+  })
+
+  it('processes TAT CSV with no errors', async () => {
+    const csvContent = [
+      'Account,Date,TimeOpened,TimeClosed,TradeType,StopType,StopMultiple,PriceOpen,PriceClose,PriceStopTarget,TotalPremium,Qty,Commission,ProfitLoss,Status,ShortPut,LongPut,ShortCall,LongCall,BuyingPower,StopMultipleResult,Slippage,StopTrigger,PutDelta,CallDelta,Template,Strategy,PriceLong,PriceShort,OpenDate,OpenTime,CloseDate,CloseTime,TradeID,ParentTaskID,ContractCount,UnderlyingSymbol,CustomLeg1,CustomLeg2,CustomLeg3,CustomLeg4',
+      'IB:U***1234,1/30/2026,10:04 AM,3:51 PM,DoubleCalendar,Vertical,0,-53.1,57.05,,-26550,5,45.65,1929.35,Manual Closed,6945,6945,6945,6945,26550,0,0,Single Bid,-0.504191198,0.495787545,MEDC 3/7,DC,113.872,60.772,2026-01-30,10:04:13,2026-01-30,15:51:13,15780,0,20,SPX,,,,',
+    ].join('\n')
+
+    const file = new File([csvContent], 'export.csv', { type: 'text/csv' })
+    const processor = new ReportingTradeProcessor()
+    const result = await processor.processFile(file)
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.validTrades).toBe(1)
+    expect(result.trades[0].dateOpened.getFullYear()).toBe(2026)
+    expect(result.trades[0].dateOpened.getMonth()).toBe(0) // January
+    expect(result.trades[0].dateOpened.getDate()).toBe(30)
+    expect(result.trades[0].timeOpened).toBe('10:04 AM')
+    expect(result.trades[0].openingPrice).toBe(53.1)
+    expect(result.trades[0].reasonForClose).toBe('Manual Closed')
   })
 })
