@@ -1,19 +1,21 @@
-name: Release
+name: Beta Release
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'packages/mcp-server/**'
-      - 'packages/agent-skills/**'
-      - 'lib/**'
   workflow_dispatch:
+    inputs:
+      release-beta:
+        description: 'Type "release-beta" to confirm'
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
+    if: github.event.inputs.release-beta == 'release-beta'
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -28,26 +30,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/mcp-server/package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Validate pre-release version
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          if [[ ! "$VERSION" =~ -beta\. ]]; then
+            echo "::error::Version '$VERSION' is not a beta pre-release. Expected format: X.Y.Z-beta.N"
+            echo "Bump the version in packages/mcp-server/package.json before triggering this workflow."
+            exit 1
+          fi
+          echo "Valid beta version: $VERSION"
+
       - name: Lint
         run: npm run lint
 
       - name: Build MCP Server
         run: npm run build -w packages/mcp-server
 
-      - name: Get version
-        id: version
-        run: echo "version=$(node -p "require('./packages/mcp-server/package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Reject pre-release versions
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
-          if [[ "$VERSION" =~ -(alpha|beta|rc)\. ]]; then
-            echo "::error::Version '$VERSION' is a pre-release. Use the Beta Release workflow instead."
-            exit 1
-          fi
-
       - name: Pack MCPB Bundle
         run: npm run mcpb:pack -w packages/mcp-server
+
+      - name: Pack npm tarball
+        run: npm pack -w packages/mcp-server --pack-destination ./packages/mcp-server
 
       - name: Upload MCPB artifact
         uses: actions/upload-artifact@v4
@@ -55,8 +64,14 @@ jobs:
           name: mcpb-bundle
           path: packages/mcp-server/*.mcpb
 
-  publish-npm:
-    name: Publish to npm
+      - name: Upload npm tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: packages/mcp-server/*.tgz
+
+  publish-npm-beta:
+    name: Publish to npm (beta)
     needs: build
     runs-on: ubuntu-latest
     outputs:
@@ -97,17 +112,17 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: npm run build -w packages/mcp-server
 
-      - name: Publish to npm
+      - name: Publish to npm (beta tag)
         id: publish
         if: steps.check.outputs.exists == 'false'
         run: |
-          npm publish -w packages/mcp-server --access public --provenance
+          npm publish -w packages/mcp-server --tag beta --access public --provenance
           echo "published=true" >> $GITHUB_OUTPUT
 
-  release:
-    name: Create GitHub Release
-    needs: [build, publish-npm]
-    if: needs.publish-npm.outputs.published == 'true'
+  prerelease:
+    name: Create GitHub Pre-Release
+    needs: [build, publish-npm-beta]
+    if: needs.publish-npm-beta.outputs.published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -120,26 +135,42 @@ jobs:
           name: mcpb-bundle
           path: ./dist
 
-      - name: Create Release
+      - name: Download npm tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-tarball
+          path: ./dist
+
+      - name: Create Pre-Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build.outputs.version }}
-          name: v${{ needs.build.outputs.version }}
-          files: ./dist/*.mcpb
-          generate_release_notes: true
+          name: v${{ needs.build.outputs.version }} (Beta)
+          prerelease: true
+          files: |
+            ./dist/*.mcpb
+            ./dist/*.tgz
           body: |
-            ## Installation
+            ## Beta Release
 
-            ### Claude Desktop (One-Click)
-            Download `tradeblocks-*.mcpb` below and double-click to install.
+            This is a **pre-release** for testing. Use `tradeblocks-mcp@latest` for the stable version.
 
-            ### npm
+            ### Install
+
+            **npm (beta tag):**
             ```bash
-            npx tradeblocks-mcp ~/path/to/backtests
+            npx tradeblocks-mcp@beta ~/path/to/backtests
             ```
 
-            ### From Source
+            **From tarball:**
             ```bash
-            git clone https://github.com/davidromeo/tradeblocks
-            cd tradeblocks && npm install && npm run build:mcp
+            npm install -g ./tradeblocks-mcp-${{ needs.build.outputs.version }}.tgz
+            ```
+
+            **Claude Desktop:**
+            Download `tradeblocks-*.mcpb` below and double-click to install.
+
+            ### Revert to stable
+            ```bash
+            npm install -g tradeblocks-mcp@latest
             ```
