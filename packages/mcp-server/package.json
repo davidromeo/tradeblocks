@@ -16,6 +16,7 @@
     "dev": "tsup --watch",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "mcpb:pack": "npm run build && node scripts/pack-mcpb.js",
+    "pack:beta": "npm run build && npm pack --pack-destination .",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
