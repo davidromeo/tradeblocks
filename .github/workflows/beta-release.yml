@@ -8,14 +8,13 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
-
 jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
     if: github.event.inputs.release-beta == 'release-beta'
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
