@@ -127,14 +127,14 @@ export function registerImportTools(server: McpServer, baseDir: string): void {
           csvType,
         });
 
-        // Brief summary for user display
-        const summary = `Imported ${result.recordCount} ${csvType} records to block "${result.blockId}"`;
+        // Brief summary for user display (use result.csvType which reflects auto-detection)
+        const summary = `Imported ${result.recordCount} ${result.csvType} records to block "${result.blockId}"`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
           blockId: result.blockId,
           name: result.name,
-          csvType,
+          csvType: result.csvType,
           sourcePath: resolvedPath,
           recordCount: result.recordCount,
           dateRange: result.dateRange,

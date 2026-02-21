@@ -1041,7 +1041,7 @@ function normalizeRecordHeaders(
 /**
  * Convert raw CSV record to ReportingTrade object
  */
-function convertToReportingTrade(
+export function convertToReportingTrade(
   raw: Record<string, string>
 ): ReportingTrade | null {
   // Check if this is a TAT format row
@@ -1384,6 +1384,7 @@ export async function loadReportingLogStats(
 export interface ImportCsvResult {
   blockId: string;
   name: string;
+  csvType: CsvType;
   recordCount: number;
   dateRange: {
     start: string | null;
@@ -1636,6 +1637,7 @@ export async function importCsv(
   return {
     blockId,
     name,
+    csvType,
     recordCount: records.length,
     dateRange,
     strategies,
