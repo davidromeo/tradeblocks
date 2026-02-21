@@ -1,9 +1,19 @@
 /**
  * DuckDB Connection Manager
  *
- * Provides lazy singleton connection to DuckDB analytics database.
- * The connection is created on first getConnection() call and reused
- * for subsequent calls until closeConnection() is called.
+ * Provides lazy singleton connection to DuckDB analytics database (analytics.duckdb)
+ * with a second database (market.duckdb) ATTACHed as the `market` catalog.
+ *
+ * Startup sequence on first RW open:
+ *   1. Open analytics.duckdb
+ *   2. DROP SCHEMA IF EXISTS market CASCADE (removes legacy inline market tables,
+ *      prevents DuckDB #14421 naming conflict with the upcoming ATTACH)
+ *   3. ATTACH market.duckdb AS market
+ *   4. ensureMarketTables() — creates market.daily/context/intraday/_sync_metadata
+ *   5. ensureSyncTables() / ensureTradeDataTable() / ensureReportingDataTable()
+ *
+ * On close: DETACH market before closeSync() so WAL is cleanly checkpointed.
+ * On RO open: ATTACH market.duckdb READ_ONLY (no table creation).
  *
  * DuckDB is single-process: only one process can open a database file at a time
  * (even read-only fails when another process holds a write lock with an active WAL).
@@ -11,25 +21,28 @@
  * orphaned MCP processes (PPID=1) and terminating them before retrying.
  *
  * Configuration via environment variables:
- *   DUCKDB_MEMORY_LIMIT - Memory limit (default: 512MB)
- *   DUCKDB_THREADS      - Number of threads (default: 2)
- *   DUCKDB_LOCK_RECOVERY - Force-kill ANY lock-holding tradeblocks-mcp (default: false)
+ *   DUCKDB_MEMORY_LIMIT    - Memory limit (default: 512MB)
+ *   DUCKDB_THREADS         - Number of threads (default: 2)
+ *   DUCKDB_LOCK_RECOVERY   - Force-kill ANY lock-holding tradeblocks-mcp (default: false)
  *   DUCKDB_LOCK_RECOVERY_TIMEOUT_MS - Wait time for SIGTERM (default: 1500)
+ *   MARKET_DB_PATH         - Path to market.duckdb (overrides default, overridden by --market-db)
  *
  * Security:
  *   - enable_external_access is disabled to prevent remote URL fetching
  *   - This setting self-locks when disabled
  *
- * Schemas created on first connection:
- *   - trades: For block/trade data
- *   - market: For market data (SPY, VIX, etc.)
+ * Schemas created on first RW connection:
+ *   - trades: For block/trade data (in analytics.duckdb)
+ *   - market: ATTACHed from market.duckdb (daily, context, intraday, _sync_metadata)
  */
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
 import { execFile } from "child_process";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { promisify } from "util";
-import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable, ensureMarketDataTables } from "./schemas.js";
+import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable } from "./schemas.js";
+import { ensureMarketTables } from "./market-schemas.js";
 
 // Module-level singleton state
 let instance: DuckDBInstance | null = null;
@@ -38,6 +51,7 @@ let connectionMode: "read_write" | "read_only" | null = null;
 let storedDbPath: string | null = null;
 let storedThreads: string | null = null;
 let storedMemoryLimit: string | null = null;
+let storedMarketDbPath: string | null = null;
 const execFileAsync = promisify(execFile);
 
 function isLockError(message: string): boolean {
@@ -156,6 +170,72 @@ async function tryRecoverLockByTerminatingStaleProcess(
   return exited;
 }
 
+/**
+ * Resolve the path to market.duckdb.
+ *
+ * Precedence: CLI --market-db > MARKET_DB_PATH env > default (<dataDir>/market.duckdb)
+ *
+ * @param dataDir - Directory where analytics.duckdb lives (used as default parent)
+ */
+function resolveMarketDbPath(dataDir: string): string {
+  // 1. CLI argument: --market-db /path/to/market.duckdb
+  const args = process.argv;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--market-db" && args[i + 1]) {
+      return path.resolve(args[i + 1]);
+    }
+  }
+  // 2. Environment variable
+  if (process.env.MARKET_DB_PATH) {
+    return path.resolve(process.env.MARKET_DB_PATH);
+  }
+  // 3. Default: alongside analytics.duckdb
+  return path.join(dataDir, "market.duckdb");
+}
+
+/**
+ * ATTACH market.duckdb to an existing connection.
+ *
+ * Creates the parent directory if needed. Auto-recreates market.duckdb on
+ * corruption (market data is re-importable from source CSVs).
+ *
+ * Hard fails on any non-corruption ATTACH error — market access is required.
+ */
+async function attachMarketDb(
+  conn: DuckDBConnection,
+  marketDbPath: string,
+  mode: "read_write" | "read_only"
+): Promise<void> {
+  await fs.mkdir(path.dirname(marketDbPath), { recursive: true });
+  const readOnlyClause = mode === "read_only" ? " (READ_ONLY)" : "";
+  try {
+    await conn.run(`ATTACH '${marketDbPath}' AS market${readOnlyClause}`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("corrupt") || msg.includes("Invalid") || msg.includes("cannot open")) {
+      console.error(`market.duckdb appears corrupted at ${marketDbPath}. Recreating.`);
+      try { await fs.unlink(marketDbPath); } catch { /* file may not exist */ }
+      // Also try removing WAL file
+      try { await fs.unlink(marketDbPath + ".wal"); } catch { /* ignore */ }
+      await conn.run(`ATTACH '${marketDbPath}' AS market${readOnlyClause}`);
+    } else {
+      throw new Error(`Failed to attach market.duckdb at ${marketDbPath}: ${msg}`);
+    }
+  }
+}
+
+/**
+ * DETACH market.duckdb from a connection.
+ * Non-fatal: may already be detached or market was never attached.
+ */
+async function detachMarketDb(conn: DuckDBConnection): Promise<void> {
+  try {
+    await conn.run("DETACH market");
+  } catch {
+    // Non-fatal: may already be detached or market never attached
+  }
+}
+
 async function openReadWriteConnection(
   dbPath: string,
   threads: string,
@@ -167,14 +247,26 @@ async function openReadWriteConnection(
     enable_external_access: "false",
   });
   connection = await instance.connect();
+
+  // Drop legacy market schema from analytics.duckdb before ATTACH.
+  // Prevents DuckDB #14421 naming conflict: having tables in both the main DB
+  // and an ATTACHed DB under the same catalog name causes corruption.
+  try {
+    await connection.run("DROP SCHEMA IF EXISTS market CASCADE");
+  } catch {
+    // Non-fatal: schema may not exist (fresh DB or already dropped)
+  }
+
+  // Attach separate market.duckdb
+  await attachMarketDb(connection, storedMarketDbPath!, "read_write");
+
   // Create schemas/tables every RW open. This keeps the process resilient if
   // analytics.duckdb is deleted/recreated while the process remains alive.
   await connection.run("CREATE SCHEMA IF NOT EXISTS trades");
-  await connection.run("CREATE SCHEMA IF NOT EXISTS market");
   await ensureSyncTables(connection);
   await ensureTradeDataTable(connection);
   await ensureReportingDataTable(connection);
-  await ensureMarketDataTables(connection);
+  await ensureMarketTables(connection);
   connectionMode = "read_write";
 
   return connection;
@@ -192,6 +284,9 @@ async function openReadOnlyConnection(
     access_mode: "READ_ONLY",
   });
   connection = await instance.connect();
+  if (storedMarketDbPath) {
+    await attachMarketDb(connection, storedMarketDbPath, "read_only");
+  }
   connectionMode = "read_only";
   return connection;
 }
@@ -208,7 +303,9 @@ function resetConnectionState(): void {
  * On first call:
  *   - Creates DuckDBInstance at `<dataDir>/analytics.duckdb`
  *   - Applies memory, thread, and security configuration
- *   - Creates 'trades' and 'market' schemas
+ *   - Drops legacy inline market schema from analytics.duckdb
+ *   - ATTACHes market.duckdb as `market` catalog
+ *   - Creates 'trades' schema and market tables
  *   - Stores connection for reuse
  *
  * Subsequent calls return the existing connection.
@@ -233,6 +330,7 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
   storedDbPath = dbPath;
   storedThreads = threads;
   storedMemoryLimit = memoryLimit;
+  storedMarketDbPath = resolveMarketDbPath(dataDir);
   // DUCKDB_LOCK_RECOVERY=true force-kills ANY lock-holding tradeblocks-mcp process.
   // Without it, only orphaned processes (PPID=1, parent died) are auto-killed.
   const forceRecovery = (process.env.DUCKDB_LOCK_RECOVERY ?? "false") !== "false";
@@ -284,11 +382,13 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
 /**
  * Close the DuckDB connection and release resources.
  *
+ * DETACHes market.duckdb before closing to ensure WAL is checkpointed cleanly.
  * Should be called during graceful shutdown (SIGINT, SIGTERM).
  * Safe to call multiple times or when no connection exists.
  */
 export async function closeConnection(): Promise<void> {
   if (connection) {
+    try { await detachMarketDb(connection); } catch { /* non-fatal, log debug */ }
     try {
       // closeSync is the synchronous close method for DuckDB connections
       connection.closeSync();

@@ -48,11 +48,13 @@ MCP Server Modes:
   tradeblocks-mcp --http --port 8080 <folder> HTTP transport on custom port
 
 Options:
-  --http           Start HTTP server instead of stdio (for web platforms)
-  --port <number>  HTTP server port (default: 3100, requires --http)
+  --http             Start HTTP server instead of stdio (for web platforms)
+  --port <number>    HTTP server port (default: 3100, requires --http)
+  --market-db <path> Path to market.duckdb (default: <folder>/market.duckdb)
 
 Environment:
   BLOCKS_DIRECTORY  Default backtests folder if not specified
+  MARKET_DB_PATH    Path to market.duckdb (overrides default, overridden by --market-db)
 
 Commands:
   install-skills    Install TradeBlocks skills to AI platform
