@@ -212,6 +212,38 @@ describe('TAT Adapter', () => {
       expect(trade!.legs).toContain('6945')
     })
 
+    it('converts rows with lowercase keys', () => {
+      const lowerRow: Record<string, string> = {}
+      for (const [key, value] of Object.entries(SAMPLE_TAT_ROW)) {
+        lowerRow[key.toLowerCase()] = value
+      }
+      const trade = convertTatRowToReportingTrade(lowerRow)
+
+      expect(trade).not.toBeNull()
+      expect(trade!.strategy).toBe('DC')
+      expect(trade!.pl).toBe(1929.35)
+      expect(trade!.numContracts).toBe(5)
+      expect(trade!.dateOpened.getFullYear()).toBe(2026)
+      expect(trade!.dateOpened.getMonth()).toBe(0)
+      expect(trade!.dateOpened.getDate()).toBe(30)
+      expect(trade!.timeOpened).toBe('10:04 AM')
+      expect(trade!.openingPrice).toBe(53.1)
+      expect(trade!.legs).toContain('SPX')
+      expect(trade!.legs).toContain('6945')
+    })
+
+    it('converts rows with UPPERCASE keys', () => {
+      const upperRow: Record<string, string> = {}
+      for (const [key, value] of Object.entries(SAMPLE_TAT_ROW)) {
+        upperRow[key.toUpperCase()] = value
+      }
+      const trade = convertTatRowToReportingTrade(upperRow)
+
+      expect(trade).not.toBeNull()
+      expect(trade!.pl).toBe(1929.35)
+      expect(trade!.dateOpened.getDate()).toBe(30)
+    })
+
     it('returns null for rows missing ProfitLoss', () => {
       const row = { ...SAMPLE_TAT_ROW, ProfitLoss: '' }
       const trade = convertTatRowToReportingTrade(row)

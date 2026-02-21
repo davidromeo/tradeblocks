@@ -140,9 +140,39 @@ function parseNumber(value: string | undefined, defaultValue?: number): number {
  * Convert a single TAT CSV row to a ReportingTrade object.
  * Returns null if the row is missing required data (date or P/L).
  */
+/**
+ * Normalize row keys to canonical PascalCase used by TAT exports.
+ * This allows conversion to work even if CSV headers have different casing.
+ */
+function normalizeRowKeys(row: Record<string, string>): Record<string, string> {
+  const keyMap: Record<string, string> = {}
+  for (const key of Object.keys(row)) {
+    keyMap[key.toLowerCase()] = key
+  }
+
+  const canonicalKeys = [
+    'OpenDate', 'Date', 'CloseDate', 'OpenTime', 'CloseTime',
+    'TimeOpened', 'TimeClosed', 'ProfitLoss', 'PriceOpen', 'PriceClose',
+    'TotalPremium', 'Qty', 'Strategy', 'Template', 'Status',
+    'UnderlyingSymbol', 'TradeType', 'ShortPut', 'ShortCall', 'LongPut', 'LongCall',
+  ]
+
+  const normalized: Record<string, string> = { ...row }
+  for (const canonical of canonicalKeys) {
+    if (!(canonical in normalized)) {
+      const actual = keyMap[canonical.toLowerCase()]
+      if (actual) normalized[canonical] = row[actual]
+    }
+  }
+  return normalized
+}
+
 export function convertTatRowToReportingTrade(
   row: Record<string, string>
 ): ReportingTrade | null {
+  // Normalize keys so conversion works regardless of CSV header casing
+  row = normalizeRowKeys(row)
+
   // Parse date: prefer OpenDate, fall back to Date
   const dateOpened = parseTatDate(row.OpenDate) ?? parseTatDate(row.Date)
   if (!dateOpened || isNaN(dateOpened.getTime())) return null
