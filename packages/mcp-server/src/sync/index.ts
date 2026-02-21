@@ -152,6 +152,8 @@ export async function syncBlock(
  *
  * @param baseDir - Base data directory containing _marketdata folder
  * @returns Sync result with file and row counts
+ * @deprecated Market data sync via _marketdata/ folder is deprecated.
+ * Use import_csv (Phase 61+) instead. Will be removed in Phase 64.
  */
 export async function syncMarketData(
   baseDir: string

@@ -14,10 +14,8 @@
 import {
   syncBlock,
   syncAllBlocks,
-  syncMarketData,
   type BlockSyncResult,
   type SyncResult,
-  type MarketSyncResult,
 } from "../../sync/index.js";
 import { upgradeToReadWrite, downgradeToReadOnly, getConnectionMode } from "../../db/connection.js";
 
@@ -40,7 +38,6 @@ export interface MultiBlockContext {
 
 export interface FullSyncContext {
   blockSyncResult: SyncResult;
-  marketSyncResult: MarketSyncResult;
   baseDir: string;
 }
 
@@ -159,8 +156,12 @@ export function withSyncedBlocks<
 }
 
 /**
- * Middleware for tools that need a full sync of all blocks and market data.
+ * Middleware for tools that need a full sync of all blocks.
  * Used by list_blocks which needs to see all available blocks.
+ *
+ * Note: syncMarketData is intentionally NOT called here (DB-09).
+ * Market data writes must not be wrapped in analytics.duckdb transactions.
+ * Market data is imported via dedicated import_csv tools (Phase 61+).
  */
 export function withFullSync<TInput, TOutput>(
   baseDir: string,
@@ -169,12 +170,10 @@ export function withFullSync<TInput, TOutput>(
   return async (input: TInput) => {
     await upgradeToReadWrite(baseDir);
     let blockSyncResult: SyncResult;
-    let marketSyncResult: MarketSyncResult;
 
     if (getConnectionMode() === "read_write") {
       try {
         blockSyncResult = await syncAllBlocks(baseDir);
-        marketSyncResult = await syncMarketData(baseDir);
       } finally {
         await downgradeToReadOnly(baseDir);
       }
@@ -188,15 +187,8 @@ export function withFullSync<TInput, TOutput>(
         errors: [],
         results: [],
       };
-      marketSyncResult = {
-        filesProcessed: 0,
-        filesSynced: 0,
-        filesUnchanged: 0,
-        rowsInserted: 0,
-        errors: [],
-      };
     }
 
-    return handler(input, { blockSyncResult, marketSyncResult, baseDir });
+    return handler(input, { blockSyncResult, baseDir });
   };
 }

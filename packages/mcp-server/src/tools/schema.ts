@@ -67,7 +67,6 @@ interface DatabaseSchemaOutput {
   };
   syncInfo: {
     blocksProcessed: number;
-    marketFilesSynced: number;
   };
 }
 
@@ -171,7 +170,7 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
         "row counts, block breakdowns for trades, and example SQL queries.",
       inputSchema: z.object({}),
     },
-    withFullSync(baseDir, async (_, { blockSyncResult, marketSyncResult }) => {
+    withFullSync(baseDir, async (_, { blockSyncResult }) => {
       const conn = await getConnection(baseDir);
 
       // Get all user tables in trades/market schemas (excluding sync metadata)
@@ -270,7 +269,6 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
         lagTemplate: generateLagTemplate(),
         syncInfo: {
           blocksProcessed: blockSyncResult.blocksProcessed,
-          marketFilesSynced: marketSyncResult.filesSynced,
         },
       };
 
