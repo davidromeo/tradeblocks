@@ -1457,7 +1457,11 @@ function validateCsvColumns(
       break;
     }
     case "reportinglog": {
-      // Required columns for reporting log (with aliases)
+      // Check for TAT format first (has TradeID, ProfitLoss, BuyingPower)
+      if (isTatFormat(headers)) {
+        break; // TAT format is valid, skip OO column checks
+      }
+      // Required columns for OO reporting log (with aliases)
       const dateOpenedAliases = ["Date Opened", "date_opened"];
       const plAliases = ["P/L", "pl"];
       const hasDateOpened = dateOpenedAliases.some((col) =>
