@@ -45,7 +45,10 @@ See [MILESTONES.md](MILESTONES.md) for full history.
   3. Old market tables are dropped from `analytics.duckdb` before ATTACH, preventing the DuckDB #14421 corruption bug
   4. Connection close explicitly DETACHes market.duckdb, and read-write upgrade/downgrade re-ATTACHes correctly without stale file locks
   5. Import writes to market.duckdb are not wrapped in analytics.duckdb transactions (cross-database write isolation enforced)
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 60-01-PLAN.md — Market schemas, ATTACH/DETACH lifecycle, and config resolution
+- [ ] 60-02-PLAN.md — Cross-database write isolation and lifecycle integration tests
 
 ### Phase 61: Import Tools
 **Goal**: Users can import market data from CSV files or external DuckDB databases into the normalized schema via MCP tools, with column mapping validation, ticker normalization, and idempotent merge semantics
@@ -105,7 +108,7 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 57. Restore enrich_trades | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
-| 60. Database Separation | v3.0 | 0/? | Not started | - |
+| 60. Database Separation | v3.0 | 0/2 | Not started | - |
 | 61. Import Tools | v3.0 | 0/? | Not started | - |
 | 62. Enrichment Pipeline | v3.0 | 0/? | Not started | - |
 | 63. Tool Migration | v3.0 | 0/? | Not started | - |
