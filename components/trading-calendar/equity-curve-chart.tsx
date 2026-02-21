@@ -156,7 +156,7 @@ export function EquityCurveChart() {
   } = useTradingCalendarStore()
 
   // Build equity curves filtered to current calendar view
-  const { backtestCurve, actualCurve, matchedBacktestCurve, matchedActualCurve, dateRange } = useMemo(() => {
+  const { backtestCurve, actualCurve, matchedBacktestCurve, matchedActualCurve, unmatchedBacktestCurve, unmatchedActualCurve, dateRange } = useMemo(() => {
     // Get the date range for the current calendar view
     const { startDate, endDate } = getViewDateRange(viewDate, calendarViewMode)
 
@@ -178,25 +178,33 @@ export function EquityCurveChart() {
     const btCurve = buildEquityCurve(filteredBacktestTrades, scalingMode, 'backtest', strategyMatches, actualContractMap)
     const actCurve = buildEquityCurve(filteredActualTrades, scalingMode, 'actual', strategyMatches, actualContractMap)
 
-    // Matched trades only curves
-    // Filter to only strategies that have a match
+    // Build matched/unmatched strategy sets
     const matchedBacktestStrategies = new Set(strategyMatches.map(m => m.backtestStrategy))
     const matchedActualStrategies = new Set(strategyMatches.map(m => m.actualStrategy))
 
+    // Matched trades only curves
     const matchedBtTrades = filteredBacktestTrades.filter(t => matchedBacktestStrategies.has(t.strategy))
     const matchedActTrades = filteredActualTrades.filter(t => matchedActualStrategies.has(t.strategy))
 
-    // Build contract map from matched actual trades only
     const matchedActualContractMap = buildStrategyContractMap(matchedActTrades)
 
     const matchedBtCurve = buildEquityCurve(matchedBtTrades, scalingMode, 'backtest', strategyMatches, matchedActualContractMap)
     const matchedActCurve = buildEquityCurve(matchedActTrades, scalingMode, 'actual', strategyMatches, matchedActualContractMap)
+
+    // Unmatched trades only curves
+    const unmatchedBtTrades = filteredBacktestTrades.filter(t => !matchedBacktestStrategies.has(t.strategy))
+    const unmatchedActTrades = filteredActualTrades.filter(t => !matchedActualStrategies.has(t.strategy))
+
+    const unmatchedBtCurve = buildEquityCurve(unmatchedBtTrades, scalingMode, 'backtest', strategyMatches, actualContractMap)
+    const unmatchedActCurve = buildEquityCurve(unmatchedActTrades, scalingMode, 'actual', strategyMatches, actualContractMap)
 
     return {
       backtestCurve: btCurve,
       actualCurve: actCurve,
       matchedBacktestCurve: matchedBtCurve,
       matchedActualCurve: matchedActCurve,
+      unmatchedBacktestCurve: unmatchedBtCurve,
+      unmatchedActualCurve: unmatchedActCurve,
       dateRange: { startDate, endDate }
     }
   }, [backtestTrades, actualTrades, scalingMode, strategyMatches, viewDate, calendarViewMode])
@@ -210,8 +218,12 @@ export function EquityCurveChart() {
   }
 
   // Select curves based on trade filter mode from store
-  const btCurve = tradeFilterMode === 'matched' ? matchedBacktestCurve : backtestCurve
-  const actCurve = tradeFilterMode === 'matched' ? matchedActualCurve : actualCurve
+  const btCurve = tradeFilterMode === 'matched' ? matchedBacktestCurve
+    : tradeFilterMode === 'unmatched' ? unmatchedBacktestCurve
+    : backtestCurve
+  const actCurve = tradeFilterMode === 'matched' ? matchedActualCurve
+    : tradeFilterMode === 'unmatched' ? unmatchedActualCurve
+    : actualCurve
 
   // Build traces
   const traces: Partial<PlotData>[] = []
@@ -314,7 +326,9 @@ export function EquityCurveChart() {
       : null
 
   // Build trade filter mode indicator
-  const filterLabel = tradeFilterMode === 'matched' ? "Matched Only" : null
+  const filterLabel = tradeFilterMode === 'matched' ? "Matched Only"
+    : tradeFilterMode === 'unmatched' ? "Unmatched Only"
+    : null
 
   const controls = (
     <div className="flex items-center gap-2">
@@ -356,6 +370,8 @@ export function EquityCurveChart() {
         flavor: "Side-by-side comparison of backtest vs actual performance over time",
         detailed: tradeFilterMode === "matched"
           ? "This chart shows how your actual performance compares to your backtest expectations for matched strategies. Divergence between the lines reveals slippage, execution differences, or timing variations accumulating over time."
+          : tradeFilterMode === "unmatched"
+          ? "This chart shows only trades from strategies that are missing a counterpart. These are strategies present in only backtest or only actual data."
           : "This chart shows all trades from both backtest and actual data. This gives you the complete picture of what was planned vs what actually executed.",
       }}
       data={traces}

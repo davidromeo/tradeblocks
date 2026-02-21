@@ -252,10 +252,10 @@ interface CombinedBacktestTradeGroupProps {
   combined: CombinedTrade
   originalTrades: Trade[]
   scalingMode: 'raw' | 'perContract' | 'toReported'
-  actualContracts?: number
+  toReportedScaleFactor?: number | null
 }
 
-function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, actualContracts }: CombinedBacktestTradeGroupProps) {
+function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, toReportedScaleFactor }: CombinedBacktestTradeGroupProps) {
   const [isLegsExpanded, setIsLegsExpanded] = useState(false)
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false)
 
@@ -264,11 +264,11 @@ function CombinedBacktestTradeGroup({ combined, originalTrades, scalingMode, act
     if (scalingMode === 'perContract') {
       return combined.numContracts > 0 ? 1 / combined.numContracts : null
     }
-    if (scalingMode === 'toReported' && actualContracts) {
-      return combined.numContracts > 0 ? actualContracts / combined.numContracts : null
+    if (scalingMode === 'toReported') {
+      return toReportedScaleFactor ?? null
     }
     return null
-  }, [scalingMode, combined.numContracts, actualContracts])
+  }, [scalingMode, combined.numContracts, toReportedScaleFactor])
 
   const legCount = combined.originalTradeCount
 
@@ -443,10 +443,10 @@ interface BacktestTradeCardProps {
   tradeIndex: number
   totalTrades: number
   scalingMode: 'raw' | 'perContract' | 'toReported'
-  actualContracts?: number
+  toReportedScaleFactor?: number | null
 }
 
-function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actualContracts }: BacktestTradeCardProps) {
+function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, toReportedScaleFactor }: BacktestTradeCardProps) {
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false)
 
   const scaleFactor = useMemo(() => {
@@ -454,11 +454,11 @@ function BacktestTradeCard({ trade, tradeIndex, totalTrades, scalingMode, actual
     if (scalingMode === 'perContract') {
       return trade.numContracts > 0 ? 1 / trade.numContracts : null
     }
-    if (scalingMode === 'toReported' && actualContracts) {
-      return trade.numContracts > 0 ? actualContracts / trade.numContracts : null
+    if (scalingMode === 'toReported') {
+      return toReportedScaleFactor ?? null
     }
     return null
-  }, [scalingMode, trade.numContracts, actualContracts])
+  }, [scalingMode, trade.numContracts, toReportedScaleFactor])
 
   const tradeLabel = totalTrades > 1 ? ` (Trade ${tradeIndex + 1} of ${totalTrades})` : ''
 
@@ -786,7 +786,7 @@ export function TradeDetailView() {
                   combined={group.combined}
                   originalTrades={group.original}
                   scalingMode={scalingMode}
-                  actualContracts={scalingContext.actualContracts}
+                  toReportedScaleFactor={btScaleFactor}
                 />
               ))}
             </div>
@@ -808,7 +808,7 @@ export function TradeDetailView() {
                 combined={group.combined}
                 originalTrades={group.original}
                 scalingMode={scalingMode}
-                actualContracts={scalingContext.actualContracts}
+                toReportedScaleFactor={btScaleFactor}
               />
             ))}
           </>
@@ -841,7 +841,7 @@ export function TradeDetailView() {
                       tradeIndex={pair.pairIndex}
                       totalTrades={matchedPairs.length}
                       scalingMode={scalingMode}
-                      actualContracts={scalingContext.actualContracts}
+                      toReportedScaleFactor={btScaleFactor}
                     />
                   ) : (
                     <div className="h-full" /> /* Empty placeholder */
@@ -869,7 +869,7 @@ export function TradeDetailView() {
                 tradeIndex={index}
                 totalTrades={backtestTrades.length}
                 scalingMode={scalingMode}
-                actualContracts={scalingContext.actualContracts}
+                toReportedScaleFactor={btScaleFactor}
               />
             ))}
           </>

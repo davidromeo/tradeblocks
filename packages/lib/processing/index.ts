@@ -8,6 +8,7 @@ export * from './csv-parser'
 export * from './trade-processor'
 export * from './daily-log-processor'
 export * from './reporting-trade-processor'
+export * from './tat-adapter'
 export * from './static-dataset-processor'
 export * from './data-loader'
 // Note: capital-calculator exports calculateInitialCapital which conflicts with utils/equity-curve

@@ -8,7 +8,11 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { Trade, DailyLogEntry, ReportingTrade } from "@tradeblocks/lib";
-import { REPORTING_TRADE_COLUMN_ALIASES } from "@tradeblocks/lib";
+import {
+  REPORTING_TRADE_COLUMN_ALIASES,
+  isTatFormat,
+  convertTatRowToReportingTrade,
+} from "@tradeblocks/lib";
 
 /**
  * CSV file mappings for flexible discovery
@@ -290,6 +294,14 @@ async function detectCsvType(filePath: string): Promise<CsvType> {
     // This catches dailylogs that also have P/L columns (like Option Omega exports)
     if (hasSimpleDate && hasValue && matchedTradeColumns.length < 2) {
       return "dailylog";
+    }
+
+    // TAT (Trade Automation Toolbox) detection:
+    // Has "TradeID" AND "ProfitLoss" AND "BuyingPower"
+    const tatSignature = ['tradeid', 'profitloss', 'buyingpower'];
+    const isTat = tatSignature.every((sig) => headers.includes(sig));
+    if (isTat) {
+      return 'reportinglog';
     }
 
     // Reporting log detection:
@@ -1029,9 +1041,16 @@ function normalizeRecordHeaders(
 /**
  * Convert raw CSV record to ReportingTrade object
  */
-function convertToReportingTrade(
+export function convertToReportingTrade(
   raw: Record<string, string>
 ): ReportingTrade | null {
+  // Check if this is a TAT format row
+  const keys = Object.keys(raw);
+  if (isTatFormat(keys)) {
+    return convertTatRowToReportingTrade(raw);
+  }
+
+  // Existing OO conversion logic below
   try {
     const normalized = normalizeRecordHeaders(raw);
 
@@ -1365,6 +1384,7 @@ export async function loadReportingLogStats(
 export interface ImportCsvResult {
   blockId: string;
   name: string;
+  csvType: CsvType;
   recordCount: number;
   dateRange: {
     start: string | null;
@@ -1438,7 +1458,11 @@ function validateCsvColumns(
       break;
     }
     case "reportinglog": {
-      // Required columns for reporting log (with aliases)
+      // Check for TAT format first (has TradeID, ProfitLoss, BuyingPower)
+      if (isTatFormat(headers)) {
+        break; // TAT format is valid, skip OO column checks
+      }
+      // Required columns for OO reporting log (with aliases)
       const dateOpenedAliases = ["Date Opened", "date_opened"];
       const plAliases = ["P/L", "pl"];
       const hasDateOpened = dateOpenedAliases.some((col) =>
@@ -1475,7 +1499,8 @@ export async function importCsv(
   baseDir: string,
   options: ImportCsvOptions
 ): Promise<ImportCsvResult> {
-  const { csvPath, blockName, csvType = "tradelog" } = options;
+  const { csvPath, blockName } = options;
+  let { csvType = "tradelog" } = options;
 
   // Validate source file exists
   try {
@@ -1487,6 +1512,15 @@ export async function importCsv(
   // Read and parse the CSV
   const content = await fs.readFile(csvPath, "utf-8");
   const records = parseCSV(content);
+
+  // Auto-detect TAT format: if csvType is default "tradelog" but headers
+  // match TAT signature, reclassify as "reportinglog"
+  if (csvType === "tradelog" && records.length > 0) {
+    const headers = Object.keys(records[0]);
+    if (isTatFormat(headers)) {
+      csvType = "reportinglog";
+    }
+  }
 
   // Validate CSV has required columns
   const validation = validateCsvColumns(records, csvType);
@@ -1603,6 +1637,7 @@ export async function importCsv(
   return {
     blockId,
     name,
+    csvType,
     recordCount: records.length,
     dateRange,
     strategies,
