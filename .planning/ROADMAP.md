@@ -27,7 +27,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 
 ## Phases
 
-- [ ] **Phase 60: Database Separation and Connection Infrastructure** — Separate market.duckdb created, ATTACHed at startup, with normalized schema and safe connection lifecycle
+- [x] **Phase 60: Database Separation and Connection Infrastructure** — Separate market.duckdb created, ATTACHed at startup, with normalized schema and safe connection lifecycle (completed 2026-02-21)
 - [ ] **Phase 61: Import Tools** — MCP tools for ingesting market data from CSV files and external DuckDB databases
 - [ ] **Phase 62: TypeScript Enrichment Pipeline** — Pure indicator functions and tiered enrichment runner computing ~40 derived fields from raw OHLCV
 - [ ] **Phase 63: Tool Migration** — All 4 market-data tools and shared query utilities migrated to new normalized schema
@@ -45,7 +45,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
   3. Old market tables are dropped from `analytics.duckdb` before ATTACH, preventing the DuckDB #14421 corruption bug
   4. Connection close explicitly DETACHes market.duckdb, and read-write upgrade/downgrade re-ATTACHes correctly without stale file locks
   5. Import writes to market.duckdb are not wrapped in analytics.duckdb transactions (cross-database write isolation enforced)
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 60-01-PLAN.md — Market schemas, ATTACH/DETACH lifecycle, and config resolution
 - [ ] 60-02-PLAN.md — Cross-database write isolation and lifecycle integration tests
@@ -108,7 +108,7 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 57. Restore enrich_trades | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
-| 60. Database Separation | 1/2 | In Progress|  | - |
+| 60. Database Separation | 2/2 | Complete    | 2026-02-21 | - |
 | 61. Import Tools | v3.0 | 0/? | Not started | - |
 | 62. Enrichment Pipeline | v3.0 | 0/? | Not started | - |
 | 63. Tool Migration | v3.0 | 0/? | Not started | - |

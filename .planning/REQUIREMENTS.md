@@ -17,7 +17,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **DB-06**: `market._sync_metadata` table tracking import/enrichment state per source and ticker
 - [x] **DB-07**: Explicit DETACH on connection close, re-ATTACH on read-write upgrade/downgrade
 - [x] **DB-08**: Old market tables dropped from `analytics.duckdb` before ATTACH (corruption prevention per DuckDB #14421)
-- [ ] **DB-09**: Cross-database write isolation enforced (import tools not wrapped in withFullSync)
+- [x] **DB-09**: Cross-database write isolation enforced (import tools not wrapped in withFullSync)
 
 ### Import Tools
 
@@ -89,7 +89,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DB-06 | Phase 60 | Complete |
 | DB-07 | Phase 60 | Complete |
 | DB-08 | Phase 60 | Complete |
-| DB-09 | Phase 60 | Pending |
+| DB-09 | Phase 60 | Complete |
 | IMP-01 | Phase 61 | Pending |
 | IMP-02 | Phase 61 | Pending |
 | IMP-03 | Phase 61 | Pending |
