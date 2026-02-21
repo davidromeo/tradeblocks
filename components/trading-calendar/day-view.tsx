@@ -147,8 +147,8 @@ export function DayView() {
 
   return (
     <div className="space-y-6">
-      {/* Matched strategies */}
-      {matchedComparisons.length > 0 && (
+      {/* Matched strategies - hidden when filter mode is 'unmatched' */}
+      {tradeFilterMode !== 'unmatched' && matchedComparisons.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
             Matched Strategies ({matchedComparisons.length})
@@ -178,7 +178,7 @@ export function DayView() {
       )}
 
       {/* Unmatched strategies - hidden when filter mode is 'matched' */}
-      {tradeFilterMode === 'all' && unmatchedComparisons.length > 0 && (
+      {tradeFilterMode !== 'matched' && unmatchedComparisons.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
             Unmatched ({unmatchedComparisons.length})
@@ -208,10 +208,17 @@ export function DayView() {
       )}
 
       {/* Empty state - accounts for filter mode */}
-      {(tradeFilterMode === 'all' ? strategyComparisons.length === 0 : matchedComparisons.length === 0) && (
+      {(tradeFilterMode === 'all'
+        ? strategyComparisons.length === 0
+        : tradeFilterMode === 'matched'
+          ? matchedComparisons.length === 0
+          : unmatchedComparisons.length === 0
+      ) && (
         <Card className="py-8">
           <CardContent className="text-center text-muted-foreground">
-            {tradeFilterMode === 'matched' ? 'No matched trades on this day' : 'No trades on this day'}
+            {tradeFilterMode === 'matched' ? 'No matched trades on this day'
+              : tradeFilterMode === 'unmatched' ? 'No unmatched trades on this day'
+              : 'No trades on this day'}
           </CardContent>
         </Card>
       )}
