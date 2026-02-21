@@ -38,6 +38,14 @@ jobs:
         id: version
         run: echo "version=$(node -p "require('./packages/mcp-server/package.json').version")" >> $GITHUB_OUTPUT
 
+      - name: Reject pre-release versions
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          if [[ "$VERSION" =~ -(alpha|beta|rc)\. ]]; then
+            echo "::error::Version '$VERSION' is a pre-release. Use the Beta Release workflow instead."
+            exit 1
+          fi
+
       - name: Pack MCPB Bundle
         run: npm run mcpb:pack -w packages/mcp-server
 
