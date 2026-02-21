@@ -2,18 +2,17 @@
 
 ## Current Position
 
-Phase: 59 of 59
-Status: v2.9 milestone shipped
-Last activity: 2026-02-09 -- Milestone v2.9 archived and tagged
-
-Progress: [##########] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-21 — Milestone v3.0 started
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-09)
+See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Planning next milestone
+**Current focus:** v3.0 Market Data Separation
 
 ## Accumulated Context
 
@@ -31,6 +30,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-09
-Stopped at: v2.9 milestone completed and archived
+Last session: 2026-02-21
+Stopped at: Defining requirements for v3.0
 Resume file: None
