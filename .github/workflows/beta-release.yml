@@ -77,7 +77,6 @@ jobs:
       published: ${{ steps.publish.outputs.published }}
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -87,9 +86,6 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
-
-      - name: Update npm for OIDC support
-        run: npm install -g npm@latest
 
       - name: Check if version exists on npm
         id: check
@@ -115,8 +111,10 @@ jobs:
         id: publish
         if: steps.check.outputs.exists == 'false'
         run: |
-          npm publish -w packages/mcp-server --tag beta --access public --provenance
+          npm publish -w packages/mcp-server --tag beta --access public
           echo "published=true" >> $GITHUB_OUTPUT
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   prerelease:
     name: Create GitHub Pre-Release
