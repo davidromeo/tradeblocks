@@ -1498,7 +1498,8 @@ export async function importCsv(
   baseDir: string,
   options: ImportCsvOptions
 ): Promise<ImportCsvResult> {
-  const { csvPath, blockName, csvType = "tradelog" } = options;
+  const { csvPath, blockName } = options;
+  let { csvType = "tradelog" } = options;
 
   // Validate source file exists
   try {
@@ -1510,6 +1511,15 @@ export async function importCsv(
   // Read and parse the CSV
   const content = await fs.readFile(csvPath, "utf-8");
   const records = parseCSV(content);
+
+  // Auto-detect TAT format: if csvType is default "tradelog" but headers
+  // match TAT signature, reclassify as "reportinglog"
+  if (csvType === "tradelog" && records.length > 0) {
+    const headers = Object.keys(records[0]);
+    if (isTatFormat(headers)) {
+      csvType = "reportinglog";
+    }
+  }
 
   // Validate CSV has required columns
   const validation = validateCsvColumns(records, csvType);
