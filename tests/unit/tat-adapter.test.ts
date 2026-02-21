@@ -144,10 +144,11 @@ describe('TAT Adapter', () => {
       const trade = convertTatRowToReportingTrade(SAMPLE_TAT_ROW)
 
       expect(trade).not.toBeNull()
-      expect(trade!.strategy).toBe('DC')
+      expect(trade!.strategy).toBe('MEDC 3/7') // Template, not Strategy
       expect(trade!.pl).toBe(1929.35)
       expect(trade!.numContracts).toBe(5) // Qty, NOT ContractCount
-      expect(trade!.initialPremium).toBe(-26550)
+      expect(trade!.initialPremium).toBe(-5310) // TotalPremium / Qty (-26550 / 5)
+      expect(trade!.openingPrice).toBe(0) // TAT does not report underlying price
       expect(trade!.reasonForClose).toBe('Manual Closed')
     })
 
@@ -182,9 +183,9 @@ describe('TAT Adapter', () => {
       expect(trade!.numContracts).toBe(5)
     })
 
-    it('uses abs(PriceOpen) for openingPrice', () => {
+    it('sets openingPrice to 0 (TAT does not report underlying price)', () => {
       const trade = convertTatRowToReportingTrade(SAMPLE_TAT_ROW)
-      expect(trade!.openingPrice).toBe(53.1)
+      expect(trade!.openingPrice).toBe(0)
     })
 
     it('maps PriceClose to closingPrice', () => {
@@ -220,14 +221,14 @@ describe('TAT Adapter', () => {
       const trade = convertTatRowToReportingTrade(lowerRow)
 
       expect(trade).not.toBeNull()
-      expect(trade!.strategy).toBe('DC')
+      expect(trade!.strategy).toBe('MEDC 3/7') // Template, not Strategy
       expect(trade!.pl).toBe(1929.35)
       expect(trade!.numContracts).toBe(5)
       expect(trade!.dateOpened.getFullYear()).toBe(2026)
       expect(trade!.dateOpened.getMonth()).toBe(0)
       expect(trade!.dateOpened.getDate()).toBe(30)
       expect(trade!.timeOpened).toBe('10:04 AM')
-      expect(trade!.openingPrice).toBe(53.1)
+      expect(trade!.openingPrice).toBe(0)
       expect(trade!.legs).toContain('SPX')
       expect(trade!.legs).toContain('6945')
     })
@@ -293,16 +294,16 @@ describe('ReportingTradeProcessor TAT integration', () => {
     expect(result.trades).toHaveLength(2)
 
     // Both trades are on the same date; sort is stable so insertion order is preserved
-    expect(result.trades[0].strategy).toBe('DC')
+    expect(result.trades[0].strategy).toBe('MEDC 3/7')
     expect(result.trades[0].numContracts).toBe(5)
     expect(result.trades[0].pl).toBe(1929.35)
 
-    expect(result.trades[1].strategy).toBe('DC')
+    expect(result.trades[1].strategy).toBe('MEDC 3/7')
     expect(result.trades[1].numContracts).toBe(5)
     expect(result.trades[1].pl).toBe(1504.35)
 
     // Verify stats
-    expect(result.stats.strategies).toEqual(['DC'])
+    expect(result.stats.strategies).toEqual(['MEDC 3/7'])
     expect(result.stats.totalPL).toBeCloseTo(3433.70, 2)
   })
 
@@ -322,7 +323,7 @@ describe('ReportingTradeProcessor TAT integration', () => {
     expect(result.trades[0].dateOpened.getMonth()).toBe(0) // January
     expect(result.trades[0].dateOpened.getDate()).toBe(30)
     expect(result.trades[0].timeOpened).toBe('10:04 AM')
-    expect(result.trades[0].openingPrice).toBe(53.1)
+    expect(result.trades[0].openingPrice).toBe(0)
     expect(result.trades[0].reasonForClose).toBe('Manual Closed')
   })
 })

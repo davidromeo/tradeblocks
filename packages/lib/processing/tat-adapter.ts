@@ -11,9 +11,11 @@
  *   TotalPremium, Qty, ContractCount, ProfitLoss, Commission, Status,
  *   ShortPut, LongPut, ShortCall, LongCall, UnderlyingSymbol, TradeType, TradeID
  *
- * Critical: numContracts uses Qty (spreads), NOT ContractCount (total legs).
- * This matches OO's No. of Contracts semantics and is required for correct
- * perContract/toReported scaling math.
+ * Key mapping differences from OO:
+ *   - strategy ← Template (not Strategy, which is a user-defined grouping in TAT)
+ *   - openingPrice: TAT does not report underlying price level (always 0)
+ *   - initialPremium ← TotalPremium / Qty (per-spread, matching OO semantics)
+ *   - numContracts ← Qty (spreads), NOT ContractCount (total legs)
  */
 
 import type { ReportingTrade } from '../models/reporting-trade'
@@ -190,14 +192,17 @@ export function convertTatRowToReportingTrade(
 
   const legs = buildTatLegsString(row)
 
+  const qty = parseNumber(row.Qty, 1)
+
   return {
-    strategy: (row.Strategy || row.Template || '').trim() || 'Unknown',
+    // Template = strategy name (matches OO's Strategy); Strategy = user-defined grouping
+    strategy: (row.Template || row.Strategy || '').trim() || 'Unknown',
     dateOpened,
     timeOpened,
-    openingPrice: Math.abs(parseNumber(row.PriceOpen)),
+    openingPrice: 0, // OO reports underlying price level; TAT does not provide this
     legs,
-    initialPremium: parseNumber(row.TotalPremium),
-    numContracts: parseNumber(row.Qty, 1), // Qty = spreads (matches OO semantics)
+    initialPremium: qty !== 0 ? parseNumber(row.TotalPremium) / qty : parseNumber(row.TotalPremium), // Per-spread premium (matches OO semantics)
+    numContracts: qty, // Qty = spreads (matches OO semantics)
     pl: parseNumber(row.ProfitLoss),
     closingPrice: row.PriceClose ? parseNumber(row.PriceClose) : undefined,
     dateClosed,
