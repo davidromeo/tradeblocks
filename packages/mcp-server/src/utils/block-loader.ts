@@ -8,7 +8,11 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { Trade, DailyLogEntry, ReportingTrade } from "@tradeblocks/lib";
-import { REPORTING_TRADE_COLUMN_ALIASES } from "@tradeblocks/lib";
+import {
+  REPORTING_TRADE_COLUMN_ALIASES,
+  isTatFormat,
+  convertTatRowToReportingTrade,
+} from "@tradeblocks/lib";
 
 /**
  * CSV file mappings for flexible discovery
@@ -290,6 +294,14 @@ async function detectCsvType(filePath: string): Promise<CsvType> {
     // This catches dailylogs that also have P/L columns (like Option Omega exports)
     if (hasSimpleDate && hasValue && matchedTradeColumns.length < 2) {
       return "dailylog";
+    }
+
+    // TAT (Trade Automation Toolbox) detection:
+    // Has "TradeID" AND "ProfitLoss" AND "BuyingPower"
+    const tatSignature = ['tradeid', 'profitloss', 'buyingpower'];
+    const isTat = tatSignature.every((sig) => headers.includes(sig));
+    if (isTat) {
+      return 'reportinglog';
     }
 
     // Reporting log detection:
@@ -1032,6 +1044,13 @@ function normalizeRecordHeaders(
 function convertToReportingTrade(
   raw: Record<string, string>
 ): ReportingTrade | null {
+  // Check if this is a TAT format row
+  const keys = Object.keys(raw);
+  if (isTatFormat(keys)) {
+    return convertTatRowToReportingTrade(raw);
+  }
+
+  // Existing OO conversion logic below
   try {
     const normalized = normalizeRecordHeaders(raw);
 
