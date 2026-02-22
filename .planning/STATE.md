@@ -2,12 +2,12 @@
 
 ## Current Position
 
-Phase: 62 of 64 (TypeScript Enrichment Pipeline)
-Plan: 3 of 3 complete
-Status: Phase complete
-Last activity: 2026-02-22 — Completed 62-03 (enrich_market_data MCP tool registered, version 1.4.0)
+Phase: 63 of 64 (Tool Migration)
+Plan: 1 of 4 complete
+Status: In progress
+Last activity: 2026-02-22 — Completed 63-01 (query foundation rewrite: schema-metadata, field-timing, data-availability)
 
-Progress: [██████░░░░] 45%
+Progress: [███████░░░] 49%
 
 ## Project Reference
 
@@ -68,6 +68,10 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 62-02]: enrichment watermark pattern: source='enrichment', ticker, target_table='daily' in market._sync_metadata
 - [Phase 62-03]: enrich_market_data follows same RW lifecycle as import tools (upgradeToReadWrite before, downgradeToReadOnly in finally)
 - [Phase 62-03]: MCP server version bumped to 1.4.0 (minor bump for new enrich_market_data tool)
+- [Phase 63-01]: Prior_Range_vs_ATR added to market.daily schema (was a documented Phase 62 gap) — timing: 'open' (prior day's range/ATR known at market open)
+- [Phase 63-01]: buildLookaheadFreeQuery string[] overload: ticker appended as last param ($N+1) so date placeholder numbering is not shifted
+- [Phase 63-01]: Tier 3 columns (High_Time, Low_Time, High_Before_Low, Reversal_Type) included in schema-metadata.daily because columns exist in market.daily CREATE TABLE even though enrichment is deferred
+- [Phase 63-01]: New field counts: 9 open / 36 close / 3 static = 48 total (was 8/44/3/55 — reduction due to Tier 3 intraday timing columns removed from new schema)
 
 ### Pending Todos
 
@@ -82,5 +86,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 62-03-PLAN.md (enrich_market_data MCP tool registered, version bumped to 1.4.0, Phase 62 complete)
+Stopped at: Completed 63-01-PLAN.md (query foundation rewrite: schema-metadata, field-timing, data-availability, 38 tests pass)
 Resume file: None
