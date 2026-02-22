@@ -465,14 +465,16 @@ export async function importFromDatabase(
     const rawResult = await conn.runAndReadAll(query);
 
     // 4. Convert result to Record<string, string>[]
-    const resultColumns = rawResult.getColumns();
+    // Use columnNames() for column name strings — getColumns() returns column data arrays,
+    // not column descriptor objects with .name properties.
+    const resultColumnNames = rawResult.columnNames();
     const resultRows = rawResult.getRows();
 
     const rows: Record<string, string>[] = resultRows.map((row) => {
       const obj: Record<string, string> = {};
-      resultColumns.forEach((col, idx) => {
+      resultColumnNames.forEach((colName, idx) => {
         const val = row[idx];
-        obj[col.name] = val === null || val === undefined ? "" : String(val);
+        obj[colName] = val === null || val === undefined ? "" : String(val);
       });
       return obj;
     });

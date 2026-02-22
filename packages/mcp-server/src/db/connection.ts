@@ -28,9 +28,10 @@
  *   MARKET_DB_PATH         - Path to market.duckdb (overrides default, overridden by --market-db)
  *
  * Security:
- *   - enable_external_access starts as "true" to allow local ATTACH (required for market.duckdb)
- *   - After ATTACH, SET enable_external_access = false locks down remote HTTP/HTTPS access
- *   - The SET is self-locking: cannot be re-enabled within the same session
+ *   - enable_external_access: "true" at DuckDBInstance creation allows local ATTACH
+ *   - We do NOT call SET enable_external_access = false because testing confirmed it also
+ *     blocks local file ATTACH operations (not just HTTP), which breaks importFromDatabase
+ *   - No HTTP URLs are used in this application — local ATTACH is the only external access needed
  *
  * Schemas created on first RW connection:
  *   - trades: For block/trade data (in analytics.duckdb)
@@ -264,14 +265,12 @@ async function openReadWriteConnection(
   // Attach separate market.duckdb
   await attachMarketDb(connection, storedMarketDbPath!, "read_write");
 
-  // Lock down external access after ATTACH (self-locking: cannot be re-enabled in this session).
-  // This prevents remote HTTP/HTTPS data fetching while still allowing local file operations
-  // on databases that are already attached.
-  try {
-    await connection.run("SET enable_external_access = false");
-  } catch {
-    // Non-fatal: may fail in some DuckDB versions or test environments
-  }
+  // NOTE: We intentionally do NOT call SET enable_external_access = false here.
+  // Testing confirmed that SET blocks ALL new ATTACH operations (including local file ATTACH),
+  // not just remote HTTP/HTTPS access. This would prevent importFromDatabase from ATTACHing
+  // external DuckDB files, making the import_from_database MCP tool non-functional.
+  // The enable_external_access: "true" at DuckDBInstance creation is the intended security
+  // boundary — no HTTP URLs are used in this application.
 
   // Create schemas/tables every RW open. This keeps the process resilient if
   // analytics.duckdb is deleted/recreated while the process remains alive.
@@ -291,7 +290,8 @@ async function openReadOnlyConnection(
   memoryLimit: string
 ): Promise<DuckDBConnection> {
   // enable_external_access must be "true" at instance creation to allow ATTACH.
-  // We lock it down via SET after attaching the market database.
+  // We do NOT call SET enable_external_access = false because it also blocks local
+  // file ATTACH operations, not just HTTP. See openReadWriteConnection for details.
   instance = await DuckDBInstance.create(dbPath, {
     threads,
     memory_limit: memoryLimit,
@@ -301,11 +301,6 @@ async function openReadOnlyConnection(
   connection = await instance.connect();
   if (storedMarketDbPath) {
     await attachMarketDb(connection, storedMarketDbPath, "read_only");
-  }
-  try {
-    await connection.run("SET enable_external_access = false");
-  } catch {
-    // Non-fatal
   }
   connectionMode = "read_only";
   return connection;
