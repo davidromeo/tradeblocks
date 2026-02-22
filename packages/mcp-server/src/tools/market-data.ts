@@ -1189,236 +1189,260 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
   );
 
   // ---------------------------------------------------------------------------
-  // calculate_orb - Calculate Opening Range Breakout levels
+  // calculate_orb - Calculate Opening Range Breakout levels from market.intraday
   // ---------------------------------------------------------------------------
+
+  /**
+   * Convert a 4-digit HHMM string (e.g., '0930') to HH:MM format (e.g., '09:30').
+   * Throws if the input is not exactly 4 digits.
+   */
+  function hhmmToSqlTime(hhmm: string): string {
+    if (!/^\d{4}$/.test(hhmm)) {
+      throw new Error(`Invalid HHMM format: ${hhmm}. Expected 4 digits like '0930'.`);
+    }
+    return `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
+  }
+
   server.registerTool(
     "calculate_orb",
     {
       description:
-        "Calculate Opening Range Breakout (ORB) levels using 15-minute checkpoint data. " +
-        "ORB is defined as the high/low range between specified start and end times. " +
-        "Returns per-day ORB high, low, range percentage, and where close fell in that range.",
+        "Calculate Opening Range Breakout (ORB) levels from market.intraday bar data. " +
+        "ORB range defined by high/low (or close) within the specified time window. " +
+        "Returns per-day ORB levels plus breakout events (direction, time, condition). " +
+        "Supports any bar resolution and any ticker with intraday data.",
       inputSchema: z.object({
-        ticker: z.string().optional().describe("Underlying ticker to query (default: SPX)"),
-        startTime: z.string().describe("ORB start time in HHMM format (e.g., '0930' for 9:30 AM)"),
-        endTime: z.string().describe("ORB end time in HHMM format (e.g., '1000' for 10:00 AM)"),
+        ticker: z.string().optional().describe("Underlying ticker (default: SPX)"),
+        startTime: z.string().describe("ORB window start time in HHMM format (e.g., '0930')"),
+        endTime: z.string().describe("ORB window end time in HHMM format (e.g., '1000')"),
         startDate: z.string().describe("Start date (YYYY-MM-DD)"),
         endDate: z.string().optional().describe("End date (YYYY-MM-DD), defaults to startDate"),
-        limit: z.number().int().min(1).optional().describe("Max rows to return (default: 100)"),
+        useHighLow: z.boolean().default(true).describe(
+          "If true, ORB range uses bar high/low values. If false, uses bar close values only. Default: true."
+        ),
+        barResolution: z.string().optional().describe(
+          "Bar resolution to use (e.g., '15', '5'). Default: finest available resolution in market.intraday for the ticker."
+        ),
+        limit: z.number().int().min(1).max(500).default(100).describe("Max days to return (default: 100)"),
       }),
     },
-    withFullSync(baseDir, async ({ ticker, startTime, endTime, startDate, endDate, limit = 100 }) => {
+    withFullSync(baseDir, async ({ ticker, startTime, endTime, startDate, endDate, useHighLow, barResolution, limit }) => {
       try {
-        // Query DuckDB for intraday data in the date range
         const end = endDate || startDate;
         const normalizedTicker = normalizeTicker(ticker || "") || DEFAULT_MARKET_TICKER;
         const conn = await getConnection(baseDir);
 
-        // Map of available checkpoint times to their field names
-        const checkpointFields: Record<string, string> = {
-          "0930": "P_0930",
-          "0945": "P_0945",
-          "1000": "P_1000",
-          "1015": "P_1015",
-          "1030": "P_1030",
-          "1045": "P_1045",
-          "1100": "P_1100",
-          "1115": "P_1115",
-          "1130": "P_1130",
-          "1145": "P_1145",
-          "1200": "P_1200",
-          "1215": "P_1215",
-          "1230": "P_1230",
-          "1245": "P_1245",
-          "1300": "P_1300",
-          "1315": "P_1315",
-          "1330": "P_1330",
-          "1345": "P_1345",
-          "1400": "P_1400",
-          "1415": "P_1415",
-          "1430": "P_1430",
-          "1445": "P_1445",
-          "1500": "P_1500",
-          "1515": "P_1515",
-          "1530": "P_1530",
-          "1545": "P_1545",
-        };
-
-        // Query market.intraday (normalized: one row per bar) and pivot into wide-format
-        // checkpoint columns (P_0930, P_0945, ...) that the ORB calculation expects.
-        // TODO: Intraday import is blocked by format incompatibility (STATE.md blocker).
-        const orbCheckpointCases = Object.entries(checkpointFields)
-          .map(([hhmm, fieldName]) => {
-            const timeStr = `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
-            return `MAX(CASE WHEN time = '${timeStr}' THEN close END) AS "${fieldName}"`;
-          })
-          .join(',\n          ');
-        const result = await conn.runAndReadAll(
-          `SELECT date,
-             MIN(CASE WHEN time = (
-               SELECT MIN(t2.time) FROM market.intraday t2
-               WHERE t2.ticker = i.ticker AND t2.date = i.date
-             ) THEN open END) AS "open",
-             MAX(close) AS "close",
-             ${orbCheckpointCases}
-           FROM market.intraday i
-           WHERE ticker = $1
-             AND date BETWEEN $2 AND $3
-           GROUP BY date
-           ORDER BY date`,
-          [normalizedTicker, startDate, end]
-        );
-        const intradayRecords = resultToRecords(result);
-
-        if (intradayRecords.length === 0) {
+        // Validate and convert HHMM inputs to HH:MM for SQL comparison
+        let sqlStartTime: string;
+        let sqlEndTime: string;
+        try {
+          sqlStartTime = hhmmToSqlTime(startTime);
+          sqlEndTime = hhmmToSqlTime(endTime);
+        } catch (e) {
           return {
-            content: [{
-              type: "text",
-              text:
-                `No intraday data available for ticker ${normalizedTicker} ` +
-                "in the specified date range. Import intraday data via import_market_csv (target_table: \"intraday\").",
-            }],
+            content: [{ type: "text", text: (e as Error).message }],
             isError: true,
           };
         }
 
-        // Validate times
-        if (!(startTime in checkpointFields)) {
-          return {
-            content: [{ type: "text", text: `Invalid startTime: ${startTime}. Must be one of: ${Object.keys(checkpointFields).join(", ")}` }],
-            isError: true,
-          };
-        }
-        if (!(endTime in checkpointFields)) {
-          return {
-            content: [{ type: "text", text: `Invalid endTime: ${endTime}. Must be one of: ${Object.keys(checkpointFields).join(", ")}` }],
-            isError: true,
-          };
-        }
-
-        // Get checkpoints in the ORB range
-        const allTimes = Object.keys(checkpointFields).sort();
-        const startIdx = allTimes.indexOf(startTime);
-        const endIdx = allTimes.indexOf(endTime);
-
-        if (startIdx >= endIdx) {
+        if (sqlStartTime >= sqlEndTime) {
           return {
             content: [{ type: "text", text: `startTime (${startTime}) must be before endTime (${endTime})` }],
             isError: true,
           };
         }
 
-        const orbTimes = allTimes.slice(startIdx, endIdx + 1);
+        // Check intraday data availability first
+        const availability = await checkDataAvailability(conn, normalizedTicker, { checkIntraday: true });
+        if (!availability.hasIntradayData) {
+          return createToolOutput(
+            `ORB: No intraday data for ${normalizedTicker}`,
+            {
+              query: { ticker: normalizedTicker, startTime, endTime, startDate, endDate: end },
+              warnings: availability.warnings,
+              days: [],
+              stats: { totalDays: 0 },
+            }
+          );
+        }
 
-        // Calculate ORB for each day in range
-        interface OrbResult {
+        // Determine bar resolution: use provided value or auto-detect from first available date
+        let resolvedBarResolution: number | null = null;
+        if (barResolution !== undefined && barResolution !== null) {
+          const parsed = parseInt(barResolution, 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            resolvedBarResolution = parsed;
+          }
+        } else {
+          // Auto-detect: find the first date with data and compute time gap between consecutive bars
+          try {
+            const sampleResult = await conn.runAndReadAll(
+              `SELECT DISTINCT time FROM market.intraday
+               WHERE ticker = $1 AND date = (SELECT MIN(date) FROM market.intraday WHERE ticker = $1)
+               ORDER BY time
+               LIMIT 10`,
+              [normalizedTicker]
+            );
+            const sampleRows = resultToRecords(sampleResult);
+            if (sampleRows.length >= 2) {
+              // Parse HH:MM times and compute minute gap between first two bars
+              const t1 = String(sampleRows[0]["time"]);
+              const t2 = String(sampleRows[1]["time"]);
+              const [h1, m1] = t1.split(":").map(Number);
+              const [h2, m2] = t2.split(":").map(Number);
+              const gap = (h2 * 60 + m2) - (h1 * 60 + m1);
+              if (gap > 0) {
+                resolvedBarResolution = gap;
+              }
+            }
+          } catch {
+            // If auto-detection fails, proceed without resolution filtering
+          }
+        }
+
+        // Build the ORB SQL query using DuckDB CTEs with parameterized ticker, dates, times.
+        // useHighLow is a template-time toggle (not a SQL parameter) controlling which expressions are used.
+        const highExpr = useHighLow ? "MAX(high)" : "MAX(close)";
+        const lowExpr = useHighLow ? "MIN(low)" : "MIN(close)";
+        const rangeExpr = useHighLow ? "MAX(high) - MIN(low)" : "MAX(close) - MIN(close)";
+        const breakupExpr = useHighLow ? "i.high > r.ORB_High" : "i.close > r.ORB_High";
+        const breakdownExpr = useHighLow ? "i.low < r.ORB_Low" : "i.close < r.ORB_Low";
+
+        const orbSql = `
+WITH orb_range AS (
+  SELECT
+    ticker, date,
+    ${highExpr} AS ORB_High,
+    ${lowExpr} AS ORB_Low,
+    ${rangeExpr} AS ORB_Range,
+    MIN(open) FILTER (WHERE time = $4) AS ORB_Open
+  FROM market.intraday
+  WHERE ticker = $1
+    AND date BETWEEN $2 AND $3
+    AND time >= $4
+    AND time <= $5
+  GROUP BY ticker, date
+),
+breakout_events AS (
+  SELECT
+    i.ticker, i.date,
+    MIN(i.time) FILTER (WHERE ${breakupExpr}) AS breakout_up_time,
+    MIN(i.time) FILTER (WHERE ${breakdownExpr}) AS breakout_down_time
+  FROM market.intraday i
+  JOIN orb_range r ON i.ticker = r.ticker AND i.date = r.date
+  WHERE i.time > $5
+  GROUP BY i.ticker, i.date
+)
+SELECT
+  r.date,
+  r.ORB_High,
+  r.ORB_Low,
+  r.ORB_Range,
+  CASE WHEN r.ORB_Low > 0 THEN r.ORB_Range / r.ORB_Low * 100 ELSE 0 END AS ORB_Range_Pct,
+  r.ORB_Open,
+  b.breakout_up_time,
+  b.breakout_down_time,
+  CASE
+    WHEN b.breakout_up_time IS NOT NULL AND b.breakout_down_time IS NOT NULL THEN
+      CASE WHEN b.breakout_up_time < b.breakout_down_time THEN 'HighFirst' ELSE 'LowFirst' END
+    WHEN b.breakout_up_time IS NOT NULL THEN 'HighOnly'
+    WHEN b.breakout_down_time IS NOT NULL THEN 'LowOnly'
+    ELSE 'NoBreakout'
+  END AS breakout_condition
+FROM orb_range r
+LEFT JOIN breakout_events b ON r.ticker = b.ticker AND r.date = b.date
+ORDER BY r.date`;
+
+        const orbResult = await conn.runAndReadAll(orbSql, [normalizedTicker, startDate, end, sqlStartTime, sqlEndTime]);
+        const orbRows = resultToRecords(orbResult);
+
+        // Process results into typed day records
+        type BreakoutCondition = "HighFirst" | "LowFirst" | "HighOnly" | "LowOnly" | "NoBreakout";
+
+        interface OrbDayResult {
           date: string;
           ORB_High: number;
           ORB_Low: number;
           ORB_Range: number;
           ORB_Range_Pct: number;
-          Close: number;
-          Close_Position_In_ORB: number;
-          Close_vs_ORB: "above" | "below" | "within";
+          ORB_Open: number | null;
+          breakout_condition: BreakoutCondition;
+          breakout_up_time: string | null;
+          breakout_down_time: string | null;
+          entry_triggered: boolean;
         }
 
-        const results: OrbResult[] = [];
+        const days: OrbDayResult[] = orbRows.map((row) => {
+          const breakoutCondition = (row["breakout_condition"] ?? "NoBreakout") as BreakoutCondition;
+          const entry_triggered = breakoutCondition !== "NoBreakout";
 
-        for (const intradayData of intradayRecords) {
-          const date = intradayData["date"] as string;
+          const orbOpen = row["ORB_Open"];
+          const orbOpenVal = (orbOpen === null || orbOpen === undefined)
+            ? null
+            : typeof orbOpen === "bigint" ? Number(orbOpen) : (orbOpen as number);
 
-          // Get prices at each checkpoint in the ORB range
-          const prices: number[] = [];
-          for (const time of orbTimes) {
-            const field = checkpointFields[time];
-            const price = getNum(intradayData, field);
-            if (!isNaN(price) && price > 0) {
-              prices.push(price);
-            }
-          }
+          return {
+            date: String(row["date"]),
+            ORB_High: Math.round(getNum(row, "ORB_High") * 100) / 100,
+            ORB_Low: Math.round(getNum(row, "ORB_Low") * 100) / 100,
+            ORB_Range: Math.round(getNum(row, "ORB_Range") * 100) / 100,
+            ORB_Range_Pct: Math.round(getNum(row, "ORB_Range_Pct") * 10000) / 10000,
+            ORB_Open: orbOpenVal !== null ? Math.round(orbOpenVal * 100) / 100 : null,
+            breakout_condition: breakoutCondition,
+            breakout_up_time: row["breakout_up_time"] ? String(row["breakout_up_time"]) : null,
+            breakout_down_time: row["breakout_down_time"] ? String(row["breakout_down_time"]) : null,
+            entry_triggered,
+          };
+        });
 
-          if (prices.length === 0) continue;
+        const totalDays = days.length;
 
-          const orbHigh = Math.max(...prices);
-          const orbLow = Math.min(...prices);
-          const orbRange = orbHigh - orbLow;
-          const orbRangePct = (orbRange / orbLow) * 100;
-          const close = getNum(intradayData, "close");
-          if (isNaN(close)) continue;
+        // Compute aggregate stats
+        const avgOrbRangePct = totalDays > 0
+          ? days.reduce((sum, d) => sum + d.ORB_Range_Pct, 0) / totalDays
+          : 0;
 
-          // Calculate where close is relative to ORB
-          let closePositionInOrb: number;
-          let closeVsOrb: "above" | "below" | "within";
-
-          if (orbRange === 0) {
-            // ORB range is zero (all checkpoint prices identical)
-            closePositionInOrb = close === orbHigh ? 0.5 : close > orbHigh ? 1 : 0;
-            closeVsOrb = close > orbHigh ? "above" : close < orbLow ? "below" : "within";
-          } else if (close > orbHigh) {
-            closePositionInOrb = 1 + (close - orbHigh) / orbRange;
-            closeVsOrb = "above";
-          } else if (close < orbLow) {
-            closePositionInOrb = (close - orbLow) / orbRange;
-            closeVsOrb = "below";
-          } else {
-            closePositionInOrb = (close - orbLow) / orbRange;
-            closeVsOrb = "within";
-          }
-
-          results.push({
-            date,
-            ORB_High: Math.round(orbHigh * 100) / 100,
-            ORB_Low: Math.round(orbLow * 100) / 100,
-            ORB_Range: Math.round(orbRange * 100) / 100,
-            ORB_Range_Pct: Math.round(orbRangePct * 1000) / 1000,
-            Close: Math.round(close * 100) / 100,
-            Close_Position_In_ORB: Math.round(closePositionInOrb * 1000) / 1000,
-            Close_vs_ORB: closeVsOrb,
-          });
-        }
-
-        // Sort by date
-        results.sort((a, b) => a.date.localeCompare(b.date));
-
-        const totalDays = results.length;
+        const breakdownByCondition = {
+          HighFirst: days.filter((d) => d.breakout_condition === "HighFirst").length,
+          LowFirst: days.filter((d) => d.breakout_condition === "LowFirst").length,
+          HighOnly: days.filter((d) => d.breakout_condition === "HighOnly").length,
+          LowOnly: days.filter((d) => d.breakout_condition === "LowOnly").length,
+          NoBreakout: days.filter((d) => d.breakout_condition === "NoBreakout").length,
+        };
 
         // Apply limit
-        const limitedResults = results.slice(0, limit);
-
-        // Calculate aggregate stats
-        const aboveCount = results.filter((r) => r.Close_vs_ORB === "above").length;
-        const belowCount = results.filter((r) => r.Close_vs_ORB === "below").length;
-        const withinCount = results.filter((r) => r.Close_vs_ORB === "within").length;
-        const avgOrbRangePct = totalDays > 0
-          ? results.reduce((sum, r) => sum + r.ORB_Range_Pct, 0) / totalDays
-          : 0;
+        const limitedDays = days.slice(0, limit);
 
         const summary =
           `ORB (${normalizedTicker}, ${startTime}-${endTime}): ${startDate} to ${end} | ` +
           `${totalDays} days, avg range ${formatPercent(avgOrbRangePct)}`;
 
-        return createToolOutput(summary, {
+        const responseData: Record<string, unknown> = {
           query: {
             ticker: normalizedTicker,
             startTime,
             endTime,
+            sqlStartTime,
+            sqlEndTime,
             startDate,
             endDate: end,
-            checkpointsUsed: orbTimes,
+            useHighLow,
+            barResolution: resolvedBarResolution !== null ? String(resolvedBarResolution) : "auto",
           },
           stats: {
             totalDays,
-            avgOrbRangePct: Math.round(avgOrbRangePct * 1000) / 1000,
-            closeAboveOrb: aboveCount,
-            closeBelowOrb: belowCount,
-            closeWithinOrb: withinCount,
-            closeAbovePct: totalDays > 0 ? Math.round((aboveCount / totalDays) * 10000) / 100 : 0,
-            closeBelowPct: totalDays > 0 ? Math.round((belowCount / totalDays) * 10000) / 100 : 0,
-            closeWithinPct: totalDays > 0 ? Math.round((withinCount / totalDays) * 10000) / 100 : 0,
+            avgOrbRangePct: Math.round(avgOrbRangePct * 10000) / 10000,
+            breakdownByCondition,
           },
-          returned: limitedResults.length,
-          days: limitedResults,
-        });
+          returned: limitedDays.length,
+          days: limitedDays,
+        };
+
+        if (availability.warnings.length > 0) {
+          responseData.warnings = availability.warnings;
+        }
+
+        return createToolOutput(summary, responseData);
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
