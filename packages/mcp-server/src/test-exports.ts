@@ -52,9 +52,20 @@ export {
   OPEN_KNOWN_FIELDS,
   CLOSE_KNOWN_FIELDS,
   STATIC_FIELDS,
+  DAILY_OPEN_FIELDS,
+  DAILY_CLOSE_FIELDS,
+  DAILY_STATIC_FIELDS,
+  CONTEXT_OPEN_FIELDS,
+  CONTEXT_CLOSE_FIELDS,
   buildLookaheadFreeQuery,
   buildOutcomeQuery,
 } from './utils/field-timing.js';
+
+// Export data availability helper for testing
+export {
+  checkDataAvailability,
+  type DataAvailabilityReport,
+} from './utils/data-availability.js';
 
 // Export intraday timing utilities for testing
 export {
