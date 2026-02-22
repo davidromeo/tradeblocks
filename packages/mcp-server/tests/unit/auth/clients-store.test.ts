@@ -1,4 +1,4 @@
-import { InMemoryClientsStore } from '../../src/auth/clients-store.js';
+import { InMemoryClientsStore } from '../../../src/auth/clients-store.js';
 
 describe('InMemoryClientsStore', () => {
   it('returns undefined for unknown client', async () => {
