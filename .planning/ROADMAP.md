@@ -91,7 +91,7 @@ Plans:
   3. `calculate_orb` queries `market.intraday` with time-range filters instead of reading pivoted checkpoint columns, supporting any bar resolution
   4. `buildLookaheadFreeQuery()` correctly JOINs `market.daily + market.context` inside the CTE before applying LAG — a Monday trade returns Friday's Vol_Regime, not Monday's
   5. All tools report missing data with actionable messages (what is missing, how to import it) instead of silent NULLs or cryptic errors
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 - [ ] 63-01-PLAN.md — Foundation: schema-metadata + field-timing rewrite + checkDataAvailability helper + tests
 - [ ] 63-02-PLAN.md — Migrate enrich_trades, analyze_regime_performance, suggest_filters to new schema
@@ -123,5 +123,5 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 60. Database Separation | 2/2 | Complete    | 2026-02-21 | - |
 | 61. Import Tools | 3/3 | Complete    | 2026-02-22 | - |
 | 62. Enrichment Pipeline | 3/3 | Complete    | 2026-02-22 | - |
-| 63. Tool Migration | 1/3 | In Progress|  | - |
+| 63. Tool Migration | 2/3 | In Progress|  | - |
 | 64. Cleanup and API Surface | v3.0 | 0/? | Not started | - |

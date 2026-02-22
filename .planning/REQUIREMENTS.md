@@ -42,14 +42,14 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Tool Migration
 
-- [ ] **MIG-01**: `enrich_trades` migrated to `market.daily JOIN market.context` with updated intraday queries
-- [ ] **MIG-02**: `analyze_regime_performance` migrated with context JOIN for regime segmentation
-- [ ] **MIG-03**: `suggest_filters` migrated with context JOIN for VIX-based filters
-- [ ] **MIG-04**: `suggest_filters` updated to include new enrichment fields as filter candidates (BB_Width, Realized_Vol, Prior_Range_vs_ATR)
+- [x] **MIG-01**: `enrich_trades` migrated to `market.daily JOIN market.context` with updated intraday queries
+- [x] **MIG-02**: `analyze_regime_performance` migrated with context JOIN for regime segmentation
+- [x] **MIG-03**: `suggest_filters` migrated with context JOIN for VIX-based filters
+- [x] **MIG-04**: `suggest_filters` updated to include new enrichment fields as filter candidates (BB_Width, Realized_Vol, Prior_Range_vs_ATR)
 - [ ] **MIG-05**: `calculate_orb` rewritten to query `market.intraday` with time range filter (any bar resolution)
 - [x] **MIG-06**: `buildLookaheadFreeQuery()` rewritten with `market.daily JOIN market.context` inside CTE before LAG application
 - [x] **MIG-07**: `checkDataAvailability()` helper integrated into all market tools
-- [ ] **MIG-08**: Tools report missing data clearly with actionable messages instead of silent NULLs
+- [x] **MIG-08**: Tools report missing data clearly with actionable messages instead of silent NULLs
 - [x] **MIG-09**: `schema-metadata.ts` updated with new tables, new fields, and field timing annotations
 - [x] **MIG-10**: `field-timing.ts` updated with correct column counts and JOIN-aware LAG CTE
 
@@ -105,14 +105,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENR-06 | Phase 62 | Complete |
 | ENR-07 | Phase 62 | Complete |
 | ENR-08 | Phase 62 | Complete |
-| MIG-01 | Phase 63 | Pending |
-| MIG-02 | Phase 63 | Pending |
-| MIG-03 | Phase 63 | Pending |
-| MIG-04 | Phase 63 | Pending |
+| MIG-01 | Phase 63 | Complete |
+| MIG-02 | Phase 63 | Complete |
+| MIG-03 | Phase 63 | Complete |
+| MIG-04 | Phase 63 | Complete |
 | MIG-05 | Phase 63 | Pending |
 | MIG-06 | Phase 63 | Complete |
 | MIG-07 | Phase 63 | Complete |
-| MIG-08 | Phase 63 | Pending |
+| MIG-08 | Phase 63 | Complete |
 | MIG-09 | Phase 63 | Complete |
 | MIG-10 | Phase 63 | Complete |
 | CLN-02 | Phase 64 | Pending |

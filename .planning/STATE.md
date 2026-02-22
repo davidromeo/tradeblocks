@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 63 of 64 (Tool Migration)
-Plan: 1 of 4 complete
+Plan: 2 of 4 complete
 Status: In progress
-Last activity: 2026-02-22 — Completed 63-01 (query foundation rewrite: schema-metadata, field-timing, data-availability)
+Last activity: 2026-02-22 — Completed 63-02 (tool migration: enrich_trades, analyze_regime_performance, suggest_filters)
 
-Progress: [███████░░░] 49%
+Progress: [████████░░] 53%
 
 ## Project Reference
 
@@ -72,6 +72,10 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 63-01]: buildLookaheadFreeQuery string[] overload: ticker appended as last param ($N+1) so date placeholder numbering is not shifted
 - [Phase 63-01]: Tier 3 columns (High_Time, Low_Time, High_Before_Low, Reversal_Type) included in schema-metadata.daily because columns exist in market.daily CREATE TABLE even though enrichment is deferred
 - [Phase 63-01]: New field counts: 9 open / 36 close / 3 static = 48 total (was 8/44/3/55 — reduction due to Tier 3 intraday timing columns removed from new schema)
+- [Phase 63-02]: Prior_Range_vs_ATR computed as (high[i-1] - low[i-1]) / ATR[i-1] — open-known field, first bar null (no prior day)
+- [Phase 63-02]: Intraday queries updated to market.intraday with CASE-WHEN pivot for checkpoint columns — graceful degradation until import blocker resolved
+- [Phase 63-02]: Composite filter improvement threshold: compositeWinRate > max(filterA_projected, filterB_projected) + 2pp
+- [Phase 63-02]: Pre-existing TS error (profitFactor possibly null in analyze_regime_performance) fixed as Rule 1 deviation
 
 ### Pending Todos
 
@@ -86,5 +90,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 63-01-PLAN.md (query foundation rewrite: schema-metadata, field-timing, data-availability, 38 tests pass)
+Stopped at: Completed 63-02-PLAN.md (tool migration: enrich_trades, analyze_regime_performance, suggest_filters, Prior_Range_vs_ATR enrichment)
 Resume file: None
