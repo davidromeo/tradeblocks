@@ -75,7 +75,11 @@ Plans:
   3. When `market.intraday` has bar data, Tier 3 fields (High_Time, Low_Time, Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol) are written to `market.daily`; when intraday is absent, Tier 3 is skipped gracefully
   4. Re-running enrichment on already-enriched data produces identical results (idempotent), and incremental imports only recompute the affected date range while using 200+ day lookback for Wilder smoothing warmup
   5. All 7 indicator functions have unit tests validating TradingView parity at non-trivial data points (not just the first 14 bars)
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 62-01-PLAN.md — Pure indicator functions (TDD): computeRSI, computeATR, computeEMA, computeSMA, computeBollingerBands, computeRealizedVol, VIX tier 2 functions + unit tests
+- [ ] 62-02-PLAN.md — Enrichment runner: runEnrichment() (tiers 1/2/3), watermark tracking, triggerEnrichment stub replacement
+- [ ] 62-03-PLAN.md — MCP tool registration: enrich_market_data tool, index.ts wiring, test-exports update, version bump to 1.4.0
 
 ### Phase 63: Tool Migration
 **Goal**: All four existing market-data tools and shared query utilities work against the new normalized schema, with graceful degradation when data is missing and correct lookahead-free field timing
@@ -114,6 +118,6 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Database Separation | 2/2 | Complete    | 2026-02-21 | - |
 | 61. Import Tools | 3/3 | Complete    | 2026-02-22 | - |
-| 62. Enrichment Pipeline | v3.0 | 0/? | Not started | - |
+| 62. Enrichment Pipeline | v3.0 | 0/3 | Planned | - |
 | 63. Tool Migration | v3.0 | 0/? | Not started | - |
 | 64. Cleanup and API Surface | v3.0 | 0/? | Not started | - |
