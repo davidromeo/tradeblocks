@@ -1,17 +1,19 @@
 import { randomUUID } from 'node:crypto';
+import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
+import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 
-type ClientInfo = { client_id: string; [key: string]: unknown };
+export class InMemoryClientsStore implements OAuthRegisteredClientsStore {
+  private clients = new Map<string, OAuthClientInformationFull>();
 
-export class InMemoryClientsStore {
-  private clients = new Map<string, ClientInfo>();
-
-  async getClient(clientId: string): Promise<ClientInfo | undefined> {
+  getClient(clientId: string): OAuthClientInformationFull | undefined {
     return this.clients.get(clientId);
   }
 
-  async registerClient(clientMetadata: Record<string, unknown>): Promise<ClientInfo> {
+  registerClient(
+    clientMetadata: Omit<OAuthClientInformationFull, 'client_id' | 'client_id_issued_at'>
+  ): OAuthClientInformationFull {
     const clientId = randomUUID();
-    const client: ClientInfo = {
+    const client: OAuthClientInformationFull = {
       ...clientMetadata,
       client_id: clientId,
       client_id_issued_at: Math.floor(Date.now() / 1000),

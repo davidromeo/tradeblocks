@@ -4,40 +4,99 @@
  * Provides HTTP transport for web platforms (ChatGPT, Google AI Studio, Julius, Claude.ai)
  * that cannot connect to stdio-based MCP servers.
  *
- * Uses Streamable HTTP transport (MCP spec 2025-03-26) with stateless mode.
- * Each request gets a fresh server+transport instance for proper isolation.
+ * When auth is configured, adds OAuth 2.1 Authorization Code + PKCE flow:
+ * - /.well-known/oauth-authorization-server (discovery)
+ * - /authorize, /token, /register (via MCP SDK auth router)
+ * - /login (custom credential form handler)
+ * - Bearer token validation on /mcp endpoints
  */
 
 import { createServer, type Server } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express, type Request, type Response, type RequestHandler } from "express";
+import type { AuthConfig } from "./auth/config.js";
 
 export interface HttpServerOptions {
   port: number;
   host?: string;
+  auth?: AuthConfig;
 }
 
 /** Factory function type for creating configured MCP servers */
 export type ServerFactory = () => McpServer;
 
 /**
- * Creates and starts an HTTP server for MCP with stateless request handling.
- *
- * @param serverFactory - Factory function that creates a fresh MCP server instance
- * @param options - HTTP server options (port, host)
- * @returns Promise that resolves when server is listening
+ * Creates and starts an HTTP server for MCP with optional OAuth authentication.
  */
 export async function startHttpServer(
   serverFactory: ServerFactory,
   options: HttpServerOptions
 ): Promise<Server> {
-  const { port, host = "0.0.0.0" } = options;
+  const { port, host = "0.0.0.0", auth } = options;
 
   const app: Express = express();
   app.use(express.json());
 
-  // Health check endpoint (required by ChatGPT for connector validation)
+  // Auth middleware array - empty when auth is disabled
+  let mcpAuthMiddleware: RequestHandler[] = [];
+
+  if (auth && !auth.noAuth) {
+    // Dynamically import auth modules to avoid loading them when unused
+    const { mcpAuthRouter } = await import(
+      "@modelcontextprotocol/sdk/server/auth/router.js"
+    );
+    const { requireBearerAuth } = await import(
+      "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js"
+    );
+    const { TradeBlocksAuthProvider } = await import("./auth/provider.js");
+    const { renderLoginPage } = await import("./auth/login-page.js");
+
+    const provider = new TradeBlocksAuthProvider(auth);
+
+    // Determine issuer URL (public URL for OAuth discovery metadata)
+    const issuerUrl = new URL(
+      auth.issuerUrl || `http://${host === "0.0.0.0" ? "localhost" : host}:${port}`
+    );
+
+    // Mount OAuth routes: /.well-known, /authorize, /token, /register
+    app.use(mcpAuthRouter({ provider, issuerUrl }));
+
+    // Parse URL-encoded form bodies for /login
+    app.use(express.urlencoded({ extended: false }));
+
+    // Custom login route for credential form submission
+    app.post("/login", (req: Request, res: Response) => {
+      const result = provider.handleLogin(req.body);
+      if ("error" in result) {
+        // Re-render login page with error message
+        const html = renderLoginPage({
+          redirectUri: req.body.redirect_uri || "",
+          state: req.body.state,
+          codeChallenge: req.body.code_challenge || "",
+          clientId: req.body.client_id || "",
+          scopes: (req.body.scopes || "").split(" ").filter(Boolean),
+          resource: req.body.resource,
+          error: result.error,
+        });
+        res.setHeader("Content-Type", "text/html");
+        res.send(html);
+        return;
+      }
+      res.redirect(result.redirectUrl);
+    });
+
+    // Create auth middleware for MCP endpoints
+    mcpAuthMiddleware = [requireBearerAuth({ verifier: provider })];
+
+    console.error(`Authentication enabled. Login at ${issuerUrl}/authorize`);
+  } else if (auth?.noAuth) {
+    console.error(
+      "WARNING: Authentication disabled (--no-auth). Only use behind an authenticating reverse proxy."
+    );
+  }
+
+  // Health check endpoint
   app.get("/", (_req: Request, res: Response) => {
     res.status(200).json({
       name: "tradeblocks-mcp",
@@ -46,25 +105,22 @@ export async function startHttpServer(
     });
   });
 
-  // Also serve MCP at root for platforms that expect it there
-  app.post("/", handleMcpRequest(serverFactory));
+  // MCP endpoints with conditional auth middleware
+  app.post("/", ...mcpAuthMiddleware, handleMcpRequest(serverFactory));
+  app.post("/mcp", ...mcpAuthMiddleware, handleMcpRequest(serverFactory));
 
-  // MCP endpoint - POST for client requests
-  app.post("/mcp", handleMcpRequest(serverFactory));
-
-  // MCP endpoint - GET for SSE streams (server-initiated messages)
-  app.get("/mcp", (_req: Request, res: Response) => {
-    // We don't support server-initiated SSE streams in stateless mode
+  app.get("/mcp", ...mcpAuthMiddleware, (_req: Request, res: Response) => {
     res.status(405).json({
       jsonrpc: "2.0",
-      error: { code: -32601, message: "Method not allowed. Use POST for MCP requests." },
+      error: {
+        code: -32601,
+        message: "Method not allowed. Use POST for MCP requests.",
+      },
       id: null,
     });
   });
 
-  // MCP endpoint - DELETE for session termination
-  app.delete("/mcp", (_req: Request, res: Response) => {
-    // Stateless mode - no sessions to terminate
+  app.delete("/mcp", ...mcpAuthMiddleware, (_req: Request, res: Response) => {
     res.status(202).send();
   });
 
@@ -73,9 +129,10 @@ export async function startHttpServer(
   return new Promise((resolve, reject) => {
     httpServer.on("error", reject);
     httpServer.listen(port, host, () => {
-      console.error(`TradeBlocks MCP HTTP server listening on http://${host}:${port}/mcp`);
+      console.error(
+        `TradeBlocks MCP HTTP server listening on http://${host}:${port}/mcp`
+      );
       console.error(`Health check available at http://${host}:${port}/`);
-      console.error(`For web platforms, expose via: ngrok http ${port}`);
       resolve(httpServer);
     });
   });
@@ -88,19 +145,16 @@ export async function startHttpServer(
 function handleMcpRequest(serverFactory: ServerFactory) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      // Create fresh server and transport for each request (stateless pattern)
       const server = serverFactory();
       const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // Stateless mode - no session tracking
+        sessionIdGenerator: undefined,
       });
 
-      // Clean up when connection closes
       res.on("close", () => {
         transport.close().catch(() => {});
         server.close().catch(() => {});
       });
 
-      // Connect and handle
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
