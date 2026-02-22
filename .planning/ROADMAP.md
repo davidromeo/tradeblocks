@@ -30,7 +30,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 - [x] **Phase 60: Database Separation and Connection Infrastructure** — Separate market.duckdb created, ATTACHed at startup, with normalized schema and safe connection lifecycle (completed 2026-02-21)
 - [x] **Phase 61: Import Tools** — MCP tools for ingesting market data from CSV files and external DuckDB databases (completed 2026-02-22)
 - [x] **Phase 62: TypeScript Enrichment Pipeline** — Pure indicator functions and tiered enrichment runner computing ~40 derived fields from raw OHLCV (completed 2026-02-22)
-- [ ] **Phase 63: Tool Migration** — All 4 market-data tools and shared query utilities migrated to new normalized schema
+- [x] **Phase 63: Tool Migration** — All 4 market-data tools and shared query utilities migrated to new normalized schema (completed 2026-02-22)
 - [ ] **Phase 64: Cleanup and API Surface** — Dead code removed, run_sql/describe_database updated, PineScripts simplified, new tools registered
 
 ## Phase Details
@@ -91,7 +91,7 @@ Plans:
   3. `calculate_orb` queries `market.intraday` with time-range filters instead of reading pivoted checkpoint columns, supporting any bar resolution
   4. `buildLookaheadFreeQuery()` correctly JOINs `market.daily + market.context` inside the CTE before applying LAG — a Monday trade returns Friday's Vol_Regime, not Monday's
   5. All tools report missing data with actionable messages (what is missing, how to import it) instead of silent NULLs or cryptic errors
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 63-01-PLAN.md — Foundation: schema-metadata + field-timing rewrite + checkDataAvailability helper + tests
 - [ ] 63-02-PLAN.md — Migrate enrich_trades, analyze_regime_performance, suggest_filters to new schema
@@ -123,5 +123,5 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 60. Database Separation | 2/2 | Complete    | 2026-02-21 | - |
 | 61. Import Tools | 3/3 | Complete    | 2026-02-22 | - |
 | 62. Enrichment Pipeline | 3/3 | Complete    | 2026-02-22 | - |
-| 63. Tool Migration | 2/3 | In Progress|  | - |
+| 63. Tool Migration | 3/3 | Complete   | 2026-02-22 | - |
 | 64. Cleanup and API Surface | v3.0 | 0/? | Not started | - |

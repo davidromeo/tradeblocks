@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 63 of 64 (Tool Migration)
-Plan: 2 of 4 complete
+Plan: 3 of 4 complete
 Status: In progress
-Last activity: 2026-02-22 — Completed 63-02 (tool migration: enrich_trades, analyze_regime_performance, suggest_filters)
+Last activity: 2026-02-22 — Completed 63-03 (ORB tool redesign for market.intraday with breakout detection)
 
-Progress: [████████░░] 53%
+Progress: [█████████░] 60%
 
 ## Project Reference
 
@@ -30,6 +30,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 | 60 | 2/2 | 8 min | 4 min |
 | 61 | 3/3 | 8 min | 3 min |
 | 62 | 3/3 | 12 min | 4 min |
+| Phase 63 P03 | 176 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 63-02]: Intraday queries updated to market.intraday with CASE-WHEN pivot for checkpoint columns — graceful degradation until import blocker resolved
 - [Phase 63-02]: Composite filter improvement threshold: compositeWinRate > max(filterA_projected, filterB_projected) + 2pp
 - [Phase 63-02]: Pre-existing TS error (profitFactor possibly null in analyze_regime_performance) fixed as Rule 1 deviation
+- [Phase 63-03]: hhmmToSqlTime() converts HHMM '0930' to '09:30' before SQL — defined locally in registerMarketDataTools
+- [Phase 63-03]: calculate_orb SQL CTE pattern: orb_range aggregates window bars, breakout_events finds first post-window bar exceeding range
+- [Phase 63-03]: entry_triggered boolean computed in TypeScript as breakoutCondition !== 'NoBreakout' (not in SQL)
+- [Phase 63-03]: useHighLow toggle uses SQL template interpolation (not parameter) — column expressions cannot be parameterized
+- [Phase 63-03]: barResolution auto-detection: time gap between first two bars on first available date (informational only)
 
 ### Pending Todos
 
@@ -90,5 +96,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 63-02-PLAN.md (tool migration: enrich_trades, analyze_regime_performance, suggest_filters, Prior_Range_vs_ATR enrichment)
+Stopped at: Completed 63-03-PLAN.md (ORB tool redesign: calculate_orb migrated to market.intraday with breakout detection)
 Resume file: None

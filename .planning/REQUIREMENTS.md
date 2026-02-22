@@ -46,7 +46,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **MIG-02**: `analyze_regime_performance` migrated with context JOIN for regime segmentation
 - [x] **MIG-03**: `suggest_filters` migrated with context JOIN for VIX-based filters
 - [x] **MIG-04**: `suggest_filters` updated to include new enrichment fields as filter candidates (BB_Width, Realized_Vol, Prior_Range_vs_ATR)
-- [ ] **MIG-05**: `calculate_orb` rewritten to query `market.intraday` with time range filter (any bar resolution)
+- [x] **MIG-05**: `calculate_orb` rewritten to query `market.intraday` with time range filter (any bar resolution)
 - [x] **MIG-06**: `buildLookaheadFreeQuery()` rewritten with `market.daily JOIN market.context` inside CTE before LAG application
 - [x] **MIG-07**: `checkDataAvailability()` helper integrated into all market tools
 - [x] **MIG-08**: Tools report missing data clearly with actionable messages instead of silent NULLs
@@ -109,7 +109,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MIG-02 | Phase 63 | Complete |
 | MIG-03 | Phase 63 | Complete |
 | MIG-04 | Phase 63 | Complete |
-| MIG-05 | Phase 63 | Pending |
+| MIG-05 | Phase 63 | Complete |
 | MIG-06 | Phase 63 | Complete |
 | MIG-07 | Phase 63 | Complete |
 | MIG-08 | Phase 63 | Complete |
