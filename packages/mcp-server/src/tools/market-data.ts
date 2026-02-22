@@ -6,8 +6,9 @@
  * lag-aware trade enrichment with market data.
  *
  * Data source: DuckDB analytics database (synced from TradingView exports)
- * - market.spx_daily: Daily context (55 fields incl. highlow timing + VIX enrichment)
- * - market.spx_15min: 15-minute intraday checkpoints
+ * - market.daily: Per-ticker OHLCV + technical indicators (normalized schema)
+ * - market.context: Global VIX/regime data (LEFT JOIN on date with market.daily)
+ * - market.intraday: Raw 15-minute bars (ticker, date, time HH:MM, OHLCV)
  */
 
 import { z } from "zod";
@@ -34,6 +35,8 @@ import {
   SPX_15MIN_OUTCOME_FIELDS,
   VIX_OUTCOME_FIELDS,
   VIX_OHLC_OUTCOME_FIELDS,
+  SPX_CHECKPOINTS,
+  VIX_CHECKPOINTS,
 } from "../utils/intraday-timing.js";
 import {
   DEFAULT_MARKET_TICKER,
@@ -42,106 +45,94 @@ import {
   normalizeTicker,
   resolveTradeTicker,
 } from "../utils/ticker.js";
+import { checkDataAvailability } from "../utils/data-availability.js";
 
 // =============================================================================
 // Types
 // =============================================================================
 
-/** Daily market data columns in market.spx_daily DuckDB table. Kept as documentation reference. */
+/**
+ * Daily market data columns sourced from market.daily + market.context (normalized schema).
+ * Kept as documentation reference for the new dual-table JOIN pattern.
+ *
+ * market.daily: Per-ticker OHLCV + technical indicators (Gap_Pct, ATR_Pct, RSI_14, BB_Width, etc.)
+ * market.context: Global VIX/regime data (VIX_Open, VIX_Close, Vol_Regime, Term_Structure_State, etc.)
+ *
+ * Field timing:
+ * - Open-known (safe for trade-entry analysis): Prior_Close, Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR
+ * - Close-derived (use LAG for trade-entry queries): Close, RSI_14, BB_Width, Realized_Vol_5D/20D,
+ *   VIX_Close, Vol_Regime, Term_Structure_State, VIX_Spike_Pct, etc.
+ * - Static (calendar facts): Day_of_Week, Month, Is_Opex
+ */
 export interface DailyMarketData {
   date: string; // YYYY-MM-DD
-  // Core price
-  Prior_Close: number;
+  ticker: string;
+  // Core price (market.daily)
+  Prior_Close: number; // open-known
   Open: number;
   High: number;
   Low: number;
   Close: number;
-  // Gap & movement
-  Gap_Pct: number;
+  // Gap & movement (market.daily)
+  Gap_Pct: number; // open-known
+  Prior_Range_vs_ATR: number; // open-known: prior day's (high-low)/ATR
   Intraday_Range_Pct: number;
   Intraday_Return_Pct: number;
-  Total_Return_Pct: number;
   Close_Position_In_Range: number;
   Gap_Filled: number; // 0 or 1
-  // VIX
-  VIX_Open: number;
+  // New enrichment fields (market.daily)
+  BB_Width: number; // (upper - lower) / middle
+  BB_Position: number; // 0-1
+  Realized_Vol_5D: number;
+  Realized_Vol_20D: number;
+  // Technical (market.daily)
+  ATR_Pct: number;
+  RSI_14: number;
+  Price_vs_EMA21_Pct: number;
+  Price_vs_SMA50_Pct: number;
+  // Momentum (market.daily)
+  Return_5D: number;
+  Return_20D: number;
+  Consecutive_Days: number;
+  Prev_Return_Pct: number;
+  // Calendar (market.daily, static)
+  Day_of_Week: number; // 2=Mon...6=Fri
+  Month: number;
+  Is_Opex: number; // 0 or 1
+  // VIX (market.context)
+  VIX_Open: number; // open-known
+  VIX_Gap_Pct: number; // open-known
   VIX_Close: number;
   VIX_Change_Pct: number;
   VIX_Spike_Pct: number;
   VIX_Percentile: number;
   Vol_Regime: number; // 1-6
-  // VIX term structure
+  // VIX term structure (market.context)
   VIX9D_Close: number;
   VIX3M_Close: number;
   VIX9D_VIX_Ratio: number;
   VIX_VIX3M_Ratio: number;
   Term_Structure_State: number; // -1, 0, 1
-  // Technical
-  ATR_Pct: number;
-  RSI_14: number;
-  Price_vs_EMA21_Pct: number;
-  Price_vs_SMA50_Pct: number;
-  BB_Position: number; // 0-1
-  // Momentum
-  Return_5D: number;
-  Return_20D: number;
-  Consecutive_Days: number;
-  // Calendar
-  Day_of_Week: number; // 2=Mon...6=Fri
-  Month: number;
-  Is_Opex: number; // 0 or 1
-  // Prior day
-  Prev_Return_Pct: number;
 }
 
-/** 15-minute intraday columns in market.spx_15min DuckDB table. Kept as documentation reference. */
-export interface Intraday15MinData {
-  date: string; // YYYY-MM-DD
-  // OHLC
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  // Checkpoint prices at each 15-min interval
-  P_0930: number;
-  P_0945: number;
-  P_1000: number;
-  P_1015: number;
-  P_1030: number;
-  P_1045: number;
-  P_1100: number;
-  P_1115: number;
-  P_1130: number;
-  P_1145: number;
-  P_1200: number;
-  P_1215: number;
-  P_1230: number;
-  P_1245: number;
-  P_1300: number;
-  P_1315: number;
-  P_1330: number;
-  P_1345: number;
-  P_1400: number;
-  P_1415: number;
-  P_1430: number;
-  P_1445: number;
-  P_1500: number;
-  P_1515: number;
-  P_1530: number;
-  P_1545: number;
-  // Percentage moves from open
-  Pct_0930_to_1000: number;
-  Pct_0930_to_1200: number;
-  Pct_0930_to_1500: number;
-  Pct_0930_to_Close: number;
-  // Market-on-close moves
-  MOC_15min: number;
-  MOC_30min: number;
-  MOC_45min: number;
-  MOC_60min: number;
-  // Afternoon action
-  Afternoon_Move: number;
-}
+/**
+ * Intraday data is now stored in market.intraday (normalized: one row per bar).
+ * Schema: (ticker VARCHAR, date DATE, time VARCHAR -- HH:MM format, open, high, low, close, volume)
+ * Primary key: (ticker, date, time)
+ *
+ * To query as wide-format checkpoints for a specific date, pivot using CASE WHEN:
+ *   SELECT date,
+ *     MAX(CASE WHEN time = '09:30' THEN close END) AS P_0930,
+ *     MAX(CASE WHEN time = '09:45' THEN close END) AS P_0945,
+ *     ... etc ...
+ *   FROM market.intraday
+ *   WHERE ticker = 'SPX' AND date = '2024-01-15'
+ *   GROUP BY date
+ *
+ * Note: Intraday data import is blocked by format incompatibility (separate date/time
+ * columns required but current export CSVs use a single Unix timestamp column).
+ * Tools that use intraday context will return null for all trades until resolved.
+ */
 
 // =============================================================================
 // Utility Functions
@@ -304,9 +295,11 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     "analyze_regime_performance",
     {
       description:
-        "Break down a block's trade performance by market regime (volatility, term structure, day of week, etc.). " +
+        "Break down a block's trade performance by market regime using market.daily and market.context. " +
         "Identifies which market conditions favor or hurt the strategy. " +
-        "Close-derived fields (volRegime, termStructure) use prior trading day values to prevent lookahead bias.",
+        "Close-derived fields (volRegime, termStructure) use prior trading day values to prevent lookahead bias. " +
+        "Vol_Regime and Term_Structure_State come from market.context via the JOIN. " +
+        "Returns warnings when market data is partially missing.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         segmentBy: z.enum([
@@ -316,9 +309,10 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           "gapDirection",
         ]).describe("Market dimension to segment by"),
         strategy: z.string().optional().describe("Filter to specific strategy"),
+        ticker: z.string().optional().describe("Underlying ticker symbol (default: SPX)"),
       }),
     },
-    withFullSync(baseDir, async ({ blockId, segmentBy, strategy }) => {
+    withFullSync(baseDir, async ({ blockId, segmentBy, strategy, ticker }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -340,6 +334,11 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const tradeKeys = uniqueTradeLookupKeys(trades);
 
         const conn = await getConnection(baseDir);
+
+        // Check data availability and collect warnings
+        const resolvedTicker = normalizeTicker(ticker || '') || DEFAULT_MARKET_TICKER;
+        const availability = await checkDataAvailability(conn, resolvedTicker);
+
         const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeKeys);
         const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
         const dailyRecords = resultToRecords(dailyResult);
@@ -469,7 +468,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
               avgPl: Math.round(avgPl * 100) / 100,
               avgWin: Math.round(avgWin * 100) / 100,
               avgLoss: Math.round(avgLoss * 100) / 100,
-              profitFactor: Math.round(profitFactor * 100) / 100,
+              profitFactor: profitFactor !== null ? Math.round(profitFactor * 100) / 100 : null,
               vsOverallWinRate: Math.round((winRate - overallWinRate) * 100) / 100,
               vsOverallAvgPl: Math.round((avgPl - overallAvgPl) * 100) / 100,
             };
@@ -488,10 +487,12 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const laggedSegments = ["volRegime", "termStructure"];
         const lagNote = laggedSegments.includes(segmentBy)
-          ? `Segmentation by ${segmentBy} uses prior trading day values (close-derived field) to prevent lookahead bias.`
+          ? `Segmentation by ${segmentBy} uses prior trading day values (close-derived field from market.context) to prevent lookahead bias.`
           : `Segmentation by ${segmentBy} uses same-day values (${segmentBy === "dayOfWeek" ? "static" : "open-known"} field).`;
 
-        return createToolOutput(summary, {
+        // Future: BB_Width quartile and Realized_Vol regime segmentation dimensions can be added here
+
+        const responseData: Record<string, unknown> = {
           blockId,
           segmentBy,
           lagNote,
@@ -507,7 +508,13 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             totalPl: Math.round(totalPl * 100) / 100,
           },
           segments: segmentStats,
-        });
+        };
+
+        if (availability.warnings.length > 0) {
+          responseData.warnings = availability.warnings;
+        }
+
+        return createToolOutput(summary, responseData);
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
@@ -525,15 +532,18 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     {
       description:
         "Analyze a block's losing trades and suggest market-based filters that would have improved performance. " +
-        "Returns actionable filter suggestions with projected impact. " +
-        "Close-derived fields use prior trading day values to prevent lookahead bias.",
+        "Returns actionable standalone filter suggestions plus composite filters where cross-field correlations are strong. " +
+        "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, BB_Width, Realized_Vol_5D/20D, BB_Position) use prior trading day values. " +
+        "Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR, Day_of_Week, Is_Opex) use same-day values. " +
+        "Uses market.daily and market.context via JOIN. Returns warnings when market data is partially missing.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         strategy: z.string().optional().describe("Filter to specific strategy"),
         minImprovementPct: z.number().optional().describe("Only suggest filters with >= X% win rate improvement (default: 3)"),
+        ticker: z.string().optional().describe("Underlying ticker symbol (default: SPX)"),
       }),
     },
-    withFullSync(baseDir, async ({ blockId, strategy, minImprovementPct = 3 }) => {
+    withFullSync(baseDir, async ({ blockId, strategy, minImprovementPct = 3, ticker }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -555,6 +565,11 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const tradeKeys = uniqueTradeLookupKeys(trades);
 
         const conn = await getConnection(baseDir);
+
+        // Check data availability and collect warnings
+        const resolvedTickerSF = normalizeTicker(ticker || '') || DEFAULT_MARKET_TICKER;
+        const availabilitySF = await checkDataAvailability(conn, resolvedTickerSF);
+
         const { sql, params } = buildLookaheadFreeQuery(tradeKeys);
         const dailyResult = await conn.runAndReadAll(sql, params);
         const dailyRecords = resultToRecords(dailyResult);
@@ -655,6 +670,22 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           // RSI (close-derived)
           { name: "Skip when prior-day RSI > 70", field: "RSI_14", operator: ">", value: 70, test: (m) => getNum(m, "prev_RSI_14") > 70, lagged: true },
           { name: "Skip when prior-day RSI < 30", field: "RSI_14", operator: "<", value: 30, test: (m) => getNum(m, "prev_RSI_14") < 30, lagged: true },
+
+          // NEW: BB_Width filters (close-derived, from market.daily)
+          { name: "Skip when prior-day BB_Width > 0.05 (wide bands = high vol)", field: "BB_Width", operator: ">", value: 0.05, test: (m) => getNum(m, "prev_BB_Width") > 0.05, lagged: true },
+          { name: "Skip when prior-day BB_Width < 0.02 (narrow bands = compression)", field: "BB_Width", operator: "<", value: 0.02, test: (m) => getNum(m, "prev_BB_Width") < 0.02, lagged: true },
+
+          // NEW: Realized Vol filters (close-derived, from market.daily)
+          { name: "Skip when prior-day 5D realized vol > 1.5%", field: "Realized_Vol_5D", operator: ">", value: 1.5, test: (m) => getNum(m, "prev_Realized_Vol_5D") > 1.5, lagged: true },
+          { name: "Skip when prior-day 20D realized vol > 1.2%", field: "Realized_Vol_20D", operator: ">", value: 1.2, test: (m) => getNum(m, "prev_Realized_Vol_20D") > 1.2, lagged: true },
+
+          // NEW: BB_Position filters (close-derived, from market.daily)
+          { name: "Skip when prior-day BB_Position > 0.9 (near upper band)", field: "BB_Position", operator: ">", value: 0.9, test: (m) => getNum(m, "prev_BB_Position") > 0.9, lagged: true },
+          { name: "Skip when prior-day BB_Position < 0.1 (near lower band)", field: "BB_Position", operator: "<", value: 0.1, test: (m) => getNum(m, "prev_BB_Position") < 0.1, lagged: true },
+
+          // NEW: Prior_Range_vs_ATR filter (open-known, from market.daily — same-day value)
+          { name: "Skip when Prior_Range_vs_ATR > 1.5 (prior day had outsized range)", field: "Prior_Range_vs_ATR", operator: ">", value: 1.5, test: (m) => getNum(m, "Prior_Range_vs_ATR") > 1.5, lagged: false },
+          { name: "Skip when Prior_Range_vs_ATR < 0.5 (prior day had compressed range)", field: "Prior_Range_vs_ATR", operator: "<", value: 0.5, test: (m) => getNum(m, "Prior_Range_vs_ATR") < 0.5, lagged: false },
         ];
 
         for (const filterDef of testFilters) {
@@ -727,11 +758,82 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         // Take top 10
         const topSuggestions = suggestions.slice(0, 10);
 
-        const summary = `Filter analysis: ${blockId} | ${topSuggestions.length} suggestions found (min ${minImprovementPct}% improvement)`;
+        // Generate composite filter suggestions from pairs of top-performing standalone filters
+        const baseWinRate = currentWinRate;
+        const significantFilters = suggestions.filter(s => s.winRateDelta > 3);
 
-        return createToolOutput(summary, {
+        interface CompositeSuggestion {
+          name: string;
+          type: "composite";
+          projectedWinRate: number;
+          projectedAvgPl: number;
+          tradesAffected: number;
+          improvement: number;
+        }
+
+        const compositeSuggestions: CompositeSuggestion[] = [];
+
+        // Build a map from filter name to the original test function and lagged flag
+        const filterTestMap = new Map<string, { test: (m: Record<string, unknown>) => boolean; lagged: boolean; field: string }>();
+        for (const fd of testFilters) {
+          filterTestMap.set(fd.name, { test: fd.test, lagged: fd.lagged, field: fd.field });
+        }
+
+        for (let i = 0; i < significantFilters.length; i++) {
+          for (let j = i + 1; j < significantFilters.length; j++) {
+            const filterA = significantFilters[i];
+            const filterB = significantFilters[j];
+
+            const testA = filterTestMap.get(filterA.filter);
+            const testB = filterTestMap.get(filterB.filter);
+            if (!testA || !testB) continue;
+
+            // Build pool: exclude NaN-lag trades for lagged fields in either filter
+            let pool = matchedTrades;
+            if (testA.lagged) {
+              const prevField = `prev_${testA.field}`;
+              pool = pool.filter((t) => !isNaN(getNum(t.market as Record<string, unknown>, prevField)));
+            }
+            if (testB.lagged) {
+              const prevField = `prev_${testB.field}`;
+              pool = pool.filter((t) => !isNaN(getNum(t.market as Record<string, unknown>, prevField)));
+            }
+
+            // Find trades that match BOTH filters (would be skipped by both)
+            const bothMatchTrades = pool.filter(t => {
+              const m = t.market as Record<string, unknown>;
+              return testA.test(m) && testB.test(m);
+            });
+
+            if (bothMatchTrades.length < 5) continue;
+
+            const compositeWinRate = bothMatchTrades.filter(t => t.trade.pl > 0).length / bothMatchTrades.length * 100;
+            const compositeAvgPl = bothMatchTrades.reduce((sum, t) => sum + t.trade.pl, 0) / bothMatchTrades.length;
+
+            // Only surface if composite win rate is materially better than either standalone filter alone
+            const improvement = compositeWinRate - Math.max(filterA.winRateDelta + baseWinRate, filterB.winRateDelta + baseWinRate);
+            if (improvement > 2) {
+              compositeSuggestions.push({
+                name: `${filterA.filter} AND ${filterB.filter}`,
+                type: "composite",
+                projectedWinRate: Math.round(compositeWinRate * 100) / 100,
+                projectedAvgPl: Math.round(compositeAvgPl * 100) / 100,
+                tradesAffected: bothMatchTrades.length,
+                improvement: Math.round(improvement * 100) / 100,
+              });
+            }
+          }
+        }
+
+        // Sort composites by improvement, take top 5
+        compositeSuggestions.sort((a, b) => b.improvement - a.improvement);
+        const topCompositeSuggestions = compositeSuggestions.slice(0, 5);
+
+        const summary = `Filter analysis: ${blockId} | ${topSuggestions.length} standalone, ${topCompositeSuggestions.length} composite suggestions (min ${minImprovementPct}% improvement)`;
+
+        const sfResponseData: Record<string, unknown> = {
           blockId,
-          lagNote: "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Consecutive_Days, VIX_Spike_Pct, Term_Structure_State) use prior trading day values to prevent lookahead bias. Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Day_of_Week, Is_Opex) use same-day values.",
+          lagNote: "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Consecutive_Days, VIX_Spike_Pct, Term_Structure_State, BB_Width, Realized_Vol_5D, Realized_Vol_20D, BB_Position) use prior trading day values to prevent lookahead bias. Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR, Day_of_Week, Is_Opex) use same-day values.",
           strategy: strategy || null,
           currentStats: {
             trades: matchedTrades.length,
@@ -739,8 +841,15 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             totalPl: Math.round(currentTotalPl * 100) / 100,
           },
           suggestedFilters: topSuggestions,
+          compositeSuggestions: topCompositeSuggestions,
           minImprovementThreshold: minImprovementPct,
-        });
+        };
+
+        if (availabilitySF.warnings.length > 0) {
+          sfResponseData.warnings = availabilitySF.warnings;
+        }
+
+        return createToolOutput(summary, sfResponseData);
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
@@ -757,16 +866,19 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     "enrich_trades",
     {
       description:
-        "Enrich trades with market context using correct temporal joins. " +
-        "Open-known fields (Gap_Pct, VIX_Open) use same-day values. " +
-        "Close-derived fields (VIX_Close, RSI_14, Vol_Regime) use prior trading day values to prevent lookahead bias. " +
-        "Use includeOutcomeFields=true for post-hoc analysis (with clear warning)." +
-        " Use includeIntradayContext=true for intraday SPX/VIX checkpoint data at trade entry time.",
+        "Enrich trades with market context from market.daily and market.context using correct temporal joins. " +
+        "Open-known fields (Gap_Pct, VIX_Open, Prior_Range_vs_ATR) use same-day values. " +
+        "Close-derived fields (VIX_Close, RSI_14, Vol_Regime, BB_Width, Realized_Vol_5D/20D, BB_Position) use prior trading day values to prevent lookahead bias. " +
+        "New enrichment fields: BB_Width, Realized_Vol_5D, Realized_Vol_20D, BB_Position, Prior_Range_vs_ATR. " +
+        "Use includeOutcomeFields=true for post-hoc analysis (with clear warning). " +
+        "Use includeIntradayContext=true for intraday SPX/VIX checkpoint data at trade entry time. " +
+        "Returns warnings when market data is partially missing.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to enrich"),
         strategy: z.string().optional().describe("Filter to specific strategy (exact match)"),
         startDate: z.string().optional().describe("Start date filter (YYYY-MM-DD)"),
         endDate: z.string().optional().describe("End date filter (YYYY-MM-DD)"),
+        ticker: z.string().optional().describe("Underlying ticker symbol (default: SPX)"),
         includeOutcomeFields: z.boolean().default(false).describe("Include same-day close values (lookahead). Defaults to false for safety."),
         includeIntradayContext: z.boolean().default(false).describe(
           "Include intraday SPX/VIX checkpoint data. Only checkpoints known at trade entry time are returned (lookahead-free). Requires 2 additional DuckDB queries."
@@ -775,7 +887,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         offset: z.number().min(0).default(0).describe("Pagination offset (default: 0)"),
       }),
     },
-    withFullSync(baseDir, async ({ blockId, strategy, startDate, endDate, includeOutcomeFields, includeIntradayContext, limit, offset }) => {
+    withFullSync(baseDir, async ({ blockId, strategy, startDate, endDate, ticker, includeOutcomeFields, includeIntradayContext, limit, offset }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
@@ -818,6 +930,11 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         // Query DuckDB for lookahead-free market data
         const conn = await getConnection(baseDir);
+
+        // Check data availability and collect warnings
+        const resolvedTickerET = normalizeTicker(ticker || '') || DEFAULT_MARKET_TICKER;
+        const availabilityET = await checkDataAvailability(conn, resolvedTickerET, { checkIntraday: includeIntradayContext });
+
         const { sql: lagSql, params: lagParams } = buildLookaheadFreeQuery(tradeKeys);
         const dailyResult = await conn.runAndReadAll(lagSql, lagParams);
         const dailyRecords = resultToRecords(dailyResult);
@@ -839,20 +956,39 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         if (includeIntradayContext) {
           const { valuesClause: pairsClause, params: pairParams } = buildRequestedPairsClause(tradeKeys);
 
-          // Query per-ticker underlying intraday data
+          // Query per-ticker SPX intraday data from market.intraday (normalized: one row per bar).
+          // Pivot bars into wide-format checkpoint columns (P_0930, P_0945, ...) that
+          // buildIntradayContext expects. market.intraday uses HH:MM time format.
+          // TODO: Intraday import is blocked by format incompatibility (STATE.md blocker):
+          // source CSVs use a single Unix timestamp column; market.intraday requires separate
+          // date + time HH:MM columns. Until fixed, these queries return empty results
+          // and intradayContext will be null for all trades (graceful degradation).
+          const spxCheckpointCases = SPX_CHECKPOINTS
+            .map(cp => {
+              const hhmm = String(cp).padStart(4, '0');
+              const timeStr = `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
+              return `MAX(CASE WHEN i.time = '${timeStr}' THEN i.close END) AS "P_${hhmm}"`;
+            })
+            .join(',\n            ');
           const spxResult = await conn.runAndReadAll(
             `WITH requested(ticker, date) AS (VALUES ${pairsClause})
-             SELECT s.*
-             FROM market.spx_15min s
-             JOIN requested r
-               ON s.ticker = r.ticker
-              AND s.date = r.date`,
+             SELECT i.ticker, i.date,
+               MIN(CASE WHEN i.time = (
+                 SELECT MIN(i2.time) FROM market.intraday i2
+                 WHERE i2.ticker = i.ticker AND i2.date = i.date
+               ) THEN i.open END) AS "open",
+               ${spxCheckpointCases}
+             FROM market.intraday i
+             JOIN requested r ON i.ticker = r.ticker AND i.date = r.date
+             GROUP BY i.ticker, i.date`,
             pairParams
           );
           const spxRecords = resultToRecords(spxResult);
           spxIntradayMap = recordsByTickerDate(spxRecords);
 
           // Query VIX intraday for both ticker-specific rows and global fallback rows.
+          // VIX data is stored in market.intraday with ticker='VIX'.
+          // Pivot into wide-format VIX_HHMM columns that buildIntradayContext expects.
           const byVixKey = new Map<string, MarketLookupKey>();
           for (const key of tradeKeys) {
             byVixKey.set(marketTickerDateKey(key.ticker, key.date), key);
@@ -864,13 +1000,24 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           const vixKeys = Array.from(byVixKey.values());
           const { valuesClause: vixPairsClause, params: vixPairParams } =
             buildRequestedPairsClause(vixKeys);
+          const vixCheckpointCases = VIX_CHECKPOINTS
+            .map(cp => {
+              const hhmm = String(cp).padStart(4, '0');
+              const timeStr = `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
+              return `MAX(CASE WHEN i.time = '${timeStr}' THEN i.close END) AS "VIX_${hhmm}"`;
+            })
+            .join(',\n            ');
           const vixResult = await conn.runAndReadAll(
             `WITH requested(ticker, date) AS (VALUES ${vixPairsClause})
-             SELECT v.*
-             FROM market.vix_intraday v
-             JOIN requested r
-               ON v.ticker = r.ticker
-              AND v.date = r.date`,
+             SELECT i.ticker, i.date,
+               MIN(CASE WHEN i.time = (
+                 SELECT MIN(i2.time) FROM market.intraday i2
+                 WHERE i2.ticker = i.ticker AND i2.date = i.date
+               ) THEN i.open END) AS "open",
+               ${vixCheckpointCases}
+             FROM market.intraday i
+             JOIN requested r ON i.ticker = r.ticker AND i.date = r.date
+             GROUP BY i.ticker, i.date`,
             vixPairParams
           );
           const vixRecords = resultToRecords(vixResult);
@@ -992,7 +1139,10 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         // Build lagNote
         let lagNote =
-          "Entry context uses lookahead-free temporal joins on ticker+date. Same-day fields (Gap_Pct, VIX_Open, Day_of_Week, etc.) are values known at market open. Prior-day fields (VIX_Close, RSI_14, Vol_Regime, etc.) use the previous trading day's close-derived values to prevent lookahead bias.";
+          "Entry context uses lookahead-free temporal joins on ticker+date via market.daily LEFT JOIN market.context. " +
+          "Same-day (open-known) fields: Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR, Day_of_Week, Month, Is_Opex. " +
+          "Prior-day (close-derived) fields: VIX_Close, RSI_14, Vol_Regime, BB_Width, Realized_Vol_5D, Realized_Vol_20D, BB_Position, Term_Structure_State, etc. — " +
+          "use the previous trading day's close-derived values to prevent lookahead bias.";
         if (includeOutcomeFields) {
           lagNote += " Outcome fields contain same-day close-derived values and represent information NOT available at trade entry time.";
         }
@@ -1020,6 +1170,10 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         if (includeOutcomeFields) {
           responseData.lookaheadWarning =
             "WARNING: outcomeFields contain same-day close-derived values that were NOT available at trade entry time. Do not use these for entry signal analysis.";
+        }
+
+        if (availabilityET.warnings.length > 0) {
+          responseData.warnings = availabilityET.warnings;
         }
 
         const summary = `Enriched trades: ${blockId} | ${matched}/${paginated.length} matched | offset ${offset}, limit ${limit}`;
@@ -1059,27 +1213,6 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const end = endDate || startDate;
         const normalizedTicker = normalizeTicker(ticker || "") || DEFAULT_MARKET_TICKER;
         const conn = await getConnection(baseDir);
-        const result = await conn.runAndReadAll(
-          `SELECT *
-           FROM market.spx_15min
-           WHERE ticker = $1
-             AND date BETWEEN $2 AND $3
-           ORDER BY date`,
-          [normalizedTicker, startDate, end]
-        );
-        const intradayRecords = resultToRecords(result);
-
-        if (intradayRecords.length === 0) {
-          return {
-            content: [{
-              type: "text",
-              text:
-                `No 15-minute intraday data available for ticker ${normalizedTicker} ` +
-                "in the specified date range",
-            }],
-            isError: true,
-          };
-        }
 
         // Map of available checkpoint times to their field names
         const checkpointFields: Record<string, string> = {
@@ -1110,6 +1243,44 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           "1530": "P_1530",
           "1545": "P_1545",
         };
+
+        // Query market.intraday (normalized: one row per bar) and pivot into wide-format
+        // checkpoint columns (P_0930, P_0945, ...) that the ORB calculation expects.
+        // TODO: Intraday import is blocked by format incompatibility (STATE.md blocker).
+        const orbCheckpointCases = Object.entries(checkpointFields)
+          .map(([hhmm, fieldName]) => {
+            const timeStr = `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
+            return `MAX(CASE WHEN time = '${timeStr}' THEN close END) AS "${fieldName}"`;
+          })
+          .join(',\n          ');
+        const result = await conn.runAndReadAll(
+          `SELECT date,
+             MIN(CASE WHEN time = (
+               SELECT MIN(t2.time) FROM market.intraday t2
+               WHERE t2.ticker = i.ticker AND t2.date = i.date
+             ) THEN open END) AS "open",
+             MAX(close) AS "close",
+             ${orbCheckpointCases}
+           FROM market.intraday i
+           WHERE ticker = $1
+             AND date BETWEEN $2 AND $3
+           GROUP BY date
+           ORDER BY date`,
+          [normalizedTicker, startDate, end]
+        );
+        const intradayRecords = resultToRecords(result);
+
+        if (intradayRecords.length === 0) {
+          return {
+            content: [{
+              type: "text",
+              text:
+                `No intraday data available for ticker ${normalizedTicker} ` +
+                "in the specified date range. Import intraday data via import_market_csv (target_table: \"intraday\").",
+            }],
+            isError: true,
+          };
+        }
 
         // Validate times
         if (!(startTime in checkpointFields)) {

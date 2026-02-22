@@ -688,7 +688,6 @@ async function hasTier3Data(conn: DuckDBConnection, ticker: string): Promise<boo
  * source='enrichment', ticker, target_table='daily' after a successful Tier 1 run.
  *
  * Schema gaps — the following fields are NOT written (absent from schema):
- * - Prior_Range_vs_ATR (not created in Phase 60)
  * - Opening_Drive_Strength (Tier 3 schema gap)
  * - Intraday_Realized_Vol (Tier 3 schema gap)
  * - wilder_state column exists but is NOT written (superseded by 200-day lookback)
@@ -822,6 +821,17 @@ export async function runEnrichment(
         : null;
     const rsi14val = rsi14[i];
 
+    // Prior_Range_vs_ATR: prior day's (high - low) / ATR[i-1]
+    // Known at market open (prior day range and ATR are available before trading begins).
+    // First bar (i=0) has no prior day, so null. ATR[i-1] must be valid (non-NaN).
+    let priorRangeVsATR: number | null = null;
+    if (i > 0) {
+      const priorATR = atrArr[i - 1];
+      if (!isNaN(priorATR) && priorATR > 0) {
+        priorRangeVsATR = (highs[i - 1] - lows[i - 1]) / priorATR;
+      }
+    }
+
     return {
       ticker,
       date: dates[i],
@@ -846,6 +856,7 @@ export async function runEnrichment(
       Day_of_Week: dayOfWeek,
       Month: monthVal,
       Is_Opex: opex,
+      Prior_Range_vs_ATR: priorRangeVsATR,
     };
   });
 
@@ -873,6 +884,7 @@ export async function runEnrichment(
     "Day_of_Week",
     "Month",
     "Is_Opex",
+    "Prior_Range_vs_ATR",
   ];
   for (let start = 0; start < enrichedRows.length; start += BATCH_SIZE) {
     const batch = enrichedRows.slice(start, start + BATCH_SIZE);
