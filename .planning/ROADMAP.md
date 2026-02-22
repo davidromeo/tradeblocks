@@ -28,7 +28,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 ## Phases
 
 - [x] **Phase 60: Database Separation and Connection Infrastructure** — Separate market.duckdb created, ATTACHed at startup, with normalized schema and safe connection lifecycle (completed 2026-02-21)
-- [ ] **Phase 61: Import Tools** — MCP tools for ingesting market data from CSV files and external DuckDB databases
+- [x] **Phase 61: Import Tools** — MCP tools for ingesting market data from CSV files and external DuckDB databases (completed 2026-02-22)
 - [ ] **Phase 62: TypeScript Enrichment Pipeline** — Pure indicator functions and tiered enrichment runner computing ~40 derived fields from raw OHLCV
 - [ ] **Phase 63: Tool Migration** — All 4 market-data tools and shared query utilities migrated to new normalized schema
 - [ ] **Phase 64: Cleanup and API Surface** — Dead code removed, run_sql/describe_database updated, PineScripts simplified, new tools registered
@@ -59,7 +59,7 @@ Plans:
   2. User can call `import_from_database` with an external DuckDB path and query to pull market data across databases, with the source database properly ATTACHed and DETACHed within the tool call
   3. Overlapping imports (same ticker + date range) succeed without duplicates via ON CONFLICT DO NOTHING, and ticker values are normalized consistently regardless of input casing
   4. Column mapping validation rejects imports with missing required fields and returns clear error messages identifying which fields are absent
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 61-01-PLAN.md — Core ingestion utilities (market-importer.ts + Phase 60 metadata helpers)
 - [ ] 61-02-PLAN.md — Tool registration (market-imports.ts + index.ts wiring + version bump)
@@ -113,7 +113,7 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Database Separation | 2/2 | Complete    | 2026-02-21 | - |
-| 61. Import Tools | 2/3 | In Progress|  | - |
+| 61. Import Tools | 3/3 | Complete    | 2026-02-22 | - |
 | 62. Enrichment Pipeline | v3.0 | 0/? | Not started | - |
 | 63. Tool Migration | v3.0 | 0/? | Not started | - |
 | 64. Cleanup and API Surface | v3.0 | 0/? | Not started | - |

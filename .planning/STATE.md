@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 61 of 64 (Import Tools)
-Plan: 2 of 2 complete
+Plan: 3 of 3 complete
 Status: In progress
-Last activity: 2026-02-22 — Completed 61-02 (import_market_csv and import_from_database MCP tools, version 1.3.0)
+Last activity: 2026-02-22 — Completed 61-03 (market import integration tests, 21 passing, 2 bugs fixed)
 
-Progress: [████░░░░░░] 27%
+Progress: [████░░░░░░] 29%
 
 ## Project Reference
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 60 | 2/2 | 8 min | 4 min |
-| 61 | 2/2 | 4 min | 2 min |
+| 61 | 3/3 | 8 min | 3 min |
 
 ## Accumulated Context
 
@@ -43,8 +43,8 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - resolveMarketDbPath precedence: CLI --market-db > MARKET_DB_PATH env > <dataDir>/market.duckdb
 - All four market table columns created upfront — no ALTER TABLE in later phases
 - tableExists() exported from schemas.ts for use in later migration phases
-- enable_external_access: true at instance creation + SET enable_external_access=false after ATTACH (self-locking, blocks HTTP while allowing already-attached local DBs)
-- enable_external_access decision RESOLVED: local ATTACH works; HTTP blocked after connection setup (Phase 61 can use DuckDB read_csv for local files but HTTP is blocked)
+- [REVISED Phase 61-03]: SET enable_external_access=false REMOVED from connection.ts — confirmed to block ALL ATTACH including local files, breaking importFromDatabase; enable_external_access:true at instance creation is sufficient security boundary
+- enable_external_access: instance-level "true" allows all local ATTACH; SET false is NOT used (breaks local ATTACH, not just HTTP)
 - syncMarketData() deprecated with @deprecated JSDoc — will be removed in Phase 64
 - withFullSync calls syncAllBlocks only (DB-09 enforced) — market writes not wrapped in analytics.duckdb transactions
 - [Phase 60]: enable_external_access starts true then locked via SET after ATTACH — allows local file ATTACH while blocking HTTP
@@ -55,6 +55,8 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 61-02]: Tool names import_market_csv and import_from_database (import_csv taken by block importer in imports.ts)
 - [Phase 61-02]: downgradeToReadOnly placed in finally block — cleanup guaranteed even on import errors
 - [Phase 61-02]: MCP server version bumped to 1.3.0 (minor bump for two new tools)
+- [Phase 61-03]: DuckDB API: columnNames() returns string[] of column names; getColumns() returns column data arrays (not descriptors)
+- [Phase 61-03]: importFromDatabase works end-to-end after removing SET enable_external_access=false and fixing columnNames() API call
 
 ### Pending Todos
 
@@ -68,5 +70,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 61-02-PLAN.md (import_market_csv and import_from_database MCP tools + version 1.3.0)
+Stopped at: Completed 61-03-PLAN.md (market import integration tests, 21 passing, 2 bugs fixed)
 Resume file: None
