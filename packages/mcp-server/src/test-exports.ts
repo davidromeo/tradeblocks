@@ -112,3 +112,11 @@ export {
   type ContextRow,
   type EnrichedContextRow,
 } from './utils/market-enricher.js';
+
+// Export market enrichment utilities for integration testing
+export {
+  runEnrichment,
+  type EnrichmentResult,
+  type EnrichmentOptions,
+  type TierStatus,
+} from './utils/market-enricher.js';
