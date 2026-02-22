@@ -73,3 +73,21 @@ export type { IntradayContext } from './utils/intraday-timing.js';
 // Export schema metadata for classification completeness tests
 export { SCHEMA_DESCRIPTIONS } from './utils/schema-metadata.js';
 export type { ColumnDescription } from './utils/schema-metadata.js';
+
+// Export market import utilities for integration testing
+export {
+  validateColumnMapping,
+  importMarketCsvFile,
+  importFromDatabase,
+  triggerEnrichment,
+  type ImportMarketCsvOptions,
+  type ImportFromDatabaseOptions,
+  type ImportResult,
+} from './utils/market-importer.js';
+
+// Export Phase 60 market import metadata helpers for integration testing
+export {
+  type MarketImportMetadata,
+  getMarketImportMetadata,
+  upsertMarketImportMetadata,
+} from './sync/metadata.js';

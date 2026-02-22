@@ -21,6 +21,7 @@ import { registerPerformanceTools } from "./tools/performance.js";
 import { registerReportTools } from "./tools/reports.js";
 import { registerImportTools } from "./tools/imports.js";
 import { registerMarketDataTools } from "./tools/market-data.js";
+import { registerMarketImportTools } from "./tools/market-imports.js";
 import { registerSQLTools } from "./tools/sql.js";
 import { registerSchemaTools } from "./tools/schema.js";
 import { registerEdgeDecayTools } from "./tools/edge-decay.js";
@@ -281,6 +282,7 @@ async function main(): Promise<void> {
     registerPerformanceTools(server, resolvedDir);
     registerReportTools(server, resolvedDir);
     registerImportTools(server, resolvedDir);
+    registerMarketImportTools(server, resolvedDir);
     registerMarketDataTools(server, resolvedDir);
     registerSQLTools(server, resolvedDir);
     registerSchemaTools(server, resolvedDir);
