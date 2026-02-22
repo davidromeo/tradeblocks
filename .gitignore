@@ -1,6 +1,9 @@
 # Planning docs (kept local)
 .planning/
 
+# Git worktrees
+.worktrees/
+
 # General ignores
 .DS_Store
 *.pem
