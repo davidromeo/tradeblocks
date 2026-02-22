@@ -2,26 +2,26 @@
 
 ## Current Position
 
-Phase: 61 of 64 (Import Tools)
-Plan: 3 of 3 complete
+Phase: 62 of 64 (TypeScript Enrichment Pipeline)
+Plan: 1 of 3 complete
 Status: In progress
-Last activity: 2026-02-22 — Completed 61-03 (market import integration tests, 21 passing, 2 bugs fixed)
+Last activity: 2026-02-22 — Completed 62-01 (pure indicator functions, 84 tests passing)
 
-Progress: [████░░░░░░] 29%
+Progress: [████░░░░░░] 30%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** v3.0 Market Data Separation — Phase 61 in progress (import tools)
+**Current focus:** v3.0 Market Data Separation — Phase 62 in progress (enrichment pipeline)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4 (v3.0)
-- Average duration: 3 min
-- Total execution time: 12 min
+- Total plans completed: 5 (v3.0)
+- Average duration: 4 min
+- Total execution time: 18 min
 
 **By Phase:**
 
@@ -29,6 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 |-------|-------|-------|----------|
 | 60 | 2/2 | 8 min | 4 min |
 | 61 | 3/3 | 8 min | 3 min |
+| 62 | 1/3 | 6 min | 6 min |
 
 ## Accumulated Context
 
@@ -57,6 +58,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 61-02]: MCP server version bumped to 1.3.0 (minor bump for two new tools)
 - [Phase 61-03]: DuckDB API: columnNames() returns string[] of column names; getColumns() returns column data arrays (not descriptors)
 - [Phase 61-03]: importFromDatabase works end-to-end after removing SET enable_external_access=false and fixing columnNames() API call
+- [Phase 62]: RSI seeds from SMA of first period changes (bars 1..period) then Wilder smoothing — confirmed correct Wilder initialization
+- [Phase 62]: computeRealizedVol first valid index at i=period (window [i-period+1..i] of log returns starting at index 1)
+- [Phase 62]: classifyTermStructure flatness: both VIX9D/VIX and VIX/VIX3M ratios within 1% of 1.0
 
 ### Pending Todos
 
@@ -71,5 +75,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 61-03-PLAN.md (market import integration tests, 21 passing, 2 bugs fixed)
+Stopped at: Completed 62-01-PLAN.md (pure indicator functions, 84 tests passing)
 Resume file: None

@@ -31,14 +31,14 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Enrichment Pipeline
 
-- [ ] **ENR-01**: Pure TypeScript indicator functions (RSI, ATR, EMA, SMA, Bollinger Bands, realized vol) validated against TradingView outputs
+- [x] **ENR-01**: Pure TypeScript indicator functions (RSI, ATR, EMA, SMA, Bollinger Bands, realized vol) validated against TradingView outputs
 - [ ] **ENR-02**: Tier 1 enrichment: ~18 fields from single-ticker OHLCV (Gap_Pct, RSI_14, ATR_Pct, Trend_Score, BB_Position, BB_Width, Realized_Vol_5D/20D, Prior_Range_vs_ATR, etc.)
 - [ ] **ENR-03**: Tier 2 enrichment: VIX regime fields from `market.context` (Vol_Regime, Term_Structure_State, VIX_Percentile, VIX ratios, etc.)
 - [ ] **ENR-04**: Tier 3 enrichment: intraday timing fields written to `market.daily` from `market.intraday` bars (High_Time, Low_Time, Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol, etc.)
 - [ ] **ENR-05**: 200+ day lookback for Wilder smoothing warmup, only updating requested date range
 - [ ] **ENR-06**: Wilder state caching in `_sync_metadata` for efficient incremental imports
 - [ ] **ENR-07**: Idempotent enrichment (re-running produces same results)
-- [ ] **ENR-08**: Unit tests for all indicator functions with TradingView parity validation
+- [x] **ENR-08**: Unit tests for all indicator functions with TradingView parity validation
 
 ### Tool Migration
 
@@ -97,14 +97,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IMP-05 | Phase 61 | Complete |
 | IMP-06 | Phase 61 | Complete |
 | IMP-07 | Phase 61 | Complete |
-| ENR-01 | Phase 62 | Pending |
+| ENR-01 | Phase 62 | Complete |
 | ENR-02 | Phase 62 | Pending |
 | ENR-03 | Phase 62 | Pending |
 | ENR-04 | Phase 62 | Pending |
 | ENR-05 | Phase 62 | Pending |
 | ENR-06 | Phase 62 | Pending |
 | ENR-07 | Phase 62 | Pending |
-| ENR-08 | Phase 62 | Pending |
+| ENR-08 | Phase 62 | Complete |
 | MIG-01 | Phase 63 | Pending |
 | MIG-02 | Phase 63 | Pending |
 | MIG-03 | Phase 63 | Pending |
