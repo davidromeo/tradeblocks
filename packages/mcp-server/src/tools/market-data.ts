@@ -1,14 +1,14 @@
 /**
  * Market Data Tools
  *
- * MCP tools for analyzing market context (VIX, term structure, regimes)
- * and correlating with trade performance. Includes enrich_trades for
- * lag-aware trade enrichment with market data.
+ * MCP tools for analyzing market context and correlating with trade performance.
+ * Includes enrich_trades for lag-aware trade enrichment, regime analysis,
+ * filter suggestions, and Opening Range Breakout calculations.
  *
- * Data source: DuckDB analytics database (synced from TradingView exports)
- * - market.daily: Per-ticker OHLCV + technical indicators (normalized schema)
- * - market.context: Global VIX/regime data (LEFT JOIN on date with market.daily)
- * - market.intraday: Raw 15-minute bars (ticker, date, time HH:MM, OHLCV)
+ * Data source: DuckDB normalized schema
+ * - market.daily: Per-ticker OHLCV + enrichment indicators
+ * - market.context: Global VIX/regime context (joined via date)
+ * - market.intraday: Raw bar data for ORB and intraday analysis
  */
 
 import { z } from "zod";
@@ -275,17 +275,11 @@ function getDayLabel(dow: number): string {
 /**
  * Register market data analysis tools.
  *
- * Note: The following tools were REMOVED in v0.6.0 - use run_sql instead:
- * - get_market_context: SELECT ... FROM market.spx_daily WHERE ...
- * - find_similar_days: Use CTE with similarity conditions
- *
- * Restored in v1.1.0 with lookahead-free temporal joins:
+ * Tools:
+ * - analyze_regime_performance: Statistical breakdown by market regime
+ * - suggest_filters: Market-based filter testing with projected impact
  * - enrich_trades: Returns trades enriched with lag-aware market context
- *
- * Kept tools (require TradeBlocks library computation):
- * - analyze_regime_performance: Statistical breakdown by regime
- * - suggest_filters: Complex filter testing with projected impact
- * - calculate_orb: Opening Range Breakout calculation from 15min checkpoints
+ * - calculate_orb: Opening Range Breakout from market.intraday bar aggregation
  */
 export function registerMarketDataTools(server: McpServer, baseDir: string): void {
   // ---------------------------------------------------------------------------
