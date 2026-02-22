@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 62 of 64 (TypeScript Enrichment Pipeline)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: In progress
-Last activity: 2026-02-22 — Completed 62-01 (pure indicator functions, 84 tests passing)
+Last activity: 2026-02-22 — Completed 62-02 (enrichment runner, runEnrichment() live)
 
-Progress: [████░░░░░░] 30%
+Progress: [█████░░░░░] 40%
 
 ## Project Reference
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 |-------|-------|-------|----------|
 | 60 | 2/2 | 8 min | 4 min |
 | 61 | 3/3 | 8 min | 3 min |
-| 62 | 1/3 | 6 min | 6 min |
+| 62 | 2/3 | 10 min | 5 min |
 
 ## Accumulated Context
 
@@ -61,6 +61,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 62]: RSI seeds from SMA of first period changes (bars 1..period) then Wilder smoothing — confirmed correct Wilder initialization
 - [Phase 62]: computeRealizedVol first valid index at i=period (window [i-period+1..i] of log returns starting at index 1)
 - [Phase 62]: classifyTermStructure flatness: both VIX9D/VIX and VIX/VIX3M ratios within 1% of 1.0
+- [Phase 62-02]: triggerEnrichment no longer returns 'pending' — wired to runEnrichment(); returns 'complete'/'skipped'/'error'
+- [Phase 62-02]: Only daily table imports trigger enrichment; context/intraday imports skip (source data not enrichment targets)
+- [Phase 62-02]: Schema gaps silently skipped: Prior_Range_vs_ATR, Opening_Drive_Strength, Intraday_Realized_Vol absent from market.daily
+- [Phase 62-02]: wilder_state column NOT written — 200-day lookback approach supersedes it per CONTEXT.md decision
+- [Phase 62-02]: enrichment watermark pattern: source='enrichment', ticker, target_table='daily' in market._sync_metadata
 
 ### Pending Todos
 
@@ -75,5 +80,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 62-01-PLAN.md (pure indicator functions, 84 tests passing)
+Stopped at: Completed 62-02-PLAN.md (enrichment runner, runEnrichment() live, triggerEnrichment wired)
 Resume file: None
