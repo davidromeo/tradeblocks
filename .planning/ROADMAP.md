@@ -55,11 +55,15 @@ Plans:
 **Depends on**: Phase 60
 **Requirements**: IMP-01, IMP-02, IMP-03, IMP-04, IMP-05, IMP-06, IMP-07
 **Success Criteria** (what must be TRUE):
-  1. User can call `import_csv` with a file path, column mapping, target table, and ticker to load OHLCV data into `market.daily` (or context/intraday) and see enriched fields populated automatically afterward
+  1. User can call `import_market_csv` with a file path, column mapping, target table, and ticker to load OHLCV data into `market.daily` (or context/intraday) and see enriched fields populated automatically afterward
   2. User can call `import_from_database` with an external DuckDB path and query to pull market data across databases, with the source database properly ATTACHed and DETACHed within the tool call
   3. Overlapping imports (same ticker + date range) succeed without duplicates via ON CONFLICT DO NOTHING, and ticker values are normalized consistently regardless of input casing
   4. Column mapping validation rejects imports with missing required fields and returns clear error messages identifying which fields are absent
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 61-01-PLAN.md — Core ingestion utilities (market-importer.ts + Phase 60 metadata helpers)
+- [ ] 61-02-PLAN.md — Tool registration (market-imports.ts + index.ts wiring + version bump)
+- [ ] 61-03-PLAN.md — Integration tests for both import tools
 
 ### Phase 62: TypeScript Enrichment Pipeline
 **Goal**: Raw OHLCV data in market.daily is automatically enriched with ~40 computed indicator fields across three tiers, using pure TypeScript functions validated against TradingView outputs
