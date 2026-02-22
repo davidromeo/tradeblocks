@@ -54,6 +54,7 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       Gap_Filled INTEGER,
       Consecutive_Days INTEGER,
       Prev_Return_Pct DOUBLE,
+      Prior_Range_vs_ATR DOUBLE,
 
       -- Tier 3 intraday timing
       High_Time DOUBLE,
