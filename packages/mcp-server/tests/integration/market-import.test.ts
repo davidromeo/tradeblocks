@@ -293,19 +293,22 @@ describe("importMarketCsvFile", () => {
       columnMapping,
     });
 
-    // Check _sync_metadata row exists with correct source/ticker/target_table
+    // Check import metadata row exists (source = import_market_csv:...)
+    // Note: runEnrichment also upserts an 'enrichment' source row, so there
+    // may be 2 rows for (ticker='SPX', target_table='daily'). We verify the
+    // import-sourced row is present with the correct values.
     const metaResult = await conn.runAndReadAll(
       "SELECT source, ticker, target_table FROM market._sync_metadata WHERE ticker = 'SPX' AND target_table = 'daily'"
     );
     const rows = metaResult.getRows();
-    expect(rows.length).toBe(1);
-    expect(String(rows[0][1])).toBe("SPX");
-    expect(String(rows[0][2])).toBe("daily");
-    // Source should reference the file path
-    expect(String(rows[0][0])).toContain("import_market_csv");
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    const importRow = rows.find((r) => String(r[0]).includes("import_market_csv"));
+    expect(importRow).toBeDefined();
+    expect(String(importRow![1])).toBe("SPX");
+    expect(String(importRow![2])).toBe("daily");
   });
 
-  it("enrichment status is 'pending' (not 'error') for normal import", async () => {
+  it("enrichment status is 'complete' (not 'error') for normal import", async () => {
     const csvPath = path.join(testDir, "spx.csv");
     await fs.writeFile(csvPath, CSV_HEADER + CSV_ROWS);
 
@@ -317,7 +320,9 @@ describe("importMarketCsvFile", () => {
       columnMapping,
     });
 
-    expect(result.enrichment.status).toBe("pending");
+    // Phase 62: triggerEnrichment now calls runEnrichment() and returns "complete",
+    // "skipped", or "error" — never "pending" (stub behavior removed).
+    expect(result.enrichment.status).toBe("complete");
     expect(result.enrichment.status).not.toBe("error");
   });
 

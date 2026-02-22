@@ -17,6 +17,7 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 import * as fs from "fs/promises";
 import { normalizeTicker } from "./ticker.js";
 import { upsertMarketImportMetadata } from "../sync/metadata.js";
+import { runEnrichment } from "./market-enricher.js";
 
 // =============================================================================
 // Constants
@@ -297,34 +298,55 @@ function computeDateRange(
 }
 
 // =============================================================================
-// Enrichment Stub
+// Enrichment Trigger
 // =============================================================================
 
 /**
- * Trigger market data enrichment (Phase 62 stub).
+ * Trigger market data enrichment after an import.
  *
- * Currently returns a pending status without performing any work.
- * Phase 62 will replace this with real enrichment logic.
+ * Calls runEnrichment() for daily table imports. Context and intraday imports
+ * are source data, not enrichment targets, so they are skipped here.
+ *
+ * Returns "complete", "skipped", or "error" — never "pending".
  */
 export async function triggerEnrichment(
-  _conn: DuckDBConnection,
+  conn: DuckDBConnection,
   ticker: string,
   targetTable: string,
-  dateRange: { min: string; max: string } | null,
+  _dateRange: { min: string; max: string } | null,
   skipEnrichment: boolean
 ): Promise<{ status: "pending" | "complete" | "skipped" | "error"; message: string }> {
+  // Only enrich daily table imports — context and intraday are source data, not enrichment targets
   if (skipEnrichment) {
     return {
       status: "skipped",
       message: "skip_enrichment=true; call enrich_market_data to populate computed fields.",
     };
   }
+  if (targetTable !== "daily") {
+    return {
+      status: "skipped",
+      message: `Enrichment only runs for daily table imports; skipping for ${targetTable}.`,
+    };
+  }
 
-  const rangeStr = dateRange ? ` (${dateRange.min} to ${dateRange.max})` : "";
-  return {
-    status: "pending",
-    message: `Enrichment for ${ticker} in market.${targetTable}${rangeStr} is queued. Run enrich_market_data to populate computed fields.`,
-  };
+  try {
+    const result = await runEnrichment(conn, ticker, {});
+    const summaryParts = [
+      `Tier 1: ${result.tier1.status}${result.tier1.fieldsWritten !== undefined ? ` (${result.tier1.fieldsWritten} fields)` : ""}${result.tier1.reason ? ` — ${result.tier1.reason}` : ""}`,
+      `Tier 2: ${result.tier2.status}${result.tier2.fieldsWritten !== undefined ? ` (${result.tier2.fieldsWritten} fields)` : ""}${result.tier2.reason ? ` — ${result.tier2.reason}` : ""}`,
+      `Tier 3: ${result.tier3.status}${result.tier3.reason ? ` — ${result.tier3.reason}` : ""}`,
+    ];
+    return {
+      status: "complete",
+      message: `Enriched ${result.rowsEnriched} rows for ${ticker} through ${result.enrichedThrough ?? "N/A"}. ${summaryParts.join("; ")}`,
+    };
+  } catch (err) {
+    return {
+      status: "error",
+      message: `Enrichment failed for ${ticker}: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 // =============================================================================
