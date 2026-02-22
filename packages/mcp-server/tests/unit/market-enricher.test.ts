@@ -100,17 +100,20 @@ describe('computeRSI', () => {
 
   test('uses Wilder smoothing (not SMA) for subsequent values', () => {
     // After the seed period, subsequent RSI uses: avgGain = (prev * (p-1) + gain) / p
-    // With all-up then one down: RSI should be less than 100 but close to it
+    // With all-up then one down day (large drop), RSI drops below 100
     const closes = [
-      ...Array.from({ length: 15 }, (_, i) => 100 + i), // 15 up days
-      99, // one down day
+      ...Array.from({ length: 15 }, (_, i) => 100 + i), // 15 consecutive up days
+      99, // one large down day — down from 114 to 99 = -15 points loss vs 1-point avg gain
     ];
     const rsi = computeRSI(closes, 14);
     // At index 14 (after 14 up days), RSI = 100
     expect(rsi[14]).toBe(100);
-    // At index 15 (one down day), RSI should drop significantly below 100
+    // At index 15 (one big down day): Wilder: avgGain=(1*13+0)/14≈0.929, avgLoss=(0*13+15)/14≈1.071
+    // RSI = 100 - 100/(1 + 0.929/1.071) ≈ 100 - 100/1.133 ≈ 46.43
+    // This verifies Wilder smoothing is working — large loss immediately moves RSI significantly
     expect(rsi[15]).toBeLessThan(100);
-    expect(rsi[15]).toBeGreaterThan(50); // Still mostly bullish
+    expect(rsi[15]).toBeLessThan(60); // Large drop should push RSI well below 60
+    expect(rsi[15]).toBeGreaterThan(0); // But not to 0 (still some prior gain memory)
   });
 });
 
@@ -330,21 +333,24 @@ describe('computeRealizedVol', () => {
     expect(computeRealizedVol(closes, 5)).toHaveLength(10);
   });
 
-  test('first period values are NaN (need period+1 closes for period log returns)', () => {
+  test('first period values are NaN (indices 0..period-1 are NaN)', () => {
+    // With period=5: log returns exist from index 1 onward.
+    // Window [i-4..i] of log returns: first valid window is [1..5] at i=5.
+    // So indices 0..4 are NaN, index 5 is first valid vol.
     const closes = Array.from({ length: 10 }, (_, i) => 100 + i);
     const vol = computeRealizedVol(closes, 5);
-    for (let i = 0; i <= 5; i++) {
+    for (let i = 0; i < 5; i++) {
       expect(isNaN(vol[i])).toBe(true);
     }
-    expect(isNaN(vol[6])).toBe(false);
+    // First valid vol at index 5 (window of log returns [1..5])
+    expect(isNaN(vol[5])).toBe(false);
   });
 
   test('constant prices produce vol of 0', () => {
     // All same price → log returns = 0 → stddev = 0 → vol = 0
     const closes = Array.from({ length: 10 }, () => 100);
     const vol = computeRealizedVol(closes, 5);
-    // First valid at index 6 (5 log returns need 6 closes: indices 1..5)
-    // Actually: period=5 returns need indices i-5..i-1, so first valid at index 5
+    // First valid at index 5 (window of log returns [1..5])
     for (let i = 0; i < closes.length; i++) {
       if (!isNaN(vol[i])) {
         expect(vol[i]).toBeCloseTo(0, 10);

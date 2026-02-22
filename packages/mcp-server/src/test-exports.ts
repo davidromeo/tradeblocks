@@ -91,3 +91,24 @@ export {
   getMarketImportMetadata,
   upsertMarketImportMetadata,
 } from './sync/metadata.js';
+
+// Export Phase 62 market enricher indicator functions for unit testing
+export {
+  computeRSI,
+  computeATR,
+  computeEMA,
+  computeSMA,
+  computeBollingerBands,
+  computeRealizedVol,
+  computeTrendScore,
+  computeConsecutiveDays,
+  isGapFilled,
+  isOpex,
+  computeVIXDerivedFields,
+  classifyVolRegime,
+  classifyTermStructure,
+  computeVIXPercentile,
+  type BollingerBandRow,
+  type ContextRow,
+  type EnrichedContextRow,
+} from './utils/market-enricher.js';
