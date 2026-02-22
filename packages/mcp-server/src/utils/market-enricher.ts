@@ -16,6 +16,9 @@
  * - TradingView Pine Script documentation (ta.rsi, ta.atr, ta.ema, ta.bb)
  */
 
+import type { DuckDBConnection } from "@duckdb/node-api";
+import { upsertMarketImportMetadata } from "../sync/metadata.js";
+
 // =============================================================================
 // Interfaces
 // =============================================================================
@@ -549,4 +552,431 @@ export function computeVIXPercentile(vixCloses: number[], period = 252): number[
   }
 
   return result;
+}
+
+// =============================================================================
+// Enrichment Runner Types
+// =============================================================================
+
+export interface EnrichmentOptions {
+  forceFull?: boolean;
+}
+
+export interface TierStatus {
+  status: "complete" | "skipped" | "error";
+  fieldsWritten?: number;
+  reason?: string;
+}
+
+export interface EnrichmentResult {
+  ticker: string;
+  tier1: TierStatus;
+  tier2: TierStatus;
+  tier3: TierStatus;
+  rowsEnriched: number;
+  enrichedThrough: string | null;
+}
+
+// =============================================================================
+// Enrichment Runner Private Helpers
+// =============================================================================
+
+/** Subtract N calendar days from a YYYY-MM-DD string, returns YYYY-MM-DD */
+function subtractDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().split("T")[0];
+}
+
+/** Parse YYYY-MM-DD to a local Date without timezone conversion */
+function parseDateStr(dateStr: string): Date | null {
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+}
+
+/** Batch UPDATE market.daily with computed enrichment fields */
+async function batchUpdateDaily(
+  conn: DuckDBConnection,
+  rows: Array<Record<string, unknown>>,
+  columns: string[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  // Build VALUES list with $N params
+  const allCols = ["ticker", "date", ...columns];
+  const placeholders = rows
+    .map((_, rowIdx) => {
+      const params = allCols.map((__, colIdx) => `$${rowIdx * allCols.length + colIdx + 1}`);
+      return `(${params.join(", ")})`;
+    })
+    .join(", ");
+  const setClauses = columns.map((c) => `${c} = v.${c}`).join(", ");
+  const sql = `
+    UPDATE market.daily AS t
+    SET ${setClauses}
+    FROM (VALUES ${placeholders}) AS v(${allCols.join(", ")})
+    WHERE t.ticker = v.ticker AND t.date = v.date
+  `;
+  const params = rows.flatMap((row) => allCols.map((col) => row[col] ?? null));
+  await conn.run(sql, params as (string | number | boolean | null | bigint)[]);
+}
+
+/** Run Tier 2: enrich market.context with computed VIX fields */
+async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
+  // Check if VIX data exists
+  const check = await conn.runAndReadAll(
+    `SELECT COUNT(*) FROM market.context WHERE VIX_Close IS NOT NULL LIMIT 1`
+  );
+  const count = Number(check.getRows()[0]?.[0] ?? 0);
+  if (count === 0) {
+    return { status: "skipped", reason: "no VIX data in market.context — import context data first" };
+  }
+
+  // Fetch all context rows ordered by date
+  const reader = await conn.runAndReadAll(
+    `SELECT date, VIX_Open, VIX_Close, VIX_High, VIX9D_Open, VIX9D_Close, VIX3M_Open, VIX3M_Close
+     FROM market.context ORDER BY date ASC`
+  );
+  const rawRows = reader.getRows();
+  if (rawRows.length === 0) return { status: "skipped", reason: "no context rows" };
+
+  // Map to ContextRow objects
+  const contextRows: ContextRow[] = rawRows.map((r) => ({
+    date: r[0] as string,
+    VIX_Open: r[1] as number | null,
+    VIX_Close: r[2] as number | null,
+    VIX_High: r[3] as number | null,
+    VIX9D_Open: r[4] as number | null,
+    VIX9D_Close: r[5] as number | null,
+    VIX3M_Open: r[6] as number | null,
+    VIX3M_Close: r[7] as number | null,
+  }));
+
+  // Compute VIX percentile using VIX_Close array
+  const vixCloses = contextRows.map((r) => r.VIX_Close ?? NaN);
+  const vixPercentiles = computeVIXPercentile(vixCloses, 252);
+
+  // Enrich each row with derived fields
+  const enrichedContext = computeVIXDerivedFields(contextRows);
+
+  // Batch UPDATE market.context with Tier 2 fields
+  const tier2Cols = [
+    "VIX_Gap_Pct",
+    "VIX_Change_Pct",
+    "VIX9D_Change_Pct",
+    "VIX3M_Change_Pct",
+    "VIX9D_VIX_Ratio",
+    "VIX_VIX3M_Ratio",
+    "VIX_Spike_Pct",
+    "Vol_Regime",
+    "Term_Structure_State",
+    "VIX_Percentile",
+  ];
+
+  // Build batch of rows with Tier 2 fields + percentile
+  const updateRows = enrichedContext.map((r, i) => {
+    const vc = r.VIX_Close ?? null;
+    const v9 = r.VIX9D_Close ?? null;
+    const v3m = r.VIX3M_Close ?? null;
+    return {
+      date: r.date,
+      VIX_Gap_Pct: r.VIX_Gap_Pct ?? null,
+      VIX_Change_Pct: r.VIX_Change_Pct ?? null,
+      VIX9D_Change_Pct: r.VIX9D_Change_Pct ?? null,
+      VIX3M_Change_Pct: r.VIX3M_Change_Pct ?? null,
+      VIX9D_VIX_Ratio: r.VIX9D_VIX_Ratio ?? null,
+      VIX_VIX3M_Ratio: r.VIX_VIX3M_Ratio ?? null,
+      VIX_Spike_Pct: r.VIX_Spike_Pct ?? null,
+      Vol_Regime: vc !== null ? classifyVolRegime(vc) : null,
+      Term_Structure_State:
+        v9 !== null && vc !== null && v3m !== null
+          ? classifyTermStructure(v9, vc, v3m)
+          : null,
+      VIX_Percentile: isNaN(vixPercentiles[i]) ? null : vixPercentiles[i],
+    };
+  });
+
+  // UPDATE market.context in batches of 500
+  const BATCH_SIZE = 500;
+  const allCols2 = ["date", ...tier2Cols];
+  for (let start = 0; start < updateRows.length; start += BATCH_SIZE) {
+    const batch = updateRows.slice(start, start + BATCH_SIZE);
+    const placeholders = batch
+      .map((_, rowIdx) => {
+        const params = allCols2.map((__, colIdx) => `$${rowIdx * allCols2.length + colIdx + 1}`);
+        return `(${params.join(", ")})`;
+      })
+      .join(", ");
+    const setClauses = tier2Cols.map((c) => `${c} = v.${c}`).join(", ");
+    const sql = `
+      UPDATE market.context AS t
+      SET ${setClauses}
+      FROM (VALUES ${placeholders}) AS v(${allCols2.join(", ")})
+      WHERE t.date = v.date
+    `;
+    const params = batch.flatMap((row) =>
+      allCols2.map((col) => (row as Record<string, unknown>)[col] ?? null)
+    );
+    await conn.run(sql, params as (string | number | boolean | null | bigint)[]);
+  }
+
+  return { status: "complete", fieldsWritten: tier2Cols.length };
+}
+
+/** Check if any intraday data exists for a ticker */
+async function hasTier3Data(conn: DuckDBConnection, ticker: string): Promise<boolean> {
+  const r = await conn.runAndReadAll(
+    `SELECT COUNT(*) FROM market.intraday WHERE ticker = $1 LIMIT 1`,
+    [ticker]
+  );
+  return Number(r.getRows()[0]?.[0] ?? 0) > 0;
+}
+
+// =============================================================================
+// Enrichment Runner
+// =============================================================================
+
+/**
+ * Run all three tiers of market enrichment for a given ticker.
+ *
+ * Tier 1: Compute and write OHLCV-derived fields to market.daily using a
+ *         200-day lookback window from the enriched_through watermark.
+ * Tier 2: Compute and write VIX-derived fields to market.context.
+ * Tier 3: Detect intraday data in market.intraday; skips gracefully if absent.
+ *
+ * The enriched_through watermark is upserted into market._sync_metadata with
+ * source='enrichment', ticker, target_table='daily' after a successful Tier 1 run.
+ *
+ * Schema gaps — the following fields are NOT written (absent from schema):
+ * - Prior_Range_vs_ATR (not created in Phase 60)
+ * - Opening_Drive_Strength (Tier 3 schema gap)
+ * - Intraday_Realized_Vol (Tier 3 schema gap)
+ * - wilder_state column exists but is NOT written (superseded by 200-day lookback)
+ *
+ * @param conn - Active DuckDB connection with market catalog attached
+ * @param ticker - Normalized ticker symbol (e.g., "SPX")
+ * @param opts - Options including forceFull (reset watermark and reprocess all rows)
+ */
+export async function runEnrichment(
+  conn: DuckDBConnection,
+  ticker: string,
+  opts: EnrichmentOptions = {}
+): Promise<EnrichmentResult> {
+  const { forceFull = false } = opts;
+
+  // 1. Get enriched_through watermark
+  const watermarkRow = await conn.runAndReadAll(
+    `SELECT enriched_through FROM market._sync_metadata
+     WHERE source = 'enrichment' AND ticker = $1 AND target_table = 'daily'`,
+    [ticker]
+  );
+  const watermark: string | null = forceFull
+    ? null
+    : ((watermarkRow.getRows()[0]?.[0] as string | null) ?? null);
+
+  // 2. Compute lookback start: watermark - 200 calendar days (as string comparison)
+  const lookbackStart = watermark ? subtractDays(watermark, 200) : null;
+
+  // 3. Fetch OHLCV rows from market.daily
+  let fetchSql = `SELECT ticker, date, open, high, low, close FROM market.daily WHERE ticker = $1`;
+  const fetchParams: unknown[] = [ticker];
+  if (lookbackStart) {
+    fetchSql += ` AND date >= $2`;
+    fetchParams.push(lookbackStart);
+  }
+  fetchSql += ` ORDER BY date ASC`;
+  const rawReader = await conn.runAndReadAll(fetchSql, fetchParams as (string | number | boolean | null | bigint)[]);
+  const rawRows = rawReader.getRows();
+
+  if (rawRows.length === 0) {
+    return {
+      ticker,
+      tier1: { status: "skipped", reason: "no data in market.daily" },
+      tier2: { status: "skipped", reason: "no daily data" },
+      tier3: { status: "skipped", reason: "no daily data" },
+      rowsEnriched: 0,
+      enrichedThrough: null,
+    };
+  }
+
+  // 4. Extract typed arrays from raw rows
+  // Columns: ticker(0), date(1), open(2), high(3), low(4), close(5)
+  const dates = rawRows.map((r) => r[1] as string);
+  const opens = rawRows.map((r) => Number(r[2]));
+  const highs = rawRows.map((r) => Number(r[3]));
+  const lows = rawRows.map((r) => Number(r[4]));
+  const closes = rawRows.map((r) => Number(r[5]));
+
+  // 5. Compute Tier 1 indicators
+  const rsi14 = computeRSI(closes, 14);
+  const atrArr = computeATR(highs, lows, closes, 14);
+  const ema21 = computeEMA(closes, 21);
+  const sma50 = computeSMA(closes, 50);
+  const bbArr = computeBollingerBands(closes, 20, 2);
+  const rvol5 = computeRealizedVol(closes, 5);
+  const rvol20 = computeRealizedVol(closes, 20);
+  const trendScores = computeTrendScore(closes, ema21, sma50, rsi14);
+  const consecutiveDays = computeConsecutiveDays(closes);
+
+  // 6. Determine which rows to write back (only rows after watermark)
+  const writeRows =
+    watermark && !forceFull
+      ? rawRows.map((_, i) => i).filter((i) => dates[i] > watermark)
+      : rawRows.map((_, i) => i);
+
+  if (writeRows.length === 0) {
+    return {
+      ticker,
+      tier1: { status: "complete", fieldsWritten: 0, reason: "already up to date" },
+      tier2: await runTier2(conn),
+      tier3: {
+        status: "skipped",
+        reason: "no intraday data in market.intraday",
+      },
+      rowsEnriched: 0,
+      enrichedThrough: watermark,
+    };
+  }
+
+  // 7. Build enriched rows for batch UPDATE
+  const enrichedRows = writeRows.map((i) => {
+    const atrVal = atrArr[i];
+    const atrPct = !isNaN(atrVal) && closes[i] > 0 ? (atrVal / closes[i]) * 100 : null;
+    const priorClose = i > 0 ? closes[i - 1] : null;
+    const priorReturn =
+      i > 1 ? ((closes[i - 1] - closes[i - 2]) / closes[i - 2]) * 100 : null;
+    const gapPct =
+      priorClose !== null && priorClose > 0
+        ? ((opens[i] - priorClose) / priorClose) * 100
+        : null;
+    const intradayRangePct =
+      opens[i] > 0 ? ((highs[i] - lows[i]) / opens[i]) * 100 : null;
+    const intradayReturnPct =
+      opens[i] > 0 ? ((closes[i] - opens[i]) / opens[i]) * 100 : null;
+    const hiLoRange = highs[i] - lows[i];
+    const closePosInRange =
+      hiLoRange > 0 ? (closes[i] - lows[i]) / hiLoRange : null;
+    const ret5d =
+      i >= 5 && closes[i - 5] > 0
+        ? ((closes[i] - closes[i - 5]) / closes[i - 5]) * 100
+        : null;
+    const ret20d =
+      i >= 20 && closes[i - 20] > 0
+        ? ((closes[i] - closes[i - 20]) / closes[i - 20]) * 100
+        : null;
+    const bb = bbArr[i];
+    const gapFilled =
+      priorClose !== null ? isGapFilled(opens[i], highs[i], lows[i], priorClose) : null;
+    const dateObj = parseDateStr(dates[i]);
+    const dayOfWeek = dateObj ? dateObj.getDay() : null; // 0=Sun..6=Sat
+    const monthVal = dateObj ? dateObj.getMonth() + 1 : null;
+    const opex = isOpex(dates[i]);
+    const ema21val = ema21[i];
+    const sma50val = sma50[i];
+    const priceVsEma21 =
+      !isNaN(ema21val) && ema21val > 0
+        ? ((closes[i] - ema21val) / ema21val) * 100
+        : null;
+    const priceVsSma50 =
+      !isNaN(sma50val) && sma50val > 0
+        ? ((closes[i] - sma50val) / sma50val) * 100
+        : null;
+    const rsi14val = rsi14[i];
+    const trendScore = trendScores[i];
+
+    return {
+      ticker,
+      date: dates[i],
+      Prior_Close: priorClose,
+      Gap_Pct: gapPct,
+      RSI_14: isNaN(rsi14val) ? null : rsi14val,
+      ATR_Pct: atrPct,
+      Price_vs_EMA21_Pct: priceVsEma21,
+      Price_vs_SMA50_Pct: priceVsSma50,
+      Trend_Score: isNaN(trendScore) ? null : trendScore,
+      BB_Position: bb ? bb.position : null,
+      BB_Width: bb ? bb.width : null,
+      Realized_Vol_5D: isNaN(rvol5[i]) ? null : rvol5[i],
+      Realized_Vol_20D: isNaN(rvol20[i]) ? null : rvol20[i],
+      Return_5D: ret5d,
+      Return_20D: ret20d,
+      Intraday_Range_Pct: intradayRangePct,
+      Intraday_Return_Pct: intradayReturnPct,
+      Close_Position_In_Range: closePosInRange,
+      Gap_Filled: gapFilled,
+      Consecutive_Days: consecutiveDays[i],
+      Prev_Return_Pct: priorReturn,
+      Day_of_Week: dayOfWeek,
+      Month: monthVal,
+      Is_Opex: opex,
+    };
+  });
+
+  // 8. Batch UPDATE via DuckDB VALUES CTE, batches of 500
+  const BATCH_SIZE = 500;
+  const columns = [
+    "Prior_Close",
+    "Gap_Pct",
+    "RSI_14",
+    "ATR_Pct",
+    "Price_vs_EMA21_Pct",
+    "Price_vs_SMA50_Pct",
+    "Trend_Score",
+    "BB_Position",
+    "BB_Width",
+    "Realized_Vol_5D",
+    "Realized_Vol_20D",
+    "Return_5D",
+    "Return_20D",
+    "Intraday_Range_Pct",
+    "Intraday_Return_Pct",
+    "Close_Position_In_Range",
+    "Gap_Filled",
+    "Consecutive_Days",
+    "Prev_Return_Pct",
+    "Day_of_Week",
+    "Month",
+    "Is_Opex",
+  ];
+  for (let start = 0; start < enrichedRows.length; start += BATCH_SIZE) {
+    const batch = enrichedRows.slice(start, start + BATCH_SIZE);
+    await batchUpdateDaily(conn, batch, columns);
+  }
+
+  // 9. Run Tier 2 (VIX context enrichment)
+  const tier2Result = await runTier2(conn);
+
+  // 10. Tier 3 — always skipped until intraday CSV format is fixed (STATE.md blocker)
+  const hasTier3 = await hasTier3Data(conn, ticker);
+  const tier3Result: TierStatus = hasTier3
+    ? {
+        status: "error",
+        reason:
+          "intraday data present but Tier 3 implementation pending",
+      }
+    : {
+        status: "skipped",
+        reason:
+          "no intraday data in market.intraday — import intraday bars to populate High_Time, Low_Time, Reversal_Type",
+      };
+
+  // 11. Update enriched_through watermark
+  const newWatermark = dates[dates.length - 1];
+  await upsertMarketImportMetadata(conn, {
+    source: "enrichment",
+    ticker,
+    target_table: "daily",
+    max_date: null,
+    enriched_through: newWatermark,
+    synced_at: new Date(),
+  });
+
+  return {
+    ticker,
+    tier1: { status: "complete", fieldsWritten: columns.length },
+    tier2: tier2Result,
+    tier3: tier3Result,
+    rowsEnriched: enrichedRows.length,
+    enrichedThrough: newWatermark,
+  };
 }
