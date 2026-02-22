@@ -16,6 +16,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express, { type Express, type Request, type Response, type RequestHandler } from "express";
 import type { AuthConfig } from "./auth/config.js";
+import { TradeBlocksAuthProvider } from "./auth/provider.js";
+import { renderLoginPage } from "./auth/login-page.js";
 
 export interface HttpServerOptions {
   port: number;
@@ -42,15 +44,13 @@ export async function startHttpServer(
   let mcpAuthMiddleware: RequestHandler[] = [];
 
   if (auth && !auth.noAuth) {
-    // Dynamically import auth modules to avoid loading them when unused
+    // SDK auth modules stay dynamic (externalized by esbuild, resolved from node_modules)
     const { mcpAuthRouter } = await import(
       "@modelcontextprotocol/sdk/server/auth/router.js"
     );
     const { requireBearerAuth } = await import(
       "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js"
     );
-    const { TradeBlocksAuthProvider } = await import("./auth/provider.js");
-    const { renderLoginPage } = await import("./auth/login-page.js");
 
     const provider = new TradeBlocksAuthProvider(auth);
 
