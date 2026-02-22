@@ -2,33 +2,33 @@
 
 ## Current Position
 
-Phase: 60 of 64 (Database Separation and Connection Infrastructure)
-Plan: 2 of 2 complete
-Status: Phase complete
-Last activity: 2026-02-21 — Completed 60-02 (DB-09 write isolation + lifecycle tests)
+Phase: 61 of 64 (Import Tools)
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-02-22 — Completed 61-01 (market-importer.ts core ingestion utilities)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 23%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** v3.0 Market Data Separation — Phase 60 complete, Phase 61 next
+**Current focus:** v3.0 Market Data Separation — Phase 61 in progress (import tools)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2 (v3.0)
-- Average duration: 4 min
-- Total execution time: 8 min
+- Total plans completed: 3 (v3.0)
+- Average duration: 3 min
+- Total execution time: 10 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 60 | 2/2 | 8 min | 4 min |
-| Phase 60 P02 | 4min | 2 tasks | 6 files |
+| 61 | 1/2 | 2 min | 2 min |
 
 ## Accumulated Context
 
@@ -49,6 +49,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - withFullSync calls syncAllBlocks only (DB-09 enforced) — market writes not wrapped in analytics.duckdb transactions
 - [Phase 60]: enable_external_access starts true then locked via SET after ATTACH — allows local file ATTACH while blocking HTTP
 - [Phase 60]: withFullSync calls syncAllBlocks only (DB-09 enforced) — market writes not wrapped in analytics.duckdb transactions
+- [Phase 61-01]: column mapping direction { sourceCol: schemaCol } — single object works for CSV headers and query result columns
+- [Phase 61-01]: applyColumnMapping skips unparseable date rows (warning) rather than throwing — allows partial imports of messy CSVs
+- [Phase 61-01]: triggerEnrichment is a pure stub (no side effects) — Phase 62 replaces it with real implementation
 
 ### Pending Todos
 
@@ -61,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-21
-Stopped at: Completed 60-02-PLAN.md (DB-09 write isolation and lifecycle tests) — Phase 60 complete
+Last session: 2026-02-22
+Stopped at: Completed 61-01-PLAN.md (market-importer.ts core ingestion utilities + metadata.ts Phase 60 helpers)
 Resume file: None

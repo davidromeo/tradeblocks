@@ -59,7 +59,7 @@ Plans:
   2. User can call `import_from_database` with an external DuckDB path and query to pull market data across databases, with the source database properly ATTACHed and DETACHed within the tool call
   3. Overlapping imports (same ticker + date range) succeed without duplicates via ON CONFLICT DO NOTHING, and ticker values are normalized consistently regardless of input casing
   4. Column mapping validation rejects imports with missing required fields and returns clear error messages identifying which fields are absent
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 - [ ] 61-01-PLAN.md — Core ingestion utilities (market-importer.ts + Phase 60 metadata helpers)
 - [ ] 61-02-PLAN.md — Tool registration (market-imports.ts + index.ts wiring + version bump)
@@ -113,7 +113,7 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Database Separation | 2/2 | Complete    | 2026-02-21 | - |
-| 61. Import Tools | v3.0 | 0/? | Not started | - |
+| 61. Import Tools | 1/3 | In Progress|  | - |
 | 62. Enrichment Pipeline | v3.0 | 0/? | Not started | - |
 | 63. Tool Migration | v3.0 | 0/? | Not started | - |
 | 64. Cleanup and API Surface | v3.0 | 0/? | Not started | - |

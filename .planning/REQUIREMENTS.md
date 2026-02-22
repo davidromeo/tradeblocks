@@ -21,13 +21,13 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Import Tools
 
-- [ ] **IMP-01**: `import_csv` MCP tool accepting file path, column mapping, target table, ticker, and optional skip_enrichment flag
-- [ ] **IMP-02**: `import_from_database` MCP tool accepting DuckDB path, query, column mapping, target table, ticker, with ATTACH/DETACH lifecycle
-- [ ] **IMP-03**: Column mapping validation ensuring required fields per target table
-- [ ] **IMP-04**: `ON CONFLICT DO NOTHING` merge semantics for safe overlapping imports
-- [ ] **IMP-05**: Ticker normalization enforced at import boundary via `normalizeTicker()`
-- [ ] **IMP-06**: Enrichment pipeline triggered automatically after import unless skip_enrichment is true
-- [ ] **IMP-07**: Multi-ticker support — any ticker can be imported into daily, context, or intraday tables
+- [x] **IMP-01**: `import_csv` MCP tool accepting file path, column mapping, target table, ticker, and optional skip_enrichment flag
+- [x] **IMP-02**: `import_from_database` MCP tool accepting DuckDB path, query, column mapping, target table, ticker, with ATTACH/DETACH lifecycle
+- [x] **IMP-03**: Column mapping validation ensuring required fields per target table
+- [x] **IMP-04**: `ON CONFLICT DO NOTHING` merge semantics for safe overlapping imports
+- [x] **IMP-05**: Ticker normalization enforced at import boundary via `normalizeTicker()`
+- [x] **IMP-06**: Enrichment pipeline triggered automatically after import unless skip_enrichment is true
+- [x] **IMP-07**: Multi-ticker support — any ticker can be imported into daily, context, or intraday tables
 
 ### Enrichment Pipeline
 
@@ -90,13 +90,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DB-07 | Phase 60 | Complete |
 | DB-08 | Phase 60 | Complete |
 | DB-09 | Phase 60 | Complete |
-| IMP-01 | Phase 61 | Pending |
-| IMP-02 | Phase 61 | Pending |
-| IMP-03 | Phase 61 | Pending |
-| IMP-04 | Phase 61 | Pending |
-| IMP-05 | Phase 61 | Pending |
-| IMP-06 | Phase 61 | Pending |
-| IMP-07 | Phase 61 | Pending |
+| IMP-01 | Phase 61 | Complete |
+| IMP-02 | Phase 61 | Complete |
+| IMP-03 | Phase 61 | Complete |
+| IMP-04 | Phase 61 | Complete |
+| IMP-05 | Phase 61 | Complete |
+| IMP-06 | Phase 61 | Complete |
+| IMP-07 | Phase 61 | Complete |
 | ENR-01 | Phase 62 | Pending |
 | ENR-02 | Phase 62 | Pending |
 | ENR-03 | Phase 62 | Pending |
