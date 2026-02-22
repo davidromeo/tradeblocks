@@ -3,25 +3,25 @@
 ## Current Position
 
 Phase: 62 of 64 (TypeScript Enrichment Pipeline)
-Plan: 2 of 3 complete
-Status: In progress
-Last activity: 2026-02-22 — Completed 62-02 (enrichment runner, runEnrichment() live)
+Plan: 3 of 3 complete
+Status: Phase complete
+Last activity: 2026-02-22 — Completed 62-03 (enrich_market_data MCP tool registered, version 1.4.0)
 
-Progress: [█████░░░░░] 40%
+Progress: [██████░░░░] 45%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** v3.0 Market Data Separation — Phase 62 in progress (enrichment pipeline)
+**Current focus:** v3.0 Market Data Separation — Phase 62 complete, Phase 63 next
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5 (v3.0)
+- Total plans completed: 6 (v3.0)
 - Average duration: 4 min
-- Total execution time: 18 min
+- Total execution time: 20 min
 
 **By Phase:**
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 |-------|-------|-------|----------|
 | 60 | 2/2 | 8 min | 4 min |
 | 61 | 3/3 | 8 min | 3 min |
-| 62 | 2/3 | 10 min | 5 min |
+| 62 | 3/3 | 12 min | 4 min |
 
 ## Accumulated Context
 
@@ -66,6 +66,8 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 62-02]: Schema gaps silently skipped: Prior_Range_vs_ATR, Opening_Drive_Strength, Intraday_Realized_Vol absent from market.daily
 - [Phase 62-02]: wilder_state column NOT written — 200-day lookback approach supersedes it per CONTEXT.md decision
 - [Phase 62-02]: enrichment watermark pattern: source='enrichment', ticker, target_table='daily' in market._sync_metadata
+- [Phase 62-03]: enrich_market_data follows same RW lifecycle as import tools (upgradeToReadWrite before, downgradeToReadOnly in finally)
+- [Phase 62-03]: MCP server version bumped to 1.4.0 (minor bump for new enrich_market_data tool)
 
 ### Pending Todos
 
@@ -75,10 +77,10 @@ None.
 
 - `field-timing.ts` unit tests assert specific column counts (8/44/3) — must update in lockstep during Phase 63.
 - Pre-existing TypeScript error in `packages/mcp-server/src/tools/market-data.ts:482` — out of scope for v3.0 but should be addressed.
-- **[Phase 62/63 prerequisite] Intraday CSV format incompatible with market.intraday**: The existing 15min/VIX intraday CSVs (`spx_15min.csv`, `msft_15min.csv`, `vix_intraday.csv`) use a single Unix timestamp `time` column encoding both date and time. `market.intraday` requires separate `date` (YYYY-MM-DD) and `time` (HH:MM) columns for its `(ticker, date, time)` PK. Column mapping cannot split one source column into two. Tier 3 enrichment (Phase 62) and `calculate_orb` migration (Phase 63) both depend on `market.intraday` being populated — the Pine Script export format must be updated to emit separate date/time columns before intraday data can be imported.
+- **[Phase 63 prerequisite] Intraday CSV format incompatible with market.intraday**: The existing 15min/VIX intraday CSVs (`spx_15min.csv`, `msft_15min.csv`, `vix_intraday.csv`) use a single Unix timestamp `time` column encoding both date and time. `market.intraday` requires separate `date` (YYYY-MM-DD) and `time` (HH:MM) columns for its `(ticker, date, time)` PK. Column mapping cannot split one source column into two. Tier 3 enrichment (Phase 62) and `calculate_orb` migration (Phase 63) both depend on `market.intraday` being populated — the Pine Script export format must be updated to emit separate date/time columns before intraday data can be imported.
 
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 62-02-PLAN.md (enrichment runner, runEnrichment() live, triggerEnrichment wired)
+Stopped at: Completed 62-03-PLAN.md (enrich_market_data MCP tool registered, version bumped to 1.4.0, Phase 62 complete)
 Resume file: None

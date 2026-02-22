@@ -29,7 +29,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 
 - [x] **Phase 60: Database Separation and Connection Infrastructure** — Separate market.duckdb created, ATTACHed at startup, with normalized schema and safe connection lifecycle (completed 2026-02-21)
 - [x] **Phase 61: Import Tools** — MCP tools for ingesting market data from CSV files and external DuckDB databases (completed 2026-02-22)
-- [ ] **Phase 62: TypeScript Enrichment Pipeline** — Pure indicator functions and tiered enrichment runner computing ~40 derived fields from raw OHLCV
+- [x] **Phase 62: TypeScript Enrichment Pipeline** — Pure indicator functions and tiered enrichment runner computing ~40 derived fields from raw OHLCV (completed 2026-02-22)
 - [ ] **Phase 63: Tool Migration** — All 4 market-data tools and shared query utilities migrated to new normalized schema
 - [ ] **Phase 64: Cleanup and API Surface** — Dead code removed, run_sql/describe_database updated, PineScripts simplified, new tools registered
 
@@ -75,7 +75,7 @@ Plans:
   3. When `market.intraday` has bar data, Tier 3 fields (High_Time, Low_Time, Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol) are written to `market.daily`; when intraday is absent, Tier 3 is skipped gracefully
   4. Re-running enrichment on already-enriched data produces identical results (idempotent), and incremental imports only recompute the affected date range while using 200+ day lookback for Wilder smoothing warmup
   5. All 7 indicator functions have unit tests validating TradingView parity at non-trivial data points (not just the first 14 bars)
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 62-01-PLAN.md — Pure indicator functions (TDD): computeRSI, computeATR, computeEMA, computeSMA, computeBollingerBands, computeRealizedVol, VIX tier 2 functions + unit tests
 - [ ] 62-02-PLAN.md — Enrichment runner: runEnrichment() (tiers 1/2/3), watermark tracking, triggerEnrichment stub replacement
@@ -118,6 +118,6 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Database Separation | 2/2 | Complete    | 2026-02-21 | - |
 | 61. Import Tools | 3/3 | Complete    | 2026-02-22 | - |
-| 62. Enrichment Pipeline | 2/3 | In Progress|  | - |
+| 62. Enrichment Pipeline | 3/3 | Complete   | 2026-02-22 | - |
 | 63. Tool Migration | v3.0 | 0/? | Not started | - |
 | 64. Cleanup and API Surface | v3.0 | 0/? | Not started | - |
