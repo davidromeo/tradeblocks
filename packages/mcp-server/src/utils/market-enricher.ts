@@ -277,56 +277,6 @@ export function computeRealizedVol(closes: number[], period: number): number[] {
   return result;
 }
 
-/**
- * Trend Score: integer -5 to +5 based on 5 conditions.
- * Takes parallel arrays of equal length (from computeEMA, computeSMA, computeRSI).
- *
- * Conditions (each +1 bullish, -1 bearish):
- * 1. close > EMA21: +1, else -1
- * 2. EMA21 > SMA50: +1, else -1
- * 3. close > SMA50: +1, else -1
- * 4. RSI_14 > 50: +1, else -1
- * 5. close > 20-day high (prior 20 bars, excluding today): +1, else -1
- *
- * Returns NaN where any required input is NaN.
- */
-export function computeTrendScore(
-  closes: number[],
-  ema21: number[],
-  sma50: number[],
-  rsi14: number[]
-): number[] {
-  const n = closes.length;
-  const result = new Array<number>(n).fill(NaN);
-
-  for (let i = 0; i < n; i++) {
-    // All inputs must be valid numbers
-    if (isNaN(ema21[i]) || isNaN(sma50[i]) || isNaN(rsi14[i])) continue;
-
-    // 5th condition: need 20 prior bars for 20-day high excluding today
-    // If we don't have 20 prior bars, skip the 5th condition (use 0)
-    let condition5 = 0;
-    if (i >= 20) {
-      let priorHigh = -Infinity;
-      for (let j = i - 20; j < i; j++) {
-        if (closes[j] > priorHigh) priorHigh = closes[j];
-      }
-      condition5 = closes[i] > priorHigh ? 1 : -1;
-    }
-
-    const score =
-      (closes[i] > ema21[i] ? 1 : -1) +
-      (ema21[i] > sma50[i] ? 1 : -1) +
-      (closes[i] > sma50[i] ? 1 : -1) +
-      (rsi14[i] > 50 ? 1 : -1) +
-      condition5;
-
-    result[i] = score;
-  }
-
-  return result;
-}
-
 // =============================================================================
 // Row-Level Helpers
 // =============================================================================
@@ -499,7 +449,7 @@ export function classifyVolRegime(vixClose: number): number {
   if (vixClose < 16) return 2;
   if (vixClose < 20) return 3;
   if (vixClose < 25) return 4;
-  if (vixClose < 35) return 5;
+  if (vixClose < 30) return 5;
   return 6;
 }
 
@@ -517,20 +467,10 @@ export function classifyTermStructure(
   vixClose: number,
   vix3mClose: number
 ): number {
-  // Flat tolerance: both adjacent ratios within 1% of 1.0
-  const ratio9dToVix = vix9dClose / vixClose;
-  const ratioVixTo3m = vixClose / vix3mClose;
-
-  const isFlat =
-    Math.abs(ratio9dToVix - 1) < 0.01 && Math.abs(ratioVixTo3m - 1) < 0.01;
-
-  if (isFlat) return 0;
-
-  // Contango: short-dated < mid < long-dated (normal upward slope)
-  if (vix9dClose < vixClose && vixClose < vix3mClose) return 1;
-
-  // Backwardation: any inversion
-  return -1;
+  // Match PineScript: vix9dClose > vixClose ? -1 : vixClose > vix3mClose ? 0 : 1
+  if (vix9dClose > vixClose) return -1;
+  if (vixClose > vix3mClose) return 0;
+  return 1;
 }
 
 /**
@@ -815,7 +755,6 @@ export async function runEnrichment(
   const bbArr = computeBollingerBands(closes, 20, 2);
   const rvol5 = computeRealizedVol(closes, 5);
   const rvol20 = computeRealizedVol(closes, 20);
-  const trendScores = computeTrendScore(closes, ema21, sma50, rsi14);
   const consecutiveDays = computeConsecutiveDays(closes);
 
   // 6. Determine which rows to write back (only rows after watermark)
@@ -882,7 +821,6 @@ export async function runEnrichment(
         ? ((closes[i] - sma50val) / sma50val) * 100
         : null;
     const rsi14val = rsi14[i];
-    const trendScore = trendScores[i];
 
     return {
       ticker,
@@ -893,7 +831,6 @@ export async function runEnrichment(
       ATR_Pct: atrPct,
       Price_vs_EMA21_Pct: priceVsEma21,
       Price_vs_SMA50_Pct: priceVsSma50,
-      Trend_Score: isNaN(trendScore) ? null : trendScore,
       BB_Position: bb ? bb.position : null,
       BB_Width: bb ? bb.width : null,
       Realized_Vol_5D: isNaN(rvol5[i]) ? null : rvol5[i],
@@ -921,7 +858,6 @@ export async function runEnrichment(
     "ATR_Pct",
     "Price_vs_EMA21_Pct",
     "Price_vs_SMA50_Pct",
-    "Trend_Score",
     "BB_Position",
     "BB_Width",
     "Realized_Vol_5D",

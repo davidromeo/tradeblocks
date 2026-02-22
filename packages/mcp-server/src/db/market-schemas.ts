@@ -42,7 +42,6 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       RSI_14 DOUBLE,
       Price_vs_EMA21_Pct DOUBLE,
       Price_vs_SMA50_Pct DOUBLE,
-      Trend_Score INTEGER,
       BB_Position DOUBLE,
       BB_Width DOUBLE,
       Realized_Vol_5D DOUBLE,
@@ -70,6 +69,13 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       PRIMARY KEY (ticker, date)
     )
   `);
+
+  // Migration: drop Trend_Score column (removed — not in any backtester, was an invented composite)
+  try {
+    await conn.run(`ALTER TABLE market.daily DROP COLUMN Trend_Score`);
+  } catch {
+    // Column already gone — ignore
+  }
 
   // VIX and volatility term structure context per trading day
   // PK: (date) — one row per trading day, shared across tickers

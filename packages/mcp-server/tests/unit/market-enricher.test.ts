@@ -8,7 +8,6 @@
  * - computeSMA: rolling average, NaN for insufficient data
  * - computeBollingerBands: population stddev, position, width
  * - computeRealizedVol: log returns, population stddev, annualized
- * - computeTrendScore: integer -5 to +5 from 5 conditions
  * - computeConsecutiveDays: streak counting with sign and reset
  * - isGapFilled: gap detection logic
  * - isOpex: 3rd Friday of month detection via string parsing
@@ -26,7 +25,6 @@ import {
   computeSMA,
   computeBollingerBands,
   computeRealizedVol,
-  computeTrendScore,
   computeConsecutiveDays,
   isGapFilled,
   isOpex,
@@ -392,78 +390,6 @@ describe('computeRealizedVol', () => {
 });
 
 // =============================================================================
-// computeTrendScore
-// =============================================================================
-
-describe('computeTrendScore', () => {
-  test('returns array of same length as input', () => {
-    const n = 10;
-    const closes = Array.from({ length: n }, () => 100);
-    const ema21 = Array.from({ length: n }, () => 100);
-    const sma50 = Array.from({ length: n }, () => 100);
-    const rsi14 = Array.from({ length: n }, () => 50);
-    expect(computeTrendScore(closes, ema21, sma50, rsi14)).toHaveLength(n);
-  });
-
-  test('returns +5 when all conditions are bullish', () => {
-    // close=110, ema21=105, sma50=100, rsi14=60 => all 4 base conditions pass
-    // 5th condition: close > prior 20-day high (need 21 bars for the lookback)
-    const n = 25;
-    // Use rising prices so the 20-day high lookback is triggered
-    const closes = Array.from({ length: n }, (_, i) => 100 + i * 2); // steadily rising
-    const ema21 = Array.from({ length: n }, (_, i) => 80 + i * 2); // below close
-    const sma50 = Array.from({ length: n }, (_, i) => 70 + i * 2); // below ema21
-    const rsi14 = Array.from({ length: n }, () => 60); // above 50
-
-    const scores = computeTrendScore(closes, ema21, sma50, rsi14);
-    // The last bar: close=148, ema21=128, sma50=118, rsi=60
-    // close > ema21: YES (+1), ema21 > sma50: YES (+1), close > sma50: YES (+1), rsi > 50: YES (+1)
-    // Prior 20-day high: closes[24-20..24-1] = closes[4..23] = 108..146 → max=146, close=148 > 146 YES (+1)
-    expect(scores[24]).toBe(5);
-  });
-
-  test('returns -5 when all conditions are bearish', () => {
-    // Falling prices: all conditions bearish
-    const n = 25;
-    const closes = Array.from({ length: n }, (_, i) => 200 - i * 2); // steadily falling
-    const ema21 = Array.from({ length: n }, (_, i) => 220 - i * 2); // above close
-    const sma50 = Array.from({ length: n }, (_, i) => 240 - i * 2); // above ema21
-    const rsi14 = Array.from({ length: n }, () => 40); // below 50
-
-    const scores = computeTrendScore(closes, ema21, sma50, rsi14);
-    // Last bar: close=152, ema21=172, sma50=192, rsi=40
-    // close > ema21: NO (-1), ema21 > sma50: NO (-1), close > sma50: NO (-1), rsi > 50: NO (-1)
-    // Prior 20-day high: max of closes[4..23] = max(192..154) = 192, close=152 < 192: NO (-1)
-    expect(scores[24]).toBe(-5);
-  });
-
-  test('returns values between -5 and 5 inclusive', () => {
-    const n = 30;
-    const closes = Array.from({ length: n }, (_, i) => 100 + Math.sin(i) * 10);
-    const ema21 = Array.from({ length: n }, (_, i) => 100 + Math.cos(i) * 5);
-    const sma50 = Array.from({ length: n }, () => 100);
-    const rsi14 = Array.from({ length: n }, (_, i) => 30 + (i % 40));
-    const scores = computeTrendScore(closes, ema21, sma50, rsi14);
-    for (const s of scores) {
-      expect(s).toBeGreaterThanOrEqual(-5);
-      expect(s).toBeLessThanOrEqual(5);
-    }
-  });
-
-  test('returns NaN-safe integers (not floating point)', () => {
-    const n = 25;
-    const closes = Array.from({ length: n }, () => 100);
-    const ema21 = Array.from({ length: n }, () => 100);
-    const sma50 = Array.from({ length: n }, () => 100);
-    const rsi14 = Array.from({ length: n }, () => 50);
-    const scores = computeTrendScore(closes, ema21, sma50, rsi14);
-    for (const s of scores) {
-      expect(Number.isInteger(s) || isNaN(s)).toBe(true);
-    }
-  });
-});
-
-// =============================================================================
 // computeConsecutiveDays
 // =============================================================================
 
@@ -698,15 +624,15 @@ describe('classifyVolRegime', () => {
     expect(classifyVolRegime(24.99)).toBe(4);
   });
 
-  test('25 <= VIX < 35 returns 5 (High)', () => {
+  test('25 <= VIX < 30 returns 5 (High)', () => {
     expect(classifyVolRegime(25)).toBe(5);
-    expect(classifyVolRegime(30)).toBe(5);
-    expect(classifyVolRegime(34.99)).toBe(5);
+    expect(classifyVolRegime(27)).toBe(5);
+    expect(classifyVolRegime(29.99)).toBe(5);
   });
 
-  test('VIX >= 35 returns 6 (Extreme)', () => {
+  test('VIX >= 30 returns 6 (Extreme)', () => {
+    expect(classifyVolRegime(30)).toBe(6);
     expect(classifyVolRegime(35)).toBe(6);
-    expect(classifyVolRegime(36)).toBe(6);
     expect(classifyVolRegime(80)).toBe(6);
   });
 });
@@ -717,31 +643,32 @@ describe('classifyVolRegime', () => {
 
 describe('classifyTermStructure', () => {
   test('returns 1 (contango) when VIX9D < VIX and VIX < VIX3M', () => {
-    // Normal vol surface: short-term < mid < long-term
     expect(classifyTermStructure(10, 15, 20)).toBe(1);
   });
 
-  test('returns -1 (backwardation) when VIX9D > VIX', () => {
-    // Short-term fear elevated relative to mid: inverted front
-    expect(classifyTermStructure(20, 15, 10)).toBe(-1);
-  });
-
-  test('returns -1 (backwardation) when VIX > VIX3M', () => {
-    // VIX above VIX3M: mid inverted relative to back
-    expect(classifyTermStructure(10, 20, 15)).toBe(-1);
-  });
-
-  test('returns 0 (flat) when all within ~1% tolerance', () => {
-    // All three within 1% of each other → flat
-    expect(classifyTermStructure(14.9, 15.0, 15.1)).toBe(0);
-  });
-
-  test('returns 1 for clear contango with larger spread', () => {
+  test('returns 1 (contango) when VIX9D <= VIX and VIX <= VIX3M', () => {
+    // PineScript: cascading conditional — falls through to 1
     expect(classifyTermStructure(12, 18, 25)).toBe(1);
   });
 
-  test('edge case: VIX9D = VIX = VIX3M (perfectly flat)', () => {
-    expect(classifyTermStructure(15, 15, 15)).toBe(0);
+  test('returns -1 (backwardation) when VIX9D > VIX', () => {
+    expect(classifyTermStructure(20, 15, 10)).toBe(-1);
+  });
+
+  test('returns 0 (flat/partial inversion) when VIX > VIX3M but VIX9D <= VIX', () => {
+    // PineScript: vix9d > vix ? -1 : vix > vix3m ? 0 : 1
+    // VIX9D=10 not > VIX=20, but VIX=20 > VIX3M=15 → 0
+    expect(classifyTermStructure(10, 20, 15)).toBe(0);
+  });
+
+  test('returns 1 when all equal (perfectly flat)', () => {
+    // PineScript: 15 > 15 is false, 15 > 15 is false → falls through to 1
+    expect(classifyTermStructure(15, 15, 15)).toBe(1);
+  });
+
+  test('returns 1 when VIX9D slightly less than VIX (no tolerance)', () => {
+    // PineScript has no tolerance — strict comparison
+    expect(classifyTermStructure(14.9, 15.0, 15.1)).toBe(1);
   });
 });
 

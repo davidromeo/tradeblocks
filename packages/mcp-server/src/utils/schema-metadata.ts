@@ -208,7 +208,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
       spx_daily: {
         description:
           "Daily underlying data with technical indicators, VIX context, highlow timing, and regime classifications. JOIN with trades on ticker+date (e.g., t.ticker = m.ticker AND t.date_opened = m.date).",
-        keyColumns: ["ticker", "date", "Vol_Regime", "VIX_Close", "Total_Return_Pct", "Trend_Score", "High_Time", "Reversal_Type"],
+        keyColumns: ["ticker", "date", "Vol_Regime", "VIX_Close", "Total_Return_Pct", "High_Time", "Reversal_Type"],
         columns: {
           ticker: {
             description: "Underlying ticker symbol (part of composite primary key with date).",
@@ -347,12 +347,6 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           Price_vs_SMA50_Pct: {
             description: "Price vs 50-day SMA as percentage",
-            hypothesis: true,
-            timing: 'close',
-          },
-          Trend_Score: {
-            description:
-              "Trend strength indicator (-5 to +5, negative=downtrend, positive=uptrend)",
             hypothesis: true,
             timing: 'close',
           },
@@ -998,26 +992,6 @@ JOIN market.spx_daily m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'
 GROUP BY m.Day_of_Week
 ORDER BY m.Day_of_Week`,
-    },
-    {
-      description: "Performance in trending vs range-bound markets (lag-aware: uses prior day's trend)",
-      sql: `WITH lagged AS (
-  SELECT date,
-    LAG(Trend_Score) OVER (ORDER BY date) AS prev_Trend_Score
-  FROM market.spx_daily
-)
-SELECT
-  CASE WHEN m.prev_Trend_Score >= 3 THEN 'Uptrend'
-       WHEN m.prev_Trend_Score <= -3 THEN 'Downtrend'
-       ELSE 'Range' END as market_condition,
-  COUNT(*) as trades,
-  SUM(t.pl) as total_pl,
-  ROUND(AVG(t.pl), 2) as avg_pl
-FROM trades.trade_data t
-JOIN lagged m ON t.date_opened = m.date
-WHERE t.block_id = 'my-block'
-  AND m.prev_Trend_Score IS NOT NULL
-GROUP BY market_condition`,
     },
     {
       description: "Performance by VIX term structure (lag-aware: uses prior day's term structure)",

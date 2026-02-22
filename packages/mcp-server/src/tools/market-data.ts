@@ -81,7 +81,6 @@ export interface DailyMarketData {
   RSI_14: number;
   Price_vs_EMA21_Pct: number;
   Price_vs_SMA50_Pct: number;
-  Trend_Score: number; // 0-4
   BB_Position: number; // 0-1
   // Momentum
   Return_5D: number;
@@ -307,7 +306,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
       description:
         "Break down a block's trade performance by market regime (volatility, term structure, day of week, etc.). " +
         "Identifies which market conditions favor or hurt the strategy. " +
-        "Close-derived fields (volRegime, termStructure, trendScore) use prior trading day values to prevent lookahead bias.",
+        "Close-derived fields (volRegime, termStructure) use prior trading day values to prevent lookahead bias.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         segmentBy: z.enum([
@@ -315,7 +314,6 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           "termStructure",
           "dayOfWeek",
           "gapDirection",
-          "trendScore",
         ]).describe("Market dimension to segment by"),
         strategy: z.string().optional().describe("Filter to specific strategy"),
       }),
@@ -407,14 +405,6 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
               segmentLabel = `Gap ${segmentValue}`;
               break;
             }
-            case "trendScore": {
-              const val = getNum(marketData, "prev_Trend_Score");
-              if (isNaN(val)) { lagExcluded++; continue; }
-              segmentValue = val;
-              segmentKey = String(val);
-              segmentLabel = `Trend Score ${val}`;
-              break;
-            }
             default:
               continue;
           }
@@ -496,7 +486,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const summary = `Regime analysis: ${blockId} by ${segmentBy} | ${totalMatched} trades across ${segmentStats.length} segments`;
 
-        const laggedSegments = ["volRegime", "termStructure", "trendScore"];
+        const laggedSegments = ["volRegime", "termStructure"];
         const lagNote = laggedSegments.includes(segmentBy)
           ? `Segmentation by ${segmentBy} uses prior trading day values (close-derived field) to prevent lookahead bias.`
           : `Segmentation by ${segmentBy} uses same-day values (${segmentBy === "dayOfWeek" ? "static" : "open-known"} field).`;
@@ -659,9 +649,6 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           // Vol regime (close-derived)
           { name: "Skip prior-day Vol Regime 5-6 (High/Extreme)", field: "Vol_Regime", operator: "in", value: [5, 6], test: (m) => getNum(m, "prev_Vol_Regime") >= 5, lagged: true },
           { name: "Skip prior-day Vol Regime 1 (Very Low)", field: "Vol_Regime", operator: "==", value: 1, test: (m) => getNum(m, "prev_Vol_Regime") === 1, lagged: true },
-          // Trend (close-derived)
-          { name: "Skip when prior-day Trend_Score <= 1", field: "Trend_Score", operator: "<=", value: 1, test: (m) => getNum(m, "prev_Trend_Score") <= 1, lagged: true },
-          { name: "Skip when prior-day Trend_Score >= 4", field: "Trend_Score", operator: ">=", value: 4, test: (m) => getNum(m, "prev_Trend_Score") >= 4, lagged: true },
           // Consecutive days (close-derived)
           { name: "Skip after prior-day 4+ consecutive up", field: "Consecutive_Days", operator: ">=", value: 4, test: (m) => getNum(m, "prev_Consecutive_Days") >= 4, lagged: true },
           { name: "Skip after prior-day 4+ consecutive down", field: "Consecutive_Days", operator: "<=", value: -4, test: (m) => getNum(m, "prev_Consecutive_Days") <= -4, lagged: true },
@@ -744,7 +731,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         return createToolOutput(summary, {
           blockId,
-          lagNote: "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Trend_Score, Consecutive_Days, VIX_Spike_Pct, Term_Structure_State) use prior trading day values to prevent lookahead bias. Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Day_of_Week, Is_Opex) use same-day values.",
+          lagNote: "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Consecutive_Days, VIX_Spike_Pct, Term_Structure_State) use prior trading day values to prevent lookahead bias. Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Day_of_Week, Is_Opex) use same-day values.",
           strategy: strategy || null,
           currentStats: {
             trades: matchedTrades.length,

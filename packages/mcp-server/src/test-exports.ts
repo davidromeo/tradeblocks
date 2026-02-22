@@ -100,7 +100,6 @@ export {
   computeSMA,
   computeBollingerBands,
   computeRealizedVol,
-  computeTrendScore,
   computeConsecutiveDays,
   isGapFilled,
   isOpex,
