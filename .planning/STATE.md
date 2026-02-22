@@ -66,6 +66,7 @@ None.
 
 - `field-timing.ts` unit tests assert specific column counts (8/44/3) — must update in lockstep during Phase 63.
 - Pre-existing TypeScript error in `packages/mcp-server/src/tools/market-data.ts:482` — out of scope for v3.0 but should be addressed.
+- **[Phase 62/63 prerequisite] Intraday CSV format incompatible with market.intraday**: The existing 15min/VIX intraday CSVs (`spx_15min.csv`, `msft_15min.csv`, `vix_intraday.csv`) use a single Unix timestamp `time` column encoding both date and time. `market.intraday` requires separate `date` (YYYY-MM-DD) and `time` (HH:MM) columns for its `(ticker, date, time)` PK. Column mapping cannot split one source column into two. Tier 3 enrichment (Phase 62) and `calculate_orb` migration (Phase 63) both depend on `market.intraday` being populated — the Pine Script export format must be updated to emit separate date/time columns before intraday data can be imported.
 
 ## Session Continuity
 
