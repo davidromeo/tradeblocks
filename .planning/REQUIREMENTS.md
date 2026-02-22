@@ -34,9 +34,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **ENR-01**: Pure TypeScript indicator functions (RSI, ATR, EMA, SMA, Bollinger Bands, realized vol) validated against TradingView outputs
 - [x] **ENR-02**: Tier 1 enrichment: ~18 fields from single-ticker OHLCV (Gap_Pct, RSI_14, ATR_Pct, Trend_Score, BB_Position, BB_Width, Realized_Vol_5D/20D, Prior_Range_vs_ATR, etc.)
 - [x] **ENR-03**: Tier 2 enrichment: VIX regime fields from `market.context` (Vol_Regime, Term_Structure_State, VIX_Percentile, VIX ratios, etc.)
-- [x] **ENR-04**: Tier 3 enrichment: intraday timing fields written to `market.daily` from `market.intraday` bars (High_Time, Low_Time, Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol, etc.)
+- [ ] **ENR-04**: Tier 3 enrichment: intraday timing fields written to `market.daily` from `market.intraday` bars (High_Time, Low_Time, Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol, etc.) — *deferred: blocked by intraday CSV format (single Unix timestamp must be split into separate date/time columns in Pine Script export before market.intraday can be populated; see STATE.md blocker)*
 - [x] **ENR-05**: 200+ day lookback for Wilder smoothing warmup, only updating requested date range
-- [x] **ENR-06**: Wilder state caching in `_sync_metadata` for efficient incremental imports
+- [x] **ENR-06**: Efficient incremental imports via `enriched_through` date watermark in `_sync_metadata` with 200-day lookback for Wilder smoothing warmup (watermark approach — no per-row Wilder state stored)
 - [x] **ENR-07**: Idempotent enrichment (re-running produces same results)
 - [x] **ENR-08**: Unit tests for all indicator functions with TradingView parity validation
 
@@ -100,7 +100,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENR-01 | Phase 62 | Complete |
 | ENR-02 | Phase 62 | Complete |
 | ENR-03 | Phase 62 | Complete |
-| ENR-04 | Phase 62 | Complete |
+| ENR-04 | Phase 62 | Deferred |
 | ENR-05 | Phase 62 | Complete |
 | ENR-06 | Phase 62 | Complete |
 | ENR-07 | Phase 62 | Complete |
