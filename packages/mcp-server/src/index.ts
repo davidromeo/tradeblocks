@@ -50,6 +50,7 @@ MCP Server Modes:
 Options:
   --http           Start HTTP server instead of stdio (for web platforms)
   --port <number>  HTTP server port (default: 3100, requires --http)
+  --no-auth        Disable authentication (only use behind an auth proxy)
 
 Environment:
   BLOCKS_DIRECTORY  Default backtests folder if not specified
@@ -107,11 +108,13 @@ function parseSkillArgs(): { platform: Platform; force: boolean } {
 function parseServerArgs(): {
   http: boolean;
   port: number;
+  noAuth: boolean;
   directory: string | undefined;
 } {
   const args = process.argv.slice(2);
   let http = false;
   let port = 3100;
+  let noAuth = false;
   let directory: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
@@ -125,6 +128,8 @@ function parseServerArgs(): {
         port = parsedPort;
       }
       i++; // Skip next arg (the port value)
+    } else if (arg === "--no-auth") {
+      noAuth = true;
     } else if (!arg.startsWith("-") && !arg.startsWith("--")) {
       // Non-flag argument is the directory
       directory = arg;
@@ -136,7 +141,7 @@ function parseServerArgs(): {
     directory = process.env.BLOCKS_DIRECTORY;
   }
 
-  return { http, port, directory };
+  return { http, port, noAuth, directory };
 }
 
 // Handle skill CLI commands
@@ -250,7 +255,7 @@ async function main(): Promise<void> {
   }
 
   // MCP Server mode - parse arguments
-  const { http, port, directory: backtestDir } = parseServerArgs();
+  const { http, port, noAuth, directory: backtestDir } = parseServerArgs();
 
   if (!backtestDir) {
     printUsage();
@@ -288,10 +293,19 @@ async function main(): Promise<void> {
   };
 
   if (http) {
-    // HTTP transport for web platforms - dynamically import to avoid bundling
-    // CommonJS deps (express, raw-body) that don't work in MCPB bundle
+    // Load auth config for HTTP mode
+    const { loadAuthConfig } = await import("./auth/config.js");
+    let auth;
+    try {
+      auth = loadAuthConfig({ noAuth });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`Error: ${msg}`);
+      process.exit(1);
+    }
+
     const { startHttpServer } = await import("./http-server.js");
-    await startHttpServer(createServer, { port });
+    await startHttpServer(createServer, { port, auth });
   } else {
     // Stdio transport for Claude Desktop, Codex CLI, etc.
     const server = createServer();
