@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 61 of 64 (Import Tools)
-Plan: 1 of 2 complete
+Plan: 2 of 2 complete
 Status: In progress
-Last activity: 2026-02-22 — Completed 61-01 (market-importer.ts core ingestion utilities)
+Last activity: 2026-02-22 — Completed 61-02 (import_market_csv and import_from_database MCP tools, version 1.3.0)
 
-Progress: [███░░░░░░░] 23%
+Progress: [████░░░░░░] 27%
 
 ## Project Reference
 
@@ -19,16 +19,16 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3 (v3.0)
+- Total plans completed: 4 (v3.0)
 - Average duration: 3 min
-- Total execution time: 10 min
+- Total execution time: 12 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 60 | 2/2 | 8 min | 4 min |
-| 61 | 1/2 | 2 min | 2 min |
+| 61 | 2/2 | 4 min | 2 min |
 
 ## Accumulated Context
 
@@ -52,6 +52,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 61-01]: column mapping direction { sourceCol: schemaCol } — single object works for CSV headers and query result columns
 - [Phase 61-01]: applyColumnMapping skips unparseable date rows (warning) rather than throwing — allows partial imports of messy CSVs
 - [Phase 61-01]: triggerEnrichment is a pure stub (no side effects) — Phase 62 replaces it with real implementation
+- [Phase 61-02]: Tool names import_market_csv and import_from_database (import_csv taken by block importer in imports.ts)
+- [Phase 61-02]: downgradeToReadOnly placed in finally block — cleanup guaranteed even on import errors
+- [Phase 61-02]: MCP server version bumped to 1.3.0 (minor bump for two new tools)
 
 ### Pending Todos
 
@@ -65,5 +68,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 61-01-PLAN.md (market-importer.ts core ingestion utilities + metadata.ts Phase 60 helpers)
+Stopped at: Completed 61-02-PLAN.md (import_market_csv and import_from_database MCP tools + version 1.3.0)
 Resume file: None
