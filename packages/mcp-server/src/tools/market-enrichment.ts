@@ -36,7 +36,7 @@ export function registerMarketEnrichmentTools(server: McpServer, baseDir: string
         "Runs three enrichment tiers: " +
         "Tier 1 (always) computes ~21 fields from daily OHLCV: RSI_14, ATR_Pct, Price_vs_EMA21_Pct, Price_vs_SMA50_Pct, BB_Position, BB_Width, Realized_Vol_5D, Realized_Vol_20D, Return_5D, Return_20D, Gap_Pct, Intraday_Range_Pct, Intraday_Return_Pct, Close_Position_In_Range, Gap_Filled, Consecutive_Days, Prev_Return_Pct, Prior_Close, Day_of_Week, Month, Is_Opex. " +
         "Tier 2 (if VIX data in market.context) computes VIX regime fields: Vol_Regime, Term_Structure_State, VIX_Percentile, VIX_Gap_Pct, VIX_Change_Pct, VIX ratios, VIX_Spike_Pct. " +
-        "Tier 3 (if intraday bars in market.intraday) computes timing fields. Currently always skipped — intraday data format update required. " +
+        "Tier 3 (if intraday bars in market.intraday) computes timing fields: High_Time, Low_Time, High_Before_Low, Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol. " +
         "Uses 200-day lookback window for Wilder smoothing warmup. Tracks enriched_through watermark in market._sync_metadata. " +
         "Call after import_market_csv or import_from_database to populate computed fields. " +
         "Use force_full=true to recompute all rows from scratch (needed after formula changes).",
