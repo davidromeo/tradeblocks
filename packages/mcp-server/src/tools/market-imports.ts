@@ -38,6 +38,9 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
         "Requires an explicit column_mapping object mapping CSV header names to schema column names. " +
         "Required schema fields: daily=[date,open,high,low,close], context=[date], intraday=[date,time,open,high,low,close]. " +
         "ticker is injected automatically (not required in mapping). " +
+        "For intraday imports from TradingView CSVs: the 'time' column is a Unix timestamp encoding both date and time. " +
+        "Map it to 'date' and the HH:MM ET time will be auto-extracted automatically — no separate time mapping needed. " +
+        "Example intraday mapping: { \"time\": \"date\", \"open\": \"open\", \"high\": \"high\", \"low\": \"low\", \"close\": \"close\" }. " +
         "Supports dry_run=true to validate without writing. " +
         "Use ~ for home directory in file_path.",
       inputSchema: z.object({
@@ -131,6 +134,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
         "Requires an explicit column_mapping object mapping query column names to schema column names. " +
         "Required schema fields: daily=[date,open,high,low,close], context=[date], intraday=[date,time,open,high,low,close]. " +
         "ticker is injected automatically. " +
+        "For intraday imports: if the source has a single Unix timestamp column, map it to 'date' and HH:MM ET time will be auto-extracted. " +
         "Supports dry_run=true to validate without writing.",
       inputSchema: z.object({
         db_path: z

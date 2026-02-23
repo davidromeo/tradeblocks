@@ -74,6 +74,10 @@ export interface ImportResult {
 /**
  * Validate that the column mapping covers all required schema fields for the target table.
  *
+ * Special case for intraday: if `date` is mapped but `time` is not, the `time` field
+ * will be auto-derived from the Unix timestamp in the date source column. In this case,
+ * the missing `time` mapping is allowed — validation passes without it.
+ *
  * @param columnMapping - Mapping from source columns to schema columns
  * @param targetTable - The target market table
  * @returns Validation result with missing field names
@@ -84,7 +88,14 @@ export function validateColumnMapping(
 ): { valid: boolean; missingFields: string[] } {
   const schemaValues = Object.values(columnMapping);
   const required = REQUIRED_SCHEMA_FIELDS[targetTable] ?? [];
-  const missing = required.filter((field) => !schemaValues.includes(field));
+  let missing = required.filter((field) => !schemaValues.includes(field));
+
+  // For intraday: allow missing `time` if `date` is mapped — time will be auto-derived
+  // from the Unix timestamp in the date source column during applyColumnMapping.
+  if (targetTable === "intraday" && missing.includes("time") && schemaValues.includes("date")) {
+    missing = missing.filter((f) => f !== "time");
+  }
+
   return { valid: missing.length === 0, missingFields: missing };
 }
 
@@ -145,6 +156,36 @@ function parseFlexibleDate(value: string): string | null {
   return null;
 }
 
+/**
+ * Extract HH:MM time from a value in Eastern Time.
+ * - If numeric AND > 1e8: treat as Unix timestamp (seconds), extract HH:MM ET
+ * - If already HH:MM: return as-is
+ * - If HHMM (4 digits): convert to HH:MM
+ * - Otherwise: return null
+ */
+function parseFlexibleTime(value: string): string | null {
+  const numeric = Number(value);
+  if (!isNaN(numeric) && numeric > 1e8) {
+    // Unix timestamp in seconds — convert to Eastern Time HH:MM
+    const d = new Date(numeric * 1000);
+    return d.toLocaleTimeString("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  }
+  // Already in HH:MM format
+  if (/^\d{2}:\d{2}$/.test(value)) {
+    return value;
+  }
+  // HHMM format (4 digits), e.g. "0930"
+  if (/^\d{4}$/.test(value)) {
+    return `${value.slice(0, 2)}:${value.slice(2)}`;
+  }
+  return null;
+}
+
 // =============================================================================
 // Private Column Mapping Helper
 // =============================================================================
@@ -183,6 +224,14 @@ function applyColumnMapping(
           break;
         }
         mapped[schemaCol] = parsedDate;
+      } else if (schemaCol === "time") {
+        const parsedTime = parseFlexibleTime(rawValue);
+        if (parsedTime === null) {
+          console.warn(`[market-importer] Skipping row with unparseable time value: "${rawValue}"`);
+          hasNullDate = true; // Reuse the skip mechanism
+          break;
+        }
+        mapped[schemaCol] = parsedTime;
       } else {
         // Numeric coercion for non-date, non-ticker fields
         if (rawValue === "" || rawValue === "NaN" || rawValue === "NA") {
@@ -196,6 +245,23 @@ function applyColumnMapping(
 
     if (hasNullDate) continue;
     if (!("date" in mapped)) continue;
+
+    // Auto-extract time from the date source column's Unix timestamp for intraday imports.
+    // This allows users to map a single Unix timestamp column to "date" and get "time"
+    // (HH:MM ET) auto-populated — no need to specify a separate time column in the mapping.
+    if (targetTable === "intraday" && !("time" in mapped)) {
+      const dateSourceCol = Object.entries(columnMapping).find(([, schema]) => schema === "date")?.[0];
+      if (dateSourceCol) {
+        const rawDateValue = row[dateSourceCol] ?? "";
+        const numericDate = Number(rawDateValue);
+        if (!isNaN(numericDate) && numericDate > 1e8) {
+          const parsedTime = parseFlexibleTime(rawDateValue);
+          if (parsedTime) {
+            mapped["time"] = parsedTime;
+          }
+        }
+      }
+    }
 
     // Inject ticker for daily and intraday tables (context PK is date-only)
     if (targetTable === "daily" || targetTable === "intraday") {
