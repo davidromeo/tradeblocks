@@ -346,9 +346,11 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
   storedThreads = threads;
   storedMemoryLimit = memoryLimit;
   storedMarketDbPath = resolveMarketDbPath(dataDir);
-  // DUCKDB_LOCK_RECOVERY=true force-kills ANY lock-holding tradeblocks-mcp process.
-  // Without it, only orphaned processes (PPID=1, parent died) are auto-killed.
-  const forceRecovery = (process.env.DUCKDB_LOCK_RECOVERY ?? "false") !== "false";
+  // Lock recovery: kill other tradeblocks-mcp processes that hold the write lock.
+  // Enabled by default — safe because market data is re-importable and lock holders
+  // are just other Claude sessions that can lazily restart their MCP server.
+  // Set DUCKDB_LOCK_RECOVERY=false to disable (only kill orphaned processes).
+  const forceRecovery = (process.env.DUCKDB_LOCK_RECOVERY ?? "true") !== "false";
 
   try {
     return await openReadWriteConnection(dbPath, threads, memoryLimit);
@@ -422,13 +424,19 @@ export async function closeConnection(): Promise<void> {
 }
 
 /**
- * Upgrade the connection to read-write mode for sync/write operations.
+ * Upgrade the connection to read-write mode for write operations.
  * No-op if already in read-write mode.
- * Retries with backoff if another session briefly holds the write lock (during sync).
- * Falls back to read-only if the lock can't be acquired (another session is active).
- * Callers should check getConnectionMode() to determine if sync should be skipped.
+ * Retries with backoff if another session briefly holds the write lock.
+ *
+ * @param dataDir - Directory where analytics.duckdb lives
+ * @param options.fallbackToReadOnly - If true, fall back to read-only on lock failure
+ *   instead of throwing. Used by sync middleware where RO is acceptable (just skip sync).
+ *   Default: false — callers that need writes get a clear error instead of a silent RO surprise.
  */
-export async function upgradeToReadWrite(dataDir: string): Promise<DuckDBConnection> {
+export async function upgradeToReadWrite(
+  dataDir: string,
+  options?: { fallbackToReadOnly?: boolean }
+): Promise<DuckDBConnection> {
   if (connectionMode === "read_write" && connection) return connection;
   await closeConnection();
 
@@ -450,8 +458,8 @@ export async function upgradeToReadWrite(dataDir: string): Promise<DuckDBConnect
     }
   }
 
-  // RW retries exhausted — fall back to read-only (skip sync, use existing data)
-  if (storedDbPath && storedThreads && storedMemoryLimit) {
+  // RW retries exhausted
+  if (options?.fallbackToReadOnly && storedDbPath && storedThreads && storedMemoryLimit) {
     try {
       await openReadOnlyConnection(storedDbPath, storedThreads, storedMemoryLimit);
       if (connection) return connection;
@@ -460,7 +468,10 @@ export async function upgradeToReadWrite(dataDir: string): Promise<DuckDBConnect
     }
   }
 
-  throw lastError || new Error("Failed to upgrade DuckDB connection to read-write");
+  throw lastError || new Error(
+    "Cannot acquire DuckDB write lock. Another process holds it. " +
+    "Kill other tradeblocks-mcp processes or restart Claude Code."
+  );
 }
 
 /**

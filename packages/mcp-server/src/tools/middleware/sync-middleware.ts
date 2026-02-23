@@ -51,7 +51,7 @@ export function withSyncedBlock<TInput extends { blockId: string }, TOutput>(
   handler: (input: TInput, ctx: SingleBlockContext) => Promise<TOutput>
 ): (input: TInput) => Promise<TOutput | ToolError> {
   return async (input: TInput) => {
-    await upgradeToReadWrite(baseDir);
+    await upgradeToReadWrite(baseDir, { fallbackToReadOnly: true });
     let syncResult: BlockSyncResult;
 
     if (getConnectionMode() === "read_write") {
@@ -113,7 +113,7 @@ export function withSyncedBlocks<
 
     const syncResults = new Map<string, BlockSyncResult>();
 
-    await upgradeToReadWrite(baseDir);
+    await upgradeToReadWrite(baseDir, { fallbackToReadOnly: true });
 
     if (getConnectionMode() === "read_write") {
       try {
@@ -168,7 +168,7 @@ export function withFullSync<TInput, TOutput>(
   handler: (input: TInput, ctx: FullSyncContext) => Promise<TOutput>
 ): (input: TInput) => Promise<TOutput> {
   return async (input: TInput) => {
-    await upgradeToReadWrite(baseDir);
+    await upgradeToReadWrite(baseDir, { fallbackToReadOnly: true });
     let blockSyncResult: SyncResult;
 
     if (getConnectionMode() === "read_write") {
