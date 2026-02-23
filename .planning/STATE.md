@@ -87,6 +87,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 64-02]: intraday validation relaxed — 'time' not required in column mapping when 'date' is mapped; auto-extraction from Unix timestamp provides it
 - [Phase 64-02]: Universal Pine Script exports 10 plots (open, high, low, close + 6 VIX fields); enrichment pipeline computes all derived fields after import
 - [Phase 64-02]: spx-15min-checkpoints.pine and vix-intraday.pine deleted (CLN-06) — checkpoint pivot approach superseded by raw market.intraday schema
+- [Phase 64-01]: enrich_trades intradayBars uses raw bar arrays (not checkpoint pivot) — callers filter by time themselves; simpler and more flexible
+- [Phase 64-01]: computeIntradayTimingFields stub added to market-enricher.ts for Plan 64-03 — avoids test-exports.ts parallel edit conflict
+- [Phase 64-01]: McpServer version bumped to 1.5.0 (synced with package.json); run_sql AVAILABLE_TABLES updated to normalized schema names
 
 ### Pending Todos
 
@@ -101,5 +104,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 64-02-PLAN.md (Universal Pine Script + intraday Unix timestamp auto-extraction in market-importer)
+Stopped at: Completed 64-01-PLAN.md (dead code removal + API surface cleanup: intraday-timing.ts and market-sync.ts deleted; run_sql and describe_database updated to normalized schema; McpServer v1.5.0)
 Resume file: None
