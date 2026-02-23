@@ -100,13 +100,18 @@ Plans:
 ### Phase 64: Cleanup and API Surface
 **Goal**: Dead sync code is removed, API surface is updated for new schema, PineScripts are simplified, and new tools are registered in the MCP server index
 **Depends on**: Phase 63
-**Requirements**: CLN-02, CLN-03, CLN-04, CLN-05, CLN-06, CLN-07
+**Requirements**: CLN-02, CLN-03, CLN-04, CLN-05, CLN-06, CLN-07, ENR-04
 **Success Criteria** (what must be TRUE):
   1. `run_sql` accepts queries against new table names (`market.daily`, `market.context`, `market.intraday`) and rejects queries against old table names (`market.spx_daily`, `market.spx_15min`, `market.vix_intraday`)
   2. `describe_database` returns the new schema structure with correct field timing annotations and an updated LAG CTE template that references the normalized tables
   3. The `_marketdata/` sync directory and its exports are deleted, and `import_csv`/`import_from_database` tools are registered in the MCP server index
   4. Pine Scripts are reduced from 3 to 1 minimal daily script exporting ~12 columns of raw OHLCV + VIX data
-**Plans**: TBD
+  5. Tier 3 enrichment computes High_Time, Low_Time, High_Before_Low, Reversal_Type from market.intraday bars
+**Plans:** 3 plans
+Plans:
+- [ ] 64-01-PLAN.md — Dead code removal, enrich_trades simplification, API surface updates (run_sql, describe_database, version sync)
+- [ ] 64-02-PLAN.md — Pine Script simplification (3→1 universal script) and importer time-splitting extension
+- [ ] 64-03-PLAN.md — Tier 3 enrichment implementation (High_Time, Low_Time, High_Before_Low, Reversal_Type) + unit tests
 
 ## Progress
 
@@ -124,4 +129,4 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 61. Import Tools | 3/3 | Complete    | 2026-02-22 | - |
 | 62. Enrichment Pipeline | 3/3 | Complete    | 2026-02-22 | - |
 | 63. Tool Migration | 3/3 | Complete    | 2026-02-22 | - |
-| 64. Cleanup and API Surface | v3.0 | 0/? | Not started | - |
+| 64. Cleanup and API Surface | v3.0 | 0/3 | Not started | - |
