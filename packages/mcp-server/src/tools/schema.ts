@@ -77,15 +77,7 @@ interface DatabaseSchemaOutput {
 // Constants
 // ============================================================================
 
-/**
- * Valid market tables and their corresponding CSV file names.
- * Used for purge_market_table validation.
- */
-const MARKET_TABLE_FILE_PATTERNS: Record<string, string[]> = {
-  daily: ["%_daily.csv"],
-  intraday: ["%_15min.csv", "%_intraday.csv"],
-  context: ["vix_*.csv", "%_vix*.csv"],
-};
+// (MARKET_TABLE_FILE_PATTERNS removed — purge_market_table now uses target_table column directly)
 
 // ============================================================================
 // LAG Template Generator
@@ -331,7 +323,6 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
       }
       try {
         const fullTableName = `market.${table}`;
-        const filePatterns = MARKET_TABLE_FILE_PATTERNS[table];
 
         // Get current row count before deletion
         const countResult = await conn.runAndReadAll(
@@ -343,12 +334,8 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
         try {
           await conn.run(`BEGIN TRANSACTION`);
           await conn.run(`DELETE FROM ${fullTableName}`);
-          const whereClause = filePatterns
-            .map((_, idx) => `LOWER(file_name) LIKE $${idx + 1}`)
-            .join(" OR ");
           await conn.run(
-            `DELETE FROM market._sync_metadata WHERE ${whereClause}`,
-            filePatterns.map((p) => p.toLowerCase())
+            `DELETE FROM market._sync_metadata WHERE target_table = '${table}'`
           );
           await conn.run(`COMMIT`);
         } catch (e) {
@@ -358,7 +345,6 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
 
         const result = {
           table: fullTableName,
-          filePatterns,
           rowsDeleted: rowsBefore,
           syncMetadataCleared: true,
           nextStep: "Next query will trigger fresh import from CSV",
