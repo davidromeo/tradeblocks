@@ -159,9 +159,9 @@ export function withSyncedBlocks<
  * Middleware for tools that need a full sync of all blocks.
  * Used by list_blocks which needs to see all available blocks.
  *
- * Note: syncMarketData is intentionally NOT called here (DB-09).
+ * Note: market data sync (removed in Phase 64) is intentionally NOT called here (DB-09).
  * Market data writes must not be wrapped in analytics.duckdb transactions.
- * Market data is imported via dedicated import_csv tools (Phase 61+).
+ * Market data is imported via dedicated import_market_csv tool (Phase 61+).
  */
 export function withFullSync<TInput, TOutput>(
   baseDir: string,

@@ -13,9 +13,11 @@
  *
  * Available tables:
  *   - trades.trade_data: Trade records from all blocks (includes inferred ticker)
- *   - market.spx_daily: Daily market context keyed by (ticker, date)
- *   - market.spx_15min: 15-minute intraday checkpoints keyed by (ticker, date)
- *   - market.vix_intraday: VIX intraday data keyed by (ticker, date)
+ *   - trades.reporting_data: Reporting/actual trade records from strategy logs
+ *   - market.daily: Daily OHLCV + enriched indicators keyed by (ticker, date)
+ *   - market.context: Global market conditions (VIX, regime) keyed by (date)
+ *   - market.intraday: Intraday bars at any resolution keyed by (ticker, date, time)
+ *   - market._sync_metadata: Import/enrichment tracking metadata
  */
 
 import { z } from "zod";
@@ -30,9 +32,11 @@ import { createToolOutput } from "../utils/output-formatter.js";
  */
 const AVAILABLE_TABLES = [
   "trades.trade_data",
-  "market.spx_daily",
-  "market.spx_15min",
-  "market.vix_intraday",
+  "trades.reporting_data",
+  "market.daily",
+  "market.context",
+  "market.intraday",
+  "market._sync_metadata",
 ];
 
 /**
@@ -233,8 +237,8 @@ export function registerSQLTools(server: McpServer, baseDir: string): void {
     {
       description:
         "Execute a SQL SELECT query against the DuckDB analytics database. " +
-        "Query trades (trades.trade_data) and market data (market.spx_daily, " +
-        "market.spx_15min, market.vix_intraday). " +
+        "Query trades (trades.trade_data, trades.reporting_data) and market data " +
+        "(market.daily, market.context, market.intraday, market._sync_metadata). " +
         "Returns up to 1000 rows.",
       inputSchema: z.object({
         query: z.string().describe("SQL SELECT query to execute"),

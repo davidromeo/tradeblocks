@@ -68,6 +68,10 @@ interface DatabaseSchemaOutput {
       closeDerived: number;
     };
   };
+  importWorkflow: {
+    description: string;
+    steps: string[];
+  };
   syncInfo: {
     blocksProcessed: number;
   };
@@ -283,6 +287,13 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
         schemas,
         examples: EXAMPLE_QUERIES,
         lagTemplate: generateLagTemplate(),
+        importWorkflow: {
+          description: "Two-step pipeline to populate market tables from CSV exports.",
+          steps: [
+            "1. import_market_csv — ingest raw CSV (daily OHLCV, context, or intraday bars) into market.daily / market.context / market.intraday",
+            "2. enrich_market_data — compute ~40 derived indicators (RSI, ATR, BB, Vol_Regime, etc.) from raw OHLCV and write back to market.daily and market.context",
+          ],
+        },
         syncInfo: {
           blocksProcessed: blockSyncResult.blocksProcessed,
         },

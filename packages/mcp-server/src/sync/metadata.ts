@@ -125,7 +125,7 @@ export async function getAllSyncedBlockIds(
  * Get sync metadata for a market data file.
  *
  * @param conn - DuckDB connection
- * @param fileName - File name (e.g., 'spx_daily.csv')
+ * @param fileName - File name or source identifier
  * @returns Metadata if file is synced, null otherwise
  */
 export async function getMarketSyncMetadata(
