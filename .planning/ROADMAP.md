@@ -31,7 +31,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 - [x] **Phase 61: Import Tools** — MCP tools for ingesting market data from CSV files and external DuckDB databases (completed 2026-02-22)
 - [x] **Phase 62: TypeScript Enrichment Pipeline** — Pure indicator functions and tiered enrichment runner computing ~40 derived fields from raw OHLCV (completed 2026-02-22)
 - [x] **Phase 63: Tool Migration** — All 4 market-data tools and shared query utilities migrated to new normalized schema (completed 2026-02-22)
-- [ ] **Phase 64: Cleanup and API Surface** — Dead code removed, run_sql/describe_database updated, PineScripts simplified, new tools registered
+- [x] **Phase 64: Cleanup and API Surface** — Dead code removed, run_sql/describe_database updated, PineScripts simplified, new tools registered (completed 2026-02-23)
 
 ## Phase Details
 
@@ -107,7 +107,7 @@ Plans:
   3. The `_marketdata/` sync directory and its exports are deleted, and `import_csv`/`import_from_database` tools are registered in the MCP server index
   4. Pine Scripts are reduced from 3 to 1 minimal daily script exporting ~12 columns of raw OHLCV + VIX data
   5. Tier 3 enrichment computes High_Time, Low_Time, High_Before_Low, Reversal_Type from market.intraday bars
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 64-01-PLAN.md — Dead code removal, enrich_trades simplification, API surface updates (run_sql, describe_database, version sync)
 - [ ] 64-02-PLAN.md — Pine Script simplification (3→1 universal script) and importer time-splitting extension
@@ -129,4 +129,4 @@ Phases execute in numeric order: 60 → 61 → 62 → 63 → 64
 | 61. Import Tools | 3/3 | Complete    | 2026-02-22 | - |
 | 62. Enrichment Pipeline | 3/3 | Complete    | 2026-02-22 | - |
 | 63. Tool Migration | 3/3 | Complete    | 2026-02-22 | - |
-| 64. Cleanup and API Surface | 2/3 | In Progress|  | - |
+| 64. Cleanup and API Surface | 3/3 | Complete   | 2026-02-23 | - |

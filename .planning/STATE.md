@@ -3,11 +3,11 @@
 ## Current Position
 
 Phase: 64 of 64 (Cleanup and API Surface)
-Plan: 2 of 3 complete
-Status: In progress
-Last activity: 2026-02-23 — Completed 64-02 (Universal Pine Script + intraday Unix timestamp importer)
+Plan: 3 of 3 complete
+Status: Complete
+Last activity: 2026-02-23 — Completed 64-03 (Tier 3 intraday timing enrichment: runTier3, computeIntradayTimingFields, Opening_Drive_Strength/Intraday_Realized_Vol schema columns)
 
-Progress: [█████████░] 85%
+Progress: [██████████] 100%
 
 ## Project Reference
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 | 61 | 3/3 | 8 min | 3 min |
 | 62 | 3/3 | 12 min | 4 min |
 | 63 | 3/3 | ~12 min | 4 min |
-| 64 (so far) | 2/3 | 6 min | 3 min |
+| 64 | 3/3 | 10 min | 3 min |
 
 ## Accumulated Context
 
@@ -90,6 +90,10 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 64-01]: enrich_trades intradayBars uses raw bar arrays (not checkpoint pivot) — callers filter by time themselves; simpler and more flexible
 - [Phase 64-01]: computeIntradayTimingFields stub added to market-enricher.ts for Plan 64-03 — avoids test-exports.ts parallel edit conflict
 - [Phase 64-01]: McpServer version bumped to 1.5.0 (synced with package.json); run_sql AVAILABLE_TABLES updated to normalized schema names
+- [Phase 64-03]: computeIntradayTimingFields returns null for empty bars (not object-with-nulls) — stub API was incompatible, replaced fully
+- [Phase 64-03]: Opening drive strength = first-30-min range / full-day range ratio (0-1), not percentage; bars < 10:00 AM ET define opening period
+- [Phase 64-03]: intradayRealizedVol is decimal (0.X), not percentage; formula: barStdDev * sqrt(barsPerDay * 252)
+- [Phase 64-03]: Opening_Drive_Strength and Intraday_Realized_Vol added to market.daily schema with ALTER TABLE migration for existing databases
 
 ### Pending Todos
 
@@ -104,5 +108,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 64-01-PLAN.md (dead code removal + API surface cleanup: intraday-timing.ts and market-sync.ts deleted; run_sql and describe_database updated to normalized schema; McpServer v1.5.0)
+Stopped at: Completed 64-03-PLAN.md (Tier 3 intraday timing enrichment: runTier3, computeIntradayTimingFields, Opening_Drive_Strength/Intraday_Realized_Vol schema columns, 16 unit tests)
 Resume file: None
