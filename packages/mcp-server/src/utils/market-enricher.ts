@@ -928,3 +928,119 @@ export async function runEnrichment(
     enrichedThrough: newWatermark,
   };
 }
+
+// =============================================================================
+// Tier 3: Intraday Timing Fields (stub — implementation in Plan 64-03)
+// =============================================================================
+
+/**
+ * Input bar for Tier 3 intraday timing computation.
+ * time is HH:MM format (e.g., "09:30"), prices are numeric.
+ */
+export interface IntradayBar {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+/**
+ * Output of Tier 3 intraday timing computation for a single trading day.
+ * All fields written to market.daily via UPDATE.
+ */
+export interface IntradayTimingResult {
+  /** Time of day high in HHMM numeric format (e.g., 1030 for 10:30). Null if no bars. */
+  High_Time: number | null;
+  /** Time of day low in HHMM numeric format (e.g., 1430 for 14:30). Null if no bars. */
+  Low_Time: number | null;
+  /** 1 if day high occurred before day low, 0 otherwise, null if no bars. */
+  High_Before_Low: number | null;
+  /** Reversal type: 1 = high first then low (bearish reversal), -1 = low first then high (bullish reversal), 0 = ambiguous/no clear reversal, null if no bars. */
+  Reversal_Type: number | null;
+  /** Opening drive strength: |close_at_opening_period - open| / open * 100. Null if no bars. */
+  Opening_Drive_Strength: number | null;
+  /** Intraday realized volatility: population stddev of bar returns annualized. Null if fewer than 2 bars. */
+  Intraday_Realized_Vol: number | null;
+}
+
+/**
+ * Compute Tier 3 intraday timing fields from an array of raw OHLCV bars for a single day.
+ *
+ * Pure function — no DB access. Called by Plan 64-03 Tier 3 implementation.
+ *
+ * @param bars - Array of intraday bars sorted by time (HH:MM ascending)
+ * @param openingPeriodEndTime - End time of the "opening period" for drive strength (HH:MM, default "10:00")
+ * @returns Computed timing fields
+ */
+export function computeIntradayTimingFields(
+  bars: IntradayBar[],
+  openingPeriodEndTime: string = "10:00"
+): IntradayTimingResult {
+  if (bars.length === 0) {
+    return {
+      High_Time: null,
+      Low_Time: null,
+      High_Before_Low: null,
+      Reversal_Type: null,
+      Opening_Drive_Strength: null,
+      Intraday_Realized_Vol: null,
+    };
+  }
+
+  // Find high and low bar
+  let highBar = bars[0];
+  let lowBar = bars[0];
+  for (const bar of bars) {
+    if (bar.high > highBar.high) highBar = bar;
+    if (bar.low < lowBar.low) lowBar = bar;
+  }
+
+  // Convert HH:MM to HHMM numeric
+  const toHHMM = (t: string): number => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 100 + m;
+  };
+
+  const High_Time = toHHMM(highBar.time);
+  const Low_Time = toHHMM(lowBar.time);
+  const High_Before_Low = High_Time < Low_Time ? 1 : 0;
+  const Reversal_Type = High_Time < Low_Time ? 1 : High_Time > Low_Time ? -1 : 0;
+
+  // Opening drive strength: |close of last bar in opening period - first bar open| / first bar open * 100
+  const openingBars = bars.filter(b => b.time <= openingPeriodEndTime);
+  let Opening_Drive_Strength: number | null = null;
+  if (openingBars.length > 0) {
+    const openPrice = bars[0].open;
+    const openingClose = openingBars[openingBars.length - 1].close;
+    Opening_Drive_Strength = openPrice !== 0
+      ? Math.abs(openingClose - openPrice) / openPrice * 100
+      : null;
+  }
+
+  // Intraday realized vol: population stddev of log returns between consecutive closes, annualized
+  let Intraday_Realized_Vol: number | null = null;
+  if (bars.length >= 2) {
+    const logReturns: number[] = [];
+    for (let i = 1; i < bars.length; i++) {
+      if (bars[i - 1].close > 0) {
+        logReturns.push(Math.log(bars[i].close / bars[i - 1].close));
+      }
+    }
+    if (logReturns.length >= 1) {
+      const mean = logReturns.reduce((s, v) => s + v, 0) / logReturns.length;
+      const variance = logReturns.reduce((s, v) => s + (v - mean) ** 2, 0) / logReturns.length;
+      const barsPerDay = bars.length;
+      Intraday_Realized_Vol = Math.sqrt(variance * barsPerDay * 252) * 100;
+    }
+  }
+
+  return {
+    High_Time,
+    Low_Time,
+    High_Before_Low,
+    Reversal_Type,
+    Opening_Drive_Strength,
+    Intraday_Realized_Vol,
+  };
+}

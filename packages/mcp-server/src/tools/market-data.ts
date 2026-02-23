@@ -31,16 +31,7 @@ import {
 } from "../utils/field-timing.js";
 import { filterByStrategy, filterByDateRange } from "./shared/filters.js";
 import {
-  buildIntradayContext,
-  SPX_15MIN_OUTCOME_FIELDS,
-  VIX_OUTCOME_FIELDS,
-  VIX_OHLC_OUTCOME_FIELDS,
-  SPX_CHECKPOINTS,
-  VIX_CHECKPOINTS,
-} from "../utils/intraday-timing.js";
-import {
   DEFAULT_MARKET_TICKER,
-  GLOBAL_MARKET_TICKER,
   marketTickerDateKey,
   normalizeTicker,
   resolveTradeTicker,
@@ -116,22 +107,12 @@ export interface DailyMarketData {
 }
 
 /**
- * Intraday data is now stored in market.intraday (normalized: one row per bar).
+ * Intraday data is stored in market.intraday (normalized: one row per bar).
  * Schema: (ticker VARCHAR, date DATE, time VARCHAR -- HH:MM format, open, high, low, close, volume)
  * Primary key: (ticker, date, time)
  *
- * To query as wide-format checkpoints for a specific date, pivot using CASE WHEN:
- *   SELECT date,
- *     MAX(CASE WHEN time = '09:30' THEN close END) AS P_0930,
- *     MAX(CASE WHEN time = '09:45' THEN close END) AS P_0945,
- *     ... etc ...
- *   FROM market.intraday
- *   WHERE ticker = 'SPX' AND date = '2024-01-15'
- *   GROUP BY date
- *
- * Note: Intraday data import is blocked by format incompatibility (separate date/time
- * columns required but current export CSVs use a single Unix timestamp column).
- * Tools that use intraday context will return null for all trades until resolved.
+ * enrich_trades returns raw bar arrays when includeIntradayContext=true:
+ *   intradayBars: [{time: "09:30", open: 4700, high: 4720, low: 4695, close: 4710}, ...]
  */
 
 // =============================================================================
@@ -865,7 +846,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         "Close-derived fields (VIX_Close, RSI_14, Vol_Regime, BB_Width, Realized_Vol_5D/20D, BB_Position) use prior trading day values to prevent lookahead bias. " +
         "New enrichment fields: BB_Width, Realized_Vol_5D, Realized_Vol_20D, BB_Position, Prior_Range_vs_ATR. " +
         "Use includeOutcomeFields=true for post-hoc analysis (with clear warning). " +
-        "Use includeIntradayContext=true for intraday SPX/VIX checkpoint data at trade entry time. " +
+        "Use includeIntradayContext=true to get raw intraday bars (intradayBars: [{time, open, high, low, close}]) from market.intraday. " +
         "Returns warnings when market data is partially missing.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to enrich"),
@@ -875,7 +856,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         ticker: z.string().optional().describe("Underlying ticker symbol (default: SPX)"),
         includeOutcomeFields: z.boolean().default(false).describe("Include same-day close values (lookahead). Defaults to false for safety."),
         includeIntradayContext: z.boolean().default(false).describe(
-          "Include intraday SPX/VIX checkpoint data. Only checkpoints known at trade entry time are returned (lookahead-free). Requires 2 additional DuckDB queries."
+          "Include raw intraday bars from market.intraday (intradayBars array with time/open/high/low/close per bar). Requires 1 additional DuckDB query."
         ),
         limit: z.number().min(1).max(500).default(50).describe("Max trades to return (default: 50, max: 500)"),
         offset: z.number().min(0).default(0).describe("Pagination offset (default: 0)"),
@@ -943,79 +924,33 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           outcomeMap = recordsByTickerDate(outcomeRecords);
         }
 
-        // Optionally query intraday checkpoint data
-        let spxIntradayMap: Map<string, Record<string, unknown>> | null = null;
-        let vixIntradayMap: Map<string, Record<string, unknown>> | null = null;
+        // Optionally query intraday bar data
+        let intradayBarsByKey: Map<string, Array<{time: string, open: number, high: number, low: number, close: number}>> | null = null;
 
         if (includeIntradayContext) {
           const { valuesClause: pairsClause, params: pairParams } = buildRequestedPairsClause(tradeKeys);
-
-          // Query per-ticker SPX intraday data from market.intraday (normalized: one row per bar).
-          // Pivot bars into wide-format checkpoint columns (P_0930, P_0945, ...) that
-          // buildIntradayContext expects. market.intraday uses HH:MM time format.
-          // TODO: Intraday import is blocked by format incompatibility (STATE.md blocker):
-          // source CSVs use a single Unix timestamp column; market.intraday requires separate
-          // date + time HH:MM columns. Until fixed, these queries return empty results
-          // and intradayContext will be null for all trades (graceful degradation).
-          const spxCheckpointCases = SPX_CHECKPOINTS
-            .map(cp => {
-              const hhmm = String(cp).padStart(4, '0');
-              const timeStr = `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
-              return `MAX(CASE WHEN i.time = '${timeStr}' THEN i.close END) AS "P_${hhmm}"`;
-            })
-            .join(',\n            ');
-          const spxResult = await conn.runAndReadAll(
+          const intradayResult = await conn.runAndReadAll(
             `WITH requested(ticker, date) AS (VALUES ${pairsClause})
-             SELECT i.ticker, i.date,
-               MIN(CASE WHEN i.time = (
-                 SELECT MIN(i2.time) FROM market.intraday i2
-                 WHERE i2.ticker = i.ticker AND i2.date = i.date
-               ) THEN i.open END) AS "open",
-               ${spxCheckpointCases}
+             SELECT i.ticker, i.date, i.time, i.open, i.high, i.low, i.close
              FROM market.intraday i
              JOIN requested r ON i.ticker = r.ticker AND i.date = r.date
-             GROUP BY i.ticker, i.date`,
+             ORDER BY i.ticker, i.date, i.time`,
             pairParams
           );
-          const spxRecords = resultToRecords(spxResult);
-          spxIntradayMap = recordsByTickerDate(spxRecords);
-
-          // Query VIX intraday for both ticker-specific rows and global fallback rows.
-          // VIX data is stored in market.intraday with ticker='VIX'.
-          // Pivot into wide-format VIX_HHMM columns that buildIntradayContext expects.
-          const byVixKey = new Map<string, MarketLookupKey>();
-          for (const key of tradeKeys) {
-            byVixKey.set(marketTickerDateKey(key.ticker, key.date), key);
-            byVixKey.set(
-              marketTickerDateKey(GLOBAL_MARKET_TICKER, key.date),
-              { ticker: GLOBAL_MARKET_TICKER, date: key.date }
-            );
+          const intradayRecords = resultToRecords(intradayResult);
+          // Group by ticker+date into arrays of bars
+          intradayBarsByKey = new Map<string, Array<{time: string, open: number, high: number, low: number, close: number}>>();
+          for (const rec of intradayRecords) {
+            const key = marketTickerDateKey(String(rec.ticker), String(rec.date));
+            if (!intradayBarsByKey.has(key)) intradayBarsByKey.set(key, []);
+            intradayBarsByKey.get(key)!.push({
+              time: String(rec.time),
+              open: Number(rec.open),
+              high: Number(rec.high),
+              low: Number(rec.low),
+              close: Number(rec.close),
+            });
           }
-          const vixKeys = Array.from(byVixKey.values());
-          const { valuesClause: vixPairsClause, params: vixPairParams } =
-            buildRequestedPairsClause(vixKeys);
-          const vixCheckpointCases = VIX_CHECKPOINTS
-            .map(cp => {
-              const hhmm = String(cp).padStart(4, '0');
-              const timeStr = `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
-              return `MAX(CASE WHEN i.time = '${timeStr}' THEN i.close END) AS "VIX_${hhmm}"`;
-            })
-            .join(',\n            ');
-          const vixResult = await conn.runAndReadAll(
-            `WITH requested(ticker, date) AS (VALUES ${vixPairsClause})
-             SELECT i.ticker, i.date,
-               MIN(CASE WHEN i.time = (
-                 SELECT MIN(i2.time) FROM market.intraday i2
-                 WHERE i2.ticker = i.ticker AND i2.date = i.date
-               ) THEN i.open END) AS "open",
-               ${vixCheckpointCases}
-             FROM market.intraday i
-             JOIN requested r ON i.ticker = r.ticker AND i.date = r.date
-             GROUP BY i.ticker, i.date`,
-            vixPairParams
-          );
-          const vixRecords = resultToRecords(vixResult);
-          vixIntradayMap = recordsByTickerDate(vixRecords);
         }
 
         // Helper: clean numeric value (BigInt -> Number, NaN -> null)
@@ -1086,44 +1021,10 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
             }
           }
 
-          // Intraday context (opt-in, per-trade checkpoint filtering)
-          if (includeIntradayContext && spxIntradayMap && vixIntradayMap) {
-            const spxIntraday = spxIntradayMap.get(marketKey) || null;
-            const vixIntraday =
-              vixIntradayMap.get(marketKey) ||
-              vixIntradayMap.get(
-                marketTickerDateKey(GLOBAL_MARKET_TICKER, lookup.date)
-              ) ||
-              null;
-            baseTrade.intradayContext = buildIntradayContext(
-              trade.timeOpened,
-              spxIntraday,
-              vixIntraday,
-            );
-
-            // Intraday outcome fields (day-level aggregates, requires BOTH flags)
-            if (includeOutcomeFields) {
-              const intradayOutcome: Record<string, unknown> = {};
-
-              if (spxIntraday) {
-                for (const field of SPX_15MIN_OUTCOME_FIELDS) {
-                  intradayOutcome[`spx_${field}`] = cleanVal(spxIntraday[field]);
-                }
-              }
-
-              if (vixIntraday) {
-                for (const field of VIX_OUTCOME_FIELDS) {
-                  intradayOutcome[field] = cleanVal(vixIntraday[field]);
-                }
-                for (const field of VIX_OHLC_OUTCOME_FIELDS) {
-                  intradayOutcome[`vix_${field}`] = cleanVal(vixIntraday[field]);
-                }
-              }
-
-              if (Object.keys(intradayOutcome).length > 0) {
-                baseTrade.intradayOutcomeFields = intradayOutcome;
-              }
-            }
+          // Intraday bars (opt-in, raw bar arrays per ticker+date)
+          if (includeIntradayContext && intradayBarsByKey) {
+            const bars = intradayBarsByKey.get(marketKey) || null;
+            baseTrade.intradayBars = bars;
           }
 
           return baseTrade;
@@ -1141,10 +1042,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           lagNote += " Outcome fields contain same-day close-derived values and represent information NOT available at trade entry time.";
         }
         if (includeIntradayContext) {
-          lagNote += " Intraday context shows SPX/VIX checkpoint values known at trade entry time (filtered by timeOpened). Checkpoints after entry time are excluded to prevent lookahead bias.";
-          if (includeOutcomeFields) {
-            lagNote += " intradayOutcomeFields contain end-of-day intraday metrics (MOC moves, VIX spike/crush flags, etc.) NOT available at trade entry time.";
-          }
+          lagNote += " intradayBars contains raw OHLC bar arrays from market.intraday keyed by ticker+date.";
         }
 
         // Build response data
@@ -1206,51 +1104,41 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         "Returns per-day ORB levels plus breakout events (direction, time, condition). " +
         "Supports any bar resolution and any ticker with intraday data.",
       inputSchema: z.object({
-        ticker: z.string().optional().describe("Underlying ticker (default: SPX)"),
-        startTime: z.string().describe("ORB window start time in HHMM format (e.g., '0930')"),
-        endTime: z.string().describe("ORB window end time in HHMM format (e.g., '1000')"),
+        ticker: z.string().default("SPX").describe("Ticker symbol (default: SPX)"),
         startDate: z.string().describe("Start date (YYYY-MM-DD)"),
-        endDate: z.string().optional().describe("End date (YYYY-MM-DD), defaults to startDate"),
-        useHighLow: z.boolean().default(true).describe(
-          "If true, ORB range uses bar high/low values. If false, uses bar close values only. Default: true."
-        ),
-        barResolution: z.string().optional().describe(
-          "Bar resolution to use (e.g., '15', '5'). Default: finest available resolution in market.intraday for the ticker."
-        ),
-        limit: z.number().int().min(1).max(500).default(100).describe("Max days to return (default: 100)"),
+        endDate: z.string().optional().describe("End date (YYYY-MM-DD, defaults to today)"),
+        startTime: z.string().default("0930").describe("ORB window start in HHMM format (default: '0930')"),
+        endTime: z.string().default("1000").describe("ORB window end in HHMM format (default: '1000')"),
+        useHighLow: z.boolean().default(true).describe("Use high/low for range (true) or close prices (false)"),
+        barResolution: z.string().optional().describe("Expected bar resolution in minutes (e.g., '15'). Auto-detected if omitted."),
+        limit: z.number().min(1).max(500).default(100).describe("Max days to return"),
       }),
     },
-    withFullSync(baseDir, async ({ ticker, startTime, endTime, startDate, endDate, useHighLow, barResolution, limit }) => {
+    withFullSync(baseDir, async ({ ticker, startDate, endDate, startTime, endTime, useHighLow, barResolution, limit }) => {
       try {
-        const end = endDate || startDate;
-        const normalizedTicker = normalizeTicker(ticker || "") || DEFAULT_MARKET_TICKER;
+        const normalizedTicker = normalizeTicker(ticker) || "SPX";
+        const end = endDate || new Date().toISOString().split("T")[0];
+
+        // Convert HHMM to HH:MM for SQL comparison
+        const sqlStartTime = hhmmToSqlTime(startTime);
+        const sqlEndTime = hhmmToSqlTime(endTime);
+
         const conn = await getConnection(baseDir);
 
-        // Validate and convert HHMM inputs to HH:MM for SQL comparison
-        let sqlStartTime: string;
-        let sqlEndTime: string;
-        try {
-          sqlStartTime = hhmmToSqlTime(startTime);
-          sqlEndTime = hhmmToSqlTime(endTime);
-        } catch (e) {
-          return {
-            content: [{ type: "text", text: (e as Error).message }],
-            isError: true,
-          };
-        }
-
-        if (sqlStartTime >= sqlEndTime) {
-          return {
-            content: [{ type: "text", text: `startTime (${startTime}) must be before endTime (${endTime})` }],
-            isError: true,
-          };
-        }
-
-        // Check intraday data availability first
+        // Check data availability
         const availability = await checkDataAvailability(conn, normalizedTicker, { checkIntraday: true });
-        if (!availability.hasIntradayData) {
+
+        // Quick check: is there any intraday data for this ticker?
+        const hasDataResult = await conn.runAndReadAll(
+          `SELECT COUNT(*) FROM market.intraday WHERE ticker = $1`,
+          [normalizedTicker]
+        );
+        const hasDataRows = hasDataResult.getRows();
+        const hasDataCount = hasDataRows.length > 0 ? Number(hasDataRows[0][0]) : 0;
+
+        if (hasDataCount === 0) {
           return createToolOutput(
-            `ORB: No intraday data for ${normalizedTicker}`,
+            `ORB (${normalizedTicker}): No intraday data available`,
             {
               query: { ticker: normalizedTicker, startTime, endTime, startDate, endDate: end },
               warnings: availability.warnings,

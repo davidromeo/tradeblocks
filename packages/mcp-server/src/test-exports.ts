@@ -31,9 +31,7 @@ export { calculateCorrelationMatrix, performTailRiskAnalysis } from '@tradeblock
 export {
   syncAllBlocks,
   syncBlock,
-  syncMarketData,
   type SyncResult,
-  type MarketSyncResult,
   type BlockSyncResult,
 } from './sync/index.js';
 
@@ -67,19 +65,8 @@ export {
   type DataAvailabilityReport,
 } from './utils/data-availability.js';
 
-// Export intraday timing utilities for testing
-export {
-  SPX_CHECKPOINTS,
-  VIX_CHECKPOINTS,
-  SPX_15MIN_OUTCOME_FIELDS,
-  VIX_OUTCOME_FIELDS,
-  VIX_OHLC_OUTCOME_FIELDS,
-  parseTimeToHHMM,
-  getKnownSpxCheckpoints,
-  getKnownVixCheckpoints,
-  buildIntradayContext,
-} from './utils/intraday-timing.js';
-export type { IntradayContext } from './utils/intraday-timing.js';
+// Export intraday timing utilities for testing (Plan 64-03)
+export { computeIntradayTimingFields } from './utils/market-enricher.js';
 
 // Export schema metadata for classification completeness tests
 export { SCHEMA_DESCRIPTIONS } from './utils/schema-metadata.js';
