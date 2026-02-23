@@ -2,19 +2,19 @@
 
 ## Current Position
 
-Phase: 63 of 64 (Tool Migration)
-Plan: 3 of 4 complete
+Phase: 64 of 64 (Cleanup and API Surface)
+Plan: 2 of 3 complete
 Status: In progress
-Last activity: 2026-02-22 — Completed 63-03 (ORB tool redesign for market.intraday with breakout detection)
+Last activity: 2026-02-23 — Completed 64-02 (Universal Pine Script + intraday Unix timestamp importer)
 
-Progress: [█████████░] 60%
+Progress: [█████████░] 85%
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** v3.0 Market Data Separation — Phase 62 complete, Phase 63 next
+**Current focus:** v3.0 Market Data Separation — Phase 63 complete, Phase 64 in progress
 
 ## Performance Metrics
 
@@ -30,7 +30,8 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 | 60 | 2/2 | 8 min | 4 min |
 | 61 | 3/3 | 8 min | 3 min |
 | 62 | 3/3 | 12 min | 4 min |
-| Phase 63 P03 | 176 | 2 tasks | 2 files |
+| 63 | 3/3 | ~12 min | 4 min |
+| 64 (so far) | 2/3 | 6 min | 3 min |
 
 ## Accumulated Context
 
@@ -82,6 +83,10 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 - [Phase 63-03]: entry_triggered boolean computed in TypeScript as breakoutCondition !== 'NoBreakout' (not in SQL)
 - [Phase 63-03]: useHighLow toggle uses SQL template interpolation (not parameter) — column expressions cannot be parameterized
 - [Phase 63-03]: barResolution auto-detection: time gap between first two bars on first available date (informational only)
+- [Phase 64-02]: parseFlexibleTime handles three formats: Unix timestamp (seconds) → HH:MM ET via toLocaleTimeString, HH:MM passthrough, HHMM 4-digit → HH:MM
+- [Phase 64-02]: intraday validation relaxed — 'time' not required in column mapping when 'date' is mapped; auto-extraction from Unix timestamp provides it
+- [Phase 64-02]: Universal Pine Script exports 10 plots (open, high, low, close + 6 VIX fields); enrichment pipeline computes all derived fields after import
+- [Phase 64-02]: spx-15min-checkpoints.pine and vix-intraday.pine deleted (CLN-06) — checkpoint pivot approach superseded by raw market.intraday schema
 
 ### Pending Todos
 
@@ -91,10 +96,10 @@ None.
 
 - `field-timing.ts` unit tests assert specific column counts (8/44/3) — must update in lockstep during Phase 63.
 - Pre-existing TypeScript error in `packages/mcp-server/src/tools/market-data.ts:482` — out of scope for v3.0 but should be addressed.
-- **[Phase 63 prerequisite] Intraday CSV format incompatible with market.intraday**: The existing 15min/VIX intraday CSVs (`spx_15min.csv`, `msft_15min.csv`, `vix_intraday.csv`) use a single Unix timestamp `time` column encoding both date and time. `market.intraday` requires separate `date` (YYYY-MM-DD) and `time` (HH:MM) columns for its `(ticker, date, time)` PK. Column mapping cannot split one source column into two. Tier 3 enrichment (Phase 62) and `calculate_orb` migration (Phase 63) both depend on `market.intraday` being populated — the Pine Script export format must be updated to emit separate date/time columns before intraday data can be imported.
+- [RESOLVED 64-02] **Intraday CSV format incompatible with market.intraday** — resolved: market-importer now auto-extracts HH:MM ET from Unix timestamps when mapping a single `time` column to `date` for intraday imports. Users can import TradingView intraday CSVs without a separate time column in the mapping.
 
 ## Session Continuity
 
-Last session: 2026-02-22
-Stopped at: Completed 63-03-PLAN.md (ORB tool redesign: calculate_orb migrated to market.intraday with breakout detection)
+Last session: 2026-02-23
+Stopped at: Completed 64-02-PLAN.md (Universal Pine Script + intraday Unix timestamp auto-extraction in market-importer)
 Resume file: None

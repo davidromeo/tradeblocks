@@ -58,8 +58,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [ ] **CLN-02**: `run_sql` allowlist updated to new table names
 - [ ] **CLN-03**: `describe_database` updated with new schema structure and LAG CTE template
 - [ ] **CLN-04**: `_marketdata/` sync code deleted (market-sync.ts and related exports)
-- [ ] **CLN-05**: Pine Scripts simplified to 1 minimal daily script (~12 columns of raw OHLCV + VIX)
-- [ ] **CLN-06**: Two Pine Scripts removed (spx-15min-checkpoints.pine, vix-intraday.pine)
+- [x] **CLN-05**: Pine Scripts simplified to 1 minimal daily script (~12 columns of raw OHLCV + VIX)
+- [x] **CLN-06**: Two Pine Scripts removed (spx-15min-checkpoints.pine, vix-intraday.pine)
 - [ ] **CLN-07**: New import tools registered in MCP server index
 
 ## Out of Scope
@@ -118,8 +118,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLN-02 | Phase 64 | Pending |
 | CLN-03 | Phase 64 | Pending |
 | CLN-04 | Phase 64 | Pending |
-| CLN-05 | Phase 64 | Pending |
-| CLN-06 | Phase 64 | Pending |
+| CLN-05 | Phase 64 | Complete |
+| CLN-06 | Phase 64 | Complete |
 | CLN-07 | Phase 64 | Pending |
 
 **Coverage:**
