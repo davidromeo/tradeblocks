@@ -89,18 +89,18 @@ describe("validateColumnMapping", () => {
       expect(result.missingFields).toEqual([]);
     });
 
-    it("rejects intraday mapping missing time field", () => {
+    it("accepts intraday mapping without time when date is mapped (auto-derived from Unix timestamp)", () => {
       const mapping = {
         ts: "date",
         o: "open",
         h: "high",
         l: "low",
         c: "close",
-        // time is missing
+        // time is intentionally missing — auto-derived from Unix timestamp in date column
       };
       const result = validateColumnMapping(mapping, "intraday");
-      expect(result.valid).toBe(false);
-      expect(result.missingFields).toContain("time");
+      expect(result.valid).toBe(true);
+      expect(result.missingFields).toEqual([]);
     });
   });
 });
