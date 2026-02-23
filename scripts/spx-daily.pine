@@ -1,413 +1,48 @@
 //@version=6
-indicator("SPX Daily Market Data", overlay=false, max_labels_count=500)
+indicator("TradeBlocks Market Data Export", overlay=false)
 
 // =============================================================================
-// SPX DAILY MARKET DATA EXPORT
+// UNIVERSAL MARKET DATA EXPORT
 // =============================================================================
-// Purpose: Export comprehensive daily market data for options strategy research
+// Purpose: Export raw OHLCV + VIX term structure for import into TradeBlocks
 //
 // Usage:
-//   1. Apply to SPX daily chart
-//   2. Set date range in TradingView (2018+ recommended for deep history)
+//   1. Apply to ANY chart on ANY timeframe
+//      - Daily chart  → import to market.daily via import_market_csv
+//      - Intraday chart (5m, 15m, etc.) → import to market.intraday
+//   2. Set date range in TradingView
 //   3. Right-click indicator pane -> "Export chart data..."
-//   4. Save as spx_daily.csv to ~/backtests/_marketdata/
+//   4. Import via: import_market_csv with column mapping
 //
-// Features:
-//   - SPX daily OHLC and gap/return metrics
-//   - VIX term structure (VIX, VIX9D, VIX3M) with enriched fields
-//   - Volatility regime classification (1-6)
-//   - Technical indicators (RSI, ATR, trend score)
-//   - Calendar context (day of week, OPEX)
-//   - High/low timing via 5-min intrabar data (request.security_lower_tf)
+// Column mapping examples:
+//   Daily:    { "time": "date", "open": "open", "high": "high", "low": "low", "close": "close" }
+//   Context:  { "time": "date", "VIX_Open": "VIX_Open", "VIX_Close": "VIX_Close", ... }
+//   Intraday: { "time": "date", "open": "open", "high": "high", "low": "low", "close": "close" }
+//             (time HH:MM auto-extracted from Unix timestamp for intraday imports)
 //
-// Note: High/low timing data requires ~1,282 recent trading days (non-pro)
-//       to ~2,564 days (Ultimate plan). Older bars will show na.
+// Note: Enrichment pipeline computes all derived fields (RSI, ATR, Bollinger, etc.)
+//       from raw OHLCV after import — no need to export them from TradingView.
 // =============================================================================
 
-// -----------------------------------------------------------------------------
-// INPUTS
-// -----------------------------------------------------------------------------
-string vixSymbol = input.string("CBOE:VIX", "VIX Symbol")
-string vix9dSymbol = input.string("CBOE:VIX9D", "VIX9D Symbol", tooltip="9-day VIX for term structure")
-string vix3mSymbol = input.string("CBOE:VIX3M", "VIX3M Symbol", tooltip="3-month VIX for term structure")
-string esSymbol = input.string("CME_MINI:ES1!", "ES Futures Symbol", tooltip="For overnight high/low")
+// VIX term structure via request.security (returns na on intraday timeframes — safe to export)
+float vixOpen    = request.security("CBOE:VIX",   timeframe.period, open)
+float vixHigh    = request.security("CBOE:VIX",   timeframe.period, high)
+float vixLow     = request.security("CBOE:VIX",   timeframe.period, low)
+float vixClose   = request.security("CBOE:VIX",   timeframe.period, close)
+float vix9dClose = request.security("CBOE:VIX9D", timeframe.period, close)
+float vix3mClose = request.security("CBOE:VIX3M", timeframe.period, close)
 
-int atrLength = input.int(14, "ATR Period", minval=1)
-int rsiLength = input.int(14, "RSI Period", minval=1)
+// Export raw OHLCV (TradingView includes open/high/low/close as default columns
+// in the export, but we plot them explicitly for clear column mapping)
+plot(open,  "open",  display=display.data_window)
+plot(high,  "high",  display=display.data_window)
+plot(low,   "low",   display=display.data_window)
+plot(close, "close", display=display.data_window)
 
-// -----------------------------------------------------------------------------
-// HELPER: Safe division to avoid divide-by-zero
-// -----------------------------------------------------------------------------
-safeDiv(float numerator, float denominator, float fallback = 0.0) =>
-    denominator != 0 and not na(denominator) ? numerator / denominator : fallback
-
-safePct(float change, float base) =>
-    safeDiv(change, base, 0.0) * 100
-
-// -----------------------------------------------------------------------------
-// CORE PRICE DATA
-// -----------------------------------------------------------------------------
-float priorClose = close[1]
-float gap = open - priorClose
-float gapPct = safePct(gap, priorClose)
-float intradayRange = high - low
-float intradayRangePct = safePct(intradayRange, open)
-float dailyReturn = close - open
-float dailyReturnPct = safePct(dailyReturn, open)
-float totalReturn = close - priorClose
-float totalReturnPct = safePct(totalReturn, priorClose)
-
-// Close position within daily range (0 = at low, 1 = at high)
-float closePositionInRange = intradayRange > 0 ? (close - low) / intradayRange : 0.5
-
-// Body and wick analysis
-float bodySize = math.abs(close - open)
-float upperWick = high - math.max(open, close)
-float lowerWick = math.min(open, close) - low
-float bodyRatio = safeDiv(bodySize, intradayRange, 0.5)
-
-// -----------------------------------------------------------------------------
-// VIX TERM STRUCTURE
-// -----------------------------------------------------------------------------
-// VIX (30-day)
-float vixOpen = request.security(vixSymbol, timeframe.period, open)
-float vixHigh = request.security(vixSymbol, timeframe.period, high)
-float vixLow = request.security(vixSymbol, timeframe.period, low)
-float vixClose = request.security(vixSymbol, timeframe.period, close)
-float vixPrevClose = request.security(vixSymbol, timeframe.period, close[1])
-float vixChange = vixClose - vixOpen
-float vixChangePct = safePct(vixChange, vixOpen)
-float vixGap = vixOpen - vixPrevClose
-float vixGapPct = safePct(vixGap, vixPrevClose)
-
-// VIX9D (9-day - important for 0DTE/weeklies)
-float vix9dOpen = request.security(vix9dSymbol, timeframe.period, open)
-float vix9dClose = request.security(vix9dSymbol, timeframe.period, close)
-float vix9dChange = vix9dClose - vix9dOpen
-float vix9dChangePct = safePct(vix9dChange, vix9dOpen)
-
-// VIX3M (3-month - important for calendars/diagonals)
-float vix3mOpen = request.security(vix3mSymbol, timeframe.period, open)
-float vix3mClose = request.security(vix3mSymbol, timeframe.period, close)
-float vix3mChange = vix3mClose - vix3mOpen
-float vix3mChangePct = safePct(vix3mChange, vix3mOpen)
-
-// Term structure ratios (critical for calendar spreads)
-// Ratio > 1 = backwardation (fear), Ratio < 1 = contango (normal)
-float vix9dVixRatio = safeDiv(vix9dClose, vixClose, 1.0)
-float vixVix3mRatio = safeDiv(vixClose, vix3mClose, 1.0)
-float vix9dVix3mRatio = safeDiv(vix9dClose, vix3mClose, 1.0)
-
-// Term structure slope (positive = contango, negative = backwardation)
-float termStructureSlope = vix3mClose - vix9dClose
-float termStructureSlopePct = safePct(termStructureSlope, vix9dClose)
-
-// Is term structure inverted? (backwardation - typically bearish for calendars)
-bool isBackwardation = vix9dClose > vixClose or vixClose > vix3mClose
-int termStructureState = vix9dClose > vixClose ? -1 : vixClose > vix3mClose ? 0 : 1  // -1=inverted, 0=flat, 1=contango
-
-// -----------------------------------------------------------------------------
-// OVERNIGHT / FUTURES DATA
-// -----------------------------------------------------------------------------
-// ES futures for overnight context
-float esClose = request.security(esSymbol, "D", close)
-float esPrevClose = request.security(esSymbol, "D", close[1])
-float esOvernightMove = esClose - esPrevClose
-float esOvernightMovePct = safePct(esOvernightMove, esPrevClose)
-
-// Futures premium/discount to SPX
-float futuresPremium = esClose - close
-float futuresPremiumPct = safePct(futuresPremium, close)
-
-// -----------------------------------------------------------------------------
-// VOLATILITY REGIME CLASSIFICATION
-// -----------------------------------------------------------------------------
-float vixSma10 = ta.sma(vixClose, 10)
-float vixSma20 = ta.sma(vixClose, 20)
-float vixStdev20 = ta.stdev(vixClose, 20, false)
-float vixZscore = vixSma20 > 0 and vixStdev20 > 0 ? (vixClose - vixSma20) / vixStdev20 : 0
-
-// Regime classification
-// 1 = Very Low (<13), 2 = Low (13-16), 3 = Normal (16-20), 4 = Elevated (20-25), 5 = High (25-30), 6 = Extreme (>30)
-int volRegime = vixClose < 13 ? 1 : vixClose < 16 ? 2 : vixClose < 20 ? 3 : vixClose < 25 ? 4 : vixClose < 30 ? 5 : 6
-
-// VIX percentile (where is VIX vs last 252 days)
-float vixPercentile = ta.percentrank(vixClose, 252)
-
-// Is VIX spiking? (intraday move)
-float vixIntradaySpike = vixHigh - vixOpen
-float vixIntradaySpikePct = safePct(vixIntradaySpike, vixOpen)
-bool isVixSpike = vixIntradaySpikePct > 10
-
-// -----------------------------------------------------------------------------
-// TECHNICAL INDICATORS
-// -----------------------------------------------------------------------------
-float atr14 = ta.atr(atrLength)
-float atrPct = safePct(atr14, close)
-float rsi14 = ta.rsi(close, rsiLength)
-float rsi5 = ta.rsi(close, 5)
-
-// Moving averages
-float ema9 = ta.ema(close, 9)
-float ema21 = ta.ema(close, 21)
-float sma50 = ta.sma(close, 50)
-float sma200 = ta.sma(close, 200)
-
-// Price vs MAs (for trend context)
-float priceVsEma9 = close - ema9
-float priceVsEma9Pct = safePct(priceVsEma9, close)
-float priceVsEma21 = close - ema21
-float priceVsEma21Pct = safePct(priceVsEma21, close)
-float priceVsSma50 = close - sma50
-float priceVsSma50Pct = safePct(priceVsSma50, close)
-float priceVsSma200 = close - sma200
-float priceVsSma200Pct = safePct(priceVsSma200, close)
-
-// Trend state
-bool aboveEma9 = close > ema9
-bool aboveEma21 = close > ema21
-bool aboveSma50 = close > sma50
-bool aboveSma200 = close > sma200
-int trendScore = (aboveEma9 ? 1 : 0) + (aboveEma21 ? 1 : 0) + (aboveSma50 ? 1 : 0) + (aboveSma200 ? 1 : 0)  // 0-4
-
-// Bollinger Bands for mean reversion context
-float bbBasis = ta.sma(close, 20)
-float bbStdev = ta.stdev(close, 20, false)
-float bbUpper = bbBasis + 2 * bbStdev
-float bbLower = bbBasis - 2 * bbStdev
-float bbWidth = safeDiv(bbUpper - bbLower, bbBasis, 0) * 100
-float bbPosition = safeDiv(close - bbLower, bbUpper - bbLower, 0.5)  // 0-1, where in BB range
-
-// -----------------------------------------------------------------------------
-// MOMENTUM & MEAN REVERSION SIGNALS
-// -----------------------------------------------------------------------------
-// Recent momentum
-float return1d = totalReturnPct
-float return2d = safePct(close - close[2], close[2])
-float return5d = safePct(close - close[5], close[5])
-float return10d = safePct(close - close[10], close[10])
-float return20d = safePct(close - close[20], close[20])
-
-// Consecutive days up/down
-var int consecutiveDays = 0
-if close > priorClose
-    consecutiveDays := consecutiveDays > 0 ? consecutiveDays + 1 : 1
-else if close < priorClose
-    consecutiveDays := consecutiveDays < 0 ? consecutiveDays - 1 : -1
-else
-    consecutiveDays := 0
-
-// Gap fill analysis
-bool gapFilled = (gap > 0 and low <= priorClose) or (gap < 0 and high >= priorClose)
-float gapFillPct = gap != 0 ? (gap > 0 ? safeDiv(math.max(0, open - low), gap, 0) : safeDiv(math.max(0, high - open), math.abs(gap), 0)) * 100 : 0
-
-// -----------------------------------------------------------------------------
-// DAY OF WEEK & CALENDAR CONTEXT
-// -----------------------------------------------------------------------------
-int dow = dayofweek  // 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat
-int weekNum = weekofyear
-int monthNum = month
-int dayOfMonth = dayofmonth
-bool isMonday = dow == dayofweek.monday
-bool isFriday = dow == dayofweek.friday
-bool isMonthStart = dayofmonth <= 3
-bool isMonthEnd = dayofmonth >= 25
-bool isQuarterEnd = (monthNum == 3 or monthNum == 6 or monthNum == 9 or monthNum == 12) and isMonthEnd
-
-// Options expiration context (3rd Friday approximation)
-bool isOpex = isFriday and dayOfMonth >= 15 and dayOfMonth <= 21
-
-// -----------------------------------------------------------------------------
-// PRIOR DAY CONTEXT
-// -----------------------------------------------------------------------------
-float prevOpen = open[1]
-float prevHigh = high[1]
-float prevLow = low[1]
-float prevRange = prevHigh - prevLow
-float prevRangePct = safePct(prevRange, priorClose)
-float prevReturn = priorClose - prevOpen
-float prevReturnPct = safePct(prevReturn, prevOpen)
-float prevClosePosition = prevRange > 0 ? (priorClose - prevLow) / prevRange : 0.5
-
-// 2-day context
-float prev2Close = close[2]
-float prev2Return = priorClose - prev2Close
-float prev2ReturnPct = safePct(prev2Return, prev2Close)
-
-// -----------------------------------------------------------------------------
-// HIGH/LOW TIMING (via intrabar data)
-// -----------------------------------------------------------------------------
-// Uses request.security_lower_tf() to get 5-min data from the daily chart
-// Note: Data available for recent ~1,282 days (non-pro) to ~2,564 days (Ultimate)
-
-float[] ltfHigh = request.security_lower_tf(syminfo.tickerid, "5", high)
-float[] ltfLow  = request.security_lower_tf(syminfo.tickerid, "5", low)
-int[]   ltfTime = request.security_lower_tf(syminfo.tickerid, "5", time)
-
-int ltfSize = array.size(ltfHigh)
-
-float intradayHighHL = na
-float intradayLowHL = na
-int highHourHL = na
-int highMinuteHL = na
-int lowHourHL = na
-int lowMinuteHL = na
-
-if ltfSize > 0
-    float maxH = na
-    float minL = na
-    int maxHTime = na
-    int minLTime = na
-
-    for i = 0 to ltfSize - 1
-        float h = array.get(ltfHigh, i)
-        float l = array.get(ltfLow, i)
-        int t = array.get(ltfTime, i)
-
-        if na(maxH) or h > maxH
-            maxH := h
-            maxHTime := t
-
-        if na(minL) or l < minL
-            minL := l
-            minLTime := t
-
-    intradayHighHL := maxH
-    intradayLowHL := minL
-    highHourHL := hour(maxHTime, "America/New_York")
-    highMinuteHL := minute(maxHTime, "America/New_York")
-    lowHourHL := hour(minLTime, "America/New_York")
-    lowMinuteHL := minute(minLTime, "America/New_York")
-
-// Computed highlow metrics
-float highTimeHL = highHourHL + highMinuteHL / 60.0
-float lowTimeHL = lowHourHL + lowMinuteHL / 60.0
-bool highBeforeLowHL = highTimeHL < lowTimeHL
-
-bool highInFirstHourHL = highHourHL == 9 or (highHourHL == 10 and highMinuteHL <= 30)
-bool lowInFirstHourHL = lowHourHL == 9 or (lowHourHL == 10 and lowMinuteHL <= 30)
-bool highInLastHourHL = highHourHL >= 15
-bool lowInLastHourHL = lowHourHL >= 15
-
-bool highInMorningHL = highHourHL < 12
-bool lowInMorningHL = lowHourHL < 12
-bool highInAfternoonHL = highHourHL >= 12
-bool lowInAfternoonHL = lowHourHL >= 12
-
-int reversalTypeHL = 0
-if highInMorningHL and lowInAfternoonHL
-    reversalTypeHL := 1
-else if lowInMorningHL and highInAfternoonHL
-    reversalTypeHL := -1
-
-float highLowSpreadHL = math.abs(highTimeHL - lowTimeHL)
-bool earlyExtremeHL = (highHourHL == 9) or (lowHourHL == 9) or (highHourHL == 10 and highMinuteHL == 0) or (lowHourHL == 10 and lowMinuteHL == 0)
-bool lateExtremeHL = (highHourHL == 15 and highMinuteHL >= 30) or (lowHourHL == 15 and lowMinuteHL >= 30)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - Core Price Data
-// -----------------------------------------------------------------------------
-// Note: TradingView already exports open, high, low, close as default columns.
-// We only need to export Prior_Close which is a computed value.
-plot(priorClose, "Prior_Close", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - Gap & Movement
-// -----------------------------------------------------------------------------
-plot(gapPct, "Gap_Pct", display=display.data_window)
-plot(intradayRangePct, "Intraday_Range_Pct", display=display.data_window)
-plot(dailyReturnPct, "Intraday_Return_Pct", display=display.data_window)
-plot(totalReturnPct, "Total_Return_Pct", display=display.data_window)
-plot(closePositionInRange, "Close_Position_In_Range", display=display.data_window)
-plot(gapFilled ? 1 : 0, "Gap_Filled", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - VIX Data
-// -----------------------------------------------------------------------------
-plot(vixOpen, "VIX_Open", display=display.data_window)
-plot(vixClose, "VIX_Close", display=display.data_window)
-plot(vixChangePct, "VIX_Change_Pct", display=display.data_window)
-plot(vixIntradaySpikePct, "VIX_Spike_Pct", display=display.data_window)
-plot(vixPercentile, "VIX_Percentile", display=display.data_window)
-plot(volRegime, "Vol_Regime", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - VIX Term Structure (Critical for Calendars)
-// -----------------------------------------------------------------------------
+// VIX data plots (daily timeframe: real values; intraday: na — harmless in export)
+plot(vixOpen,    "VIX_Open",    display=display.data_window)
+plot(vixHigh,    "VIX_High",    display=display.data_window)
+plot(vixLow,     "VIX_Low",     display=display.data_window)
+plot(vixClose,   "VIX_Close",   display=display.data_window)
 plot(vix9dClose, "VIX9D_Close", display=display.data_window)
 plot(vix3mClose, "VIX3M_Close", display=display.data_window)
-plot(vix9dVixRatio, "VIX9D_VIX_Ratio", display=display.data_window)
-plot(vixVix3mRatio, "VIX_VIX3M_Ratio", display=display.data_window)
-plot(termStructureState, "Term_Structure_State", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - Technical Indicators
-// -----------------------------------------------------------------------------
-plot(atrPct, "ATR_Pct", display=display.data_window)
-plot(rsi14, "RSI_14", display=display.data_window)
-plot(priceVsEma21Pct, "Price_vs_EMA21_Pct", display=display.data_window)
-plot(priceVsSma50Pct, "Price_vs_SMA50_Pct", display=display.data_window)
-plot(trendScore, "Trend_Score", display=display.data_window)
-plot(bbPosition, "BB_Position", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - Momentum
-// -----------------------------------------------------------------------------
-plot(return5d, "Return_5D", display=display.data_window)
-plot(return20d, "Return_20D", display=display.data_window)
-plot(consecutiveDays, "Consecutive_Days", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - Calendar Context
-// -----------------------------------------------------------------------------
-plot(dow, "Day_of_Week", display=display.data_window)
-plot(monthNum, "Month", display=display.data_window)
-plot(isOpex ? 1 : 0, "Is_Opex", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - Prior Day Context
-// -----------------------------------------------------------------------------
-plot(prevReturnPct, "Prev_Return_Pct", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - Enriched VIX Fields
-// -----------------------------------------------------------------------------
-plot(vixGapPct, "VIX_Gap_Pct", display=display.data_window)
-plot(vix9dOpen, "VIX9D_Open", display=display.data_window)
-plot(vix9dChangePct, "VIX9D_Change_Pct", display=display.data_window)
-plot(vixHigh, "VIX_High", display=display.data_window)
-plot(vixLow, "VIX_Low", display=display.data_window)
-plot(vix3mOpen, "VIX3M_Open", display=display.data_window)
-plot(vix3mChangePct, "VIX3M_Change_Pct", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// EXPORT PLOTS - High/Low Timing
-// -----------------------------------------------------------------------------
-plot(highTimeHL, "High_Time", display=display.data_window)
-plot(lowTimeHL, "Low_Time", display=display.data_window)
-plot(highBeforeLowHL ? 1 : 0, "High_Before_Low", display=display.data_window)
-plot(highInFirstHourHL ? 1 : 0, "High_In_First_Hour", display=display.data_window)
-plot(lowInFirstHourHL ? 1 : 0, "Low_In_First_Hour", display=display.data_window)
-plot(highInLastHourHL ? 1 : 0, "High_In_Last_Hour", display=display.data_window)
-plot(lowInLastHourHL ? 1 : 0, "Low_In_Last_Hour", display=display.data_window)
-plot(reversalTypeHL, "Reversal_Type", display=display.data_window)
-plot(highLowSpreadHL, "High_Low_Spread", display=display.data_window)
-plot(earlyExtremeHL ? 1 : 0, "Early_Extreme", display=display.data_window)
-plot(lateExtremeHL ? 1 : 0, "Late_Extreme", display=display.data_window)
-plot(intradayHighHL, "Intraday_High", display=display.data_window)
-plot(intradayLowHL, "Intraday_Low", display=display.data_window)
-
-// -----------------------------------------------------------------------------
-// VISUAL DISPLAY (uses already-exported VIX data, no extra plot count)
-// -----------------------------------------------------------------------------
-// Reference lines
-hline(15, "VIX 15", color=color.green, linestyle=hline.style_dotted)
-hline(20, "VIX 20", color=color.gray, linestyle=hline.style_dotted)
-hline(25, "VIX 25", color=color.orange, linestyle=hline.style_dotted)
-hline(30, "VIX 30", color=color.red, linestyle=hline.style_dotted)
-
-// Background: Term structure state
-bgcolor(termStructureState == -1 ? color.new(color.red, 85) :      // Backwardation
-        termStructureState == 0 ? color.new(color.yellow, 90) :    // Flat
-        color.new(color.green, 92),                                 // Contango
-        title="Term Structure Background")
