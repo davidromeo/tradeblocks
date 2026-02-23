@@ -682,15 +682,14 @@ async function hasTier3Data(conn: DuckDBConnection, ticker: string): Promise<boo
  * Tier 1: Compute and write OHLCV-derived fields to market.daily using a
  *         200-day lookback window from the enriched_through watermark.
  * Tier 2: Compute and write VIX-derived fields to market.context.
- * Tier 3: Detect intraday data in market.intraday; skips gracefully if absent.
+ * Tier 3: Compute intraday timing fields (High_Time, Low_Time, High_Before_Low,
+ *         Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol) from
+ *         market.intraday bars; skips gracefully if no intraday data exists.
  *
  * The enriched_through watermark is upserted into market._sync_metadata with
  * source='enrichment', ticker, target_table='daily' after a successful Tier 1 run.
  *
- * Schema gaps — the following fields are NOT written (absent from schema):
- * - Opening_Drive_Strength (Tier 3 schema gap)
- * - Intraday_Realized_Vol (Tier 3 schema gap)
- * - wilder_state column exists but is NOT written (superseded by 200-day lookback)
+ * Note: wilder_state column exists but is NOT written (superseded by 200-day lookback).
  *
  * @param conn - Active DuckDB connection with market catalog attached
  * @param ticker - Normalized ticker symbol (e.g., "SPX")
@@ -894,19 +893,8 @@ export async function runEnrichment(
   // 9. Run Tier 2 (VIX context enrichment)
   const tier2Result = await runTier2(conn);
 
-  // 10. Tier 3 — always skipped until intraday CSV format is fixed (STATE.md blocker)
-  const hasTier3 = await hasTier3Data(conn, ticker);
-  const tier3Result: TierStatus = hasTier3
-    ? {
-        status: "error",
-        reason:
-          "intraday data present but Tier 3 implementation pending",
-      }
-    : {
-        status: "skipped",
-        reason:
-          "no intraday data in market.intraday — import intraday bars to populate High_Time, Low_Time, Reversal_Type",
-      };
+  // 10. Tier 3 — intraday timing fields from market.intraday
+  const tier3Result = await runTier3(conn, ticker, dates);
 
   // 11. Update enriched_through watermark
   const newWatermark = dates[dates.length - 1];
@@ -930,117 +918,190 @@ export async function runEnrichment(
 }
 
 // =============================================================================
-// Tier 3: Intraday Timing Fields (stub — implementation in Plan 64-03)
+// Tier 3: Intraday Timing Fields
 // =============================================================================
 
 /**
- * Input bar for Tier 3 intraday timing computation.
- * time is HH:MM format (e.g., "09:30"), prices are numeric.
+ * Convert HH:MM time string to decimal hours (e.g., "10:30" → 10.5).
  */
-export interface IntradayBar {
-  time: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
+function hhmmToDecimalHours(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h + m / 60;
 }
 
 /**
- * Output of Tier 3 intraday timing computation for a single trading day.
- * All fields written to market.daily via UPDATE.
- */
-export interface IntradayTimingResult {
-  /** Time of day high in HHMM numeric format (e.g., 1030 for 10:30). Null if no bars. */
-  High_Time: number | null;
-  /** Time of day low in HHMM numeric format (e.g., 1430 for 14:30). Null if no bars. */
-  Low_Time: number | null;
-  /** 1 if day high occurred before day low, 0 otherwise, null if no bars. */
-  High_Before_Low: number | null;
-  /** Reversal type: 1 = high first then low (bearish reversal), -1 = low first then high (bullish reversal), 0 = ambiguous/no clear reversal, null if no bars. */
-  Reversal_Type: number | null;
-  /** Opening drive strength: |close_at_opening_period - open| / open * 100. Null if no bars. */
-  Opening_Drive_Strength: number | null;
-  /** Intraday realized volatility: population stddev of bar returns annualized. Null if fewer than 2 bars. */
-  Intraday_Realized_Vol: number | null;
-}
-
-/**
- * Compute Tier 3 intraday timing fields from an array of raw OHLCV bars for a single day.
+ * Compute intraday timing fields from raw OHLCV bars for a single date.
  *
- * Pure function — no DB access. Called by Plan 64-03 Tier 3 implementation.
+ * Pure function — no DB access. Exported for unit testing.
  *
- * @param bars - Array of intraday bars sorted by time (HH:MM ascending)
- * @param openingPeriodEndTime - End time of the "opening period" for drive strength (HH:MM, default "10:00")
- * @returns Computed timing fields
+ * Fields computed:
+ * - highTime: Decimal hours when day high occurred (e.g., 10.5 = 10:30)
+ * - lowTime: Decimal hours when day low occurred
+ * - highBeforeLow: true if high occurred before low
+ * - reversalType: +1 = morning high + afternoon low, -1 = morning low + afternoon high, 0 = trend day
+ * - openingDriveStrength: (first 30-min range) / (full day range), 0-1 scale; 0 if day range is 0
+ * - intradayRealizedVol: Annualized realized vol from intraday bar-to-bar log returns (decimal, not %)
+ *
+ * @param bars - Array of {time: "HH:MM", open, high, low, close} ordered by time (oldest first)
+ * @returns Computed fields or null if bars is empty
  */
 export function computeIntradayTimingFields(
-  bars: IntradayBar[],
-  openingPeriodEndTime: string = "10:00"
-): IntradayTimingResult {
-  if (bars.length === 0) {
-    return {
-      High_Time: null,
-      Low_Time: null,
-      High_Before_Low: null,
-      Reversal_Type: null,
-      Opening_Drive_Strength: null,
-      Intraday_Realized_Vol: null,
-    };
-  }
+  bars: Array<{ time: string; open: number; high: number; low: number; close: number }>
+): {
+  highTime: number;
+  lowTime: number;
+  highBeforeLow: boolean;
+  reversalType: number;
+  openingDriveStrength: number;
+  intradayRealizedVol: number;
+} | null {
+  if (bars.length === 0) return null;
 
-  // Find high and low bar
-  let highBar = bars[0];
-  let lowBar = bars[0];
+  let maxHigh = -Infinity;
+  let minLow = Infinity;
+  let highTimeStr = bars[0].time;
+  let lowTimeStr = bars[0].time;
+
   for (const bar of bars) {
-    if (bar.high > highBar.high) highBar = bar;
-    if (bar.low < lowBar.low) lowBar = bar;
+    if (bar.high > maxHigh) {
+      maxHigh = bar.high;
+      highTimeStr = bar.time;
+    }
+    if (bar.low < minLow) {
+      minLow = bar.low;
+      lowTimeStr = bar.time;
+    }
   }
 
-  // Convert HH:MM to HHMM numeric
-  const toHHMM = (t: string): number => {
-    const [h, m] = t.split(":").map(Number);
-    return h * 100 + m;
-  };
+  const highTime = hhmmToDecimalHours(highTimeStr);
+  const lowTime = hhmmToDecimalHours(lowTimeStr);
+  const highBeforeLow = highTime < lowTime;
 
-  const High_Time = toHHMM(highBar.time);
-  const Low_Time = toHHMM(lowBar.time);
-  const High_Before_Low = High_Time < Low_Time ? 1 : 0;
-  const Reversal_Type = High_Time < Low_Time ? 1 : High_Time > Low_Time ? -1 : 0;
+  // Reversal type: morning = before 12:00, afternoon = 12:00 or later
+  const highInMorning = highTime < 12;
+  const lowInMorning = lowTime < 12;
+  const highInAfternoon = highTime >= 12;
+  const lowInAfternoon = lowTime >= 12;
 
-  // Opening drive strength: |close of last bar in opening period - first bar open| / first bar open * 100
-  const openingBars = bars.filter(b => b.time <= openingPeriodEndTime);
-  let Opening_Drive_Strength: number | null = null;
-  if (openingBars.length > 0) {
-    const openPrice = bars[0].open;
-    const openingClose = openingBars[openingBars.length - 1].close;
-    Opening_Drive_Strength = openPrice !== 0
-      ? Math.abs(openingClose - openPrice) / openPrice * 100
-      : null;
+  let reversalType = 0;
+  if (highInMorning && lowInAfternoon) reversalType = 1;     // High morning, low afternoon
+  else if (lowInMorning && highInAfternoon) reversalType = -1; // Low morning, high afternoon
+
+  // Opening Drive Strength: ratio of first-30-min range to full-day range
+  // First 30 min = bars with time < 10:00 (market opens 09:30)
+  const openingBars = bars.filter(b => hhmmToDecimalHours(b.time) < 10);
+  let openingDriveStrength = 0;
+  const fullDayRange = maxHigh - minLow;
+  if (openingBars.length > 0 && fullDayRange > 0) {
+    const openHigh = Math.max(...openingBars.map(b => b.high));
+    const openLow = Math.min(...openingBars.map(b => b.low));
+    openingDriveStrength = (openHigh - openLow) / fullDayRange;
   }
 
-  // Intraday realized vol: population stddev of log returns between consecutive closes, annualized
-  let Intraday_Realized_Vol: number | null = null;
+  // Intraday Realized Vol: annualized from bar-to-bar close log returns
+  // Uses sqrt(252 * barsPerDay) annualization
+  let intradayRealizedVol = 0;
   if (bars.length >= 2) {
     const logReturns: number[] = [];
     for (let i = 1; i < bars.length; i++) {
-      if (bars[i - 1].close > 0) {
+      if (bars[i - 1].close > 0 && bars[i].close > 0) {
         logReturns.push(Math.log(bars[i].close / bars[i - 1].close));
       }
     }
-    if (logReturns.length >= 1) {
-      const mean = logReturns.reduce((s, v) => s + v, 0) / logReturns.length;
-      const variance = logReturns.reduce((s, v) => s + (v - mean) ** 2, 0) / logReturns.length;
-      const barsPerDay = bars.length;
-      Intraday_Realized_Vol = Math.sqrt(variance * barsPerDay * 252) * 100;
+    if (logReturns.length > 0) {
+      const mean = logReturns.reduce((s, r) => s + r, 0) / logReturns.length;
+      const variance = logReturns.reduce((s, r) => s + (r - mean) ** 2, 0) / logReturns.length;
+      const barStdDev = Math.sqrt(variance);
+      // Annualize: multiply by sqrt(barsPerDay * 252)
+      // barsPerDay = number of bars we actually have (adapts to timeframe)
+      intradayRealizedVol = barStdDev * Math.sqrt(bars.length * 252);
     }
   }
 
-  return {
-    High_Time,
-    Low_Time,
-    High_Before_Low,
-    Reversal_Type,
-    Opening_Drive_Strength,
-    Intraday_Realized_Vol,
-  };
+  return { highTime, lowTime, highBeforeLow, reversalType, openingDriveStrength, intradayRealizedVol };
+}
+
+/** Run Tier 3: compute intraday timing fields from market.intraday and write to market.daily */
+async function runTier3(
+  conn: DuckDBConnection,
+  ticker: string,
+  dates: string[]
+): Promise<TierStatus> {
+  // Check if intraday data exists for this ticker
+  const hasData = await hasTier3Data(conn, ticker);
+  if (!hasData) {
+    return {
+      status: "skipped",
+      reason: "no intraday data in market.intraday — import intraday bars to populate Tier 3 fields",
+    };
+  }
+
+  // Query intraday bars for all dates in the enrichment range
+  const result = await conn.runAndReadAll(
+    `SELECT date, time, open, high, low, close
+     FROM market.intraday
+     WHERE ticker = $1 AND date >= $2 AND date <= $3
+     ORDER BY date, time`,
+    [ticker, dates[0], dates[dates.length - 1]]
+  );
+
+  const rows = result.getRows();
+  const columns = result.columnNames();
+  const dateIdx = columns.indexOf("date");
+  const timeIdx = columns.indexOf("time");
+  const openIdx = columns.indexOf("open");
+  const highIdx = columns.indexOf("high");
+  const lowIdx = columns.indexOf("low");
+  const closeIdx = columns.indexOf("close");
+
+  // Group bars by date
+  const barsByDate = new Map<string, Array<{ time: string; open: number; high: number; low: number; close: number }>>();
+  for (const row of rows) {
+    const dateStr = String(row[dateIdx]);
+    const bar = {
+      time: String(row[timeIdx]),
+      open: Number(row[openIdx]),
+      high: Number(row[highIdx]),
+      low: Number(row[lowIdx]),
+      close: Number(row[closeIdx]),
+    };
+    if (!barsByDate.has(dateStr)) barsByDate.set(dateStr, []);
+    barsByDate.get(dateStr)!.push(bar);
+  }
+
+  if (barsByDate.size === 0) {
+    return {
+      status: "skipped",
+      reason: "intraday data exists but no bars overlap with enrichment date range",
+    };
+  }
+
+  // Compute timing fields for each date and batch update market.daily
+  const tier3Cols = ["High_Time", "Low_Time", "High_Before_Low", "Reversal_Type", "Opening_Drive_Strength", "Intraday_Realized_Vol"];
+  const enrichedRows: Array<Record<string, unknown>> = [];
+
+  for (const [dateStr, bars] of barsByDate) {
+    const timing = computeIntradayTimingFields(bars);
+    if (!timing) continue;
+
+    enrichedRows.push({
+      ticker,
+      date: dateStr,
+      High_Time: timing.highTime,
+      Low_Time: timing.lowTime,
+      High_Before_Low: timing.highBeforeLow ? 1 : 0,
+      Reversal_Type: timing.reversalType,
+      Opening_Drive_Strength: timing.openingDriveStrength,
+      Intraday_Realized_Vol: timing.intradayRealizedVol,
+    });
+  }
+
+  // Batch update using the existing batchUpdateDaily helper
+  const BATCH_SIZE = 500;
+  for (let start = 0; start < enrichedRows.length; start += BATCH_SIZE) {
+    const batch = enrichedRows.slice(start, start + BATCH_SIZE);
+    await batchUpdateDaily(conn, batch, tier3Cols);
+  }
+
+  return { status: "complete", fieldsWritten: tier3Cols.length };
 }

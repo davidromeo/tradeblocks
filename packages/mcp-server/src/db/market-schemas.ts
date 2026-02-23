@@ -61,6 +61,8 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       Low_Time DOUBLE,
       High_Before_Low INTEGER,
       Reversal_Type INTEGER,
+      Opening_Drive_Strength DOUBLE,
+      Intraday_Realized_Vol DOUBLE,
 
       -- Calendar fields
       Day_of_Week INTEGER,
@@ -76,6 +78,18 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
     await conn.run(`ALTER TABLE market.daily DROP COLUMN Trend_Score`);
   } catch {
     // Column already gone — ignore
+  }
+
+  // Migration: add Tier 3 columns that were added after initial schema
+  for (const col of [
+    { name: "Opening_Drive_Strength", type: "DOUBLE" },
+    { name: "Intraday_Realized_Vol", type: "DOUBLE" },
+  ]) {
+    try {
+      await conn.run(`ALTER TABLE market.daily ADD COLUMN ${col.name} ${col.type}`);
+    } catch {
+      // Column already exists — ignore
+    }
   }
 
   // VIX and volatility term structure context per trading day
