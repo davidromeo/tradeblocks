@@ -20,6 +20,9 @@ import {
   OPEN_KNOWN_FIELDS,
   CLOSE_KNOWN_FIELDS,
   STATIC_FIELDS,
+  DAILY_OPEN_FIELDS,
+  DAILY_STATIC_FIELDS,
+  CONTEXT_OPEN_FIELDS,
 } from "../utils/field-timing.js";
 
 // ============================================================================
@@ -79,9 +82,9 @@ interface DatabaseSchemaOutput {
  * Used for purge_market_table validation.
  */
 const MARKET_TABLE_FILE_PATTERNS: Record<string, string[]> = {
-  spx_daily: ["%_daily.csv"],
-  spx_15min: ["%_15min.csv"],
-  vix_intraday: ["%_vix_intraday.csv", "vix_intraday.csv"],
+  daily: ["%_daily.csv"],
+  intraday: ["%_15min.csv", "%_intraday.csv"],
+  context: ["vix_*.csv", "%_vix*.csv"],
 };
 
 // ============================================================================
@@ -98,13 +101,12 @@ function generateLagTemplate(): {
   sql: string;
   fieldCounts: { openKnown: number; static: number; closeDerived: number };
 } {
-  const openCols = [...OPEN_KNOWN_FIELDS].map(f => `    ${f}`).join(',\n');
-  const staticCols = [...STATIC_FIELDS].map(f => `    ${f}`).join(',\n');
-  const lagCols = [...CLOSE_KNOWN_FIELDS]
-    .map(f => `    LAG(${f}) OVER (PARTITION BY ticker ORDER BY date) AS prev_${f}`)
-    .join(',\n');
+  // Qualify daily-sourced fields with d., context-sourced with c.
+  const dailyOpenCols = [...DAILY_OPEN_FIELDS].map(f => `    d.${f}`).join(',\n');
+  const contextOpenCols = [...CONTEXT_OPEN_FIELDS].map(f => `    c.${f}`).join(',\n');
+  const staticCols = [...DAILY_STATIC_FIELDS].map(f => `    d.${f}`).join(',\n');
 
-  const sql = `-- Lookahead-free CTE template for market.spx_daily
+  const sql = `-- Lookahead-free CTE template for market.daily + market.context (dual-table JOIN)
 -- Open-known fields: safe to use same-day (known at/before market open)
 -- Static fields: safe to use same-day (calendar facts)
 -- Close-derived fields: use LAG() for prior trading day values
@@ -117,16 +119,38 @@ WITH requested AS (
   FROM trades.trade_data
   WHERE block_id = 'my-block'
 ),
-WITH lagged AS (
-  SELECT ticker, date,
-    -- Open-known fields (safe same-day)
-${openCols},
+joined AS (
+  -- Scan full ticker history so LAG sees correct prior trading day
+  SELECT d.ticker, d.date,
+    -- Open-known fields from daily (safe same-day)
+${dailyOpenCols},
+    -- Open-known fields from context (safe same-day)
+${contextOpenCols},
     -- Static fields (safe same-day)
 ${staticCols},
+    -- Close-derived fields from both tables (will be LAGged below)
+    d.high, d.low, d.close, d.RSI_14, d.ATR_Pct, d.BB_Position, d.BB_Width,
+    d.Realized_Vol_5D, d.Realized_Vol_20D, d.Return_5D, d.Return_20D,
+    d.Intraday_Range_Pct, d.Intraday_Return_Pct, d.Close_Position_In_Range,
+    d.Gap_Filled, d.Consecutive_Days,
+    c.VIX_Close, c.VIX_High, c.VIX_Low, c.VIX_Change_Pct,
+    c.VIX9D_Close, c.VIX3M_Close, c.Vol_Regime, c.Term_Structure_State,
+    c.VIX_Percentile, c.VIX_Spike_Pct
+  FROM market.daily d
+  LEFT JOIN market.context c ON d.date = c.date
+  WHERE d.ticker IN (SELECT ticker FROM requested)
+),
+lagged AS (
+  SELECT *,
     -- Close-derived fields (prior trading day via LAG)
-${lagCols}
-  FROM market.spx_daily
-  WHERE ticker IN (SELECT ticker FROM requested)
+    LAG(high) OVER (PARTITION BY ticker ORDER BY date) AS prev_high,
+    LAG(RSI_14) OVER (PARTITION BY ticker ORDER BY date) AS prev_RSI_14,
+    LAG(BB_Width) OVER (PARTITION BY ticker ORDER BY date) AS prev_BB_Width,
+    LAG(Realized_Vol_20D) OVER (PARTITION BY ticker ORDER BY date) AS prev_Realized_Vol_20D,
+    LAG(VIX_Close) OVER (PARTITION BY ticker ORDER BY date) AS prev_VIX_Close,
+    LAG(Vol_Regime) OVER (PARTITION BY ticker ORDER BY date) AS prev_Vol_Regime,
+    LAG(Term_Structure_State) OVER (PARTITION BY ticker ORDER BY date) AS prev_Term_Structure_State
+  FROM joined
 )
 SELECT t.*, m.*
 FROM trades.trade_data t
@@ -137,7 +161,7 @@ WHERE t.block_id = 'my-block'`;
 
   return {
     description:
-      'Reusable LAG() CTE for lookahead-free queries joining trades to spx_daily by ticker+date. ' +
+      'Reusable LAG() CTE for lookahead-free queries joining trades to market.daily + market.context. ' +
       'Close-derived fields (VIX_Close, Vol_Regime, RSI_14, etc.) use LAG() to get the prior trading day value, ' +
       'preventing lookahead bias. Open-known and static fields are safe to use same-day.',
     sql,
@@ -289,11 +313,11 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
       description:
         "Delete all data from a market table and clear its sync metadata. " +
         "Use when market data is corrupted and needs to be re-imported from CSV. " +
-        "After purging, the next query will trigger a fresh sync from the CSV file. " +
-        "Valid tables: spx_daily, spx_15min, vix_intraday",
+        "After purging, re-import with import_market_csv and re-run enrich_market_data. " +
+        "Valid tables: daily, context, intraday",
       inputSchema: z.object({
         table: z
-          .enum(["spx_daily", "spx_15min", "vix_intraday"])
+          .enum(["daily", "context", "intraday"])
           .describe("Market table to purge (without 'market.' prefix)"),
       }),
     },
