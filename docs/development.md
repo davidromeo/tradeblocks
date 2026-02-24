@@ -87,7 +87,7 @@ This document explains how TradeBlocks is structured and how to work effectively
 
 
 ## Development Tips
-- Use the `plans/` directory for task breakdowns if you want structured TODOs (optional).
+- Use the `.planning/` directory for task breakdowns if you want structured TODOs (optional).
 - Tailwind CSS configuration lives in `tailwind.config.ts` produced via `@tailwindcss/postcss` (Tailwind v4). Check `app/globals.css` for design tokens.
 - Components expect the `@/*` alias (configured in `tsconfig.json`)—prefer it over relative paths.
 - When debugging IndexedDB, the store names mirror file names (e.g., `tradeblocks-trades`); inspect them via browser dev tools.
@@ -131,7 +131,7 @@ The project uses the "Get Shit Done" (GSD) workflow for structured development:
 **Common GSD commands:**
 - `/gsd:progress` - Check current progress and next actions
 - `/gsd:plan-phase <N>` - Create detailed plan for a phase
-- `/gsd:execute-plan` - Execute a PLAN.md file
+- `/gsd:execute-phase <N>` - Execute all plans in a phase
 - `/gsd:verify-work` - Manual acceptance testing
 
 The GSD workflow provides:
