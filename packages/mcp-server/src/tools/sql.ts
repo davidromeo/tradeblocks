@@ -239,6 +239,8 @@ export function registerSQLTools(server: McpServer, baseDir: string): void {
         "Execute a SQL SELECT query against the DuckDB analytics database. " +
         "Query trades (trades.trade_data, trades.reporting_data) and market data " +
         "(market.daily, market.context, market.intraday, market._sync_metadata). " +
+        "Trade queries should filter by block_id (e.g. WHERE block_id = 'my-strategy'). " +
+        "Call describe_database first to discover available block_ids and column names. " +
         "Returns up to 1000 rows.",
       inputSchema: z.object({
         query: z.string().describe("SQL SELECT query to execute"),

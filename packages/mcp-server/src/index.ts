@@ -281,7 +281,10 @@ async function main(): Promise<void> {
   const createServer = (): McpServer => {
     const server = new McpServer(
       { name: "tradeblocks-mcp", version: "2.0.0" },
-      { capabilities: { tools: {} } }
+      {
+        capabilities: { tools: {} },
+        instructions: "Call list_blocks first to discover available block IDs. All other block tools require a blockId returned by list_blocks. For SQL queries, call describe_database first to discover block_ids and column names, then filter trades with WHERE block_id = '...'.",
+      }
     );
     registerBlockTools(server, resolvedDir);
     registerAnalysisTools(server, resolvedDir);

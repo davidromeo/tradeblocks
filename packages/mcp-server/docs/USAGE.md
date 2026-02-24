@@ -33,7 +33,7 @@ The server communicates via stdio and works with any MCP-compatible client:
 - **Codex CLI** - Add to `~/.codex/config.toml`
 - **Gemini CLI** - Add to `~/.gemini/settings.json`
 
-**Web Platforms** (requires ngrok tunnel):
+**Web Platforms** (requires HTTP mode + public URL):
 - **ChatGPT** - Developer Mode with remote URL
 - **Google AI Studio** - Native MCP support
 - **Julius AI** - Native MCP support

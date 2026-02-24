@@ -70,7 +70,7 @@ export function withSyncedBlock<TInput extends { blockId: string }, TOutput>(
         content: [
           {
             type: "text" as const,
-            text: `Block '${input.blockId}' no longer exists (folder was deleted)`,
+            text: `Block '${input.blockId}' no longer exists (folder was deleted). Call list_blocks to see available blocks.`,
           },
         ],
         isError: true as const,
@@ -82,7 +82,7 @@ export function withSyncedBlock<TInput extends { blockId: string }, TOutput>(
         content: [
           {
             type: "text" as const,
-            text: `Sync error for block '${input.blockId}': ${syncResult.error}`,
+            text: `Sync error for block '${input.blockId}': ${syncResult.error}. Call list_blocks to see available blocks.`,
           },
         ],
         isError: true as const,
@@ -126,7 +126,7 @@ export function withSyncedBlocks<
               content: [
                 {
                   type: "text" as const,
-                  text: `Block '${blockId}' no longer exists (folder was deleted)`,
+                  text: `Block '${blockId}' no longer exists (folder was deleted). Call list_blocks to see available blocks.`,
                 },
               ],
               isError: true as const,
@@ -138,7 +138,7 @@ export function withSyncedBlocks<
               content: [
                 {
                   type: "text" as const,
-                  text: `Sync error for block '${blockId}': ${result.error}`,
+                  text: `Sync error for block '${blockId}': ${result.error}. Call list_blocks to see available blocks.`,
                 },
               ],
               isError: true as const,

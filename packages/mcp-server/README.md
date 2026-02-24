@@ -4,7 +4,7 @@ Model Context Protocol (MCP) server for options trading analysis. Works with Cla
 
 ## Features
 
-- **34 MCP tools** for comprehensive trading analysis
+- **Comprehensive MCP tools** for trading analysis
 - **SQL analytics layer** - `run_sql` for arbitrary queries, `describe_database` for schema discovery
 - **Two transport modes**: stdio (CLI tools) and HTTP (web platforms)
 - **Block-based data organization** - each folder is a trading strategy
@@ -122,28 +122,22 @@ See [Gemini CLI MCP documentation](https://geminicli.com/docs/tools/mcp-server/)
 
 ### Web Platforms (ChatGPT, Google AI Studio, Julius)
 
-Web AI platforms require HTTP transport with an ngrok tunnel:
+Web AI platforms require HTTP transport with a publicly reachable URL:
 
-**Terminal 1:** Start HTTP server
 ```bash
 tradeblocks-mcp --http ~/Trading/backtests
 ```
 
-**Terminal 2:** Expose via ngrok
-```bash
-ngrok http 3100
-```
+Then expose port 3100 however you prefer (ngrok, Cloudflare Tunnel, reverse proxy, Docker on a server, etc.) and add the URL (`https://your-host/mcp`) to your platform's MCP settings.
 
-Then add the ngrok URL (`https://xxx.ngrok.io/mcp`) to your platform's MCP settings.
-
-See [Web Platforms Guide](docs/WEB-PLATFORMS.md) for detailed setup instructions.
+See [Web Platforms Guide](docs/WEB-PLATFORMS.md) for platform-specific setup, or [Docker Deployment](#docker-deployment) for running on a remote server.
 
 ## Transport Modes
 
 | Mode | Flag | Use Case | Platforms |
 |------|------|----------|-----------|
 | stdio | (default) | Local CLI tools | Claude Desktop, Claude Code, Codex CLI, Gemini CLI |
-| HTTP | `--http` | Web platforms via ngrok | ChatGPT, Google AI Studio, Julius AI |
+| HTTP | `--http` | Web platforms, remote servers | ChatGPT, Google AI Studio, Julius AI |
 
 ```bash
 # stdio mode (default)
@@ -153,6 +147,64 @@ tradeblocks-mcp ~/backtests
 tradeblocks-mcp --http ~/backtests
 tradeblocks-mcp --http --port 8080 ~/backtests
 ```
+
+## Docker Deployment
+
+Run the MCP server in a container for remote/server deployments:
+
+```bash
+cd packages/mcp-server
+npm run build                # build on host (resolves workspace deps)
+docker build -t tradeblocks-mcp .
+```
+
+Run with docker compose:
+```bash
+docker compose up -d
+```
+
+Or run directly:
+```bash
+docker run -d -p 3100:3100 -v ./data:/data --env-file .env tradeblocks-mcp
+```
+
+Place your block folders (each containing CSV files) in the `data/` directory. The container runs in HTTP mode on port 3100 by default. See [Authentication](#authentication) below for configuring credentials.
+
+Connect any MCP client to `http://<your-host>:3100/mcp`. How you expose this endpoint (reverse proxy, tunnel, VPN, etc.) is up to you.
+
+## Authentication
+
+HTTP mode includes **OAuth 2.1 with PKCE** authentication, enabled by default. MCP clients that support OAuth (Claude, ChatGPT, etc.) handle the flow automatically — users see a login prompt on first connection.
+
+### Setup
+
+Copy `.env.example` to `.env` and configure:
+
+```env
+# Required for HTTP mode
+TRADEBLOCKS_USERNAME=admin
+TRADEBLOCKS_PASSWORD=changeme
+TRADEBLOCKS_JWT_SECRET=           # generate with: openssl rand -hex 32
+
+# Optional
+TRADEBLOCKS_PORT=3100             # HTTP port (default: 3100)
+TRADEBLOCKS_JWT_EXPIRY=24h        # Token lifetime (default: 24h)
+TRADEBLOCKS_ISSUER_URL=           # Public URL when behind a reverse proxy (e.g. https://mcp.yourdomain.com)
+
+# DuckDB tuning
+DUCKDB_THREADS=2
+DUCKDB_MEMORY_LIMIT=512MB
+```
+
+### Disabling Auth
+
+If the server is behind a reverse proxy or tunnel that already handles authentication:
+
+```bash
+tradeblocks-mcp --http --no-auth ~/backtests
+```
+
+Or set `TRADEBLOCKS_NO_AUTH=true` in `.env`.
 
 ## Agent Skills
 
