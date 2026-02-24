@@ -1,6 +1,9 @@
 # Planning docs (kept local)
 .planning/
 
+# Local MCP test data
+.testdata/
+
 # Git worktrees
 .worktrees/
 

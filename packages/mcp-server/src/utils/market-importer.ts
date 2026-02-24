@@ -61,6 +61,7 @@ export interface ImportFromDatabaseOptions {
 
 export interface ImportResult {
   rowsInserted: number;
+  rowsUpdated: number;
   rowsSkipped: number;
   inputRowCount: number;
   dateRange: { min: string; max: string } | null;
@@ -288,9 +289,9 @@ async function insertMappedRows(
   conn: DuckDBConnection,
   targetTable: "daily" | "context" | "intraday",
   mappedRows: Array<Record<string, unknown>>
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<{ inserted: number; updated: number; skipped: number }> {
   if (mappedRows.length === 0) {
-    return { inserted: 0, skipped: 0 };
+    return { inserted: 0, updated: 0, skipped: 0 };
   }
 
   const tableName = `market.${targetTable}`;
@@ -325,20 +326,35 @@ async function insertMappedRows(
     }
 
     const columnList = columns.join(", ");
+
+    // Build ON CONFLICT clause: merge non-key columns into existing rows
+    // (e.g., importing VIX9D_Close into a context row that already has VIX_Close)
+    const conflictKeys = new Set(
+      CONFLICT_TARGETS[targetTable].replace(/[()]/g, "").split(",").map((s: string) => s.trim())
+    );
+    const updateCols = columns.filter((c) => !conflictKeys.has(c));
+    const conflictAction =
+      updateCols.length > 0
+        ? `DO UPDATE SET ${updateCols.map((c) => `${c} = EXCLUDED.${c}`).join(", ")}`
+        : "DO NOTHING";
+
     const sql =
       `INSERT INTO ${tableName} (${columnList}) VALUES ${valuePlaceholders.join(", ")} ` +
-      `ON CONFLICT ${conflictTarget} DO NOTHING`;
+      `ON CONFLICT ${conflictTarget} ${conflictAction}`;
 
     await conn.run(sql, values as (string | number | boolean | null | bigint)[]);
   }
 
-  // COUNT(*) after insert
+  // COUNT(*) after insert — net new rows
   const afterResult = await conn.runAndReadAll(`SELECT COUNT(*) FROM ${tableName}`);
   const afterCount = Number(afterResult.getRows()[0][0]);
 
   const inserted = afterCount - beforeCount;
-  const skipped = mappedRows.length - inserted;
-  return { inserted, skipped };
+  // With DO UPDATE, non-inserted rows are updated (not skipped).
+  // With DO NOTHING (updateCols empty), non-inserted rows are skipped.
+  const updated = updateCols.length > 0 ? mappedRows.length - inserted : 0;
+  const skipped = updateCols.length > 0 ? 0 : mappedRows.length - inserted;
+  return { inserted, updated, skipped };
 }
 
 // =============================================================================
@@ -479,6 +495,7 @@ export async function importMarketCsvFile(
   if (dryRun) {
     return {
       rowsInserted: 0,
+      rowsUpdated: 0,
       rowsSkipped: 0,
       inputRowCount: mappedRows.length,
       dateRange,
@@ -490,7 +507,7 @@ export async function importMarketCsvFile(
   }
 
   // 6. Insert rows
-  const { inserted, skipped } = await insertMappedRows(conn, targetTable, mappedRows);
+  const { inserted, updated, skipped } = await insertMappedRows(conn, targetTable, mappedRows);
 
   // 7. Upsert import metadata
   await upsertMarketImportMetadata(conn, {
@@ -507,6 +524,7 @@ export async function importMarketCsvFile(
 
   return {
     rowsInserted: inserted,
+    rowsUpdated: updated,
     rowsSkipped: skipped,
     inputRowCount: mappedRows.length,
     dateRange,
@@ -588,7 +606,7 @@ export async function importFromDatabase(
     }
 
     // 7. Insert rows
-    const { inserted, skipped } = await insertMappedRows(conn, targetTable, mappedRows);
+    const { inserted, updated, skipped } = await insertMappedRows(conn, targetTable, mappedRows);
 
     // 8. Upsert import metadata
     await upsertMarketImportMetadata(conn, {
@@ -605,6 +623,7 @@ export async function importFromDatabase(
 
     return {
       rowsInserted: inserted,
+      rowsUpdated: updated,
       rowsSkipped: skipped,
       inputRowCount: mappedRows.length,
       dateRange,

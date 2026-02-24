@@ -92,7 +92,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
 
         const summary = dry_run
           ? `[DRY RUN] Would import ${result.inputRowCount} rows into market.${target_table} (${ticker.toUpperCase()}) — no data written`
-          : `Imported ${result.rowsInserted} of ${result.inputRowCount} rows into market.${target_table} (${ticker.toUpperCase()}); ${result.rowsSkipped} skipped (already exist)`;
+          : `Imported ${result.rowsInserted} of ${result.inputRowCount} rows into market.${target_table} (${ticker.toUpperCase()})${result.rowsUpdated ? `; ${result.rowsUpdated} merged into existing rows` : ""}${result.rowsSkipped ? `; ${result.rowsSkipped} skipped` : ""}`;
 
         return createToolOutput(summary, {
           ticker: ticker.toUpperCase(),
@@ -192,7 +192,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
 
         const summary = dry_run
           ? `[DRY RUN] Would import ${result.inputRowCount} rows into market.${target_table} (${ticker.toUpperCase()}) — no data written`
-          : `Imported ${result.rowsInserted} of ${result.inputRowCount} rows into market.${target_table} (${ticker.toUpperCase()}); ${result.rowsSkipped} skipped (already exist)`;
+          : `Imported ${result.rowsInserted} of ${result.inputRowCount} rows into market.${target_table} (${ticker.toUpperCase()})${result.rowsUpdated ? `; ${result.rowsUpdated} merged into existing rows` : ""}${result.rowsSkipped ? `; ${result.rowsSkipped} skipped` : ""}`;
 
         return createToolOutput(summary, {
           ticker: ticker.toUpperCase(),
