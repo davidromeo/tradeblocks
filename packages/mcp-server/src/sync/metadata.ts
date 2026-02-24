@@ -19,15 +19,6 @@ export interface BlockSyncMetadata {
   sync_version: number;
 }
 
-/**
- * Sync metadata for a market data file (market._sync_metadata)
- */
-export interface MarketSyncMetadata {
-  file_name: string;
-  content_hash: string;
-  max_date: string | null;
-  synced_at: Date;
-}
 
 /**
  * Get sync metadata for a block.
@@ -119,61 +110,6 @@ export async function getAllSyncedBlockIds(
 
   const rows = reader.getRows();
   return rows.map((row) => row[0] as string);
-}
-
-/**
- * Get sync metadata for a market data file.
- *
- * @param conn - DuckDB connection
- * @param fileName - File name or source identifier
- * @returns Metadata if file is synced, null otherwise
- */
-export async function getMarketSyncMetadata(
-  conn: DuckDBConnection,
-  fileName: string
-): Promise<MarketSyncMetadata | null> {
-  const reader = await conn.runAndReadAll(
-    `SELECT file_name, content_hash, max_date, synced_at
-     FROM market._sync_metadata
-     WHERE file_name = $1`,
-    [fileName]
-  );
-
-  const rows = reader.getRows();
-  if (rows.length === 0) {
-    return null;
-  }
-
-  const row = rows[0];
-  return {
-    file_name: row[0] as string,
-    content_hash: row[1] as string,
-    max_date: row[2] as string | null,
-    synced_at: new Date(row[3] as string),
-  };
-}
-
-/**
- * Insert or update sync metadata for a market data file.
- *
- * @param conn - DuckDB connection
- * @param metadata - Market sync metadata to upsert
- */
-export async function upsertMarketSyncMetadata(
-  conn: DuckDBConnection,
-  metadata: MarketSyncMetadata
-): Promise<void> {
-  await conn.run(
-    `INSERT OR REPLACE INTO market._sync_metadata
-     (file_name, content_hash, max_date, synced_at)
-     VALUES ($1, $2, $3, $4)`,
-    [
-      metadata.file_name,
-      metadata.content_hash,
-      metadata.max_date,
-      metadata.synced_at.toISOString(),
-    ]
-  );
 }
 
 // =============================================================================

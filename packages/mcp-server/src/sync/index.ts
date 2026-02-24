@@ -25,10 +25,7 @@ export {
   upsertSyncMetadata,
   deleteSyncMetadata,
   getAllSyncedBlockIds,
-  getMarketSyncMetadata,
-  upsertMarketSyncMetadata,
   type BlockSyncMetadata,
-  type MarketSyncMetadata,
 } from "./metadata.js";
 
 // Re-export block sync types and internal functions (for testing)

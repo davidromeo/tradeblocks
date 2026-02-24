@@ -114,12 +114,14 @@ function parseServerArgs(): {
   port: number;
   noAuth: boolean;
   directory: string | undefined;
+  marketDb: string | undefined;
 } {
   const args = process.argv.slice(2);
   let http = false;
   let port = 3100;
   let noAuth = false;
   let directory: string | undefined;
+  let marketDb: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -132,6 +134,9 @@ function parseServerArgs(): {
         port = parsedPort;
       }
       i++; // Skip next arg (the port value)
+    } else if (arg === "--market-db" && args[i + 1]) {
+      marketDb = args[i + 1];
+      i++; // Skip next arg (the path value)
     } else if (arg === "--no-auth") {
       noAuth = true;
     } else if (!arg.startsWith("-") && !arg.startsWith("--")) {
@@ -140,12 +145,15 @@ function parseServerArgs(): {
     }
   }
 
-  // Also check environment variable
+  // Also check environment variables
   if (!directory) {
     directory = process.env.BLOCKS_DIRECTORY;
   }
+  if (!marketDb) {
+    marketDb = process.env.MARKET_DB_PATH;
+  }
 
-  return { http, port, noAuth, directory };
+  return { http, port, noAuth, directory, marketDb };
 }
 
 // Handle skill CLI commands
