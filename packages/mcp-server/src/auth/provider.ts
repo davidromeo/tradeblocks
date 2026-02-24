@@ -4,6 +4,7 @@ import type { OAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/
 import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { OAuthClientInformationFull, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
+import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { InMemoryClientsStore } from './clients-store.js';
 import { AuthCodeStore } from './code-store.js';
 import { issueAccessToken, verifyAccessToken as verifyJwt } from './token.js';
@@ -127,7 +128,13 @@ export class TradeBlocksAuthProvider implements OAuthServerProvider {
   }
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
-    return verifyJwt(token, this.config.jwtSecret);
+    try {
+      return await verifyJwt(token, this.config.jwtSecret);
+    } catch {
+      // MCP SDK requireBearerAuth checks `error instanceof InvalidTokenError`
+      // to return 401. Generic errors fall through to 500.
+      throw new InvalidTokenError('Invalid or expired access token');
+    }
   }
 
   private validateCredentials(username: string, password: string): boolean {
