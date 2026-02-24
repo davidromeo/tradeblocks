@@ -79,7 +79,7 @@ describe('Derived Sets', () => {
 
     const totalClassified = dailyClassified.length + contextClassified.length;
 
-    expect(allClassified.size).toBe(48);
+    expect(allClassified.size).toBe(50);
     expect(allClassified.size).toBe(totalClassified);
 
     // Every classified column should be in exactly one set
@@ -112,10 +112,10 @@ describe('Derived Sets', () => {
     expect(CONTEXT_OPEN_FIELDS.size).toBe(4);
   });
 
-  test('CLOSE_KNOWN_FIELDS has exactly 36 fields (22 daily + 14 context)', () => {
-    expect(CLOSE_KNOWN_FIELDS.size).toBe(36);
-    // Daily close-derived: 18 Tier1 + 4 Tier3 = 22
-    expect(DAILY_CLOSE_FIELDS.size).toBe(22);
+  test('CLOSE_KNOWN_FIELDS has exactly 38 fields (24 daily + 14 context)', () => {
+    expect(CLOSE_KNOWN_FIELDS.size).toBe(38);
+    // Daily close-derived: 18 Tier1 + 4 Tier3 + 2 Tier3 (Opening_Drive_Strength, Intraday_Realized_Vol) = 24
+    expect(DAILY_CLOSE_FIELDS.size).toBe(24);
     // Context close-derived: 14
     expect(CONTEXT_CLOSE_FIELDS.size).toBe(14);
   });

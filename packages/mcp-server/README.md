@@ -245,6 +245,17 @@ backtests/
 | `run_sql` | Execute SQL queries against trades and market data |
 | `describe_database` | Schema discovery with table info and example queries |
 
+### Market Data Tools
+| Tool | Description |
+|------|-------------|
+| `import_market_csv` | Import market data CSV with column mapping |
+| `import_from_database` | Import from external DuckDB databases |
+| `enrich_market_data` | Compute ~40 derived indicators from raw OHLCV |
+| `enrich_trades` | Enrich trades with market context (lookahead-free) |
+| `analyze_regime_performance` | Analyze P&L by market regime |
+| `suggest_filters` | Suggest trade filters based on market conditions |
+| `calculate_orb` | Opening range breakout analysis from intraday bars |
+
 ### Import Tools
 | Tool | Description |
 |------|-------------|
@@ -268,21 +279,25 @@ npm run mcpb:pack
 
 ## Market Data (Optional)
 
-For market context (VIX regimes, intraday timing, gap analysis), export underlying/VIX data from TradingView using the included PineScript indicators. The MCP server syncs these CSVs into DuckDB automatically.
+For market context (VIX regimes, intraday timing, gap analysis), import market data from TradingView exports using MCP tools:
 
-Supported `_marketdata` filename patterns:
-- `<ticker>_daily.csv` (example: `spx_daily.csv`, `msft_daily.csv`)
-- `<ticker>_15min.csv` (example: `spx_15min.csv`, `msft_15min.csv`)
-- `<scope>_vix_intraday.csv` or `vix_intraday.csv` (global scope `ALL`)
+1. **Export** from TradingView (any chart: SPX daily, VIX daily, SPX 5-min, etc.)
+2. **Import** via `import_market_csv` with a column mapping
+3. **Enrich** via `enrich_market_data` to compute ~40 derived indicators
 
-Market tables are keyed by `(ticker, date)`, and trade enrichment joins on ticker + date.
+No Pine Scripts needed — TradingView exports raw OHLCV natively.
 
-See [scripts/README.md](../../scripts/README.md) for setup instructions, field documentation, and the 3 PineScript indicators.
+Market data lives in a separate `market.duckdb` (configurable via `MARKET_DB_PATH` or `--market-db`). Tables:
+- `market.daily` — Daily OHLCV + enriched indicators (keyed by `ticker, date`)
+- `market.context` — VIX / volatility context (keyed by `date`)
+- `market.intraday` — Intraday bars at any resolution (keyed by `ticker, date, time`)
+
+See [scripts/README.md](../../scripts/README.md) for import examples and column mapping reference.
 
 ## Related
 
 - [Usage Guide](docs/USAGE.md) - Detailed usage examples and workflows
 - [Web Platforms Guide](docs/WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
 - [Agent Skills](../agent-skills/README.md) - Conversational workflows for guided analysis
-- [Market Data Scripts](../../scripts/README.md) - TradingView PineScript indicators for SPX/VIX data
+- [Market Data Import](../../scripts/README.md) - Import workflow and column mapping reference
 - [Main Application](../../README.md) - Web-based UI for TradeBlocks

@@ -310,6 +310,18 @@ async function insertMappedRows(
   const beforeResult = await conn.runAndReadAll(`SELECT COUNT(*) FROM ${tableName}`);
   const beforeCount = Number(beforeResult.getRows()[0][0]);
 
+  // Build ON CONFLICT clause: merge non-key columns into existing rows
+  // (e.g., importing VIX9D_Close into a context row that already has VIX_Close)
+  const conflictKeys = new Set(
+    CONFLICT_TARGETS[targetTable].replace(/[()]/g, "").split(",").map((s: string) => s.trim())
+  );
+  const updateCols = columns.filter((c) => !conflictKeys.has(c));
+  const conflictAction =
+    updateCols.length > 0
+      ? `DO UPDATE SET ${updateCols.map((c) => `${c} = EXCLUDED.${c}`).join(", ")}`
+      : "DO NOTHING";
+
+  const columnList = columns.join(", ");
   const BATCH_SIZE = 500;
   for (let i = 0; i < mappedRows.length; i += BATCH_SIZE) {
     const batch = mappedRows.slice(i, i + BATCH_SIZE);
@@ -324,19 +336,6 @@ async function insertMappedRows(
       }
       valuePlaceholders.push(`(${rowPlaceholders.join(", ")})`);
     }
-
-    const columnList = columns.join(", ");
-
-    // Build ON CONFLICT clause: merge non-key columns into existing rows
-    // (e.g., importing VIX9D_Close into a context row that already has VIX_Close)
-    const conflictKeys = new Set(
-      CONFLICT_TARGETS[targetTable].replace(/[()]/g, "").split(",").map((s: string) => s.trim())
-    );
-    const updateCols = columns.filter((c) => !conflictKeys.has(c));
-    const conflictAction =
-      updateCols.length > 0
-        ? `DO UPDATE SET ${updateCols.map((c) => `${c} = EXCLUDED.${c}`).join(", ")}`
-        : "DO NOTHING";
 
     const sql =
       `INSERT INTO ${tableName} (${columnList}) VALUES ${valuePlaceholders.join(", ")} ` +
@@ -595,6 +594,7 @@ export async function importFromDatabase(
     if (dryRun) {
       return {
         rowsInserted: 0,
+        rowsUpdated: 0,
         rowsSkipped: 0,
         inputRowCount: mappedRows.length,
         dateRange,

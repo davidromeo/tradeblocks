@@ -441,8 +441,8 @@ export function computeVIXDerivedFields(rows: ContextRow[]): EnrichedContextRow[
  * 2: Low       13 <= VIX < 16
  * 3: Normal    16 <= VIX < 20
  * 4: Elevated  20 <= VIX < 25
- * 5: High      25 <= VIX < 35
- * 6: Extreme   VIX >= 35
+ * 5: High      25 <= VIX < 30
+ * 6: Extreme   VIX >= 30
  */
 export function classifyVolRegime(vixClose: number): number {
   if (vixClose < 13) return 1;

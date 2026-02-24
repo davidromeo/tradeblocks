@@ -105,7 +105,7 @@ Rules for type 1 (trade dates from CSVs):
 - **DON'T**: Use `toLocaleDateString()` with explicit `timeZone` on these dates — this re-interprets the local-midnight date in a different timezone and can shift it by a day.
 - **DON'T**: Use `.toISOString().split("T")[0]` on these dates — this converts to UTC first and can shift the calendar date.
 
-**Market Data Lookahead Rules (MCP Server)**: When joining trades with `market.spx_daily`, close-derived fields (44 fields including `Trend_Score`, `RSI_14`, `VIX_Close`, `Vol_Regime`, `Return_5D`) are only known after market close and MUST use `LAG()` to get the prior trading day's value. Use `buildLookaheadFreeQuery()` from `utils/field-timing.ts`. Open-known fields (8 fields: `Gap_Pct`, `VIX_Open`, `Prior_Close`, etc.) and static fields (3: `Day_of_Week`, `Month`, `Is_Opex`) are safe to use same-day. See `utils/schema-metadata.ts` for the authoritative field classification.
+**Market Data Lookahead Rules (MCP Server)**: When joining trades with market data, `buildLookaheadFreeQuery()` from `utils/field-timing.ts` JOINs `market.daily` and `market.context` before applying `LAG()`. Close-derived fields (38 fields including `RSI_14`, `VIX_Close`, `Vol_Regime`, `BB_Width`, `Opening_Drive_Strength`) are only known after market close and MUST use `LAG()` to get the prior trading day's value. Open-known fields (9 fields: `Gap_Pct`, `VIX_Open`, `Prior_Close`, `Prior_Range_vs_ATR`, etc.) and static fields (3: `Day_of_Week`, `Month`, `Is_Opex`) are safe to use same-day. See `utils/schema-metadata.ts` for the authoritative field classification.
 
 **Date Handling**: Trades use separate `dateOpened` (Date object) and `timeOpened` (string) fields. When processing CSVs, parse dates carefully and maintain consistency with legacy format.
 
@@ -145,7 +145,9 @@ When adding new metrics, calculations, or chart data to the UI, **consider wheth
 - `src/tools/performance.ts` - Chart data, period returns, backtest vs actual
 - `src/tools/analysis.ts` - Monte Carlo, walk-forward, correlations
 - `src/tools/reports.ts` - Custom queries, field statistics
-- `src/tools/market-data.ts` - Market regime analysis, filter suggestions, ORB calculation (all via DuckDB)
+- `src/tools/market-data.ts` - Market regime analysis, filter suggestions, ORB calculation, trade enrichment
+- `src/tools/market-imports.ts` - import_market_csv, import_from_database
+- `src/tools/market-enrichment.ts` - enrich_market_data
 
 ### Using MCP Tools Natively
 
@@ -167,9 +169,10 @@ The TradeBlocks MCP server is connected via `npm link`, making tools available d
 ```
 
 **Market data access:**
-- All market data is in DuckDB: `SELECT ... FROM market.spx_daily`, `market.spx_15min`, `market.vix_intraday`
+- Market data in separate `market.duckdb`: `market.daily`, `market.context`, `market.intraday`
+- Import via `mcp__tradeblocks__import_market_csv`, enrich via `mcp__tradeblocks__enrich_market_data`
 - Use `mcp__tradeblocks__run_sql` or `mcp__tradeblocks__describe_database` for schema discovery
-- Dedicated tools: `analyze_regime_performance`, `suggest_filters`, `calculate_orb` (all DuckDB-backed)
+- Dedicated tools: `analyze_regime_performance`, `suggest_filters`, `calculate_orb`, `enrich_trades`
 
 ### Trading Calendar Data Model
 

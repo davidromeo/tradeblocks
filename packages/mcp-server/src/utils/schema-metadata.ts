@@ -358,6 +358,16 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             hypothesis: true,
             timing: 'close',
           },
+          Opening_Drive_Strength: {
+            description: "First-30-min range / full-day range ratio (0-1); higher = strong opening drive",
+            hypothesis: true,
+            timing: 'close',
+          },
+          Intraday_Realized_Vol: {
+            description: "Annualized realized volatility from intraday bar returns (decimal, e.g., 0.15 = 15%)",
+            hypothesis: true,
+            timing: 'close',
+          },
           // Calendar fields — static
           Day_of_Week: {
             description: "Day of week (2=Monday through 6=Friday)",
