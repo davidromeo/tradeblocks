@@ -174,7 +174,7 @@ describe("importMarketCsvFile", () => {
     });
     expect(result1.rowsInserted).toBe(2);
 
-    // Second import — same data, should be ON CONFLICT DO NOTHING
+    // Second import — same data, ON CONFLICT DO UPDATE (idempotent)
     const result2 = await importMarketCsvFile(conn, {
       filePath: csvPath,
       ticker: "SPX",
@@ -182,7 +182,7 @@ describe("importMarketCsvFile", () => {
       columnMapping,
     });
     expect(result2.rowsInserted).toBe(0);
-    expect(result2.rowsSkipped).toBe(2);
+    expect(result2.rowsUpdated).toBe(2);
 
     // DB count still 2, not 4
     const dbResult = await conn.runAndReadAll(

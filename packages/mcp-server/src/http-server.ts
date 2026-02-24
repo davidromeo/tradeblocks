@@ -66,8 +66,25 @@ export async function startHttpServer(
     // Parse URL-encoded form bodies for /login
     app.use(express.urlencoded({ extended: false }));
 
+    // Simple in-memory rate limiter for login attempts
+    const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+    const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+    const LOGIN_MAX_ATTEMPTS = 10;
+
     // Custom login route for credential form submission
     app.post("/login", (req: Request, res: Response) => {
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      const now = Date.now();
+      const entry = loginAttempts.get(ip);
+      if (entry && now < entry.resetAt) {
+        if (entry.count >= LOGIN_MAX_ATTEMPTS) {
+          res.status(429).json({ error: "Too many login attempts. Try again later." });
+          return;
+        }
+        entry.count++;
+      } else {
+        loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+      }
       const result = provider.handleLogin(req.body);
       if ("error" in result) {
         // Re-render login page with error message

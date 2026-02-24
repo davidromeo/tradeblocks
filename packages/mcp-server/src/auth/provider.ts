@@ -1,4 +1,4 @@
-import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
+import { randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { Response } from 'express';
 import type { OAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
@@ -138,10 +138,11 @@ export class TradeBlocksAuthProvider implements OAuthServerProvider {
   }
 
   private validateCredentials(username: string, password: string): boolean {
-    const hashA = createHash('sha256').update(username).digest();
-    const hashB = createHash('sha256').update(this.config.username).digest();
-    const hashC = createHash('sha256').update(password).digest();
-    const hashD = createHash('sha256').update(this.config.password).digest();
+    const salt = 'tradeblocks-auth';
+    const hashA = scryptSync(username, salt, 32);
+    const hashB = scryptSync(this.config.username, salt, 32);
+    const hashC = scryptSync(password, salt, 32);
+    const hashD = scryptSync(this.config.password, salt, 32);
     return timingSafeEqual(hashA, hashB) && timingSafeEqual(hashC, hashD);
   }
 }
