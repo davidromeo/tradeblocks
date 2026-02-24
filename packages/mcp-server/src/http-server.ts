@@ -38,6 +38,7 @@ export async function startHttpServer(
   const { port, host = "0.0.0.0", auth } = options;
 
   const app: Express = express();
+  app.set("trust proxy", 1);
   app.use(express.json());
 
   // Auth middleware array - empty when auth is disabled

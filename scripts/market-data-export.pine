@@ -1,0 +1,40 @@
+//@version=6
+indicator("TradeBlocks Market Data Export", overlay=false)
+
+// =============================================================================
+// UNIVERSAL MARKET DATA EXPORT
+// =============================================================================
+// Purpose: Export raw OHLCV for import into TradeBlocks
+//
+// Usage:
+//   1. Apply to ANY chart on ANY timeframe
+//      - SPX daily chart  → import to market.daily via import_market_csv
+//      - SPX intraday (5m, 15m) → import to market.intraday
+//      - VIX daily chart  → import to market.context (accurate session values)
+//      - VIX9D/VIX3M daily → import to market.context
+//   2. Set date range in TradingView
+//   3. Right-click indicator pane -> "Export chart data..."
+//   4. Import via: import_market_csv with column mapping
+//
+// Column mapping examples:
+//   SPX Daily:    { "time": "date", "open": "open", "high": "high", "low": "low", "close": "close" }
+//   SPX Intraday: { "time": "date", "open": "open", "high": "high", "low": "low", "close": "close" }
+//                 (time HH:MM auto-extracted from Unix timestamp for intraday imports)
+//   VIX Daily:    { "time": "date", "open": "VIX_Open", "high": "VIX_High", "low": "VIX_Low", "close": "VIX_Close" }
+//   VIX9D Daily:  { "time": "date", "close": "VIX9D_Close" }
+//   VIX3M Daily:  { "time": "date", "close": "VIX3M_Close" }
+//
+// IMPORTANT: Export VIX data from a CBOE:VIX chart directly — do NOT use
+// request.security() on an SPX chart. VIX settles at 4:15 PM ET vs SPX at
+// 4:00 PM, so cross-security requests produce inaccurate values (~0.2-0.3 off).
+//
+// Note: Enrichment pipeline computes all derived fields (RSI, ATR, Bollinger,
+//       Vol_Regime, Term_Structure, etc.) from raw OHLCV after import.
+// =============================================================================
+
+// Export raw OHLCV (TradingView includes open/high/low/close as default columns
+// in the export, but we plot them explicitly for clear column mapping)
+plot(open,  "open",  display=display.data_window)
+plot(high,  "high",  display=display.data_window)
+plot(low,   "low",   display=display.data_window)
+plot(close, "close", display=display.data_window)
