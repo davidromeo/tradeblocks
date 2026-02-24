@@ -9,6 +9,8 @@ import {
   getWeekGridDates,
   getFilteredScaledDayBacktestPl,
   getFilteredScaledDayActualPl,
+  getScaledDayBacktestPl,
+  getScaledDayActualPl,
   getFilteredTradeCounts,
   getScaledDayMargin
 } from '@tradeblocks/lib'
@@ -39,25 +41,32 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
   const dateKey = formatDateKey(date)
   const dayData = calendarDays.get(dateKey)
 
-  // Build matched strategy sets when in matched mode
+  // Build matched strategy sets when filtering by matched/unmatched
   const matchedBacktestStrategies = useMemo(() => {
-    if (tradeFilterMode !== 'matched') return null
+    if (tradeFilterMode === 'all') return null
     return new Set(strategyMatches.map(m => m.backtestStrategy))
   }, [tradeFilterMode, strategyMatches])
 
   const matchedActualStrategies = useMemo(() => {
-    if (tradeFilterMode !== 'matched') return null
+    if (tradeFilterMode === 'all') return null
     return new Set(strategyMatches.map(m => m.actualStrategy))
   }, [tradeFilterMode, strategyMatches])
 
   // Get filtered trade counts
   const { backtestCount, actualCount } = useMemo(() => {
     if (!dayData) return { backtestCount: 0, actualCount: 0 }
+    if (tradeFilterMode === 'unmatched') {
+      const matched = getFilteredTradeCounts(dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches)
+      return {
+        backtestCount: dayData.backtestTradeCount - matched.backtestCount,
+        actualCount: dayData.actualTradeCount - matched.actualCount
+      }
+    }
     return getFilteredTradeCounts(dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches)
-  }, [dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches])
+  }, [dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches, tradeFilterMode])
 
   // In matched mode, only show days that have BOTH backtest AND actual trades from matched strategies
-  // This enables actual comparison. In all mode, show if either exists.
+  // This enables actual comparison. In all/unmatched mode, show if either exists.
   // IMPORTANT: Only show trade data for dates within the current month view
   const hasTrades = isCurrentMonth && (tradeFilterMode === 'matched'
     ? backtestCount > 0 && actualCount > 0
@@ -70,8 +79,24 @@ function CalendarDayCell({ date, isCurrentMonth, isToday, onClick }: CalendarDay
   const showActual = (dataDisplayMode === 'actual' || dataDisplayMode === 'both') && hasActualData
 
   // Get both P/L values (filtered)
-  const backtestPl = dayData ? getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches) : 0
-  const actualPl = dayData ? getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches) : 0
+  const backtestPl = useMemo(() => {
+    if (!dayData) return 0
+    if (tradeFilterMode === 'unmatched') {
+      const total = getScaledDayBacktestPl(dayData, scalingMode, strategyMatches)
+      const matched = getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches)
+      return total - matched
+    }
+    return getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches)
+  }, [dayData, scalingMode, matchedBacktestStrategies, strategyMatches, tradeFilterMode])
+  const actualPl = useMemo(() => {
+    if (!dayData) return 0
+    if (tradeFilterMode === 'unmatched') {
+      const total = getScaledDayActualPl(dayData, scalingMode)
+      const matched = getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches)
+      return total - matched
+    }
+    return getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches)
+  }, [dayData, scalingMode, matchedActualStrategies, strategyMatches, tradeFilterMode])
 
   // Get background style - handles mismatch cases with stripes when showing both
   const bgStyle = useMemo(() => {
@@ -190,14 +215,14 @@ interface WeeklySummaryProps {
 function WeeklySummary({ dates, currentMonth }: WeeklySummaryProps) {
   const { calendarDays, scalingMode, dataDisplayMode, showMargin, tradeFilterMode, strategyMatches } = useTradingCalendarStore()
 
-  // Build matched strategy sets when in matched mode
+  // Build matched strategy sets when filtering by matched/unmatched
   const matchedBacktestStrategies = useMemo(() => {
-    if (tradeFilterMode !== 'matched') return null
+    if (tradeFilterMode === 'all') return null
     return new Set(strategyMatches.map(m => m.backtestStrategy))
   }, [tradeFilterMode, strategyMatches])
 
   const matchedActualStrategies = useMemo(() => {
-    if (tradeFilterMode !== 'matched') return null
+    if (tradeFilterMode === 'all') return null
     return new Set(strategyMatches.map(m => m.actualStrategy))
   }, [tradeFilterMode, strategyMatches])
 
@@ -218,19 +243,41 @@ function WeeklySummary({ dates, currentMonth }: WeeklySummaryProps) {
       const dayData = calendarDays.get(dateKey)
 
       if (dayData) {
-        const { backtestCount, actualCount } = getFilteredTradeCounts(dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches)
+        let btCount: number, actCount: number
+        if (tradeFilterMode === 'unmatched') {
+          const matched = getFilteredTradeCounts(dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches)
+          btCount = dayData.backtestTradeCount - matched.backtestCount
+          actCount = dayData.actualTradeCount - matched.actualCount
+        } else {
+          const counts = getFilteredTradeCounts(dayData, matchedBacktestStrategies, matchedActualStrategies, strategyMatches)
+          btCount = counts.backtestCount
+          actCount = counts.actualCount
+        }
 
         // In matched mode, only count days that have BOTH backtest AND actual
         const includeDay = tradeFilterMode === 'matched'
-          ? backtestCount > 0 && actualCount > 0
+          ? btCount > 0 && actCount > 0
           : true
 
-        if (includeDay && backtestCount > 0) {
-          backtestPl += getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches)
+        if (includeDay && btCount > 0) {
+          if (tradeFilterMode === 'unmatched') {
+            // Unmatched P&L = total - matched
+            const totalPl = getScaledDayBacktestPl(dayData, scalingMode, strategyMatches)
+            const matchedPl = getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches)
+            backtestPl += totalPl - matchedPl
+          } else {
+            backtestPl += getFilteredScaledDayBacktestPl(dayData, scalingMode, matchedBacktestStrategies, strategyMatches)
+          }
           backtestDays++
         }
-        if (includeDay && actualCount > 0) {
-          actualPl += getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches)
+        if (includeDay && actCount > 0) {
+          if (tradeFilterMode === 'unmatched') {
+            const totalPl = getScaledDayActualPl(dayData, scalingMode)
+            const matchedPl = getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches)
+            actualPl += totalPl - matchedPl
+          } else {
+            actualPl += getFilteredScaledDayActualPl(dayData, scalingMode, matchedActualStrategies, strategyMatches)
+          }
           actualDays++
         }
         // Track max scaled margin for the week (only for included days)

@@ -64,6 +64,7 @@ import { REQUIRED_DAILY_LOG_COLUMNS } from "@tradeblocks/lib";
 import {
   REPORTING_TRADE_COLUMN_ALIASES,
   REQUIRED_REPORTING_TRADE_COLUMNS,
+  isTatFormat,
 } from "@tradeblocks/lib";
 import type { StrategyAlignment } from "@tradeblocks/lib";
 import {
@@ -483,6 +484,9 @@ export function BlockDialog({
             requiredHeaders = REQUIRED_DAILY_LOG_COLUMNS;
             break;
           case "reporting":
+            if (isTatFormat(parsedHeaders)) {
+              return null; // TAT format detected, skip OO column validation
+            }
             normalizedHeaders = normalizeHeaders(
               parsedHeaders,
               REPORTING_TRADE_COLUMN_ALIASES
@@ -1792,8 +1796,8 @@ export function BlockDialog({
       </div>
     ) : (
       <div className="max-w-xs text-sm leading-snug">
-        Upload strategy reporting exports (e.g., strategy-trade-log.csv) to
-        compare modeled results with the live portfolio.
+        Upload strategy reporting exports to compare backtest results with live
+        trades. Supports OptionOmega and TAT CSV formats.
       </div>
     );
 

@@ -55,13 +55,15 @@ let storedThreads: string | null = null;
 let storedMemoryLimit: string | null = null;
 let storedMarketDbPath: string | null = null;
 const execFileAsync = promisify(execFile);
+const isWindows = process.platform === "win32";
 
 function isLockError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     lower.includes("could not set lock on file") ||
     lower.includes("conflicting lock is held") ||
-    lower.includes("io error: could not set lock")
+    lower.includes("io error: could not set lock") ||
+    lower.includes("being used by another process") // Windows OS error
   );
 }
 
@@ -83,6 +85,15 @@ function isProcessAlive(pid: number): boolean {
 
 async function getProcessParentPid(pid: number): Promise<number | null> {
   try {
+    if (isWindows) {
+      const { stdout } = await execFileAsync("wmic", [
+        "process", "where", `ProcessId=${pid}`, "get", "ParentProcessId", "/value",
+      ]);
+      const match = stdout.match(/ParentProcessId=(\d+)/);
+      if (!match) return null;
+      const ppid = parseInt(match[1], 10);
+      return Number.isFinite(ppid) ? ppid : null;
+    }
     const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "ppid="]);
     const ppid = parseInt(stdout.trim(), 10);
     return Number.isFinite(ppid) ? ppid : null;
@@ -93,6 +104,15 @@ async function getProcessParentPid(pid: number): Promise<number | null> {
 
 async function getProcessCommand(pid: number): Promise<string | null> {
   try {
+    if (isWindows) {
+      const { stdout } = await execFileAsync("wmic", [
+        "process", "where", `ProcessId=${pid}`, "get", "CommandLine", "/value",
+      ]);
+      const match = stdout.match(/CommandLine=(.+)/);
+      if (!match) return null;
+      const command = match[1].trim();
+      return command.length > 0 ? command : null;
+    }
     const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="]);
     const command = stdout.trim();
     return command.length > 0 ? command : null;
@@ -133,18 +153,25 @@ async function tryRecoverLockByTerminatingStaleProcess(
   const isTradeblocksProcess =
     command.includes("tradeblocks-mcp") ||
     command.includes("/mcp-server/server/index.js") ||
-    command.includes("packages/mcp-server/server/index.js");
-  const targetsSameDb = command.includes(normalizedDbPath) || command.includes(normalizedDbDir);
+    command.includes("packages/mcp-server/server/index.js") ||
+    command.includes("\\mcp-server\\server\\index.js") ||
+    command.includes("packages\\mcp-server\\server\\index.js");
+  // Normalize command paths for consistent comparison (Windows backslashes → forward slashes)
+  const normalizedCommand = command.replace(/\\/g, "/");
+  const targetsSameDb = normalizedCommand.includes(normalizedDbPath) || normalizedCommand.includes(normalizedDbDir);
 
   if (!isTradeblocksProcess || !targetsSameDb) {
     return false;
   }
 
-  // Check if the lock holder is orphaned (parent died, reparented to init/launchd PID 1).
-  // Orphaned processes are definitively stale — their Claude session is gone.
+  // Check if the lock holder is orphaned (parent session is gone).
+  // Unix: orphaned processes get reparented to PID 1 (init/launchd).
+  // Windows: child keeps original PPID even after parent dies — check if parent is still alive.
   // Only kill non-orphaned processes if forceRecovery is explicitly enabled.
   const ppid = await getProcessParentPid(lockHolderPid);
-  const orphaned = ppid === 1;
+  const orphaned = isWindows
+    ? (ppid !== null && !isProcessAlive(ppid))
+    : ppid === 1;
   if (!orphaned && !forceRecovery) {
     return false;
   }

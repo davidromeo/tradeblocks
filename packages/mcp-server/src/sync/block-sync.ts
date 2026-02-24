@@ -17,6 +17,8 @@ import {
   type BlockSyncMetadata,
 } from "./metadata.js";
 import { resolveTickerFromCsvRow } from "../utils/ticker.js";
+import { convertToReportingTrade } from "../utils/block-loader.js";
+import type { ReportingTrade } from "@tradeblocks/lib";
 
 /**
  * Result of syncing a single block
@@ -335,32 +337,48 @@ async function insertTradeBatch(
 }
 
 /**
- * Insert reporting log records in batches to avoid parameter limits.
+ * Format a Date to YYYY-MM-DD using local timezone components.
+ * Preserves the calendar day stored in the Date object (see CLAUDE.md date rules).
+ */
+function formatDateForDb(date: Date | undefined): string | null {
+  if (!date || isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Insert reporting trades in batches to avoid parameter limits.
+ * Accepts format-agnostic ReportingTrade objects — all CSV format detection
+ * is handled upstream by convertToReportingTrade().
  *
  * @param conn - DuckDB connection
  * @param blockId - Block identifier
- * @param records - Parsed CSV records
- * @param startIdx - Starting index in records array
+ * @param trades - Converted ReportingTrade objects
+ * @param tickers - Parallel array of resolved ticker strings
+ * @param startIdx - Starting index in arrays
  * @param batchSize - Number of records per batch
  */
 async function insertReportingBatch(
   conn: DuckDBConnection,
   blockId: string,
-  records: Record<string, string>[],
+  trades: ReportingTrade[],
+  tickers: string[],
   startIdx: number,
   batchSize: number
 ): Promise<void> {
-  const batch = records.slice(startIdx, startIdx + batchSize);
+  const batch = trades.slice(startIdx, startIdx + batchSize);
+  const batchTickers = tickers.slice(startIdx, startIdx + batchSize);
   if (batch.length === 0) return;
 
-  // Build VALUES placeholders: ($1, $2, $3, ...), ($15, $16, $17, ...), ...
   // Each row has 15 columns: block_id + 13 reporting fields + ticker
   const columnsPerRow = 15;
   const placeholders: string[] = [];
   const params: (string | number | null)[] = [];
 
   for (let rowIdx = 0; rowIdx < batch.length; rowIdx++) {
-    const record = batch[rowIdx];
+    const trade = batch[rowIdx];
     const baseParam = rowIdx * columnsPerRow + 1;
     const rowPlaceholders = Array.from(
       { length: columnsPerRow },
@@ -368,32 +386,22 @@ async function insertReportingBatch(
     );
     placeholders.push(`(${rowPlaceholders.join(", ")})`);
 
-    // Parse numeric values safely
-    const initialPremium = parseFloat(record["Initial Premium"]);
-    const numContracts = parseInt(record["No. of Contracts"], 10);
-    const pl = parseFloat(record["P/L"]);
-    const closingPrice = parseFloat(record["Closing Price"]);
-    const avgClosingCost = parseFloat(record["Avg. Closing Cost"]);
-    const openingPrice = parseFloat(record["Opening Price"]);
-    const ticker = resolveTickerFromCsvRow(record);
-
-    // Map CSV record to column values
     params.push(
-      blockId, // block_id
-      normalizeCsvDate(record["Date Opened"]), // date_opened
-      record["Time Opened"] || null, // time_opened
-      record["Strategy"] || null, // strategy
-      record["Legs"] || null, // legs
-      isNaN(initialPremium) ? null : initialPremium, // initial_premium
-      isNaN(numContracts) ? 1 : numContracts, // num_contracts
-      isNaN(pl) ? 0 : pl, // pl
-      normalizeCsvDate(record["Date Closed"]), // date_closed
-      record["Time Closed"] || null, // time_closed
-      isNaN(closingPrice) ? null : closingPrice, // closing_price
-      isNaN(avgClosingCost) ? null : avgClosingCost, // avg_closing_cost
-      record["Reason For Close"] || null, // reason_for_close
-      isNaN(openingPrice) ? null : openingPrice, // opening_price
-      ticker // ticker
+      blockId,
+      formatDateForDb(trade.dateOpened),
+      trade.timeOpened || null,
+      trade.strategy || null,
+      trade.legs || null,
+      trade.initialPremium ?? null,
+      trade.numContracts ?? 1,
+      trade.pl ?? 0,
+      formatDateForDb(trade.dateClosed),
+      trade.timeClosed || null,
+      trade.closingPrice ?? null,
+      trade.avgClosingCost ?? null,
+      trade.reasonForClose || null,
+      trade.openingPrice ?? null,
+      batchTickers[rowIdx]
     );
   }
 
@@ -547,14 +555,25 @@ export async function syncBlockInternal(
       );
 
       if (optionalLogs.reportinglog && reportinglogHash) {
-        // Read and parse reporting CSV
+        // Read and parse reporting CSV, then convert to ReportingTrade objects.
+        // convertToReportingTrade handles all format detection (OO, TAT, etc.)
         const reportingPath = path.join(blockPath, optionalLogs.reportinglog);
         const reportingContent = await fs.readFile(reportingPath, "utf-8");
         const reportingRecords = parseCSV(reportingContent);
 
+        const reportingTrades: ReportingTrade[] = [];
+        const reportingTickers: string[] = [];
+        for (const record of reportingRecords) {
+          const trade = convertToReportingTrade(record);
+          if (trade) {
+            reportingTrades.push(trade);
+            reportingTickers.push(resolveTickerFromCsvRow(record));
+          }
+        }
+
         // Insert reporting trades in batches of 500
-        for (let i = 0; i < reportingRecords.length; i += batchSize) {
-          await insertReportingBatch(conn, blockId, reportingRecords, i, batchSize);
+        for (let i = 0; i < reportingTrades.length; i += batchSize) {
+          await insertReportingBatch(conn, blockId, reportingTrades, reportingTickers, i, batchSize);
         }
       }
 

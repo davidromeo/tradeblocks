@@ -2,6 +2,7 @@
 
 import { MetricCard } from "@/components/metric-card";
 import { MetricSection } from "@/components/metric-section";
+import { MultiSelect } from "@/components/multi-select";
 import { Button } from "@/components/ui/button";
 import {
   HoverCard,
@@ -49,8 +50,11 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     unmatchedActualStrategies,
     actualTrades,
     combineLegGroups,
+    allStrategies,
+    selectedStrategies,
     setScalingMode,
     setTradeFilterMode,
+    setSelectedStrategies,
     setCombineLegGroups,
   } = useTradingCalendarStore();
 
@@ -75,7 +79,9 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     // Filter comparisons based on trade filter mode
     const filteredComparisons = tradeFilterMode === 'matched'
       ? scaledComparisons.filter(c => c.isMatched)
-      : scaledComparisons;
+      : tradeFilterMode === 'unmatched'
+        ? scaledComparisons.filter(c => !c.isMatched)
+        : scaledComparisons;
 
     let scaledBacktestPl = 0;
     let scaledActualPl = 0;
@@ -100,10 +106,10 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     }
 
     // Calculate filtered trade counts
-    const filteredBacktestCount = tradeFilterMode === 'matched'
+    const filteredBacktestCount = tradeFilterMode !== 'all'
       ? filteredComparisons.reduce((sum, c) => sum + (c.backtest?.trades.length ?? 0), 0)
       : dayData.backtestTradeCount;
-    const filteredActualCount = tradeFilterMode === 'matched'
+    const filteredActualCount = tradeFilterMode !== 'all'
       ? filteredComparisons.reduce((sum, c) => sum + (c.actual?.trades.length ?? 0), 0)
       : dayData.actualTradeCount;
 
@@ -150,9 +156,54 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
   // Get P/L positive flag
   const isPositive = (value: number) => value > 0;
 
+  // Build strategy options for MultiSelect
+  const strategyOptions = useMemo(
+    () => allStrategies.map((s) => ({ label: s, value: s })),
+    [allStrategies]
+  );
+
   // Build actions for Performance section header
   const performanceActions = hasActualTrades ? (
     <>
+      {/* Strategy Filter */}
+      {allStrategies.length > 1 && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <Label className="text-xs text-muted-foreground">Strategies</Label>
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80 p-0 overflow-hidden">
+                <div className="space-y-3">
+                  <div className="bg-primary/5 border-b px-4 py-3">
+                    <h4 className="text-sm font-semibold text-primary">
+                      Strategy Filter
+                    </h4>
+                  </div>
+                  <div className="px-4 pb-4 space-y-3">
+                    <p className="text-sm text-foreground leading-relaxed">
+                      Filter calendar data to specific strategies. All
+                      calculations, charts, and stats update to reflect only the
+                      selected strategies.
+                    </p>
+                  </div>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          </div>
+          <MultiSelect
+            options={strategyOptions}
+            defaultValue={selectedStrategies}
+            onValueChange={setSelectedStrategies}
+            placeholder="All strategies"
+            maxCount={1}
+            className="w-[200px]"
+            searchable={allStrategies.length > 5}
+          />
+        </div>
+      )}
+
       {/* Scaling Mode Toggle */}
       <div className="space-y-1">
         <div className="flex items-center gap-1">
@@ -233,6 +284,9 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
                     <li>
                       <strong>Matched Only:</strong> Only include trades from strategies that have both backtest and actual data
                     </li>
+                    <li>
+                      <strong>Unmatched Only:</strong> Only include trades from strategies missing a counterpart
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -243,12 +297,13 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
           value={tradeFilterMode}
           onValueChange={(value) => setTradeFilterMode(value as TradeFilterMode)}
         >
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-[180px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Trades</SelectItem>
             <SelectItem value="matched">Matched Only</SelectItem>
+            <SelectItem value="unmatched">Unmatched Only</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -282,21 +337,20 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
     return `${value.toFixed(1)}%`;
   };
 
-  // Check if we should show the comparison section
+  // Show the comparison section shell whenever the block has actual trades (unfiltered)
+  // to avoid layout jumps. Content changes based on whether comparisonStats is available.
   const showComparisonSection = isViewingDay
     ? dayStats?.hasBacktest && dayStats?.hasActual
-    : comparisonStats;
+    : hasActualTrades;
+
+  // Whether we have actual comparison data to display metrics
+  const hasComparisonData = isViewingDay
+    ? dayStats?.hasBacktest && dayStats?.hasActual
+    : !!comparisonStats;
 
   return (
     <div className="space-y-6">
-      {/* Standalone controls when comparison section is hidden but we have actual trades */}
-      {!showComparisonSection && hasActualTrades && (
-        <div className="flex items-center gap-4 justify-end">
-          {performanceActions}
-        </div>
-      )}
-
-      {/* Comparison Stats - same structure, data changes based on context */}
+      {/* Comparison Stats - always present when block has actual trades, content varies */}
       {showComparisonSection && (
         <MetricSection
           title="Backtest vs Actual"
@@ -304,121 +358,131 @@ export function StatsHeader({ onMatchStrategiesClick }: StatsHeaderProps) {
           gridCols={4}
           actions={performanceActions}
         >
-          <MetricCard
-            title="Backtest P&L"
-            value={
-              isViewingDay && dayStats
-                ? dayStats.backtestPl
-                : comparisonStats?.backtestPl ?? 0
-            }
-            format="currency"
-            subtitle={
-              isViewingDay && dayStats
-                ? `${dayStats.backtestTradeCount} trades`
-                : undefined
-            }
-            isPositive={isPositive(
-              isViewingDay && dayStats
-                ? dayStats.backtestPl
-                : comparisonStats?.backtestPl ?? 0
-            )}
-            tooltip={{
-              flavor: "Total P&L from backtest trades",
-              detailed:
-                "Sum of all backtest trade results (scaled if scaling mode is active)",
-            }}
-          />
-          <MetricCard
-            title="Actual P&L"
-            value={
-              isViewingDay && dayStats
-                ? dayStats.actualPl
-                : comparisonStats?.actualPl ?? 0
-            }
-            format="currency"
-            subtitle={
-              isViewingDay && dayStats
-                ? `${dayStats.actualTradeCount} trades`
-                : undefined
-            }
-            isPositive={isPositive(
-              isViewingDay && dayStats
-                ? dayStats.actualPl
-                : comparisonStats?.actualPl ?? 0
-            )}
-            tooltip={{
-              flavor: "Total P&L from actual trades",
-              detailed: "Sum of all actual executed trade results",
-            }}
-          />
-          <MetricCard
-            title="Variance"
-            value={
-              isViewingDay && dayStats
-                ? dayStats.variance ?? 0
-                : comparisonStats?.totalSlippage ?? 0
-            }
-            format="currency"
-            subtitle={
-              isViewingDay && dayStats
-                ? dayStats.variancePercent !== null
-                  ? formatPercent(dayStats.variancePercent)
-                  : undefined
-                : comparisonStats && comparisonStats.backtestPl !== 0
-                ? formatPercent(
-                    (comparisonStats.totalSlippage /
-                      Math.abs(comparisonStats.backtestPl)) *
-                      100
-                  )
-                : undefined
-            }
-            isPositive={isPositive(
-              isViewingDay && dayStats
-                ? dayStats.variance ?? 0
-                : comparisonStats?.totalSlippage ?? 0
-            )}
-            tooltip={{
-              flavor: "Performance difference between actual and backtest",
-              detailed:
-                "Includes slippage, commissions, timing differences, and market impact. Positive means actual outperformed backtest.",
-            }}
-          />
-          <MetricCard
-            title="Match Rate"
-            value={
-              isViewingDay && dayStats
-                ? dayStats.strategyCount > 0
-                  ? `${Math.round(
-                      (dayStats.matchedCount / dayStats.strategyCount) * 100
-                    )}%`
-                  : "-"
-                : comparisonStats
-                ? `${comparisonStats.matchRate.toFixed(0)}%`
-                : "-"
-            }
-            subtitle={
-              isViewingDay && dayStats
-                ? dayStats.strategyCount - dayStats.matchedCount > 0
-                  ? `${
-                      dayStats.strategyCount - dayStats.matchedCount
-                    } unmatched`
-                  : "All matched"
-                : comparisonStats &&
-                  comparisonStats.unmatchedBacktestCount +
-                    comparisonStats.unmatchedActualCount >
-                    0
-                ? `${
-                    comparisonStats.unmatchedBacktestCount +
-                    comparisonStats.unmatchedActualCount
-                  } unmatched`
-                : "All matched"
-            }
-            tooltip={{
-              flavor: "Percentage of strategies that were matched",
-              detailed:
-                "How many backtest strategies have corresponding actual trades",
-            }}
-          />
+          {hasComparisonData ? (
+            <>
+              <MetricCard
+                title="Backtest P&L"
+                value={
+                  isViewingDay && dayStats
+                    ? dayStats.backtestPl
+                    : comparisonStats?.backtestPl ?? 0
+                }
+                format="currency"
+                subtitle={
+                  isViewingDay && dayStats
+                    ? `${dayStats.backtestTradeCount} trades`
+                    : undefined
+                }
+                isPositive={isPositive(
+                  isViewingDay && dayStats
+                    ? dayStats.backtestPl
+                    : comparisonStats?.backtestPl ?? 0
+                )}
+                tooltip={{
+                  flavor: "Total P&L from backtest trades",
+                  detailed:
+                    "Sum of all backtest trade results (scaled if scaling mode is active)",
+                }}
+              />
+              <MetricCard
+                title="Actual P&L"
+                value={
+                  isViewingDay && dayStats
+                    ? dayStats.actualPl
+                    : comparisonStats?.actualPl ?? 0
+                }
+                format="currency"
+                subtitle={
+                  isViewingDay && dayStats
+                    ? `${dayStats.actualTradeCount} trades`
+                    : undefined
+                }
+                isPositive={isPositive(
+                  isViewingDay && dayStats
+                    ? dayStats.actualPl
+                    : comparisonStats?.actualPl ?? 0
+                )}
+                tooltip={{
+                  flavor: "Total P&L from actual trades",
+                  detailed: "Sum of all actual executed trade results",
+                }}
+              />
+              <MetricCard
+                title="Variance"
+                value={
+                  isViewingDay && dayStats
+                    ? dayStats.variance ?? 0
+                    : comparisonStats?.totalSlippage ?? 0
+                }
+                format="currency"
+                subtitle={
+                  isViewingDay && dayStats
+                    ? dayStats.variancePercent !== null
+                      ? formatPercent(dayStats.variancePercent)
+                      : undefined
+                    : comparisonStats && comparisonStats.backtestPl !== 0
+                    ? formatPercent(
+                        (comparisonStats.totalSlippage /
+                          Math.abs(comparisonStats.backtestPl)) *
+                          100
+                      )
+                    : undefined
+                }
+                isPositive={isPositive(
+                  isViewingDay && dayStats
+                    ? dayStats.variance ?? 0
+                    : comparisonStats?.totalSlippage ?? 0
+                )}
+                tooltip={{
+                  flavor: "Performance difference between actual and backtest",
+                  detailed:
+                    "Includes slippage, commissions, timing differences, and market impact. Positive means actual outperformed backtest.",
+                }}
+              />
+              <MetricCard
+                title="Match Rate"
+                value={
+                  isViewingDay && dayStats
+                    ? dayStats.strategyCount > 0
+                      ? `${Math.round(
+                          (dayStats.matchedCount / dayStats.strategyCount) * 100
+                        )}%`
+                      : "-"
+                    : comparisonStats
+                    ? `${comparisonStats.matchRate.toFixed(0)}%`
+                    : "-"
+                }
+                subtitle={
+                  isViewingDay && dayStats
+                    ? dayStats.strategyCount - dayStats.matchedCount > 0
+                      ? `${
+                          dayStats.strategyCount - dayStats.matchedCount
+                        } unmatched`
+                      : "All matched"
+                    : comparisonStats &&
+                      comparisonStats.unmatchedBacktestCount +
+                        comparisonStats.unmatchedActualCount >
+                        0
+                    ? `${
+                        comparisonStats.unmatchedBacktestCount +
+                        comparisonStats.unmatchedActualCount
+                      } unmatched`
+                    : "All matched"
+                }
+                tooltip={{
+                  flavor: "Percentage of strategies that were matched",
+                  detailed:
+                    "How many backtest strategies have corresponding actual trades",
+                }}
+              />
+            </>
+          ) : (
+            <div className="col-span-4 flex items-center justify-center py-4 text-sm text-muted-foreground">
+              {selectedStrategies.length > 0
+                ? "Selected strategies have no actual trades in this period — clear the filter or add a strategy with actual data to compare."
+                : "No actual trades in this period to compare."}
+            </div>
+          )}
         </MetricSection>
       )}
 
