@@ -150,22 +150,28 @@ tradeblocks-mcp --http --port 8080 ~/backtests
 
 ## Docker Deployment
 
-Run the MCP server in a container for remote/server deployments:
+Run the MCP server in a container for remote/server deployments.
+
+### Pre-built image (recommended)
+
+```bash
+docker run -d -p 3100:3100 -v ./data:/data --env-file .env ghcr.io/davidromeo/tradeblocks-mcp:latest
+```
+
+Or with docker compose, set the image in `docker-compose.yml`:
+```yaml
+services:
+  tradeblocks:
+    image: ghcr.io/davidromeo/tradeblocks-mcp:latest
+```
+
+### Build from source
 
 ```bash
 cd packages/mcp-server
 npm run build                # build on host (resolves workspace deps)
 docker build -t tradeblocks-mcp .
-```
-
-Run with docker compose:
-```bash
 docker compose up -d
-```
-
-Or run directly:
-```bash
-docker run -d -p 3100:3100 -v ./data:/data --env-file .env tradeblocks-mcp
 ```
 
 Place your block folders (each containing CSV files) in the `data/` directory. The container runs in HTTP mode on port 3100 by default. See [Authentication](#authentication) below for configuring credentials.
