@@ -10,6 +10,7 @@ import { CSVParser, ParseProgress } from './csv-parser'
 import { findMissingHeaders, normalizeHeaders } from '../utils/csv-headers'
 import { ProcessingError, ValidationError } from '../models'
 import { rawReportingTradeDataSchema, reportingTradeSchema } from '../models/validators'
+import { isTatFormat, convertTatRowToReportingTrade } from './tat-adapter'
 
 export interface ReportingTradeProcessingConfig {
   maxRows?: number
@@ -53,6 +54,14 @@ export class ReportingTradeProcessor {
     const errors: ProcessingError[] = []
     const warnings: string[] = []
 
+    // Read file content first so we can detect format from headers
+    const fileContent = await this.readFileContent(file)
+
+    // Extract headers from first line to detect format
+    const firstLine = fileContent.split(/\r?\n/)[0] || ''
+    const rawHeaders = firstLine.replace(/^\ufeff/, '').split(',').map(h => h.trim())
+    const isTat = isTatFormat(rawHeaders)
+
     const csvParser = new CSVParser({
       maxRows: this.config.maxRows,
       progressCallback: (progress, rowsProcessed) => {
@@ -68,25 +77,25 @@ export class ReportingTradeProcessor {
       },
     })
 
-    const parseResult = await csvParser.parseFileObject<RawReportingTradeData>(
-      file,
-      (row) => this.validateRawRow(row),
-      (progress) => {
-        this.config.progressCallback({
-          ...progress,
-          validTrades: 0,
-          invalidTrades: 0,
-        })
-      }
-    )
+    // For TAT format, parse without OO row validator (TAT rows would fail OO validation).
+    // For OO format, use the existing validator that normalizes aliases and validates schema.
+    const parseResult = isTat
+      ? await csvParser.parseFile<Record<string, string>>(fileContent)
+      : await csvParser.parseFile<RawReportingTradeData>(
+          fileContent,
+          (row) => this.validateRawRow(row)
+        )
 
     errors.push(...parseResult.errors)
     warnings.push(...parseResult.warnings)
 
-    const normalizedHeaders = normalizeHeaders(parseResult.headers, REPORTING_TRADE_COLUMN_ALIASES)
-    const missingColumns = findMissingHeaders(normalizedHeaders, REQUIRED_REPORTING_TRADE_COLUMNS)
-    if (missingColumns.length > 0) {
-      throw new Error(`Missing required reporting trade columns: ${missingColumns.join(', ')}`)
+    if (!isTat) {
+      // Existing OO column validation
+      const normalizedHeaders = normalizeHeaders(parseResult.headers, REPORTING_TRADE_COLUMN_ALIASES)
+      const missingColumns = findMissingHeaders(normalizedHeaders, REQUIRED_REPORTING_TRADE_COLUMNS)
+      if (missingColumns.length > 0) {
+        throw new Error(`Missing required reporting trade columns: ${missingColumns.join(', ')}`)
+      }
     }
 
     this.config.progressCallback({
@@ -106,9 +115,27 @@ export class ReportingTradeProcessor {
     for (let i = 0; i < parseResult.data.length; i++) {
       const rawTrade = parseResult.data[i]
       try {
-        const trade = this.convertToReportingTrade(rawTrade)
-        trades.push(trade)
-        validTrades++
+        if (isTat) {
+          const trade = convertTatRowToReportingTrade(rawTrade as unknown as Record<string, string>)
+          if (trade) {
+            trades.push(trade)
+            validTrades++
+          } else {
+            invalidTrades++
+            const validationError: ValidationError = {
+              type: 'validation',
+              message: `TAT trade conversion failed at row ${i + 2}: missing required fields`,
+              field: 'unknown',
+              value: rawTrade,
+              expected: 'Valid TAT trade data',
+            }
+            errors.push(validationError)
+          }
+        } else {
+          const trade = this.convertToReportingTrade(rawTrade as RawReportingTradeData)
+          trades.push(trade)
+          validTrades++
+        }
       } catch (error) {
         invalidTrades++
         const validationError: ValidationError = {
@@ -170,6 +197,25 @@ export class ReportingTradeProcessor {
         totalPL,
       },
     }
+  }
+
+  /**
+   * Read file content as text using FileReader.
+   */
+  private readFileContent(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const content = event.target?.result as string
+        if (!content) {
+          reject(new Error('Failed to read file content'))
+          return
+        }
+        resolve(content)
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsText(file)
+    })
   }
 
   private validateRawRow(row: Record<string, string>): RawReportingTradeData | null {

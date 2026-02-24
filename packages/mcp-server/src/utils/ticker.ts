@@ -11,6 +11,7 @@ const TICKER_FIELD_CANDIDATES = [
   "underlying",
   "Underlying",
   "underlyingSymbol",
+  "UnderlyingSymbol",
   "Underlying Symbol",
 ];
 

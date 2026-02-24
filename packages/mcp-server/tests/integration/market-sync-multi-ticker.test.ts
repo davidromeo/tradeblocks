@@ -214,6 +214,43 @@ describe("Market Sync Multi-Ticker", () => {
     expect(tickers.getRows()).toEqual([["SPX"]]);
   });
 
+  it("resolves UnderlyingSymbol (PascalCase) from TAT CSV rows", async () => {
+    const TAT_HEADERS_LINE =
+      "Account,Date,TimeOpened,TimeClosed,TradeType,StopType,StopMultiple,PriceOpen,PriceClose,PriceStopTarget,TotalPremium,Qty,Commission,ProfitLoss,Status,ShortPut,LongPut,ShortCall,LongCall,BuyingPower,StopMultipleResult,Slippage,StopTrigger,PutDelta,CallDelta,Template,Strategy,PriceLong,PriceShort,OpenDate,OpenTime,CloseDate,CloseTime,TradeID,ParentTaskID,ContractCount,UnderlyingSymbol";
+
+    await writeCsv(
+      testDir,
+      "tat-block/reportinglog.csv",
+      TAT_HEADERS_LINE,
+      [
+        "IB:U1234,1/30/2026,10:04 AM,3:51 PM,DoubleCalendar,Vertical,0,-53.1,57.05,,-26550,5,45.65,1929.35,Manual Closed,6945,6945,6945,6945,26550,0,0,Single Bid,-0.504,0.496,MEDC 3/7,DC,113.872,60.772,2026-01-30,10:04:13,2026-01-30,15:51:13,15780,0,20,NDX",
+      ]
+    );
+    // Need a tradelog for the block to sync
+    await writeCsv(
+      testDir,
+      "tat-block/tradelog.csv",
+      TRADE_HEADERS,
+      [
+        "2026-01-30,09:35:00,2026-01-30,15:30:00,2.50,0.50,NDX 21000P/20900P,250,1,200,DC,1.50,1.50,Target,10200,5000",
+      ]
+    );
+
+    const blockSyncResult = await syncAllBlocks(testDir);
+    expect(blockSyncResult.blocksSynced).toBe(1);
+    expect(blockSyncResult.errors).toHaveLength(0);
+
+    const conn = await getConnection(testDir);
+    const tickers = await conn.runAndReadAll(`
+      SELECT DISTINCT ticker
+      FROM trades.reporting_data
+      WHERE block_id = 'tat-block'
+      ORDER BY ticker
+    `);
+
+    expect(tickers.getRows()).toEqual([["NDX"]]);
+  });
+
   it("falls back to SPX when neither ticker columns nor legs provide a symbol", async () => {
     await writeCsv(
       testDir,
