@@ -2,6 +2,12 @@
 
 All notable changes to the TradeBlocks MCP Server will be documented in this file.
 
+## [2.0.0-beta.2] - 2026-02-26
+
+### Added
+
+- **VIX_RTH_Open**: New `market.context` column sourcing VIX open from the first intraday bar in the 09:30-09:32 ET window instead of the pre-market daily open. Tier 2 enrichment now uses `VIX_RTH_Open` (when available) for `VIX_Gap_Pct` and `VIX_Spike_Pct` via COALESCE fallback. The pre-market daily open can differ by 2-3+ VIX points on volatile days. Falls back to `VIX_Open` automatically when no intraday VIX data is present. Run `enrich_market_data(ticker, force_full: true)` to recompute.
+
 ## [2.0.0] - 2026-02-24
 
 ### BREAKING CHANGES
