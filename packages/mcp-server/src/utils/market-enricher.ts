@@ -38,6 +38,7 @@ export interface ContextRow {
   VIX_Open?: number | null;
   VIX_Close?: number | null;
   VIX_High?: number | null;
+  VIX_RTH_Open?: number | null;
   VIX9D_Open?: number | null;
   VIX9D_Close?: number | null;
   VIX3M_Open?: number | null;
@@ -381,6 +382,9 @@ export function computeVIXDerivedFields(rows: ContextRow[]): EnrichedContextRow[
   return rows.map((row, i): EnrichedContextRow => {
     const prev = i > 0 ? rows[i - 1] : null;
 
+    // Effective open: prefer RTH open from intraday bars, fall back to daily VIX_Open
+    const effectiveOpen = row.VIX_RTH_Open ?? row.VIX_Open;
+
     // Same-day ratio and spike fields
     const VIX9D_VIX_Ratio =
       row.VIX9D_Close != null && row.VIX_Close != null && row.VIX_Close !== 0
@@ -393,8 +397,8 @@ export function computeVIXDerivedFields(rows: ContextRow[]): EnrichedContextRow[
         : null;
 
     const VIX_Spike_Pct =
-      row.VIX_High != null && row.VIX_Open != null && row.VIX_Open !== 0
-        ? ((row.VIX_High - row.VIX_Open) / row.VIX_Open) * 100
+      row.VIX_High != null && effectiveOpen != null && effectiveOpen !== 0
+        ? ((row.VIX_High - effectiveOpen) / effectiveOpen) * 100
         : null;
 
     // Intraday change fields (same-day open to close)
@@ -412,8 +416,8 @@ export function computeVIXDerivedFields(rows: ContextRow[]): EnrichedContextRow[
     const prevVIXClose = prev?.VIX_Close ?? null;
 
     const VIX_Gap_Pct =
-      row.VIX_Open != null && prevVIXClose != null && prevVIXClose !== 0
-        ? ((row.VIX_Open - prevVIXClose) / prevVIXClose) * 100
+      effectiveOpen != null && prevVIXClose != null && prevVIXClose !== 0
+        ? ((effectiveOpen - prevVIXClose) / prevVIXClose) * 100
         : null;
 
     const VIX_Change_Pct =
@@ -580,12 +584,38 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
   const rawRows = reader.getRows();
   if (rawRows.length === 0) return { status: "skipped", reason: "no context rows" };
 
+  // Query VIX RTH open from intraday bars (first bar in 09:30-09:32 window per date)
+  const rthOpenByDate = new Map<string, number>();
+  try {
+    const rthReader = await conn.runAndReadAll(
+      `SELECT date, open
+       FROM market.intraday
+       WHERE ticker = 'VIX'
+         AND time >= '09:30' AND time <= '09:32'
+       ORDER BY date, time ASC`
+    );
+    const rthRows = rthReader.getRows();
+    for (const r of rthRows) {
+      const dateStr = r[0] as string;
+      // Keep first bar per date (earliest time in window)
+      if (!rthOpenByDate.has(dateStr)) {
+        const openVal = r[1] as number | null;
+        if (openVal != null) {
+          rthOpenByDate.set(dateStr, openVal);
+        }
+      }
+    }
+  } catch {
+    // market.intraday may not have VIX data — gracefully continue with empty map
+  }
+
   // Map to ContextRow objects
   const contextRows: ContextRow[] = rawRows.map((r) => ({
     date: r[0] as string,
     VIX_Open: r[1] as number | null,
     VIX_Close: r[2] as number | null,
     VIX_High: r[3] as number | null,
+    VIX_RTH_Open: rthOpenByDate.get(r[0] as string) ?? null,
     VIX9D_Open: r[4] as number | null,
     VIX9D_Close: r[5] as number | null,
     VIX3M_Open: r[6] as number | null,
@@ -601,6 +631,7 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
 
   // Batch UPDATE market.context with Tier 2 fields
   const tier2Cols = [
+    "VIX_RTH_Open",
     "VIX_Gap_Pct",
     "VIX_Change_Pct",
     "VIX9D_Change_Pct",
@@ -620,6 +651,7 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
     const v3m = r.VIX3M_Close ?? null;
     return {
       date: r.date,
+      VIX_RTH_Open: r.VIX_RTH_Open ?? null,
       VIX_Gap_Pct: r.VIX_Gap_Pct ?? null,
       VIX_Change_Pct: r.VIX_Change_Pct ?? null,
       VIX9D_Change_Pct: r.VIX9D_Change_Pct ?? null,

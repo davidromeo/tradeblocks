@@ -102,6 +102,7 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       VIX_Close DOUBLE,
       VIX_High DOUBLE,
       VIX_Low DOUBLE,
+      VIX_RTH_Open DOUBLE,
       VIX_Change_Pct DOUBLE,
       VIX_Gap_Pct DOUBLE,
       VIX9D_Open DOUBLE,
@@ -120,6 +121,13 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       PRIMARY KEY (date)
     )
   `);
+
+  // Migration: add VIX_RTH_Open column to existing databases
+  try {
+    await conn.run(`ALTER TABLE market.context ADD COLUMN VIX_RTH_Open DOUBLE`);
+  } catch {
+    // Column already exists
+  }
 
   // Raw intraday bars per ticker, per day, per time slot (Eastern Time "HH:MM")
   // PK: (ticker, date, time)

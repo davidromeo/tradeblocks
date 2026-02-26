@@ -432,6 +432,11 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             hypothesis: false,
             timing: 'close',
           },
+          VIX_RTH_Open: {
+            description: "VIX RTH (Regular Trading Hours) open from first intraday bar in 09:30-09:32 ET window. NULL if no intraday bar available; derived fields fall back to VIX_Open.",
+            hypothesis: true,
+            timing: 'open',
+          },
           VIX_Change_Pct: {
             description: "VIX percentage change from prior close",
             hypothesis: true,
