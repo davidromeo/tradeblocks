@@ -594,6 +594,57 @@ describe('computeVIXDerivedFields', () => {
     const expected = (14.5 - 14.0) / 14.0 * 100;
     expect(result[0].VIX_Spike_Pct).toBeCloseTo(expected, 3);
   });
+
+  test('uses VIX_RTH_Open for VIX_Gap_Pct when available', () => {
+    const rows = [
+      { date: '2025-01-06', VIX_Open: 14.0, VIX_Close: 13.5, VIX_High: 14.5,
+        VIX9D_Open: 12.0, VIX9D_Close: 11.8, VIX3M_Open: 16.0, VIX3M_Close: 15.8 },
+      { date: '2025-01-07', VIX_Open: 13.8, VIX_RTH_Open: 14.1, VIX_Close: 14.2, VIX_High: 14.5,
+        VIX9D_Open: 11.9, VIX9D_Close: 12.1, VIX3M_Open: 15.9, VIX3M_Close: 16.1 },
+    ];
+    const result = computeVIXDerivedFields(rows);
+    // VIX_Gap_Pct should use VIX_RTH_Open (14.1), not VIX_Open (13.8)
+    // = (14.1 - 13.5) / 13.5 * 100
+    const expected = (14.1 - 13.5) / 13.5 * 100;
+    expect(result[1].VIX_Gap_Pct).toBeCloseTo(expected, 3);
+  });
+
+  test('uses VIX_RTH_Open for VIX_Spike_Pct when available', () => {
+    const rows = [
+      { date: '2025-01-07', VIX_Open: 13.8, VIX_RTH_Open: 14.1, VIX_Close: 14.2, VIX_High: 15.0,
+        VIX9D_Open: 11.9, VIX9D_Close: 12.1, VIX3M_Open: 15.9, VIX3M_Close: 16.1 },
+    ];
+    const result = computeVIXDerivedFields(rows);
+    // VIX_Spike_Pct = (VIX_High - effectiveOpen) / effectiveOpen * 100
+    // = (15.0 - 14.1) / 14.1 * 100
+    const expected = (15.0 - 14.1) / 14.1 * 100;
+    expect(result[0].VIX_Spike_Pct).toBeCloseTo(expected, 3);
+  });
+
+  test('falls back to VIX_Open for VIX_Gap_Pct when VIX_RTH_Open is null', () => {
+    const rows = [
+      { date: '2025-01-06', VIX_Open: 14.0, VIX_Close: 13.5, VIX_High: 14.5,
+        VIX9D_Open: 12.0, VIX9D_Close: 11.8, VIX3M_Open: 16.0, VIX3M_Close: 15.8 },
+      { date: '2025-01-07', VIX_Open: 13.8, VIX_RTH_Open: null, VIX_Close: 14.2, VIX_High: 14.5,
+        VIX9D_Open: 11.9, VIX9D_Close: 12.1, VIX3M_Open: 15.9, VIX3M_Close: 16.1 },
+    ];
+    const result = computeVIXDerivedFields(rows);
+    // Should use VIX_Open (13.8) since VIX_RTH_Open is null
+    const expected = (13.8 - 13.5) / 13.5 * 100;
+    expect(result[1].VIX_Gap_Pct).toBeCloseTo(expected, 3);
+  });
+
+  test('falls back to VIX_Open for VIX_Spike_Pct when VIX_RTH_Open is undefined', () => {
+    // Row without VIX_RTH_Open property at all (simulates pre-RTH-enrichment data)
+    const rows = [
+      { date: '2025-01-07', VIX_Open: 13.8, VIX_Close: 14.2, VIX_High: 14.5,
+        VIX9D_Open: 11.9, VIX9D_Close: 12.1, VIX3M_Open: 15.9, VIX3M_Close: 16.1 },
+    ];
+    const result = computeVIXDerivedFields(rows);
+    // effectiveOpen = undefined ?? 13.8 = 13.8
+    const expected = (14.5 - 13.8) / 13.8 * 100;
+    expect(result[0].VIX_Spike_Pct).toBeCloseTo(expected, 3);
+  });
 });
 
 // =============================================================================

@@ -79,7 +79,7 @@ describe('Derived Sets', () => {
 
     const totalClassified = dailyClassified.length + contextClassified.length;
 
-    expect(allClassified.size).toBe(50);
+    expect(allClassified.size).toBe(51);
     expect(allClassified.size).toBe(totalClassified);
 
     // Every classified column should be in exactly one set
@@ -104,12 +104,12 @@ describe('Derived Sets', () => {
     }
   });
 
-  test('OPEN_KNOWN_FIELDS has exactly 9 fields (5 daily + 4 context)', () => {
-    expect(OPEN_KNOWN_FIELDS.size).toBe(9);
+  test('OPEN_KNOWN_FIELDS has exactly 10 fields (5 daily + 5 context)', () => {
+    expect(OPEN_KNOWN_FIELDS.size).toBe(10);
     // Daily open-known: open, Prior_Close, Gap_Pct, Prev_Return_Pct, Prior_Range_vs_ATR
     expect(DAILY_OPEN_FIELDS.size).toBe(5);
-    // Context open-known: VIX_Open, VIX_Gap_Pct, VIX9D_Open, VIX3M_Open
-    expect(CONTEXT_OPEN_FIELDS.size).toBe(4);
+    // Context open-known: VIX_Open, VIX_RTH_Open, VIX_Gap_Pct, VIX9D_Open, VIX3M_Open
+    expect(CONTEXT_OPEN_FIELDS.size).toBe(5);
   });
 
   test('CLOSE_KNOWN_FIELDS has exactly 38 fields (24 daily + 14 context)', () => {
