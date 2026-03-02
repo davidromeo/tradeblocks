@@ -14,10 +14,8 @@
 import {
   syncBlock,
   syncAllBlocks,
-  syncMarketData,
   type BlockSyncResult,
   type SyncResult,
-  type MarketSyncResult,
 } from "../../sync/index.js";
 import { upgradeToReadWrite, downgradeToReadOnly, getConnectionMode } from "../../db/connection.js";
 
@@ -40,7 +38,6 @@ export interface MultiBlockContext {
 
 export interface FullSyncContext {
   blockSyncResult: SyncResult;
-  marketSyncResult: MarketSyncResult;
   baseDir: string;
 }
 
@@ -54,7 +51,7 @@ export function withSyncedBlock<TInput extends { blockId: string }, TOutput>(
   handler: (input: TInput, ctx: SingleBlockContext) => Promise<TOutput>
 ): (input: TInput) => Promise<TOutput | ToolError> {
   return async (input: TInput) => {
-    await upgradeToReadWrite(baseDir);
+    await upgradeToReadWrite(baseDir, { fallbackToReadOnly: true });
     let syncResult: BlockSyncResult;
 
     if (getConnectionMode() === "read_write") {
@@ -73,7 +70,7 @@ export function withSyncedBlock<TInput extends { blockId: string }, TOutput>(
         content: [
           {
             type: "text" as const,
-            text: `Block '${input.blockId}' no longer exists (folder was deleted)`,
+            text: `Block '${input.blockId}' no longer exists (folder was deleted). Call list_blocks to see available blocks.`,
           },
         ],
         isError: true as const,
@@ -85,7 +82,7 @@ export function withSyncedBlock<TInput extends { blockId: string }, TOutput>(
         content: [
           {
             type: "text" as const,
-            text: `Sync error for block '${input.blockId}': ${syncResult.error}`,
+            text: `Sync error for block '${input.blockId}': ${syncResult.error}. Call list_blocks to see available blocks.`,
           },
         ],
         isError: true as const,
@@ -116,7 +113,7 @@ export function withSyncedBlocks<
 
     const syncResults = new Map<string, BlockSyncResult>();
 
-    await upgradeToReadWrite(baseDir);
+    await upgradeToReadWrite(baseDir, { fallbackToReadOnly: true });
 
     if (getConnectionMode() === "read_write") {
       try {
@@ -129,7 +126,7 @@ export function withSyncedBlocks<
               content: [
                 {
                   type: "text" as const,
-                  text: `Block '${blockId}' no longer exists (folder was deleted)`,
+                  text: `Block '${blockId}' no longer exists (folder was deleted). Call list_blocks to see available blocks.`,
                 },
               ],
               isError: true as const,
@@ -141,7 +138,7 @@ export function withSyncedBlocks<
               content: [
                 {
                   type: "text" as const,
-                  text: `Sync error for block '${blockId}': ${result.error}`,
+                  text: `Sync error for block '${blockId}': ${result.error}. Call list_blocks to see available blocks.`,
                 },
               ],
               isError: true as const,
@@ -159,22 +156,24 @@ export function withSyncedBlocks<
 }
 
 /**
- * Middleware for tools that need a full sync of all blocks and market data.
+ * Middleware for tools that need a full sync of all blocks.
  * Used by list_blocks which needs to see all available blocks.
+ *
+ * Note: market data sync (removed in Phase 64) is intentionally NOT called here (DB-09).
+ * Market data writes must not be wrapped in analytics.duckdb transactions.
+ * Market data is imported via dedicated import_market_csv tool (Phase 61+).
  */
 export function withFullSync<TInput, TOutput>(
   baseDir: string,
   handler: (input: TInput, ctx: FullSyncContext) => Promise<TOutput>
 ): (input: TInput) => Promise<TOutput> {
   return async (input: TInput) => {
-    await upgradeToReadWrite(baseDir);
+    await upgradeToReadWrite(baseDir, { fallbackToReadOnly: true });
     let blockSyncResult: SyncResult;
-    let marketSyncResult: MarketSyncResult;
 
     if (getConnectionMode() === "read_write") {
       try {
         blockSyncResult = await syncAllBlocks(baseDir);
-        marketSyncResult = await syncMarketData(baseDir);
       } finally {
         await downgradeToReadOnly(baseDir);
       }
@@ -188,15 +187,8 @@ export function withFullSync<TInput, TOutput>(
         errors: [],
         results: [],
       };
-      marketSyncResult = {
-        filesProcessed: 0,
-        filesSynced: 0,
-        filesUnchanged: 0,
-        rowsInserted: 0,
-        errors: [],
-      };
     }
 
-    return handler(input, { blockSyncResult, marketSyncResult, baseDir });
+    return handler(input, { blockSyncResult, baseDir });
   };
 }

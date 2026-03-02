@@ -4,7 +4,7 @@ Model Context Protocol (MCP) server for options trading analysis. Works with Cla
 
 ## Features
 
-- **34 MCP tools** for comprehensive trading analysis
+- **Comprehensive MCP tools** for trading analysis
 - **SQL analytics layer** - `run_sql` for arbitrary queries, `describe_database` for schema discovery
 - **Two transport modes**: stdio (CLI tools) and HTTP (web platforms)
 - **Block-based data organization** - each folder is a trading strategy
@@ -122,28 +122,22 @@ See [Gemini CLI MCP documentation](https://geminicli.com/docs/tools/mcp-server/)
 
 ### Web Platforms (ChatGPT, Google AI Studio, Julius)
 
-Web AI platforms require HTTP transport with an ngrok tunnel:
+Web AI platforms require HTTP transport with a publicly reachable URL:
 
-**Terminal 1:** Start HTTP server
 ```bash
 tradeblocks-mcp --http ~/Trading/backtests
 ```
 
-**Terminal 2:** Expose via ngrok
-```bash
-ngrok http 3100
-```
+Then expose port 3100 however you prefer (ngrok, Cloudflare Tunnel, reverse proxy, Docker on a server, etc.) and add the URL (`https://your-host/mcp`) to your platform's MCP settings.
 
-Then add the ngrok URL (`https://xxx.ngrok.io/mcp`) to your platform's MCP settings.
-
-See [Web Platforms Guide](docs/WEB-PLATFORMS.md) for detailed setup instructions.
+See [Web Platforms Guide](docs/WEB-PLATFORMS.md) for platform-specific setup, or [Docker Deployment](#docker-deployment) for running on a remote server.
 
 ## Transport Modes
 
 | Mode | Flag | Use Case | Platforms |
 |------|------|----------|-----------|
 | stdio | (default) | Local CLI tools | Claude Desktop, Claude Code, Codex CLI, Gemini CLI |
-| HTTP | `--http` | Web platforms via ngrok | ChatGPT, Google AI Studio, Julius AI |
+| HTTP | `--http` | Web platforms, remote servers | ChatGPT, Google AI Studio, Julius AI |
 
 ```bash
 # stdio mode (default)
@@ -153,6 +147,70 @@ tradeblocks-mcp ~/backtests
 tradeblocks-mcp --http ~/backtests
 tradeblocks-mcp --http --port 8080 ~/backtests
 ```
+
+## Docker Deployment
+
+Run the MCP server in a container for remote/server deployments.
+
+### Pre-built image (recommended)
+
+```bash
+docker run -d -p 3100:3100 -v ./data:/data --env-file .env ghcr.io/davidromeo/tradeblocks-mcp:latest
+```
+
+Or with docker compose, set the image in `docker-compose.yml`:
+```yaml
+services:
+  tradeblocks:
+    image: ghcr.io/davidromeo/tradeblocks-mcp:latest
+```
+
+### Build from source
+
+```bash
+cd packages/mcp-server
+npm run build                # build on host (resolves workspace deps)
+docker build -t tradeblocks-mcp .
+docker compose up -d
+```
+
+Place your block folders (each containing CSV files) in the `data/` directory. The container runs in HTTP mode on port 3100 by default. See [Authentication](#authentication) below for configuring credentials.
+
+Connect any MCP client to `http://<your-host>:3100/mcp`. How you expose this endpoint (reverse proxy, tunnel, VPN, etc.) is up to you.
+
+## Authentication
+
+HTTP mode includes **OAuth 2.1 with PKCE** authentication, enabled by default. MCP clients that support OAuth (Claude, ChatGPT, etc.) handle the flow automatically — users see a login prompt on first connection.
+
+### Setup
+
+Copy `.env.example` to `.env` and configure:
+
+```env
+# Required for HTTP mode
+TRADEBLOCKS_USERNAME=admin
+TRADEBLOCKS_PASSWORD=changeme
+TRADEBLOCKS_JWT_SECRET=           # generate with: openssl rand -hex 32
+
+# Optional
+TRADEBLOCKS_PORT=3100             # HTTP port (default: 3100)
+TRADEBLOCKS_JWT_EXPIRY=24h        # Token lifetime (default: 24h)
+TRADEBLOCKS_ISSUER_URL=           # Public URL when behind a reverse proxy (e.g. https://mcp.yourdomain.com)
+
+# DuckDB tuning
+DUCKDB_THREADS=2
+DUCKDB_MEMORY_LIMIT=512MB
+```
+
+### Disabling Auth
+
+If the server is behind a reverse proxy or tunnel that already handles authentication:
+
+```bash
+tradeblocks-mcp --http --no-auth ~/backtests
+```
+
+Or set `TRADEBLOCKS_NO_AUTH=true` in `.env`.
 
 ## Agent Skills
 
@@ -245,6 +303,17 @@ backtests/
 | `run_sql` | Execute SQL queries against trades and market data |
 | `describe_database` | Schema discovery with table info and example queries |
 
+### Market Data Tools
+| Tool | Description |
+|------|-------------|
+| `import_market_csv` | Import market data CSV with column mapping |
+| `import_from_database` | Import from external DuckDB databases |
+| `enrich_market_data` | Compute ~40 derived indicators from raw OHLCV |
+| `enrich_trades` | Enrich trades with market context (lookahead-free) |
+| `analyze_regime_performance` | Analyze P&L by market regime |
+| `suggest_filters` | Suggest trade filters based on market conditions |
+| `calculate_orb` | Opening range breakout analysis from intraday bars |
+
 ### Import Tools
 | Tool | Description |
 |------|-------------|
@@ -268,21 +337,25 @@ npm run mcpb:pack
 
 ## Market Data (Optional)
 
-For market context (VIX regimes, intraday timing, gap analysis), export underlying/VIX data from TradingView using the included PineScript indicators. The MCP server syncs these CSVs into DuckDB automatically.
+For market context (VIX regimes, intraday timing, gap analysis), import market data from TradingView exports using MCP tools:
 
-Supported `_marketdata` filename patterns:
-- `<ticker>_daily.csv` (example: `spx_daily.csv`, `msft_daily.csv`)
-- `<ticker>_15min.csv` (example: `spx_15min.csv`, `msft_15min.csv`)
-- `<scope>_vix_intraday.csv` or `vix_intraday.csv` (global scope `ALL`)
+1. **Export** from TradingView (any chart: SPX daily, VIX daily, SPX 5-min, etc.)
+2. **Import** via `import_market_csv` with a column mapping
+3. **Enrich** via `enrich_market_data` to compute ~40 derived indicators
 
-Market tables are keyed by `(ticker, date)`, and trade enrichment joins on ticker + date.
+No Pine Scripts needed — TradingView exports raw OHLCV natively.
 
-See [scripts/README.md](../../scripts/README.md) for setup instructions, field documentation, and the 3 PineScript indicators.
+Market data lives in a separate `market.duckdb` (configurable via `MARKET_DB_PATH` or `--market-db`). Tables:
+- `market.daily` — Daily OHLCV + enriched indicators (keyed by `ticker, date`)
+- `market.context` — VIX / volatility context (keyed by `date`)
+- `market.intraday` — Intraday bars at any resolution (keyed by `ticker, date, time`)
+
+See [scripts/README.md](../../scripts/README.md) for import examples and column mapping reference.
 
 ## Related
 
 - [Usage Guide](docs/USAGE.md) - Detailed usage examples and workflows
 - [Web Platforms Guide](docs/WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
 - [Agent Skills](../agent-skills/README.md) - Conversational workflows for guided analysis
-- [Market Data Scripts](../../scripts/README.md) - TradingView PineScript indicators for SPX/VIX data
+- [Market Data Import](../../scripts/README.md) - Import workflow and column mapping reference
 - [Main Application](../../README.md) - Web-based UI for TradeBlocks

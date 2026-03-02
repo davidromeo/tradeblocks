@@ -22,7 +22,7 @@
  *     COUNT(*) as trades,
  *     SUM(pl) as total_pl
  *   FROM trades.trade_data t
- *   JOIN market.spx_daily m ON t.date_opened = m.date
+ *   JOIN market.daily m ON t.date_opened = m.date
  *   WHERE t.block_id = 'my-block'
  *   GROUP BY bucket
  */

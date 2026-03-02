@@ -21,6 +21,8 @@ import { registerPerformanceTools } from "./tools/performance.js";
 import { registerReportTools } from "./tools/reports.js";
 import { registerImportTools } from "./tools/imports.js";
 import { registerMarketDataTools } from "./tools/market-data.js";
+import { registerMarketImportTools } from "./tools/market-imports.js";
+import { registerMarketEnrichmentTools } from "./tools/market-enrichment.js";
 import { registerSQLTools } from "./tools/sql.js";
 import { registerSchemaTools } from "./tools/schema.js";
 import { registerEdgeDecayTools } from "./tools/edge-decay.js";
@@ -48,11 +50,14 @@ MCP Server Modes:
   tradeblocks-mcp --http --port 8080 <folder> HTTP transport on custom port
 
 Options:
-  --http           Start HTTP server instead of stdio (for web platforms)
-  --port <number>  HTTP server port (default: 3100, requires --http)
+  --http             Start HTTP server instead of stdio (for web platforms)
+  --port <number>    HTTP server port (default: 3100, requires --http)
+  --market-db <path> Path to market.duckdb (default: <folder>/market.duckdb)
+  --no-auth          Disable authentication (only use behind an auth proxy)
 
 Environment:
   BLOCKS_DIRECTORY  Default backtests folder if not specified
+  MARKET_DB_PATH    Path to market.duckdb (overrides default, overridden by --market-db)
 
 Commands:
   install-skills    Install TradeBlocks skills to AI platform
@@ -107,12 +112,16 @@ function parseSkillArgs(): { platform: Platform; force: boolean } {
 function parseServerArgs(): {
   http: boolean;
   port: number;
+  noAuth: boolean;
   directory: string | undefined;
+  marketDb: string | undefined;
 } {
   const args = process.argv.slice(2);
   let http = false;
   let port = 3100;
+  let noAuth = false;
   let directory: string | undefined;
+  let marketDb: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -125,18 +134,26 @@ function parseServerArgs(): {
         port = parsedPort;
       }
       i++; // Skip next arg (the port value)
+    } else if (arg === "--market-db" && args[i + 1]) {
+      marketDb = args[i + 1];
+      i++; // Skip next arg (the path value)
+    } else if (arg === "--no-auth") {
+      noAuth = true;
     } else if (!arg.startsWith("-") && !arg.startsWith("--")) {
       // Non-flag argument is the directory
       directory = arg;
     }
   }
 
-  // Also check environment variable
+  // Also check environment variables
   if (!directory) {
     directory = process.env.BLOCKS_DIRECTORY;
   }
+  if (!marketDb) {
+    marketDb = process.env.MARKET_DB_PATH;
+  }
 
-  return { http, port, directory };
+  return { http, port, noAuth, directory, marketDb };
 }
 
 // Handle skill CLI commands
@@ -250,7 +267,7 @@ async function main(): Promise<void> {
   }
 
   // MCP Server mode - parse arguments
-  const { http, port, directory: backtestDir } = parseServerArgs();
+  const { http, port, noAuth, directory: backtestDir } = parseServerArgs();
 
   if (!backtestDir) {
     printUsage();
@@ -271,14 +288,19 @@ async function main(): Promise<void> {
   // Used by HTTP transport which needs fresh instances per request (stateless mode)
   const createServer = (): McpServer => {
     const server = new McpServer(
-      { name: "tradeblocks-mcp", version: "1.2.0" },
-      { capabilities: { tools: {} } }
+      { name: "tradeblocks-mcp", version: "2.0.0" },
+      {
+        capabilities: { tools: {} },
+        instructions: "Call list_blocks first to discover available block IDs. All other block tools require a blockId returned by list_blocks. For SQL queries, call describe_database first to discover block_ids and column names, then filter trades with WHERE block_id = '...'.",
+      }
     );
     registerBlockTools(server, resolvedDir);
     registerAnalysisTools(server, resolvedDir);
     registerPerformanceTools(server, resolvedDir);
     registerReportTools(server, resolvedDir);
     registerImportTools(server, resolvedDir);
+    registerMarketImportTools(server, resolvedDir);
+    registerMarketEnrichmentTools(server, resolvedDir);
     registerMarketDataTools(server, resolvedDir);
     registerSQLTools(server, resolvedDir);
     registerSchemaTools(server, resolvedDir);
@@ -288,10 +310,19 @@ async function main(): Promise<void> {
   };
 
   if (http) {
-    // HTTP transport for web platforms - dynamically import to avoid bundling
-    // CommonJS deps (express, raw-body) that don't work in MCPB bundle
+    // Load auth config for HTTP mode
+    const { loadAuthConfig } = await import("./auth/config.js");
+    let auth;
+    try {
+      auth = loadAuthConfig({ noAuth });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`Error: ${msg}`);
+      process.exit(1);
+    }
+
     const { startHttpServer } = await import("./http-server.js");
-    await startHttpServer(createServer, { port });
+    await startHttpServer(createServer, { port, auth });
   } else {
     // Stdio transport for Claude Desktop, Codex CLI, etc.
     const server = createServer();

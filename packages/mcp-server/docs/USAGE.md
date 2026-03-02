@@ -33,7 +33,7 @@ The server communicates via stdio and works with any MCP-compatible client:
 - **Codex CLI** - Add to `~/.codex/config.toml`
 - **Gemini CLI** - Add to `~/.gemini/settings.json`
 
-**Web Platforms** (requires ngrok tunnel):
+**Web Platforms** (requires HTTP mode + public URL):
 - **ChatGPT** - Developer Mode with remote URL
 - **Google AI Studio** - Native MCP support
 - **Julius AI** - Native MCP support
@@ -126,6 +126,17 @@ GROUP BY dow ORDER BY dow
 |------|---------|
 | `run_sql` | Execute SQL queries against trades and market data |
 | `describe_database` | Schema discovery with table info and examples |
+
+### Market Data Tools
+| Tool | Purpose |
+|------|---------|
+| `import_market_csv` | Import market data CSV with column mapping |
+| `import_from_database` | Import from external DuckDB databases |
+| `enrich_market_data` | Compute ~40 derived indicators from raw OHLCV |
+| `enrich_trades` | Enrich trades with market context (lookahead-free) |
+| `analyze_regime_performance` | Analyze P&L by market regime |
+| `suggest_filters` | Suggest trade filters based on market conditions |
+| `calculate_orb` | Opening range breakout analysis from intraday bars |
 
 ### Import Tools
 | Tool | Purpose |
@@ -260,24 +271,41 @@ WHERE block_id = 'my-strategy' AND pl > 0
 ORDER BY date_opened DESC
 LIMIT 50
 
--- Join trades with market data
-SELECT t.date_opened, t.strategy, t.pl, m.VIX_Close, m.Vol_Regime
+-- Join trades with market data (lookahead-free via LAG)
+WITH joined AS (
+  SELECT d.ticker, d.date, d.Gap_Pct, c.VIX_Open, c.VIX_Close, c.Vol_Regime
+  FROM market.daily d
+  LEFT JOIN market.context c ON d.date = c.date
+  WHERE d.ticker = 'SPX'
+),
+lagged AS (
+  SELECT *, LAG(VIX_Close) OVER (PARTITION BY ticker ORDER BY date) AS prev_VIX_Close,
+    LAG(Vol_Regime) OVER (PARTITION BY ticker ORDER BY date) AS prev_Vol_Regime
+  FROM joined
+)
+SELECT t.date_opened, t.strategy, t.pl, m.Gap_Pct, m.VIX_Open, m.prev_VIX_Close, m.prev_Vol_Regime
 FROM trades.trade_data t
-LEFT JOIN market.spx_daily m
-  ON COALESCE(NULLIF(t.ticker, ''), 'SPX') = m.ticker
- AND CAST(t.date_opened AS VARCHAR) = m.date
+JOIN lagged m ON CAST(t.date_opened AS VARCHAR) = m.date
 WHERE t.block_id = 'my-strategy'
 
--- Aggregate by VIX bucket
+-- Aggregate by VIX bucket (uses prior day's VIX to avoid lookahead)
+WITH joined AS (
+  SELECT d.ticker, d.date, c.VIX_Close
+  FROM market.daily d
+  LEFT JOIN market.context c ON d.date = c.date
+  WHERE d.ticker = 'SPX'
+),
+lagged AS (
+  SELECT *, LAG(VIX_Close) OVER (PARTITION BY ticker ORDER BY date) AS prev_VIX_Close
+  FROM joined
+)
 SELECT
-  CASE WHEN m.VIX_Close < 20 THEN 'Low' ELSE 'High' END as vix_level,
+  CASE WHEN m.prev_VIX_Close < 20 THEN 'Low' ELSE 'High' END as vix_level,
   COUNT(*) as trades,
   SUM(CASE WHEN t.pl > 0 THEN 1 ELSE 0 END)::FLOAT / COUNT(*) as win_rate
 FROM trades.trade_data t
-JOIN market.spx_daily m
-  ON COALESCE(NULLIF(t.ticker, ''), 'SPX') = m.ticker
- AND CAST(t.date_opened AS VARCHAR) = m.date
-WHERE t.block_id = 'my-strategy'
+JOIN lagged m ON CAST(t.date_opened AS VARCHAR) = m.date
+WHERE t.block_id = 'my-strategy' AND m.prev_VIX_Close IS NOT NULL
 GROUP BY vix_level
 ```
 
@@ -305,23 +333,27 @@ Skills provide structured prompts for common analysis tasks.
 
 ## Market Data Setup
 
-For market-aware analysis (VIX regimes, gap analysis, intraday timing), you'll need underlying/VIX data from TradingView:
+For market-aware analysis (VIX regimes, gap analysis, intraday timing), import market data from TradingView exports:
 
-1. Add the 3 PineScript indicators to your TradingView charts
-2. Export CSVs to `~/backtests/_marketdata/`
-3. The MCP server auto-syncs them into DuckDB on first query
+1. **Export from TradingView**: Open chart (SPX daily, VIX daily, SPX 5-min, etc.) → Right-click → "Export chart data..."
+2. **Import via MCP tool**: Use `import_market_csv` with a column mapping
+3. **Enrich**: Use `enrich_market_data` to compute ~40 derived indicators
 
-Supported market filename patterns:
-- `<ticker>_daily.csv`
-- `<ticker>_15min.csv`
-- `<scope>_vix_intraday.csv`
-- `vix_intraday.csv` (global fallback scope `ALL`)
+No Pine Scripts needed — TradingView exports raw OHLCV natively from any chart.
 
-See [scripts/README.md](../../../scripts/README.md) for the PineScript indicators, export instructions, and all 55+ available fields.
+### Target Tables
+
+| Table | Purpose | Example Data |
+|-------|---------|--------------|
+| `market.daily` | Daily OHLCV + enriched indicators | SPX daily bars |
+| `market.context` | VIX / volatility context | VIX, VIX9D, VIX3M daily |
+| `market.intraday` | Intraday bars (any resolution) | SPX 5-min, VIX 5-min |
+
+See [scripts/README.md](../../../scripts/README.md) for import examples and column mapping reference.
 
 ## Related Documentation
 
 - [README.md](../README.md) - Installation and setup
 - [Web Platforms Guide](./WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
-- [Market Data Scripts](../../../scripts/README.md) - TradingView PineScript indicators
+- [Market Data Import](../../../scripts/README.md) - Import workflow and column mappings
 - [Agent Skills](../../agent-skills/README.md) - Conversational workflows

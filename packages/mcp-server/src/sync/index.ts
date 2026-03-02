@@ -15,7 +15,6 @@ import {
   type BlockSyncResult,
 } from "./block-sync.js";
 import { getSyncMetadata } from "./metadata.js";
-import { syncMarketDataInternal } from "./market-sync.js";
 
 // Re-export hasher utilities
 export { hashFileContent } from "./hasher.js";
@@ -26,10 +25,7 @@ export {
   upsertSyncMetadata,
   deleteSyncMetadata,
   getAllSyncedBlockIds,
-  getMarketSyncMetadata,
-  upsertMarketSyncMetadata,
   type BlockSyncMetadata,
-  type MarketSyncMetadata,
 } from "./metadata.js";
 
 // Re-export block sync types and internal functions (for testing)
@@ -47,17 +43,6 @@ export interface SyncResult {
   blocksDeleted: number;
   errors: Array<{ blockId: string; error: string }>;
   results: BlockSyncResult[];
-}
-
-/**
- * Result of syncing market data
- */
-export interface MarketSyncResult {
-  filesProcessed: number;
-  filesSynced: number;
-  filesUnchanged: number;
-  rowsInserted: number;
-  errors: Array<{ fileName: string; error: string }>;
 }
 
 // --- Sync Functions ---
@@ -144,39 +129,3 @@ export async function syncBlock(
   return syncBlockInternal(conn, blockId, blockPath);
 }
 
-/**
- * Sync market data from _marketdata folder to DuckDB.
- *
- * Uses merge strategy to preserve historical data while
- * adding new dates from updated CSV exports.
- *
- * @param baseDir - Base data directory containing _marketdata folder
- * @returns Sync result with file and row counts
- */
-export async function syncMarketData(
-  baseDir: string
-): Promise<MarketSyncResult> {
-  const conn = await getConnection(baseDir);
-  const results = await syncMarketDataInternal(conn, baseDir);
-
-  // Aggregate results
-  const errors: Array<{ fileName: string; error: string }> = [];
-  let totalRowsInserted = 0;
-
-  for (const result of results) {
-    if (result.status === "error" && result.error) {
-      errors.push({ fileName: result.file, error: result.error });
-    }
-    if (result.rowsInserted) {
-      totalRowsInserted += result.rowsInserted;
-    }
-  }
-
-  return {
-    filesProcessed: results.length,
-    filesSynced: results.filter((r) => r.status === "synced").length,
-    filesUnchanged: results.filter((r) => r.status === "unchanged").length,
-    rowsInserted: totalRowsInserted,
-    errors,
-  };
-}

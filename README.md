@@ -75,9 +75,11 @@ Files are auto-detected by column headers, not filenames. See [USAGE.md](package
 - Client-side storage (IndexedDB) - data stays on your machine
 
 ### MCP Server
-- 34 tools for statistics, simulations, walk-forward analysis, and SQL queries
+- Tools for statistics, simulations, walk-forward analysis, and SQL queries
 - SQL analytics layer (`run_sql` + `describe_database`) for flexible data exploration
-- Works with Claude Desktop, Claude Code, Codex CLI, Gemini CLI
+- Market data import and enrichment (`import_market_csv` + `enrich_market_data`)
+- Lookahead-free trade enrichment with market context (VIX regimes, intraday timing)
+- Works with Claude Desktop, Claude Code, Codex CLI, Gemini CLI, ChatGPT, Google AI Studio
 - Agent skills for guided strategy health checks and portfolio recommendations
 
 ## Contributing

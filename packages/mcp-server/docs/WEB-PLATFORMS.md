@@ -116,7 +116,7 @@ Note the ngrok URL (e.g., `https://abc123.ngrok.io`) - you'll need this for plat
 ### Notes
 
 - Google AI Studio MCP support is experimental
-- All 19+ TradeBlocks tools are available
+- All TradeBlocks tools are available
 - Works with Gemini models
 
 ---
