@@ -64,7 +64,10 @@ import {
   downloadFile,
   generateExportFilename,
 } from "@tradeblocks/lib";
-import type { WalkForwardOptimizationTarget } from "@tradeblocks/lib";
+import type {
+  WalkForwardOptimizationTarget,
+  SkippedWindow,
+} from "@tradeblocks/lib";
 import { useBlockStore, useWalkForwardStore } from "@tradeblocks/lib/stores";
 
 const TARGET_LABELS: Record<WalkForwardOptimizationTarget, string> = {
@@ -114,6 +117,7 @@ export default function WalkForwardPage() {
   );
 
   const [showFailingOnly, setShowFailingOnly] = useState(false);
+  const [showSkippedWindows, setShowSkippedWindows] = useState(false);
   const [minOosTrades, setMinOosTrades] = useState(0);
   const [periodRange, setPeriodRange] = useState<[number, number]>([1, 1]);
   const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
@@ -243,6 +247,8 @@ export default function WalkForwardPage() {
       );
 
       return {
+        kind: "period" as const,
+        sortKey: new Date(period.inSampleStart).getTime(),
         label: `Period ${index + 1}`,
         inSampleRange: `${formatDate(period.inSampleStart)} → ${formatDate(
           period.inSampleEnd
@@ -263,6 +269,22 @@ export default function WalkForwardPage() {
     });
   }, [results]);
 
+  // Build skipped window summaries for the unified timeline
+  const skippedSummaries = useMemo(() => {
+    if (!results) return [];
+    return results.results.skippedWindows.map(
+      (sw: SkippedWindow, index: number) => ({
+        kind: "skipped" as const,
+        sortKey: new Date(sw.inSampleStart).getTime(),
+        label: `Skipped ${index + 1}`,
+        inSampleRange: `${formatDate(sw.inSampleStart)} → ${formatDate(sw.inSampleEnd)}`,
+        outSampleRange: `${formatDate(sw.outOfSampleStart)} → ${formatDate(sw.outOfSampleEnd)}`,
+        reason: sw.reason,
+        detail: sw.detail,
+      })
+    );
+  }, [results]);
+
   const rangeFilteredSummaries = useMemo(() => {
     const [start, end] = periodRange;
     return periodSummaries.filter((_, idx) => {
@@ -279,6 +301,23 @@ export default function WalkForwardPage() {
       return true;
     });
   }, [rangeFilteredSummaries, showFailingOnly, minOosTrades]);
+
+  // Unified timeline: merge periods + skipped windows when toggle is on
+  type PeriodEntry = (typeof periodSummaries)[number];
+  type SkippedEntry = (typeof skippedSummaries)[number];
+  type TimelineEntry = PeriodEntry | SkippedEntry;
+
+  const timelineEntries = useMemo((): TimelineEntry[] => {
+    if (!showSkippedWindows || skippedSummaries.length === 0) {
+      return filteredPeriodSummaries;
+    }
+    const merged = [
+      ...filteredPeriodSummaries,
+      ...skippedSummaries,
+    ];
+    merged.sort((a, b) => a.sortKey - b.sortKey);
+    return merged;
+  }, [filteredPeriodSummaries, skippedSummaries, showSkippedWindows]);
 
   const miniBars = useMemo(() => {
     return filteredPeriodSummaries.map((period) => {
@@ -530,6 +569,19 @@ export default function WalkForwardPage() {
                       Only failing windows (&lt;60% retention)
                     </span>
                   </label>
+                  {skippedSummaries.length > 0 && (
+                    <label className="flex items-center gap-2">
+                      <Checkbox
+                        checked={showSkippedWindows}
+                        onCheckedChange={(v) =>
+                          setShowSkippedWindows(Boolean(v))
+                        }
+                      />
+                      <span className="text-muted-foreground">
+                        Show skipped windows ({skippedSummaries.length})
+                      </span>
+                    </label>
+                  )}
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-xs">
                       Min OOS trades
@@ -576,7 +628,7 @@ export default function WalkForwardPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {filteredPeriodSummaries.length === 0 ? (
+                {timelineEntries.length === 0 ? (
                   <div className="py-10 text-center text-sm text-muted-foreground">
                     {periodSummaries.length === 0
                       ? "Run the analysis to populate this table."
@@ -598,7 +650,60 @@ export default function WalkForwardPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredPeriodSummaries.map((period) => {
+                        {timelineEntries.map((entry) => {
+                          if (entry.kind === "skipped") {
+                            const isTradeIssue =
+                              entry.reason === "insufficient_is_trades" ||
+                              entry.reason === "insufficient_oos_trades";
+                            const reasonLabel = isTradeIssue
+                              ? "Not enough trades"
+                              : "No viable params";
+                            const explanation = isTradeIssue
+                              ? "This window didn\u2019t have enough trades to produce reliable statistics. Try lowering the minimum trade requirement or using wider windows."
+                              : "Every parameter combination was rejected by risk checks, performance floors, or produced undefined metrics (e.g. zero drawdown \u2192 undefined Calmar). Try relaxing constraints or widening parameter ranges.";
+                            return (
+                              <TableRow
+                                key={entry.label}
+                                className="bg-amber-50/50 dark:bg-amber-950/10"
+                              >
+                                <TableCell className="font-medium border-l-2 border-l-amber-400/60">
+                                  <span className="text-amber-700 dark:text-amber-400 text-sm font-medium">
+                                    Skipped
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {entry.inSampleRange}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {entry.outSampleRange}
+                                </TableCell>
+                                <TableCell colSpan={4} className="text-sm">
+                                  <HoverCard>
+                                    <HoverCardTrigger asChild>
+                                      <span className="inline-flex items-center gap-1.5 cursor-help text-amber-700 dark:text-amber-400">
+                                        <AlertTriangle className="h-3.5 w-3.5" />
+                                        {reasonLabel}
+                                        <span className="text-muted-foreground font-normal">
+                                          — {entry.detail}
+                                        </span>
+                                      </span>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent className="w-80">
+                                      <div className="space-y-2">
+                                        <p className="text-sm font-medium">{reasonLabel}</p>
+                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                          {explanation}
+                                        </p>
+                                      </div>
+                                    </HoverCardContent>
+                                  </HoverCard>
+                                </TableCell>
+                                <TableCell />
+                              </TableRow>
+                            );
+                          }
+
+                          const period = entry;
                           const delta =
                             period.outSampleMetric - period.inSampleMetric;
                           const deltaClass =

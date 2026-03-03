@@ -86,6 +86,7 @@ function createMockAnalysis(blockId = 'block-1'): WalkForwardAnalysis {
     config: DEFAULT_WALK_FORWARD_CONFIG,
     results: {
       periods: [period],
+      skippedWindows: [],
       summary: {
         avgInSamplePerformance: 475,
         avgOutOfSamplePerformance: 320,
