@@ -137,7 +137,7 @@ export function registerCoreBlockTools(
           hasReportingLog,
           limit,
         },
-        { blockSyncResult: syncResult, marketSyncResult }
+        { blockSyncResult: syncResult }
       ) => {
         try {
           let blocks = await listBlocks(baseDir);
@@ -191,7 +191,7 @@ export function registerCoreBlockTools(
         const summary = `Found ${blocks.length} block(s)${totalBeforeLimit > blocks.length ? ` (showing ${blocks.length} of ${totalBeforeLimit})` : ""}${blocksWithReporting > 0 ? `, ${blocksWithReporting} with reporting logs` : ""}`;
 
         // Collect sync errors
-        const syncErrors = [...syncResult.errors, ...marketSyncResult.errors];
+        const syncErrors = [...syncResult.errors];
 
         // Build structured data for Claude reasoning
         const structuredData = {
@@ -227,7 +227,6 @@ export function registerCoreBlockTools(
             blocksSynced: syncResult.blocksSynced,
             blocksUnchanged: syncResult.blocksUnchanged,
             blocksDeleted: syncResult.blocksDeleted,
-            marketFilesSynced: marketSyncResult.filesSynced,
           },
           // Add sync errors if any occurred
           ...(syncErrors.length > 0 ? { syncErrors } : {}),

@@ -573,25 +573,38 @@ export function validateDatasetName(name: string): { valid: boolean; error?: str
  * Suggest a dataset name from filename
  */
 export function suggestDatasetName(fileName: string): string {
-  // Remove extension
-  const baseName = fileName.replace(/\.[^/.]+$/, '')
+  // Remove extension by finding last dot not preceded by slash
+  const dotIdx = fileName.lastIndexOf('.')
+  const slashIdx = Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\'))
+  const baseName = dotIdx > slashIdx && dotIdx > 0 ? fileName.substring(0, dotIdx) : fileName
 
-  // Convert to valid name format
-  const suggested = baseName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_') // Replace invalid chars with underscore
-    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
-    .replace(/_+/g, '_') // Collapse multiple underscores
+  // Build sanitized name character by character (avoids regex on uncontrolled input)
+  let result = ''
+  let lastWasUnderscore = true // Treat start as underscore to skip leading ones
+  for (const ch of baseName.toLowerCase()) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
+      result += ch
+      lastWasUnderscore = false
+    } else if (!lastWasUnderscore) {
+      result += '_'
+      lastWasUnderscore = true
+    }
+  }
+
+  // Remove trailing underscore
+  if (result.endsWith('_')) {
+    result = result.slice(0, -1)
+  }
 
   // Ensure it starts with a letter or number
-  if (!/^[a-z0-9]/.test(suggested)) {
-    return 'data_' + suggested
+  if (result.length > 0 && !/^[a-z0-9]/.test(result)) {
+    result = 'data_' + result
   }
 
   // Truncate if too long
-  if (suggested.length > 50) {
-    return suggested.substring(0, 50)
+  if (result.length > 50) {
+    result = result.substring(0, 50)
   }
 
-  return suggested || 'dataset'
+  return result || 'dataset'
 }

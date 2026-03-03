@@ -219,8 +219,8 @@ function aggregateAndAlignReturns(
   normalization: "raw" | "margin" | "notional",
   dateBasis: "opened" | "closed"
 ): AlignedStrategyReturns {
-  // Group trades by strategy and date
-  const strategyDailyReturns: Record<string, Record<string, number>> = {};
+  // Group trades by strategy and date (use null prototype to prevent prototype pollution)
+  const strategyDailyReturns: Record<string, Record<string, number>> = Object.create(null);
   const allDates = new Set<string>();
 
   for (const trade of trades) {
@@ -248,7 +248,7 @@ function aggregateAndAlignReturns(
     }
 
     if (!strategyDailyReturns[strategy]) {
-      strategyDailyReturns[strategy] = {};
+      strategyDailyReturns[strategy] = Object.create(null);
     }
 
     strategyDailyReturns[strategy][dateKey] =

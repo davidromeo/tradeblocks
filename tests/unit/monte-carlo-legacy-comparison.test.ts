@@ -6,7 +6,13 @@ import { CsvTestDataLoader } from "../data/csv-loader";
 
 describe("Monte Carlo legacy comparison", () => {
   it("prints stats for legacy parameter set", async () => {
-    const { trades } = await CsvTestDataLoader.loadTestData();
+    const testData = await CsvTestDataLoader.loadTestData();
+
+    if (testData.sources.trades !== "csv") {
+      console.log("Skipping: requires tradelog.csv in tests/data/");
+      return;
+    }
+    const { trades } = testData;
 
     const params: MonteCarloParams = {
       numSimulations: 1000,

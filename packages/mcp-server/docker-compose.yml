@@ -1,0 +1,35 @@
+services:
+  tradeblocks:
+    build: .
+    ports:
+      - "${TRADEBLOCKS_PORT:-3100}:3100"
+    volumes:
+      - ./data:/data
+    env_file: .env
+    restart: unless-stopped
+
+  # Optional: auto-sync backtest files from another machine.
+  # Syncthing watches the data/ directory and syncs CSVs between devices.
+  # DuckDB files are excluded via data/.stignore.
+  #
+  # To enable:
+  # 1. Uncomment the syncthing service below
+  # 2. Run: docker compose up -d
+  # 3. Open http://localhost:8384 to configure sync folders
+  #
+  # syncthing:
+  #   image: syncthing/syncthing:latest
+  #   volumes:
+  #     - ./data:/var/syncthing/data
+  #     - syncthing-config:/var/syncthing/config
+  #   ports:
+  #     - "8384:8384"    # Web UI
+  #     - "22000:22000"  # Sync protocol (TCP)
+  #     - "22000:22000/udp"  # Sync protocol (QUIC)
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #   restart: unless-stopped
+
+# volumes:
+#   syncthing-config:

@@ -1,6 +1,12 @@
 # Planning docs (kept local)
 .planning/
 
+# Local MCP test data
+.testdata/
+
+# Git worktrees
+.worktrees/
+
 # General ignores
 .DS_Store
 *.pem

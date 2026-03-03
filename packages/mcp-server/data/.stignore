@@ -1,0 +1,6 @@
+// .stignore — prevents Syncthing from syncing DuckDB files.
+// DuckDB databases are built server-side from imported data and should
+// not be synced. Only backtest CSV folders should transfer between devices.
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp

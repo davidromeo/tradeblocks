@@ -22,9 +22,9 @@ Skills do not execute code directly - they require the TradeBlocks MCP server fo
 | `tradeblocks-health-check` | Strategy health evaluation - metrics, stress tests, risk indicators | `get_statistics`, `run_monte_carlo`, `get_tail_risk` |
 | `tradeblocks-wfa` | Walk-forward analysis - test parameter robustness on unseen data | `run_walk_forward` |
 | `tradeblocks-risk` | Risk assessment and position sizing | `calculate_position_sizing`, `get_tail_risk` |
-| `tradeblocks-compare` | Performance comparison - backtest vs actual, strategy correlations | `compare_backtest_vs_actual`, `calculate_correlation` |
-| `tradeblocks-portfolio` | Portfolio addition decisions - should I add this strategy? | `calculate_correlation`, `get_statistics` |
-| `tradeblocks-optimize` | Parameter optimization with overfitting awareness | `list_available_fields`, `aggregate_by_field` |
+| `tradeblocks-compare` | Performance comparison - backtest vs actual, strategy correlations | `compare_backtest_to_actual`, `get_correlation_matrix` |
+| `tradeblocks-portfolio` | Portfolio addition decisions - should I add this strategy? | `get_correlation_matrix`, `get_statistics` |
+| `tradeblocks-optimize` | Parameter optimization with overfitting awareness | `run_sql`, `describe_database` |
 
 ## Prerequisites
 

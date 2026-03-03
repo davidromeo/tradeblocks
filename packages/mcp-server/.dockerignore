@@ -1,0 +1,10 @@
+node_modules
+.git
+*.md
+tests
+scripts
+docs
+*.test.ts
+.env
+.env.*
+data
