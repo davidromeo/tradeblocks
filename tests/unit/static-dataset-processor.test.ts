@@ -5,7 +5,7 @@
  * are correctly parsed into UTC dates that can be matched against trades.
  */
 
-import { processStaticDatasetContent } from '@tradeblocks/lib'
+import { processStaticDatasetContent, suggestDatasetName } from '@tradeblocks/lib'
 
 /**
  * Format a date in Eastern Time for verification
@@ -389,5 +389,42 @@ not-a-date,3900.78
       expect(getEasternDateString(result.rows[1].timestamp)).toBe('2022-05-19')
       expect(getEasternDateString(result.rows[2].timestamp)).toBe('2022-05-20')
     })
+  })
+})
+
+describe('suggestDatasetName', () => {
+  it('converts filename to snake_case without extension', () => {
+    expect(suggestDatasetName('My Data File.csv')).toBe('my_data_file')
+  })
+
+  it('handles multiple invalid characters', () => {
+    expect(suggestDatasetName('hello---world___test.xlsx')).toBe('hello_world_test')
+  })
+
+  it('removes leading non-alphanumeric after sanitization', () => {
+    expect(suggestDatasetName('___leading.csv')).toBe('leading')
+  })
+
+  it('prefixes with data_ if result starts with non-alphanumeric', () => {
+    // A filename that after sanitization starts with underscore
+    expect(suggestDatasetName('.hidden-file.csv')).toBe('hidden_file')
+  })
+
+  it('returns "dataset" for empty or fully invalid input', () => {
+    expect(suggestDatasetName('...')).toBe('dataset')
+    expect(suggestDatasetName('   ')).toBe('dataset')
+  })
+
+  it('truncates to 50 characters', () => {
+    const longName = 'a'.repeat(60) + '.csv'
+    expect(suggestDatasetName(longName).length).toBe(50)
+  })
+
+  it('handles filenames with path separators', () => {
+    expect(suggestDatasetName('some/path/file.csv')).toBe('some_path_file')
+  })
+
+  it('handles filenames without extension', () => {
+    expect(suggestDatasetName('noextension')).toBe('noextension')
   })
 })
