@@ -55,8 +55,8 @@ export function calculateCorrelationMatrix(
     timePeriod = "daily",
   } = options;
 
-  // Group trades by strategy and date
-  const strategyDailyReturns: Record<string, Record<string, number>> = {};
+  // Group trades by strategy and date (use null prototype to prevent prototype pollution)
+  const strategyDailyReturns: Record<string, Record<string, number>> = Object.create(null);
 
   for (const trade of trades) {
     // Skip trades without a strategy
@@ -77,7 +77,7 @@ export function calculateCorrelationMatrix(
     }
 
     if (!strategyDailyReturns[strategy]) {
-      strategyDailyReturns[strategy] = {};
+      strategyDailyReturns[strategy] = Object.create(null);
     }
 
     strategyDailyReturns[strategy][dateKey] =

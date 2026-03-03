@@ -580,7 +580,8 @@ export function suggestDatasetName(fileName: string): string {
   const suggested = baseName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_') // Replace invalid chars with underscore
-    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+    .replace(/^_+/, '') // Remove leading underscores
+    .replace(/_+$/, '') // Remove trailing underscores
     .replace(/_+/g, '_') // Collapse multiple underscores
 
   // Ensure it starts with a letter or number
