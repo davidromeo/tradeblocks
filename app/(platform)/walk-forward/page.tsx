@@ -272,7 +272,7 @@ export default function WalkForwardPage() {
   // Build skipped window summaries for the unified timeline
   const skippedSummaries = useMemo(() => {
     if (!results) return [];
-    return results.results.skippedWindows.map(
+    return (results.results.skippedWindows ?? []).map(
       (sw: SkippedWindow, index: number) => ({
         kind: "skipped" as const,
         sortKey: new Date(sw.inSampleStart).getTime(),
