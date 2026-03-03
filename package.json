@@ -97,6 +97,7 @@
   "overrides": {
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "lodash": ">=4.17.23"
+    "lodash": ">=4.17.23",
+    "rollup": ">=4.59.0"
   }
 }
