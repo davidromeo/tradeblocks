@@ -117,3 +117,20 @@ export {
   type EnrichmentOptions,
   type TierStatus,
 } from './utils/market-enricher.js';
+
+// Export strategy profile types and CRUD functions for integration testing (Phase 60)
+export type {
+  StrategyProfile,
+  StrategyProfileRow,
+  LegDetail,
+  EntryFilter,
+  ExitRule,
+  KeyMetrics,
+} from './models/strategy-profile.js';
+export {
+  ensureProfilesSchema,
+  upsertProfile,
+  getProfile,
+  listProfiles,
+  deleteProfile,
+} from './db/profile-schemas.js';

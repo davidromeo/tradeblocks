@@ -45,6 +45,7 @@ import * as path from "path";
 import { promisify } from "util";
 import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable } from "./schemas.js";
 import { ensureMarketTables } from "./market-schemas.js";
+import { ensureProfilesSchema } from "./profile-schemas.js";
 
 // Module-level singleton state
 let instance: DuckDBInstance | null = null;
@@ -306,6 +307,7 @@ async function openReadWriteConnection(
   await ensureTradeDataTable(connection);
   await ensureReportingDataTable(connection);
   await ensureMarketTables(connection);
+  await ensureProfilesSchema(connection);
   connectionMode = "read_write";
 
   return connection;
