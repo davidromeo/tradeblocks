@@ -130,6 +130,8 @@ export async function upsertProfile(
   const expectedRegimesJson = escSql(JSON.stringify(profile.expectedRegimes));
   const keyMetricsJson = escSql(JSON.stringify(profile.keyMetrics));
 
+  const nowTs = new Date().toISOString().replace("T", " ").replace("Z", "");
+
   await conn.run(`
     INSERT INTO profiles.strategy_profiles
       (block_id, strategy_name, structure_type, greeks_bias, thesis,
@@ -146,8 +148,8 @@ export async function upsertProfile(
       '${exitRulesJson}'::JSON,
       '${expectedRegimesJson}'::JSON,
       '${keyMetricsJson}'::JSON,
-      current_timestamp,
-      current_timestamp
+      TIMESTAMPTZ '${nowTs}',
+      TIMESTAMPTZ '${nowTs}'
     )
     ON CONFLICT (block_id, strategy_name) DO UPDATE SET
       structure_type = excluded.structure_type,
@@ -158,7 +160,7 @@ export async function upsertProfile(
       exit_rules = excluded.exit_rules,
       expected_regimes = excluded.expected_regimes,
       key_metrics = excluded.key_metrics,
-      updated_at = current_timestamp
+      updated_at = TIMESTAMPTZ '${nowTs}'
   `);
 
   const stored = await getProfile(conn, profile.blockId, profile.strategyName);
