@@ -280,9 +280,10 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
         <div
           key={key}
           className={cn(
-            "space-y-2 rounded-lg border p-3 transition-opacity",
-            enabled ? "border-border/40" : "border-border/20 opacity-60"
+            "space-y-2 rounded-lg border p-3 transition-colors",
+            enabled ? "border-border/40 bg-card" : "border-border/30 cursor-pointer hover:border-border/50 hover:bg-muted/30"
           )}
+          onClick={!enabled ? () => toggleParameter(key, true) : undefined}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -820,6 +821,17 @@ export function WalkForwardPeriodSelector({ blockId, addon }: PeriodSelectorProp
             </div>
           </div>
         </div>
+
+        {/* Nudge when no parameters enabled - above the collapsible so it's always visible */}
+        {!Object.values(extendedParameterRanges).some(([,,,enabled]) => enabled) && (
+          <div className="flex items-start gap-2.5 rounded-md border border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-950/20 px-3 py-2.5">
+            <Sparkles className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+            <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+              Enable at least one parameter sweep to run the analysis. The optimizer tests combinations
+              across your ranges to find the best settings for each window.
+            </p>
+          </div>
+        )}
 
         <Collapsible open={parametersOpen} onOpenChange={setParametersOpen}>
           <CollapsibleTrigger asChild>

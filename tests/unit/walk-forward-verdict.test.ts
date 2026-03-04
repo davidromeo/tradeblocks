@@ -45,6 +45,7 @@ function createMockResults(options: {
 }): WalkForwardResults {
   return {
     periods: [],
+    skippedWindows: [],
     summary: {
       avgInSamplePerformance: 1000,
       avgOutOfSamplePerformance: options.degradationFactor * 1000,

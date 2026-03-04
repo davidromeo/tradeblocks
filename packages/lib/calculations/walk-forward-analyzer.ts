@@ -12,6 +12,7 @@ import {
   PerformanceFloorConfig,
   DiversificationConfig,
   PeriodDiversificationMetrics,
+  SkippedWindow,
 } from '../models/walk-forward'
 import { PortfolioStatsCalculator } from './portfolio-stats'
 import { calculateKellyMetrics } from './kelly'
@@ -95,7 +96,7 @@ export class WalkForwardAnalyzer {
     })
 
     const periods: WalkForwardPeriodResult[] = []
-    let skippedPeriods = 0
+    const skippedWindows: SkippedWindow[] = []
     let totalParameterTests = 0
 
     for (let index = 0; index < windows.length; index++) {
@@ -109,7 +110,11 @@ export class WalkForwardAnalyzer {
       const minOutSample = options.config.minOutOfSampleTrades ?? DEFAULT_MIN_OUT_SAMPLE_TRADES
 
       if (inSampleTrades.length < minInSample || outSampleTrades.length < minOutSample) {
-        skippedPeriods++
+        const reason = inSampleTrades.length < minInSample ? 'insufficient_is_trades' as const : 'insufficient_oos_trades' as const
+        const detail = inSampleTrades.length < minInSample
+          ? `${inSampleTrades.length} IS trades < min ${minInSample}`
+          : `${outSampleTrades.length} OOS trades < min ${minOutSample}`
+        skippedWindows.push({ ...window, reason, detail })
         continue
       }
 
@@ -206,7 +211,11 @@ export class WalkForwardAnalyzer {
       totalParameterTests += tested
 
       if (!bestCombo) {
-        skippedPeriods++
+        skippedWindows.push({
+          ...window,
+          reason: 'no_viable_params',
+          detail: `All ${combinationIterator.count} combo${combinationIterator.count === 1 ? '' : 's'} rejected`,
+        })
         continue
       }
 
@@ -261,7 +270,7 @@ export class WalkForwardAnalyzer {
       sortedTrades.length,
       startedAt,
       completedAt,
-      skippedPeriods
+      skippedWindows
     )
 
     options.onProgress?.({
@@ -737,13 +746,13 @@ export class WalkForwardAnalyzer {
     analyzedTrades: number,
     startedAt: Date,
     completedAt: Date = new Date(),
-    skippedPeriods = 0
+    skippedWindows: SkippedWindow[] = []
   ): WalkForwardResults {
     const summary = this.calculateSummary(periods)
     const stats = {
       totalPeriods,
       evaluatedPeriods: periods.length,
-      skippedPeriods,
+      skippedPeriods: skippedWindows.length,
       totalParameterTests,
       analyzedTrades,
       durationMs: completedAt.getTime() - startedAt.getTime(),
@@ -755,6 +764,7 @@ export class WalkForwardAnalyzer {
 
     return {
       periods,
+      skippedWindows,
       summary: { ...summary, robustnessScore },
       stats,
     }

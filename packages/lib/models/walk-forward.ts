@@ -150,6 +150,16 @@ export interface WalkForwardWindow {
   outOfSampleEnd: Date
 }
 
+export type WindowSkipReason =
+  | 'insufficient_is_trades'
+  | 'insufficient_oos_trades'
+  | 'no_viable_params'
+
+export interface SkippedWindow extends WalkForwardWindow {
+  reason: WindowSkipReason
+  detail: string
+}
+
 export interface WalkForwardPeriodResult extends WalkForwardWindow {
   optimalParameters: Record<string, number>
   inSampleMetrics: PortfolioStats
@@ -185,6 +195,7 @@ export interface WalkForwardRunStats {
 
 export interface WalkForwardResults {
   periods: WalkForwardPeriodResult[]
+  skippedWindows: SkippedWindow[]
   summary: WalkForwardSummary
   stats: WalkForwardRunStats
 }

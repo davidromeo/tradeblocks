@@ -108,6 +108,16 @@ export function WalkForwardSummary({ results }: WalkForwardSummaryProps) {
   const consistencyPct = (results.stats.consistencyScore || 0) * 100
   const windowCount = results.periods.length
 
+  // Count skipped window reasons
+  const skippedWindows = results.skippedWindows ?? []
+  const skippedCount = skippedWindows.length
+  const insufficientTradesCount = skippedWindows.filter(
+    (w) => w.reason === "insufficient_is_trades" || w.reason === "insufficient_oos_trades"
+  ).length
+  const noViableParamsCount = skippedWindows.filter(
+    (w) => w.reason === "no_viable_params"
+  ).length
+
   return (
     <Card className={cn("border-l-4", style.border)}>
       <CardContent className="pt-6 space-y-6">
@@ -150,6 +160,21 @@ export function WalkForwardSummary({ results }: WalkForwardSummaryProps) {
             <p className="text-sm text-muted-foreground">
               {summaryMessages[assessment.overall]}
             </p>
+            {skippedCount > 0 && (
+              <p className="text-xs text-muted-foreground/80">
+                {skippedCount} window{skippedCount !== 1 ? "s" : ""} skipped
+                {" ("}
+                {[
+                  insufficientTradesCount > 0 &&
+                    `${insufficientTradesCount} insufficient trades`,
+                  noViableParamsCount > 0 &&
+                    `${noViableParamsCount} no viable params`,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+                {")"}
+              </p>
+            )}
           </div>
         </div>
 

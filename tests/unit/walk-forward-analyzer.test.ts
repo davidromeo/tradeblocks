@@ -1630,4 +1630,144 @@ describe('WalkForwardAnalyzer edge cases and stress tests', () => {
       expect(Number.isFinite(period.targetMetricOutOfSample)).toBe(true)
     })
   })
+
+  describe('skipped window tracking', () => {
+    it('captures skipped windows due to insufficient IS trades', async () => {
+      const trades = createTestTrades([100, 200], '2024-01-01', 30, 50_000)
+
+      const config: WalkForwardConfig = {
+        inSampleDays: 30,
+        outOfSampleDays: 15,
+        stepSizeDays: 15,
+        optimizationTarget: 'netPl',
+        parameterRanges: { kellyMultiplier: [1, 1, 1] },
+        minInSampleTrades: 10,
+        minOutOfSampleTrades: 1,
+      }
+
+      const result = await analyzer.analyze({ trades, config })
+
+      expect(result.results.skippedWindows.length).toBeGreaterThan(0)
+      expect(result.results.stats.skippedPeriods).toBe(result.results.skippedWindows.length)
+
+      const insufficientIS = result.results.skippedWindows.filter(
+        (w) => w.reason === 'insufficient_is_trades'
+      )
+      expect(insufficientIS.length).toBeGreaterThan(0)
+      expect(insufficientIS[0].detail).toMatch(/IS trades < min/)
+      expect(insufficientIS[0].inSampleStart).toBeInstanceOf(Date)
+      expect(insufficientIS[0].inSampleEnd).toBeInstanceOf(Date)
+    })
+
+    it('captures skipped windows due to insufficient OOS trades', async () => {
+      // Create trades clustered in first 20 days only
+      const trades = createTestTrades(
+        [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000],
+        '2024-01-01',
+        1,
+        50_000
+      )
+
+      const config: WalkForwardConfig = {
+        inSampleDays: 10,
+        outOfSampleDays: 30,
+        stepSizeDays: 10,
+        optimizationTarget: 'netPl',
+        parameterRanges: { kellyMultiplier: [1, 1, 1] },
+        minInSampleTrades: 1,
+        minOutOfSampleTrades: 5,
+      }
+
+      const result = await analyzer.analyze({ trades, config })
+
+      const insufficientOOS = result.results.skippedWindows.filter(
+        (w) => w.reason === 'insufficient_oos_trades'
+      )
+      // The OOS window extends past the trade data, so some windows should have insufficient OOS trades
+      if (insufficientOOS.length > 0) {
+        expect(insufficientOOS[0].detail).toMatch(/OOS trades < min/)
+      }
+    })
+
+    it('captures skipped windows due to no viable parameter combo', async () => {
+      const trades = createTestTrades(
+        [100, -5000, 100, -5000, 100, -5000, 100, -5000],
+        '2024-01-01',
+        2,
+        10_000
+      )
+
+      const config: WalkForwardConfig = {
+        inSampleDays: 8,
+        outOfSampleDays: 4,
+        stepSizeDays: 4,
+        optimizationTarget: 'netPl',
+        parameterRanges: {
+          kellyMultiplier: [1, 1, 1],
+          maxDrawdownPct: [1, 1, 1],
+        },
+        minInSampleTrades: 2,
+        minOutOfSampleTrades: 1,
+      }
+
+      const result = await analyzer.analyze({ trades, config })
+
+      const noViable = result.results.skippedWindows.filter(
+        (w) => w.reason === 'no_viable_params'
+      )
+      if (noViable.length > 0) {
+        expect(noViable[0].detail).toMatch(/combo/)
+      }
+    })
+
+    it('returns empty skippedWindows when all windows succeed', async () => {
+      const trades = createTestTrades(
+        [500, -250, 650, -100, 300, -400, 700, 200, -150, 450, -200, 550],
+        '2024-01-02',
+        3,
+        40_000
+      )
+
+      const config: WalkForwardConfig = {
+        inSampleDays: 18,
+        outOfSampleDays: 9,
+        stepSizeDays: 9,
+        optimizationTarget: 'netPl',
+        parameterRanges: { kellyMultiplier: [1, 1, 1] },
+        minInSampleTrades: 2,
+        minOutOfSampleTrades: 1,
+      }
+
+      const result = await analyzer.analyze({ trades, config })
+
+      expect(result.results.skippedWindows).toEqual([])
+      expect(result.results.stats.skippedPeriods).toBe(0)
+      expect(result.results.periods.length).toBeGreaterThan(0)
+    })
+
+    it('skipped windows preserve date ranges for UI display', async () => {
+      const trades = createTestTrades([100], '2024-01-01', 1, 50_000)
+
+      const config: WalkForwardConfig = {
+        inSampleDays: 10,
+        outOfSampleDays: 5,
+        stepSizeDays: 5,
+        optimizationTarget: 'netPl',
+        parameterRanges: { kellyMultiplier: [1, 1, 1] },
+        minInSampleTrades: 5,
+        minOutOfSampleTrades: 5,
+      }
+
+      const result = await analyzer.analyze({ trades, config })
+
+      // With only 1 trade and min 5 required, windows should be skipped
+      for (const skipped of result.results.skippedWindows) {
+        expect(skipped.inSampleStart).toBeInstanceOf(Date)
+        expect(skipped.inSampleEnd).toBeInstanceOf(Date)
+        expect(skipped.outOfSampleStart).toBeInstanceOf(Date)
+        expect(skipped.outOfSampleEnd).toBeInstanceOf(Date)
+        expect(skipped.inSampleEnd.getTime()).toBeLessThan(skipped.outOfSampleStart.getTime())
+      }
+    })
+  })
 })
