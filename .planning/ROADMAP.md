@@ -27,7 +27,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 
 ## Phases
 
-- [ ] **Phase 60: Profile Storage** - DuckDB strategy_profiles table with full schema
+- [x] **Phase 60: Profile Storage** - DuckDB strategy_profiles table with full schema (completed 2026-03-04)
 - [ ] **Phase 61: Profile CRUD Tools** - profile_strategy, get_strategy_profile, list_profiles MCP tools
 - [ ] **Phase 62: Structure-Aware Analysis Tools** - analyze_structure_fit, validate_entry_filters, portfolio_structure_map MCP tools
 
@@ -42,7 +42,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
   2. Profiles are keyed by block_id + strategy name — two profiles for different strategies in the same block coexist without collision
   3. The schema accepts all known Option Omega strategy types (vertical spreads, calendars, iron condors, reverse iron condors, butterflies, etc.) without schema changes
   4. Upserting a profile with an existing block_id + strategy key overwrites the previous record cleanly
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 60-01-PLAN.md — Strategy profiles types, DDL, CRUD functions, and integration tests
@@ -84,6 +84,6 @@ Plans:
 | 57. Restore enrich_trades | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
-| 60. Profile Storage | v2.10 | 0/1 | Not started | - |
+| 60. Profile Storage | 1/1 | Complete   | 2026-03-04 | - |
 | 61. Profile CRUD Tools | v2.10 | 0/1 | Not started | - |
 | 62. Structure-Aware Analysis Tools | v2.10 | 0/1 | Not started | - |
