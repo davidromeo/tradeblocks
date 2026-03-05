@@ -28,7 +28,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 ## Phases
 
 - [x] **Phase 60: Profile Storage** - DuckDB strategy_profiles table with full schema (completed 2026-03-04)
-- [ ] **Phase 61: Profile CRUD Tools** - profile_strategy, get_strategy_profile, list_profiles, delete_profile MCP tools
+- [x] **Phase 61: Profile CRUD Tools** - profile_strategy, get_strategy_profile, list_profiles, delete_profile MCP tools (completed 2026-03-05)
 - [ ] **Phase 62: Structure-Aware Analysis Tools** - analyze_structure_fit, validate_entry_filters, portfolio_structure_map MCP tools
 
 ## Phase Details
@@ -57,7 +57,7 @@ Plans:
   3. Calling `list_profiles` with a block_id returns all profiles for that block; calling without a block_id returns profiles across all blocks
   4. Calling `delete_profile` with a block_id and strategy name removes the profile; deleting nonexistent returns success
   5. All four tools follow existing MCP patterns (Zod schema, sync middleware, handler, createToolOutput) and register correctly
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 61-01-PLAN.md — Profile CRUD tools (profile_strategy, get_strategy_profile, list_profiles, delete_profile) with integration tests
@@ -86,5 +86,5 @@ Plans:
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Profile Storage | v2.10 | 1/1 | Complete | 2026-03-04 |
-| 61. Profile CRUD Tools | v2.10 | 0/1 | Planning | - |
+| 61. Profile CRUD Tools | 1/1 | Complete   | 2026-03-05 | - |
 | 62. Structure-Aware Analysis Tools | v2.10 | 0/1 | Not started | - |

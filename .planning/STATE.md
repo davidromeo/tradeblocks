@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.10
 milestone_name: Strategy Profiles
-status: planning
-stopped_at: Completed 60-01-PLAN.md — profile storage layer done
-last_updated: "2026-03-04T21:07:00.464Z"
+status: executing
+stopped_at: Completed 61-01-PLAN.md
+last_updated: "2026-03-05T13:28:31.297Z"
 last_activity: 2026-03-04 — Roadmap created for v2.10 Strategy Profiles
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 1
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 66
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 
 ## Current Position
 
-Phase: 60 of 62 (Profile Storage)
-Plan: 0 of 1 in current phase
-Status: Ready to plan
-Last activity: 2026-03-04 — Roadmap created for v2.10 Strategy Profiles
+Phase: 61 of 62 (Profile CRUD Tools)
+Plan: 1 of 1 in current phase
+Status: Phase 61 complete
+Last activity: 2026-03-05 — Completed 61-01 profile CRUD tools
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████░░░░] 66%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 60-profile-storage P01 | 5 | 2 tasks | 6 files |
+| Phase 61-profile-crud-tools P01 | 5 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,8 @@ Progress: [░░░░░░░░░░] 0%
 - Storage in DuckDB new table (strategy_profiles) keyed by block_id + strategy name (composite key, upsert semantics)
 - Profile schema validated against real Pickle RIC v2 analysis: structure type, greeks bias, legs, entry filters, exit rules, thesis, expected regimes, key metrics
 - [Phase 60-profile-storage]: Use TIMESTAMPTZ literal syntax instead of current_timestamp in DuckDB INSERT — parser treats it as column name in ON CONFLICT context
+- [Phase 61-profile-crud-tools]: Export handler functions separately from registration for direct integration testing without MCP transport
+- [Phase 61-profile-crud-tools]: list_profiles uses conditional sync — withSyncedBlock when blockId present, direct query when omitted
 
 ### Pending Todos
 
@@ -72,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-04T21:03:45.925Z
-Stopped at: Completed 60-01-PLAN.md — profile storage layer done
-Resume file: None
+Last session: 2026-03-05T13:42:30Z
+Stopped at: Completed 61-01-PLAN.md
+Resume file: .planning/phases/61-profile-crud-tools/61-01-SUMMARY.md
