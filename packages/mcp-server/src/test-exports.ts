@@ -134,3 +134,15 @@ export {
   listProfiles,
   deleteProfile,
 } from './db/profile-schemas.js';
+
+// Export Phase 61 profile tool handlers and schemas for integration testing
+export {
+  handleProfileStrategy,
+  handleGetStrategyProfile,
+  handleListProfiles,
+  handleDeleteProfile,
+  profileStrategySchema,
+  getStrategyProfileSchema,
+  listProfilesSchema,
+  deleteProfileSchema,
+} from './tools/profiles.js';
