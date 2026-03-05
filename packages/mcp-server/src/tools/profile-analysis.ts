@@ -2,11 +2,9 @@
  * Profile Analysis Tools
  *
  * MCP tools that use stored strategy profiles for targeted analysis:
+ * - analyze_structure_fit: Dimension-based performance breakdown using profile context
+ * - validate_entry_filters: Entry filter effectiveness analysis with ablation study
  * - portfolio_structure_map: Vol_Regime x Trend_Direction matrix across strategies
- *
- * Plan 02 tools (analyze_structure_fit, validate_entry_filters) are registered
- * separately if present; this file provides registerProfileAnalysisTools() which
- * wires all profile analysis tools into the server.
  */
 
 import { z } from "zod";
@@ -15,7 +13,7 @@ import { loadBlock } from "../utils/block-loader.js";
 import { createToolOutput } from "../utils/output-formatter.js";
 import type { Trade } from "@tradeblocks/lib";
 import { getConnection } from "../db/connection.js";
-import { listProfiles } from "../db/profile-schemas.js";
+import { getProfile, listProfiles } from "../db/profile-schemas.js";
 import { filterByStrategy } from "./shared/filters.js";
 import {
   buildLookaheadFreeQuery,
@@ -27,6 +25,8 @@ import {
   resolveTradeTicker,
 } from "../utils/ticker.js";
 import { computeSliceStats, type SliceStats } from "../utils/analysis-stats.js";
+import { buildFilterPredicate, type FilterPredicate } from "../utils/filter-predicates.js";
+import { withSyncedBlock } from "./middleware/sync-middleware.js";
 import {
   upgradeToReadWrite,
   downgradeToReadOnly,
@@ -125,6 +125,652 @@ const VOL_REGIME_LABELS: Record<number, string> = {
 
 const TREND_LABELS = ["up", "down", "flat"] as const;
 type TrendLabel = (typeof TREND_LABELS)[number];
+
+/**
+ * Day of week labels (DuckDB market data: 2=Mon to 6=Fri)
+ */
+const DAY_LABELS: Record<number, string> = {
+  1: "Monday",
+  2: "Monday",
+  3: "Tuesday",
+  4: "Wednesday",
+  5: "Thursday",
+  6: "Friday",
+};
+
+/**
+ * Determine time-of-day bucket from timeOpened string (format "HH:MM:SS" or "HH:MM").
+ */
+function getTimeBucket(timeOpened: string | undefined): string | null {
+  if (!timeOpened) return null;
+  const match = timeOpened.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const totalMinutes = hours * 60 + minutes;
+
+  // morning: 09:30-11:00, midday: 11:00-14:00, afternoon: 14:00-16:00
+  if (totalMinutes < 570) return null; // before 09:30
+  if (totalMinutes < 660) return "morning";   // 09:30-11:00
+  if (totalMinutes < 840) return "midday";    // 11:00-14:00
+  if (totalMinutes <= 960) return "afternoon"; // 14:00-16:00
+  return null; // after 16:00
+}
+
+/**
+ * Safely get a raw value from a record.
+ */
+function getRaw(record: Record<string, unknown>, field: string): unknown {
+  return record[field];
+}
+
+interface TradeWithMarket {
+  trade: Trade;
+  market: Record<string, unknown>;
+}
+
+/**
+ * Load trades and market data for a strategy profile analysis.
+ * Shared between analyze_structure_fit and validate_entry_filters.
+ */
+async function loadTradesAndMarket(
+  baseDir: string,
+  blockId: string,
+  strategyName: string
+): Promise<{
+  matched: TradeWithMarket[];
+  unmatchedCount: number;
+  allTrades: Trade[];
+}> {
+  const block = await loadBlock(baseDir, blockId);
+  const trades = filterByStrategy(block.trades, strategyName);
+
+  if (trades.length === 0) {
+    return { matched: [], unmatchedCount: 0, allTrades: [] };
+  }
+
+  // Collect unique trade keys for market query
+  const tradeKeys = uniqueTradeLookupKeys(trades);
+
+  // Query market data
+  const conn = await getConnection(baseDir);
+  const { sql, params } = buildLookaheadFreeQuery(tradeKeys);
+  const result = await conn.runAndReadAll(sql, params);
+  const marketRecords = resultToRecords(result);
+  const marketMap = recordsByTickerDate(marketRecords);
+
+  // Match trades to market records
+  const matched: TradeWithMarket[] = [];
+  let unmatchedCount = 0;
+
+  for (const trade of trades) {
+    const lookup = getTradeLookupKey(trade);
+    const key = marketTickerDateKey(lookup.ticker, lookup.date);
+    const market = marketMap.get(key);
+    if (market) {
+      matched.push({ trade, market });
+    } else {
+      unmatchedCount++;
+    }
+  }
+
+  return { matched, unmatchedCount, allTrades: trades };
+}
+
+/**
+ * Create numeric bucket labels from data values.
+ * Divides sorted values into ~4 quartile-based ranges.
+ */
+function createNumericBuckets(values: number[]): { label: string; min: number; max: number }[] {
+  if (values.length === 0) return [];
+  const sorted = [...values].sort((a, b) => a - b);
+
+  const uniqueValues = [...new Set(sorted)];
+  if (uniqueValues.length <= 4) {
+    return uniqueValues.map((v) => ({
+      label: String(Math.round(v * 100) / 100),
+      min: v,
+      max: v,
+    }));
+  }
+
+  const buckets: { label: string; min: number; max: number }[] = [];
+  const quartileSize = Math.ceil(sorted.length / 4);
+  for (let i = 0; i < 4; i++) {
+    const start = i * quartileSize;
+    const end = Math.min((i + 1) * quartileSize - 1, sorted.length - 1);
+    if (start > sorted.length - 1) break;
+    const min = sorted[start];
+    const max = sorted[end];
+    const r = (n: number) => Math.round(n * 100) / 100;
+    buckets.push({
+      label: min === max ? `${r(min)}` : `${r(min)} to ${r(max)}`,
+      min,
+      max,
+    });
+  }
+
+  return buckets;
+}
+
+/**
+ * Find which bucket a value belongs to.
+ */
+function findBucket(
+  value: number,
+  buckets: { label: string; min: number; max: number }[]
+): string | null {
+  for (const bucket of buckets) {
+    if (value >= bucket.min && value <= bucket.max) return bucket.label;
+  }
+  return null;
+}
+
+// =============================================================================
+// analyze_structure_fit Schema and Handler
+// =============================================================================
+
+export const analyzeStructureFitSchema = z.object({
+  blockId: z.string().describe("Block ID to analyze"),
+  strategyName: z.string().describe("Strategy name matching a stored profile"),
+  minTrades: z
+    .number()
+    .optional()
+    .default(10)
+    .describe("Minimum trades per bucket for reliable stats (thin-data warning threshold)"),
+});
+
+export async function handleAnalyzeStructureFit(
+  input: z.infer<typeof analyzeStructureFitSchema>,
+  baseDir: string
+): Promise<ReturnType<typeof createToolOutput>> {
+  const { blockId, strategyName, minTrades } = input;
+
+  // Load profile
+  const conn = await getConnection(baseDir);
+  const profile = await getProfile(conn, blockId, strategyName);
+  if (!profile) {
+    return createToolOutput(
+      `No profile found for strategy '${strategyName}' in block '${blockId}'. Create one with profile_strategy first.`,
+      { error: "profile_not_found" }
+    );
+  }
+
+  // Load trades + market data
+  const { matched, unmatchedCount, allTrades } = await loadTradesAndMarket(
+    baseDir,
+    blockId,
+    strategyName
+  );
+
+  const warnings: string[] = [];
+
+  if (allTrades.length === 0) {
+    return createToolOutput(
+      `No trades found for strategy '${strategyName}' in block '${blockId}'.`,
+      { error: "no_trades" }
+    );
+  }
+
+  if (unmatchedCount > 0) {
+    warnings.push(
+      `${unmatchedCount} of ${allTrades.length} trades had no matching market data and were excluded from market-based analysis.`
+    );
+  }
+
+  if (matched.length === 0) {
+    return createToolOutput(
+      `No trades could be matched to market data for strategy '${strategyName}'.`,
+      { error: "no_market_match", warnings }
+    );
+  }
+
+  // Overall stats
+  const allPls = matched.map((m) => m.trade.pl);
+  const overall = computeSliceStats(allPls);
+
+  // Dimension analysis
+  const dimensions: Record<string, Record<string, SliceStats>> = {};
+
+  // --- Fixed dimension: Vol_Regime ---
+  const volRegimeBuckets: Record<string, number[]> = {};
+  for (const { trade, market } of matched) {
+    const val = getNum(market, "prev_Vol_Regime");
+    if (isNaN(val)) continue;
+    const label = VOL_REGIME_LABELS[val] || `regime_${val}`;
+    if (!volRegimeBuckets[label]) volRegimeBuckets[label] = [];
+    volRegimeBuckets[label].push(trade.pl);
+  }
+  const volRegimeStats: Record<string, SliceStats> = {};
+  for (const [label, pls] of Object.entries(volRegimeBuckets)) {
+    volRegimeStats[label] = computeSliceStats(pls);
+  }
+  dimensions["Vol_Regime"] = volRegimeStats;
+
+  // --- Fixed dimension: day_of_week ---
+  const dowBuckets: Record<string, number[]> = {};
+  for (const { trade, market } of matched) {
+    const val = getNum(market, "Day_of_Week");
+    if (isNaN(val)) continue;
+    const label = DAY_LABELS[val] || `day_${val}`;
+    if (!dowBuckets[label]) dowBuckets[label] = [];
+    dowBuckets[label].push(trade.pl);
+  }
+  const dowStats: Record<string, SliceStats> = {};
+  for (const [label, pls] of Object.entries(dowBuckets)) {
+    dowStats[label] = computeSliceStats(pls);
+  }
+  dimensions["day_of_week"] = dowStats;
+
+  // --- Fixed dimension: time_of_day ---
+  const todBuckets: Record<string, number[]> = {};
+  for (const { trade } of matched) {
+    const bucket = getTimeBucket(trade.timeOpened);
+    if (!bucket) continue;
+    if (!todBuckets[bucket]) todBuckets[bucket] = [];
+    todBuckets[bucket].push(trade.pl);
+  }
+  const todStats: Record<string, SliceStats> = {};
+  for (const [label, pls] of Object.entries(todBuckets)) {
+    todStats[label] = computeSliceStats(pls);
+  }
+  dimensions["time_of_day"] = todStats;
+
+  // --- Profile-derived dimensions from entry_filters ---
+  for (const filter of profile.entryFilters) {
+    const predicate = buildFilterPredicate(filter);
+    const fieldKey = predicate.fieldKey;
+
+    // Collect numeric values for this field from matched trades
+    const fieldValues: { val: number; pl: number }[] = [];
+    for (const { trade, market } of matched) {
+      const raw = getRaw(market, fieldKey);
+      if (raw === null || raw === undefined) continue;
+      const num = Number(raw);
+      if (isNaN(num)) continue;
+      fieldValues.push({ val: num, pl: trade.pl });
+    }
+
+    if (fieldValues.length === 0) continue;
+
+    // Create buckets from the data
+    const buckets = createNumericBuckets(fieldValues.map((f) => f.val));
+    if (buckets.length === 0) continue;
+
+    const filterBuckets: Record<string, number[]> = {};
+    for (const { val, pl } of fieldValues) {
+      const bucketLabel = findBucket(val, buckets);
+      if (!bucketLabel) continue;
+      if (!filterBuckets[bucketLabel]) filterBuckets[bucketLabel] = [];
+      filterBuckets[bucketLabel].push(pl);
+    }
+
+    const filterStats: Record<string, SliceStats> = {};
+    for (const [label, pls] of Object.entries(filterBuckets)) {
+      filterStats[label] = computeSliceStats(pls);
+    }
+    dimensions[filter.field] = filterStats;
+  }
+
+  // Thin-data warnings
+  for (const [dimName, bucketStats] of Object.entries(dimensions)) {
+    for (const [bucketLabel, stats] of Object.entries(bucketStats)) {
+      if (stats.tradeCount > 0 && stats.tradeCount < minTrades) {
+        warnings.push(
+          `${dimName}/${bucketLabel}: only ${stats.tradeCount} trades (< ${minTrades} threshold)`
+        );
+      }
+    }
+  }
+
+  // Profile update hints
+  const profileUpdateHints: { field: string; suggested: string; reason: string }[] = [];
+
+  // Check Vol_Regime performance vs overall
+  for (const [label, stats] of Object.entries(volRegimeStats)) {
+    if (stats.tradeCount >= minTrades) {
+      const winRateDiff = stats.winRate - overall.winRate;
+      if (winRateDiff >= 20) {
+        profileUpdateHints.push({
+          field: "expectedRegimes",
+          suggested: label,
+          reason: `Win rate ${stats.winRate.toFixed(1)}% in ${label} is ${winRateDiff.toFixed(1)}pp above overall ${overall.winRate.toFixed(1)}%`,
+        });
+      }
+      if (winRateDiff <= -20) {
+        profileUpdateHints.push({
+          field: "expectedRegimes",
+          suggested: `avoid_${label}`,
+          reason: `Win rate ${stats.winRate.toFixed(1)}% in ${label} is ${Math.abs(winRateDiff).toFixed(1)}pp below overall ${overall.winRate.toFixed(1)}%`,
+        });
+      }
+    }
+  }
+
+  // Check day_of_week for stark differences
+  for (const [label, stats] of Object.entries(dowStats)) {
+    if (stats.tradeCount >= minTrades) {
+      const winRateDiff = stats.winRate - overall.winRate;
+      if (Math.abs(winRateDiff) >= 20) {
+        profileUpdateHints.push({
+          field: "day_of_week",
+          suggested: winRateDiff > 0 ? `favor_${label}` : `avoid_${label}`,
+          reason: `Win rate ${stats.winRate.toFixed(1)}% on ${label} vs overall ${overall.winRate.toFixed(1)}%`,
+        });
+      }
+    }
+  }
+
+  // Check time_of_day for stark differences
+  for (const [label, stats] of Object.entries(todStats)) {
+    if (stats.tradeCount >= minTrades) {
+      const winRateDiff = stats.winRate - overall.winRate;
+      if (Math.abs(winRateDiff) >= 20) {
+        profileUpdateHints.push({
+          field: "time_of_day",
+          suggested: winRateDiff > 0 ? `favor_${label}` : `avoid_${label}`,
+          reason: `Win rate ${stats.winRate.toFixed(1)}% during ${label} vs overall ${overall.winRate.toFixed(1)}%`,
+        });
+      }
+    }
+  }
+
+  // Summary text
+  const dimNames = Object.keys(dimensions).join(", ");
+  const summaryText = `Structure fit analysis for '${strategyName}': ${matched.length} trades analyzed across ${Object.keys(dimensions).length} dimensions (${dimNames}). Overall win rate: ${overall.winRate.toFixed(1)}%, avg P&L: $${overall.avgPl.toFixed(2)}. ${profileUpdateHints.length} update hint(s).`;
+
+  return createToolOutput(summaryText, {
+    overall,
+    dimensions,
+    profile_update_hints: profileUpdateHints,
+    warnings,
+    profile: {
+      strategyName: profile.strategyName,
+      structureType: profile.structureType,
+      greeksBias: profile.greeksBias,
+      thesis: profile.thesis,
+      expectedRegimes: profile.expectedRegimes,
+    },
+  });
+}
+
+// =============================================================================
+// validate_entry_filters Schema and Handler
+// =============================================================================
+
+export const validateEntryFiltersSchema = z.object({
+  blockId: z.string().describe("Block ID to analyze"),
+  strategyName: z.string().describe("Strategy name matching a stored profile"),
+  minTrades: z
+    .number()
+    .optional()
+    .default(10)
+    .describe("Minimum trades per group for reliable stats"),
+  maxAblationFilters: z
+    .number()
+    .optional()
+    .default(8)
+    .describe("Maximum number of filters for pairwise ablation (cap for combinatorial explosion)"),
+});
+
+export async function handleValidateEntryFilters(
+  input: z.infer<typeof validateEntryFiltersSchema>,
+  baseDir: string
+): Promise<ReturnType<typeof createToolOutput>> {
+  const { blockId, strategyName, minTrades, maxAblationFilters } = input;
+
+  // Load profile
+  const conn = await getConnection(baseDir);
+  const profile = await getProfile(conn, blockId, strategyName);
+  if (!profile) {
+    return createToolOutput(
+      `No profile found for strategy '${strategyName}' in block '${blockId}'. Create one with profile_strategy first.`,
+      { error: "profile_not_found" }
+    );
+  }
+
+  // Early return if no entry filters
+  if (!profile.entryFilters || profile.entryFilters.length === 0) {
+    return createToolOutput(
+      `Profile '${strategyName}' has no entry_filters defined. Add filters via profile_strategy to enable validation.`,
+      { no_filters: true }
+    );
+  }
+
+  // Load trades + market data
+  const { matched, unmatchedCount, allTrades } = await loadTradesAndMarket(
+    baseDir,
+    blockId,
+    strategyName
+  );
+
+  const warnings: string[] = [];
+
+  if (allTrades.length === 0) {
+    return createToolOutput(
+      `No trades found for strategy '${strategyName}' in block '${blockId}'.`,
+      { error: "no_trades" }
+    );
+  }
+
+  if (unmatchedCount > 0) {
+    warnings.push(
+      `${unmatchedCount} of ${allTrades.length} trades had no matching market data and were excluded.`
+    );
+  }
+
+  if (matched.length === 0) {
+    return createToolOutput(
+      `No trades could be matched to market data for strategy '${strategyName}'.`,
+      { error: "no_market_match", warnings }
+    );
+  }
+
+  // Build predicates for each filter
+  const filters = profile.entryFilters;
+  const predicates: FilterPredicate[] = filters.map((f) => buildFilterPredicate(f));
+
+  // No-filters baseline: all matched trades
+  const noFiltersPls = matched.map((m) => m.trade.pl);
+  const noFiltersStats = computeSliceStats(noFiltersPls);
+
+  // Per-filter comparison
+  const perFilter: Record<
+    string,
+    { entered: SliceStats; filtered_out: SliceStats; no_data_count: number }
+  > = {};
+
+  for (let i = 0; i < filters.length; i++) {
+    const filter = filters[i];
+    const predicate = predicates[i];
+    const filterDesc =
+      filter.description || `${filter.field} ${filter.operator} ${JSON.stringify(filter.value)}`;
+
+    const enteredPls: number[] = [];
+    const filteredOutPls: number[] = [];
+    let noDataCount = 0;
+
+    for (const { trade, market } of matched) {
+      const raw = getRaw(market, predicate.fieldKey);
+      if (raw === null || raw === undefined) {
+        noDataCount++;
+        continue;
+      }
+      if (predicate.test(market)) {
+        enteredPls.push(trade.pl);
+      } else {
+        filteredOutPls.push(trade.pl);
+      }
+    }
+
+    perFilter[filterDesc] = {
+      entered: computeSliceStats(enteredPls),
+      filtered_out: computeSliceStats(filteredOutPls),
+      no_data_count: noDataCount,
+    };
+  }
+
+  // Ablation study
+  // Baseline: all filters applied
+  const baselinePls: number[] = [];
+  for (const { trade, market } of matched) {
+    let passesAll = true;
+    let hasData = true;
+    for (const predicate of predicates) {
+      const raw = getRaw(market, predicate.fieldKey);
+      if (raw === null || raw === undefined) {
+        hasData = false;
+        break;
+      }
+      if (!predicate.test(market)) {
+        passesAll = false;
+        break;
+      }
+    }
+    if (hasData && passesAll) {
+      baselinePls.push(trade.pl);
+    }
+  }
+  const baseline = computeSliceStats(baselinePls);
+
+  // Single removal ablation
+  const ablationSingle: Record<string, SliceStats> = {};
+  for (let skip = 0; skip < filters.length; skip++) {
+    const filterDesc =
+      filters[skip].description ||
+      `${filters[skip].field} ${filters[skip].operator} ${JSON.stringify(filters[skip].value)}`;
+
+    const pls: number[] = [];
+    for (const { trade, market } of matched) {
+      let passesRemaining = true;
+      let hasData = true;
+      for (let j = 0; j < predicates.length; j++) {
+        if (j === skip) continue;
+        const raw = getRaw(market, predicates[j].fieldKey);
+        if (raw === null || raw === undefined) {
+          hasData = false;
+          break;
+        }
+        if (!predicates[j].test(market)) {
+          passesRemaining = false;
+          break;
+        }
+      }
+      if (hasData && passesRemaining) {
+        pls.push(trade.pl);
+      }
+    }
+    ablationSingle[filterDesc] = computeSliceStats(pls);
+  }
+
+  // Pairwise removal ablation (only if filter count <= maxAblationFilters)
+  const ablationPairs: Record<string, SliceStats> = {};
+  if (filters.length <= maxAblationFilters) {
+    for (let i = 0; i < filters.length; i++) {
+      for (let j = i + 1; j < filters.length; j++) {
+        const descI =
+          filters[i].description ||
+          `${filters[i].field} ${filters[i].operator} ${JSON.stringify(filters[i].value)}`;
+        const descJ =
+          filters[j].description ||
+          `${filters[j].field} ${filters[j].operator} ${JSON.stringify(filters[j].value)}`;
+        const pairKey = `${descI} + ${descJ}`;
+
+        const pls: number[] = [];
+        for (const { trade, market } of matched) {
+          let passesRemaining = true;
+          let hasData = true;
+          for (let k = 0; k < predicates.length; k++) {
+            if (k === i || k === j) continue;
+            const raw = getRaw(market, predicates[k].fieldKey);
+            if (raw === null || raw === undefined) {
+              hasData = false;
+              break;
+            }
+            if (!predicates[k].test(market)) {
+              passesRemaining = false;
+              break;
+            }
+          }
+          if (hasData && passesRemaining) {
+            pls.push(trade.pl);
+          }
+        }
+        ablationPairs[pairKey] = computeSliceStats(pls);
+      }
+    }
+  }
+
+  // Profile update hints
+  const profileUpdateHints: {
+    field: string;
+    action: "remove" | "adjust";
+    reason: string;
+  }[] = [];
+
+  // Check per-filter: if entered performs worse than filtered_out, suggest removal
+  for (const [filterDesc, { entered, filtered_out }] of Object.entries(perFilter)) {
+    if (
+      entered.tradeCount >= minTrades &&
+      filtered_out.tradeCount >= minTrades
+    ) {
+      if (entered.avgPl < filtered_out.avgPl && filtered_out.avgPl > 0) {
+        profileUpdateHints.push({
+          field: filterDesc,
+          action: "remove",
+          reason: `Entered avg P&L ($${entered.avgPl.toFixed(2)}) worse than filtered-out ($${filtered_out.avgPl.toFixed(2)}) — filter may be counterproductive`,
+        });
+      }
+    }
+  }
+
+  // Check ablation: if removing a filter improves over baseline
+  for (const [filterDesc, stats] of Object.entries(ablationSingle)) {
+    if (stats.tradeCount >= minTrades && baseline.tradeCount >= minTrades) {
+      if (stats.avgPl > baseline.avgPl && stats.winRate > baseline.winRate) {
+        profileUpdateHints.push({
+          field: filterDesc,
+          action: "remove",
+          reason: `Removing this filter improves avg P&L ($${stats.avgPl.toFixed(2)} vs $${baseline.avgPl.toFixed(2)}) and win rate (${stats.winRate.toFixed(1)}% vs ${baseline.winRate.toFixed(1)}%)`,
+        });
+      }
+    }
+  }
+
+  // Thin-data warnings
+  if (baseline.tradeCount > 0 && baseline.tradeCount < minTrades) {
+    warnings.push(
+      `Baseline (all filters): only ${baseline.tradeCount} trades (< ${minTrades} threshold)`
+    );
+  }
+  for (const [filterDesc, { entered, filtered_out }] of Object.entries(perFilter)) {
+    if (entered.tradeCount > 0 && entered.tradeCount < minTrades) {
+      warnings.push(
+        `${filterDesc} entered: only ${entered.tradeCount} trades (< ${minTrades} threshold)`
+      );
+    }
+    if (filtered_out.tradeCount > 0 && filtered_out.tradeCount < minTrades) {
+      warnings.push(
+        `${filterDesc} filtered_out: only ${filtered_out.tradeCount} trades (< ${minTrades} threshold)`
+      );
+    }
+  }
+
+  // Summary text
+  const summaryText = `Filter validation for '${strategyName}': ${filters.length} filter(s) analyzed across ${matched.length} trades. Baseline (all filters): ${baseline.tradeCount} trades, win rate ${baseline.winRate.toFixed(1)}%, avg P&L $${baseline.avgPl.toFixed(2)}. ${profileUpdateHints.length} update hint(s).`;
+
+  return createToolOutput(summaryText, {
+    baseline,
+    no_filters: noFiltersStats,
+    per_filter: perFilter,
+    ablation: {
+      single: ablationSingle,
+      pairs: ablationPairs,
+    },
+    profile_update_hints: profileUpdateHints,
+    warnings,
+  });
+}
 
 // =============================================================================
 // portfolio_structure_map Schema and Handler
@@ -437,7 +1083,39 @@ export function registerProfileAnalysisTools(
     }
   );
 
-  // NOTE: analyze_structure_fit and validate_entry_filters are registered by Plan 02.
-  // If Plan 02 has already added them to this file, they will be registered above.
-  // If Plan 02 runs after Plan 03, it will add its tools and update this registration function.
+  // -------------------------------------------------------------------------
+  // Tool: analyze_structure_fit
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "analyze_structure_fit",
+    {
+      description:
+        "Analyze how well a strategy fits various market dimensions using its stored profile. " +
+        "Returns performance breakdown by Vol_Regime, day-of-week, time-of-day, and profile-derived " +
+        "dimensions from entry_filters. Includes profile_update_hints when data shows clear patterns " +
+        "diverging from profile, and thin-data warnings for small buckets.",
+      inputSchema: analyzeStructureFitSchema,
+    },
+    withSyncedBlock(baseDir, async (input, ctx) => {
+      return handleAnalyzeStructureFit(input, ctx.baseDir);
+    })
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool: validate_entry_filters
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "validate_entry_filters",
+    {
+      description:
+        "Validate effectiveness of a strategy's entry filters. Splits trades into entered vs " +
+        "filtered-out groups per filter and shows full stat suite for both. Runs ablation study " +
+        "removing one filter at a time and testing all pairs. Returns profile_update_hints when " +
+        "filters appear counterproductive.",
+      inputSchema: validateEntryFiltersSchema,
+    },
+    withSyncedBlock(baseDir, async (input, ctx) => {
+      return handleValidateEntryFilters(input, ctx.baseDir);
+    })
+  );
 }
