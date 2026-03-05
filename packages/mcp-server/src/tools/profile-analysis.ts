@@ -127,15 +127,14 @@ const TREND_LABELS = ["up", "down", "flat"] as const;
 type TrendLabel = (typeof TREND_LABELS)[number];
 
 /**
- * Day of week labels (DuckDB market data: 2=Mon to 6=Fri)
+ * Day of week labels (market data: 1=Mon to 5=Fri)
  */
 const DAY_LABELS: Record<number, string> = {
   1: "Monday",
-  2: "Monday",
-  3: "Tuesday",
-  4: "Wednesday",
-  5: "Thursday",
-  6: "Friday",
+  2: "Tuesday",
+  3: "Wednesday",
+  4: "Thursday",
+  5: "Friday",
 };
 
 /**

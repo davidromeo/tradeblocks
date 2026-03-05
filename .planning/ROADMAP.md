@@ -29,7 +29,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 
 - [x] **Phase 60: Profile Storage** - DuckDB strategy_profiles table with full schema (completed 2026-03-04)
 - [x] **Phase 61: Profile CRUD Tools** - profile_strategy, get_strategy_profile, list_profiles, delete_profile MCP tools (completed 2026-03-05)
-- [ ] **Phase 62: Structure-Aware Analysis Tools** - analyze_structure_fit, validate_entry_filters, portfolio_structure_map MCP tools
+- [x] **Phase 62: Structure-Aware Analysis Tools** - analyze_structure_fit, validate_entry_filters, portfolio_structure_map MCP tools (completed 2026-03-05)
 
 ## Phase Details
 
@@ -71,7 +71,7 @@ Plans:
   2. Calling `validate_entry_filters` with a block_id and strategy name compares performance on entered vs. filtered-out days and returns per-filter contribution metrics
   3. Calling `portfolio_structure_map` returns a matrix of all profiled strategies crossed against market regimes, showing which regime x structure combinations have coverage and which are blind spots
   4. All three tools return structured output consumable without further SQL and follow existing MCP registration patterns
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 62-01-PLAN.md — Shared utilities (analysis-stats, filter-predicates) and Trend_Direction enrichment
@@ -89,4 +89,4 @@ Plans:
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Profile Storage | v2.10 | 1/1 | Complete | 2026-03-04 |
 | 61. Profile CRUD Tools | v2.10 | 1/1 | Complete | 2026-03-05 |
-| 62. Structure-Aware Analysis Tools | 2/3 | In Progress|  | - |
+| 62. Structure-Aware Analysis Tools | 3/3 | Complete   | 2026-03-05 | - |
