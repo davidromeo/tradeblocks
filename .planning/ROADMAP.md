@@ -60,7 +60,7 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 61-01-PLAN.md — Profile CRUD tools (profile_strategy, get_strategy_profile, list_profiles, delete_profile) with integration tests
+- [x] 61-01-PLAN.md — Profile CRUD tools (profile_strategy, get_strategy_profile, list_profiles, delete_profile) with integration tests
 
 ### Phase 62: Structure-Aware Analysis Tools
 **Goal**: Claude can run targeted analysis that explicitly uses a stored profile to query the right conditions, validate filter contributions, and map portfolio coverage across strategies
@@ -71,10 +71,12 @@ Plans:
   2. Calling `validate_entry_filters` with a block_id and strategy name compares performance on entered vs. filtered-out days and returns per-filter contribution metrics
   3. Calling `portfolio_structure_map` returns a matrix of all profiled strategies crossed against market regimes, showing which regime x structure combinations have coverage and which are blind spots
   4. All three tools return structured output consumable without further SQL and follow existing MCP registration patterns
-**Plans**: TBD
+**Plans:** 1/3 plans executed
 
 Plans:
-- [ ] 62-01: Implement analyze_structure_fit, validate_entry_filters, and portfolio_structure_map MCP tools
+- [ ] 62-01-PLAN.md — Shared utilities (analysis-stats, filter-predicates) and Trend_Direction enrichment
+- [ ] 62-02-PLAN.md — analyze_structure_fit and validate_entry_filters tools with integration tests
+- [ ] 62-03-PLAN.md — portfolio_structure_map, profile-aware tool enhancements, and registration wiring
 
 ## Progress
 
@@ -86,5 +88,5 @@ Plans:
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Profile Storage | v2.10 | 1/1 | Complete | 2026-03-04 |
-| 61. Profile CRUD Tools | 1/1 | Complete   | 2026-03-05 | - |
-| 62. Structure-Aware Analysis Tools | v2.10 | 0/1 | Not started | - |
+| 61. Profile CRUD Tools | v2.10 | 1/1 | Complete | 2026-03-05 |
+| 62. Structure-Aware Analysis Tools | 1/3 | In Progress|  | - |

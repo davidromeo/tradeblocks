@@ -21,9 +21,9 @@ Requirements for Strategy Profiles milestone. Each maps to roadmap phases.
 
 ### Structure-Aware Analysis
 
-- [ ] **ANLZ-01**: `analyze_structure_fit` runs targeted regime/condition queries based on a strategy's profile (greeks bias, profit driver, key metrics) and returns a fit report
-- [ ] **ANLZ-02**: `validate_entry_filters` compares performance on entered days vs. filtered-out days to measure each entry filter's contribution to edge
-- [ ] **ANLZ-03**: `portfolio_structure_map` builds a regime x structure matrix across all profiled strategies showing coverage and blind spots
+- [x] **ANLZ-01**: `analyze_structure_fit` runs targeted regime/condition queries based on a strategy's profile (greeks bias, profit driver, key metrics) and returns a fit report
+- [x] **ANLZ-02**: `validate_entry_filters` compares performance on entered days vs. filtered-out days to measure each entry filter's contribution to edge
+- [x] **ANLZ-03**: `portfolio_structure_map` builds a regime x structure matrix across all profiled strategies showing coverage and blind spots
 
 ## Future Requirements
 
@@ -57,9 +57,9 @@ Requirements for Strategy Profiles milestone. Each maps to roadmap phases.
 | PROF-01 | Phase 61 | Complete |
 | PROF-02 | Phase 61 | Complete |
 | PROF-03 | Phase 61 | Complete |
-| ANLZ-01 | Phase 62 | Pending |
-| ANLZ-02 | Phase 62 | Pending |
-| ANLZ-03 | Phase 62 | Pending |
+| ANLZ-01 | Phase 62 | Complete |
+| ANLZ-02 | Phase 62 | Complete |
+| ANLZ-03 | Phase 62 | Complete |
 
 **Coverage:**
 - v2.10 requirements: 9 total

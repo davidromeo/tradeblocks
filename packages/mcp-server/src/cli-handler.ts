@@ -22,6 +22,7 @@ import { registerSchemaTools } from "./tools/schema.js";
 import { registerEdgeDecayTools } from "./tools/edge-decay.js";
 import { registerGuideTools } from "./tools/guides.js";
 import { registerProfileTools } from "./tools/profiles.js";
+import { registerProfileAnalysisTools } from "./tools/profile-analysis.js";
 
 // Type for tool result content items
 type ContentItem =
@@ -113,6 +114,7 @@ export async function handleDirectCall(args: string[]): Promise<void> {
   registerEdgeDecayTools(mockServer, resolvedDir);
   registerGuideTools(mockServer);
   registerProfileTools(mockServer, resolvedDir);
+  registerProfileAnalysisTools(mockServer, resolvedDir);
 
   // Handle special case: list available tools
   if (!toolName || toolName === "--list" || toolName === "help") {
