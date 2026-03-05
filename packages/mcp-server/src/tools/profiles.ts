@@ -1,0 +1,298 @@
+/**
+ * Strategy Profile Tools
+ *
+ * MCP tools for CRUD operations on strategy profiles stored in DuckDB.
+ * Wraps the Phase 60 storage layer (db/profile-schemas.ts) as conversational tools.
+ *
+ * Tools registered:
+ *   - profile_strategy     — Create or update a strategy profile
+ *   - get_strategy_profile — Retrieve a single profile by block + strategy name
+ *   - list_profiles        — List profiles (optionally filtered by block)
+ *   - delete_profile       — Remove a profile (idempotent)
+ */
+
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { getConnection, upgradeToReadWrite, downgradeToReadOnly } from "../db/connection.js";
+import {
+  upsertProfile,
+  getProfile,
+  listProfiles,
+  deleteProfile,
+} from "../db/profile-schemas.js";
+import { createToolOutput } from "../utils/output-formatter.js";
+import { withSyncedBlock } from "./middleware/sync-middleware.js";
+
+// ---------------------------------------------------------------------------
+// Zod schemas (exported for testability)
+// ---------------------------------------------------------------------------
+
+export const profileStrategySchema = z.object({
+  blockId: z.string().describe("Block ID (block_id) to associate the profile with"),
+  strategyName: z.string().describe("Human-readable strategy name (e.g., 'Pickle RIC v2')"),
+  structureType: z
+    .string()
+    .describe(
+      "Option structure type: iron_condor, calendar_spread, double_calendar, vertical_spread, " +
+        "butterfly, reverse_iron_condor, short_put_spread, short_call_spread, straddle, strangle, etc."
+    ),
+  greeksBias: z
+    .string()
+    .describe(
+      "Primary greeks exposure: theta_positive, vega_negative, delta_neutral, delta_positive, " +
+        "delta_negative, gamma_scalp, etc."
+    ),
+  thesis: z.string().default("").describe("Free-text description of the strategy thesis"),
+  legs: z
+    .array(
+      z.object({
+        type: z.string().describe("Leg type: long_put, short_call, long_call, short_put, etc."),
+        strike: z.string().describe("Strike selection: ATM, 5-delta, 30-delta, etc."),
+        expiry: z.string().describe("Expiry selection: same-day, weekly, 45-DTE, etc."),
+        quantity: z.number().describe("Quantity (positive=long, negative=short)"),
+      })
+    )
+    .default([])
+    .describe("Structured leg descriptions"),
+  entryFilters: z
+    .array(
+      z.object({
+        field: z.string().describe("Market data field: VIX_Close, RSI_14, Vol_Regime, etc."),
+        operator: z.string().describe("Comparison operator: >, <, >=, <=, ==, between, in"),
+        value: z
+          .union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))])
+          .describe("Filter value or array for between/in operators"),
+        description: z.string().optional().describe("Human-readable description of this filter"),
+      })
+    )
+    .default([])
+    .describe("Entry condition filters referencing market data fields"),
+  exitRules: z
+    .array(
+      z.object({
+        type: z.string().describe("Rule type: stop_loss, profit_target, time_exit, conditional"),
+        trigger: z.string().describe("Trigger condition: '200% of credit', '50% of max profit', '15:00 ET'"),
+        description: z.string().optional().describe("Human-readable description"),
+      })
+    )
+    .default([])
+    .describe("Exit rules and triggers"),
+  expectedRegimes: z
+    .array(z.string())
+    .default([])
+    .describe("Market regimes this strategy targets: low_vol, high_vol, trending_up, etc."),
+  keyMetrics: z
+    .object({
+      expectedWinRate: z.number().optional().describe("Expected win rate (0-1)"),
+      targetPremium: z.number().optional().describe("Target premium collected ($)"),
+      maxLoss: z.number().optional().describe("Maximum loss per contract ($)"),
+      profitTarget: z.number().optional().describe("Profit target ($ or %)"),
+    })
+    .passthrough()
+    .default({})
+    .describe("Performance benchmarks and strategy-specific metrics"),
+});
+
+export const getStrategyProfileSchema = z.object({
+  blockId: z.string().describe("Block ID to look up"),
+  strategyName: z.string().describe("Strategy name to look up"),
+});
+
+export const listProfilesSchema = z.object({
+  blockId: z.string().optional().describe("Optional block ID filter. Omit to list all profiles across all blocks."),
+});
+
+export const deleteProfileSchema = z.object({
+  blockId: z.string().describe("Block ID of the profile to delete"),
+  strategyName: z.string().describe("Strategy name of the profile to delete"),
+});
+
+// ---------------------------------------------------------------------------
+// Handler functions (exported for testability)
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle profile_strategy: create or update a strategy profile.
+ */
+export async function handleProfileStrategy(
+  input: z.infer<typeof profileStrategySchema>,
+  baseDir: string
+): Promise<ReturnType<typeof createToolOutput>> {
+  await upgradeToReadWrite(baseDir);
+  try {
+    const conn = await getConnection(baseDir);
+    const stored = await upsertProfile(conn, {
+      blockId: input.blockId,
+      strategyName: input.strategyName,
+      structureType: input.structureType,
+      greeksBias: input.greeksBias,
+      thesis: input.thesis,
+      legs: input.legs,
+      entryFilters: input.entryFilters,
+      exitRules: input.exitRules,
+      expectedRegimes: input.expectedRegimes,
+      keyMetrics: input.keyMetrics,
+    });
+    return createToolOutput(
+      `Profile saved: ${input.strategyName} for block ${input.blockId}`,
+      { profile: stored }
+    );
+  } finally {
+    await downgradeToReadOnly(baseDir);
+  }
+}
+
+/**
+ * Handle get_strategy_profile: retrieve a single profile.
+ */
+export async function handleGetStrategyProfile(
+  input: z.infer<typeof getStrategyProfileSchema>,
+  baseDir: string
+): Promise<ReturnType<typeof createToolOutput>> {
+  const conn = await getConnection(baseDir);
+  const profile = await getProfile(conn, input.blockId, input.strategyName);
+  if (!profile) {
+    return createToolOutput(
+      `No profile found for strategy '${input.strategyName}' in block '${input.blockId}'`,
+      { profile: null }
+    );
+  }
+  return createToolOutput(
+    `Profile: ${input.strategyName} in block ${input.blockId}`,
+    { profile }
+  );
+}
+
+/**
+ * Handle list_profiles: list profiles with optional block filter.
+ */
+export async function handleListProfiles(
+  input: z.infer<typeof listProfilesSchema>,
+  baseDir: string
+): Promise<ReturnType<typeof createToolOutput>> {
+  const conn = await getConnection(baseDir);
+  const profiles = await listProfiles(conn, input.blockId);
+  const summaryRows = profiles.map((p) => ({
+    blockId: p.blockId,
+    strategyName: p.strategyName,
+    structureType: p.structureType,
+    greeksBias: p.greeksBias,
+    updatedAt: p.updatedAt,
+  }));
+  return createToolOutput(
+    `Found ${profiles.length} profile(s)${input.blockId ? ` for block ${input.blockId}` : ""}`,
+    { count: profiles.length, profiles: summaryRows }
+  );
+}
+
+/**
+ * Handle delete_profile: remove a profile (idempotent).
+ */
+export async function handleDeleteProfile(
+  input: z.infer<typeof deleteProfileSchema>,
+  baseDir: string
+): Promise<ReturnType<typeof createToolOutput>> {
+  await upgradeToReadWrite(baseDir);
+  try {
+    const conn = await getConnection(baseDir);
+    const deleted = await deleteProfile(conn, input.blockId, input.strategyName);
+    if (deleted) {
+      return createToolOutput(
+        `Deleted profile: ${input.strategyName} from block ${input.blockId}`,
+        { deleted: true }
+      );
+    }
+    return createToolOutput(
+      `No profile found for strategy '${input.strategyName}' in block '${input.blockId}' — nothing to delete`,
+      { deleted: false }
+    );
+  } finally {
+    await downgradeToReadOnly(baseDir);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Registration
+// ---------------------------------------------------------------------------
+
+/**
+ * Register all profile CRUD tools on the MCP server.
+ *
+ * @param server  - McpServer instance to register tools on
+ * @param baseDir - Base data directory (passed to connection helpers)
+ */
+export function registerProfileTools(server: McpServer, baseDir: string): void {
+  // -------------------------------------------------------------------------
+  // Tool: profile_strategy
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "profile_strategy",
+    {
+      description:
+        "Create or update a strategy profile for a block. Stores structure type, greeks bias, " +
+        "legs, entry filters, exit rules, expected regimes, and key metrics. " +
+        "If a profile with the same block_id + strategy_name already exists, it is overwritten (upsert).",
+      inputSchema: profileStrategySchema,
+    },
+    withSyncedBlock(baseDir, async (input, ctx) => {
+      return handleProfileStrategy(input, ctx.baseDir);
+    })
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool: get_strategy_profile
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "get_strategy_profile",
+    {
+      description:
+        "Retrieve a single strategy profile by block_id and strategy_name. " +
+        "Returns the full profile including all schema fields, or a not-found message.",
+      inputSchema: getStrategyProfileSchema,
+    },
+    withSyncedBlock(baseDir, async (input, ctx) => {
+      return handleGetStrategyProfile(input, ctx.baseDir);
+    })
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool: list_profiles
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "list_profiles",
+    {
+      description:
+        "List strategy profiles. Provide block_id to filter by block, or omit to list all profiles " +
+        "across all blocks. Returns summary rows with block_id, strategy_name, structure_type, " +
+        "greeks_bias, and updated_at.",
+      inputSchema: listProfilesSchema,
+    },
+    async (input) => {
+      // list_profiles has optional blockId — when provided, sync the block first;
+      // when omitted, query directly without sync (no block to validate).
+      if (input.blockId) {
+        const syncedHandler = withSyncedBlock(baseDir, async (syncInput: { blockId: string }, ctx) => {
+          return handleListProfiles({ blockId: syncInput.blockId }, ctx.baseDir);
+        });
+        return syncedHandler({ blockId: input.blockId });
+      }
+      return handleListProfiles(input, baseDir);
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // Tool: delete_profile
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    "delete_profile",
+    {
+      description:
+        "Delete a strategy profile by block_id and strategy_name. " +
+        "Idempotent: deleting a nonexistent profile returns success with a not-found message.",
+      inputSchema: deleteProfileSchema,
+    },
+    withSyncedBlock(baseDir, async (input, ctx) => {
+      return handleDeleteProfile(input, ctx.baseDir);
+    })
+  );
+}
