@@ -151,3 +151,13 @@ export {
   listProfilesSchema,
   deleteProfileSchema,
 } from './tools/profiles.js';
+
+// Export Phase 62 profile analysis tool handlers and schemas for integration testing
+export {
+  handleAnalyzeStructureFit,
+  handleValidateEntryFilters,
+  handlePortfolioStructureMap,
+  analyzeStructureFitSchema,
+  validateEntryFiltersSchema,
+  portfolioStructureMapSchema,
+} from './tools/profile-analysis.js';

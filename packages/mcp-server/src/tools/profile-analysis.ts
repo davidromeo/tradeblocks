@@ -284,7 +284,8 @@ export async function handleAnalyzeStructureFit(
   input: z.infer<typeof analyzeStructureFitSchema>,
   baseDir: string
 ): Promise<ReturnType<typeof createToolOutput>> {
-  const { blockId, strategyName, minTrades } = input;
+  const { blockId, strategyName } = input;
+  const minTrades = input.minTrades ?? 10;
 
   // Load profile
   const conn = await getConnection(baseDir);
@@ -517,7 +518,9 @@ export async function handleValidateEntryFilters(
   input: z.infer<typeof validateEntryFiltersSchema>,
   baseDir: string
 ): Promise<ReturnType<typeof createToolOutput>> {
-  const { blockId, strategyName, minTrades, maxAblationFilters } = input;
+  const { blockId, strategyName } = input;
+  const minTrades = input.minTrades ?? 10;
+  const maxAblationFilters = input.maxAblationFilters ?? 8;
 
   // Load profile
   const conn = await getConnection(baseDir);
