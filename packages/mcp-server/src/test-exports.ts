@@ -103,6 +103,7 @@ export {
   isOpex,
   computeVIXDerivedFields,
   classifyVolRegime,
+  classifyTrendDirection,
   classifyTermStructure,
   computeVIXPercentile,
   type BollingerBandRow,

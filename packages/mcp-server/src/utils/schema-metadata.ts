@@ -492,6 +492,11 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             hypothesis: true,
             timing: 'close',
           },
+          Trend_Direction: {
+            description: "Trend direction classification based on 20-day return: up (>1%), down (<-1%), flat (-1% to 1%). NULL if Return_20D unavailable.",
+            hypothesis: true,
+            timing: 'close',
+          },
         },
       },
       intraday: {
