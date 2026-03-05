@@ -1,0 +1,105 @@
+/**
+ * Filter Predicate Builder
+ *
+ * Converts EntryFilter objects into runtime predicates that can evaluate
+ * market data records. Handles field timing awareness via CLOSE_KNOWN_FIELDS
+ * to automatically apply the prev_ prefix for close-derived fields.
+ *
+ * Used by analyze_structure_fit and portfolio_structure_map to evaluate
+ * entry filters against market data rows.
+ */
+
+import { CLOSE_KNOWN_FIELDS } from "./field-timing.js";
+import type { EntryFilter } from "../models/strategy-profile.js";
+
+/**
+ * A compiled filter predicate with metadata about the field key used.
+ */
+export interface FilterPredicate {
+  /** Evaluate this predicate against a market data record */
+  test: (market: Record<string, unknown>) => boolean;
+  /** The actual field key used for lookup (may have prev_ prefix) */
+  fieldKey: string;
+  /** Whether the field was detected as close-derived and lagged */
+  isLagged: boolean;
+}
+
+/**
+ * Safely extract a numeric value from a record.
+ * Returns NaN if the value is missing, null, undefined, or non-numeric.
+ */
+function getNum(record: Record<string, unknown>, key: string): number {
+  const val = record[key];
+  if (val === null || val === undefined) return NaN;
+  const num = Number(val);
+  return num;
+}
+
+/**
+ * Safely extract a value from a record for loose equality comparison.
+ * Returns undefined if the key is missing.
+ */
+function getRaw(record: Record<string, unknown>, key: string): unknown {
+  return record[key];
+}
+
+/**
+ * Build a runtime predicate from an EntryFilter.
+ *
+ * Automatically detects close-derived fields via CLOSE_KNOWN_FIELDS and
+ * prepends "prev_" to the field key for correct lookahead-free evaluation.
+ *
+ * NaN/null/undefined values in the market record always return false
+ * (missing data never matches a filter).
+ *
+ * @param filter - Entry filter specification
+ * @returns Compiled predicate with metadata
+ */
+export function buildFilterPredicate(filter: EntryFilter): FilterPredicate {
+  const isLagged = CLOSE_KNOWN_FIELDS.has(filter.field);
+  const fieldKey = isLagged ? `prev_${filter.field}` : filter.field;
+
+  const { operator, value } = filter;
+
+  const test = (market: Record<string, unknown>): boolean => {
+    // For "in" and "==" operators, we may need raw value access
+    if (operator === "in") {
+      const raw = getRaw(market, fieldKey);
+      if (raw === null || raw === undefined) return false;
+      if (!Array.isArray(value)) return false;
+      // Use loose equality for each array element
+      return value.some((v) => v == raw); // eslint-disable-line eqeqeq
+    }
+
+    if (operator === "==") {
+      const raw = getRaw(market, fieldKey);
+      if (raw === null || raw === undefined) return false;
+      return value == raw; // eslint-disable-line eqeqeq
+    }
+
+    // Numeric operators: >, <, >=, <=, between
+    const num = getNum(market, fieldKey);
+    if (isNaN(num)) return false;
+
+    switch (operator) {
+      case ">":
+        return num > Number(value);
+      case "<":
+        return num < Number(value);
+      case ">=":
+        return num >= Number(value);
+      case "<=":
+        return num <= Number(value);
+      case "between": {
+        if (!Array.isArray(value) || value.length < 2) return false;
+        const lo = Number(value[0]);
+        const hi = Number(value[1]);
+        return num >= lo && num <= hi;
+      }
+      default:
+        return false;
+    }
+  };
+
+  return { test, fieldKey, isLagged };
+}

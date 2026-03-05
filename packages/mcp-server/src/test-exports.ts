@@ -135,6 +135,10 @@ export {
   deleteProfile,
 } from './db/profile-schemas.js';
 
+// Export Phase 62 analysis utility modules for unit testing
+export { computeSliceStats, type SliceStats } from './utils/analysis-stats.js';
+export { buildFilterPredicate, type FilterPredicate } from './utils/filter-predicates.js';
+
 // Export Phase 61 profile tool handlers and schemas for integration testing
 export {
   handleProfileStrategy,
