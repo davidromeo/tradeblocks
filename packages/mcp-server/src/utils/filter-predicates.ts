@@ -44,10 +44,47 @@ function getRaw(record: Record<string, unknown>, key: string): unknown {
 }
 
 /**
+ * Check whether a filter value is a cross-field reference (a string that
+ * looks like a field name rather than a pure numeric literal).
+ */
+function isCrossFieldRef(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  // If it parses as a finite number, it's a numeric literal, not a field ref
+  if (value.trim() !== "" && isFinite(Number(value))) return false;
+  return true;
+}
+
+/**
+ * Resolve a cross-field reference value. If the value is a string that
+ * already exists as a key in the market record, use it as-is. Otherwise,
+ * if the bare field name (without prev_ prefix) is close-derived, try
+ * the prev_ prefixed version.
+ */
+function resolveFieldRef(
+  refName: string,
+  market: Record<string, unknown>
+): number {
+  // Direct lookup first (handles cases like "prev_VIX_Close" spelled out)
+  if (refName in market) {
+    return getNum(market, refName);
+  }
+  // If the ref looks like a bare close-derived field, try prev_ prefix
+  if (CLOSE_KNOWN_FIELDS.has(refName)) {
+    return getNum(market, `prev_${refName}`);
+  }
+  return NaN;
+}
+
+/**
  * Build a runtime predicate from an EntryFilter.
  *
  * Automatically detects close-derived fields via CLOSE_KNOWN_FIELDS and
  * prepends "prev_" to the field key for correct lookahead-free evaluation.
+ *
+ * For comparison operators (>, <, >=, <=, ==), if the filter value is a
+ * string that looks like a field name (not a pure numeric string), it is
+ * treated as a cross-field reference. The referenced field's value is
+ * looked up from the market record at evaluation time.
  *
  * NaN/null/undefined values in the market record always return false
  * (missing data never matches a filter).
@@ -74,12 +111,37 @@ export function buildFilterPredicate(filter: EntryFilter): FilterPredicate {
     if (operator === "==") {
       const raw = getRaw(market, fieldKey);
       if (raw === null || raw === undefined) return false;
+      // Cross-field reference for ==
+      if (isCrossFieldRef(value)) {
+        const refVal = resolveFieldRef(value, market);
+        if (isNaN(refVal)) return false;
+        return Number(raw) === refVal;
+      }
       return value == raw; // eslint-disable-line eqeqeq
     }
 
     // Numeric operators: >, <, >=, <=, between
     const num = getNum(market, fieldKey);
     if (isNaN(num)) return false;
+
+    // For comparison operators, check if value is a cross-field reference
+    if (
+      isCrossFieldRef(value) &&
+      (operator === ">" || operator === "<" || operator === ">=" || operator === "<=")
+    ) {
+      const refVal = resolveFieldRef(value, market);
+      if (isNaN(refVal)) return false;
+      switch (operator) {
+        case ">":
+          return num > refVal;
+        case "<":
+          return num < refVal;
+        case ">=":
+          return num >= refVal;
+        case "<=":
+          return num <= refVal;
+      }
+    }
 
     switch (operator) {
       case ">":

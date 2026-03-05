@@ -107,6 +107,102 @@ describe("buildFilterPredicate", () => {
     });
   });
 
+  describe("cross-field references", () => {
+    it("< operator with cross-field ref: VIX_Open < prev_VIX_Close", () => {
+      const pred = buildFilterPredicate({
+        field: "VIX_Open",
+        operator: "<",
+        value: "prev_VIX_Close",
+        description: "VIX O/N Move Down",
+      });
+      // VIX_Open is open-known (no lag), value references prev_VIX_Close directly
+      expect(pred.fieldKey).toBe("VIX_Open");
+      expect(pred.test({ VIX_Open: 18, prev_VIX_Close: 20 })).toBe(true);
+      expect(pred.test({ VIX_Open: 22, prev_VIX_Close: 20 })).toBe(false);
+      expect(pred.test({ VIX_Open: 20, prev_VIX_Close: 20 })).toBe(false);
+    });
+
+    it("> operator with cross-field ref: Gap_Pct > Prior_Range_vs_ATR", () => {
+      const pred = buildFilterPredicate({
+        field: "Gap_Pct",
+        operator: ">",
+        value: "Prior_Range_vs_ATR",
+      });
+      expect(pred.test({ Gap_Pct: 1.5, Prior_Range_vs_ATR: 1.0 })).toBe(true);
+      expect(pred.test({ Gap_Pct: 0.5, Prior_Range_vs_ATR: 1.0 })).toBe(false);
+    });
+
+    it(">= operator with cross-field ref", () => {
+      const pred = buildFilterPredicate({
+        field: "Gap_Pct",
+        operator: ">=",
+        value: "Prior_Range_vs_ATR",
+      });
+      expect(pred.test({ Gap_Pct: 1.0, Prior_Range_vs_ATR: 1.0 })).toBe(true);
+      expect(pred.test({ Gap_Pct: 0.9, Prior_Range_vs_ATR: 1.0 })).toBe(false);
+    });
+
+    it("<= operator with cross-field ref", () => {
+      const pred = buildFilterPredicate({
+        field: "VIX_Open",
+        operator: "<=",
+        value: "prev_VIX_Close",
+      });
+      expect(pred.test({ VIX_Open: 20, prev_VIX_Close: 20 })).toBe(true);
+      expect(pred.test({ VIX_Open: 21, prev_VIX_Close: 20 })).toBe(false);
+    });
+
+    it("== operator with cross-field ref", () => {
+      const pred = buildFilterPredicate({
+        field: "VIX_Open",
+        operator: "==",
+        value: "prev_VIX_Close",
+      });
+      expect(pred.test({ VIX_Open: 20, prev_VIX_Close: 20 })).toBe(true);
+      expect(pred.test({ VIX_Open: 19, prev_VIX_Close: 20 })).toBe(false);
+    });
+
+    it("resolves bare close-derived field name to prev_ prefixed key", () => {
+      // Value is "VIX_Close" (close-derived) but record has "prev_VIX_Close"
+      const pred = buildFilterPredicate({
+        field: "VIX_Open",
+        operator: "<",
+        value: "VIX_Close",
+      });
+      expect(pred.test({ VIX_Open: 18, prev_VIX_Close: 20 })).toBe(true);
+      expect(pred.test({ VIX_Open: 22, prev_VIX_Close: 20 })).toBe(false);
+    });
+
+    it("returns false when referenced field is missing from record", () => {
+      const pred = buildFilterPredicate({
+        field: "VIX_Open",
+        operator: "<",
+        value: "NonExistentField",
+      });
+      expect(pred.test({ VIX_Open: 18 })).toBe(false);
+    });
+
+    it("returns false when referenced field value is null", () => {
+      const pred = buildFilterPredicate({
+        field: "VIX_Open",
+        operator: "<",
+        value: "prev_VIX_Close",
+      });
+      expect(pred.test({ VIX_Open: 18, prev_VIX_Close: null })).toBe(false);
+    });
+
+    it("numeric string values are NOT treated as field references", () => {
+      // "20" is a numeric string, should be treated as literal 20
+      const pred = buildFilterPredicate({
+        field: "VIX_Close",
+        operator: "<",
+        value: "20",
+      });
+      expect(pred.test({ prev_VIX_Close: 15 })).toBe(true);
+      expect(pred.test({ prev_VIX_Close: 25 })).toBe(false);
+    });
+  });
+
   describe("NaN / null / undefined handling", () => {
     it("returns false when field value is NaN", () => {
       const pred = buildFilterPredicate({ field: "VIX_Close", operator: "<", value: 20 });
