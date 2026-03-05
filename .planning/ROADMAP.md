@@ -28,7 +28,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 ## Phases
 
 - [x] **Phase 60: Profile Storage** - DuckDB strategy_profiles table with full schema (completed 2026-03-04)
-- [ ] **Phase 61: Profile CRUD Tools** - profile_strategy, get_strategy_profile, list_profiles MCP tools
+- [ ] **Phase 61: Profile CRUD Tools** - profile_strategy, get_strategy_profile, list_profiles, delete_profile MCP tools
 - [ ] **Phase 62: Structure-Aware Analysis Tools** - analyze_structure_fit, validate_entry_filters, portfolio_structure_map MCP tools
 
 ## Phase Details
@@ -45,21 +45,22 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 60-01-PLAN.md — Strategy profiles types, DDL, CRUD functions, and integration tests
+- [x] 60-01-PLAN.md — Strategy profiles types, DDL, CRUD functions, and integration tests
 
 ### Phase 61: Profile CRUD Tools
-**Goal**: Claude can create, retrieve, and list strategy profiles through MCP tools using the storage layer from Phase 60
+**Goal**: Claude can create, retrieve, list, and delete strategy profiles through MCP tools using the storage layer from Phase 60
 **Depends on**: Phase 60
 **Requirements**: PROF-01, PROF-02, PROF-03
 **Success Criteria** (what must be TRUE):
   1. Calling `profile_strategy` with a block_id, strategy name, and structured description creates or updates a profile in DuckDB and confirms success
   2. Calling `get_strategy_profile` with a block_id and strategy name returns the full stored profile including all schema fields
   3. Calling `list_profiles` with a block_id returns all profiles for that block; calling without a block_id returns profiles across all blocks
-  4. All three tools follow existing MCP patterns (Zod schema → sync middleware → handler → createToolOutput) and register correctly
-**Plans**: TBD
+  4. Calling `delete_profile` with a block_id and strategy name removes the profile; deleting nonexistent returns success
+  5. All four tools follow existing MCP patterns (Zod schema, sync middleware, handler, createToolOutput) and register correctly
+**Plans:** 1 plan
 
 Plans:
-- [ ] 61-01: Implement profile_strategy, get_strategy_profile, and list_profiles MCP tools
+- [ ] 61-01-PLAN.md — Profile CRUD tools (profile_strategy, get_strategy_profile, list_profiles, delete_profile) with integration tests
 
 ### Phase 62: Structure-Aware Analysis Tools
 **Goal**: Claude can run targeted analysis that explicitly uses a stored profile to query the right conditions, validate filter contributions, and map portfolio coverage across strategies
@@ -84,6 +85,6 @@ Plans:
 | 57. Restore enrich_trades | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 58. Schema Metadata + Documentation | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
-| 60. Profile Storage | 1/1 | Complete   | 2026-03-04 | - |
-| 61. Profile CRUD Tools | v2.10 | 0/1 | Not started | - |
+| 60. Profile Storage | v2.10 | 1/1 | Complete | 2026-03-04 |
+| 61. Profile CRUD Tools | v2.10 | 0/1 | Planning | - |
 | 62. Structure-Aware Analysis Tools | v2.10 | 0/1 | Not started | - |
