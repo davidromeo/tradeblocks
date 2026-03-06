@@ -182,7 +182,17 @@ async function loadTradesAndMarket(
   allTrades: Trade[];
 }> {
   const block = await loadBlock(baseDir, blockId);
-  const trades = filterByStrategy(block.trades, strategyName);
+  let trades = filterByStrategy(block.trades, strategyName);
+
+  // Single-strategy backtest blocks may have a different strategy name in the CSV
+  // (e.g., blockId fallback "2_3 dc" vs profile name "2/3 DC - v2").
+  // If no trades match by name and the block has only one unique strategy, use all trades.
+  if (trades.length === 0 && block.trades.length > 0) {
+    const uniqueStrategies = new Set(block.trades.map((t) => t.strategy));
+    if (uniqueStrategies.size === 1) {
+      trades = block.trades;
+    }
+  }
 
   if (trades.length === 0) {
     return { matched: [], unmatchedCount: 0, allTrades: [] };
@@ -832,7 +842,14 @@ export async function handlePortfolioStructureMap(
         continue;
       }
 
-      const trades = filterByStrategy(block.trades, profile.strategyName);
+      let trades = filterByStrategy(block.trades, profile.strategyName);
+      // Single-strategy block fallback (see loadTradesAndMarket)
+      if (trades.length === 0 && block.trades.length > 0) {
+        const uniqueStrategies = new Set(block.trades.map((t) => t.strategy));
+        if (uniqueStrategies.size === 1) {
+          trades = block.trades;
+        }
+      }
       if (trades.length === 0) {
         warnings.push(`No trades found for strategy '${profile.strategyName}' in block '${profile.blockId}'`);
         continue;

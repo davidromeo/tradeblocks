@@ -25,6 +25,26 @@ export interface FilterPredicate {
 }
 
 /**
+ * Day-of-week name to number mapping (market data uses 1=Mon to 5=Fri).
+ */
+const DAY_NAME_TO_NUM: Record<string, number> = {
+  monday: 1, mon: 1,
+  tuesday: 2, tue: 2, tues: 2,
+  wednesday: 3, wed: 3,
+  thursday: 4, thu: 4, thurs: 4,
+  friday: 5, fri: 5,
+};
+
+/**
+ * If a filter value is a day-of-week name and the field is Day_of_Week,
+ * convert it to the corresponding number. Returns null if not applicable.
+ */
+function resolveDayName(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  return DAY_NAME_TO_NUM[value.toLowerCase()] ?? null;
+}
+
+/**
  * Safely extract a numeric value from a record.
  * Returns NaN if the value is missing, null, undefined, or non-numeric.
  */
@@ -104,13 +124,20 @@ export function buildFilterPredicate(filter: EntryFilter): FilterPredicate {
       const raw = getRaw(market, fieldKey);
       if (raw === null || raw === undefined) return false;
       if (!Array.isArray(value)) return false;
-      // Use loose equality for each array element
-      return value.some((v) => v == raw); // eslint-disable-line eqeqeq
+      // Try day-of-week name resolution for each element
+      return value.some((v) => {
+        const dayNum = resolveDayName(v);
+        if (dayNum !== null) return Number(raw) === dayNum;
+        return v == raw; // eslint-disable-line eqeqeq
+      });
     }
 
     if (operator === "==") {
       const raw = getRaw(market, fieldKey);
       if (raw === null || raw === undefined) return false;
+      // Day-of-week name resolution (e.g., "Tuesday" == 2)
+      const dayNum = resolveDayName(value);
+      if (dayNum !== null) return Number(raw) === dayNum;
       // Cross-field reference for ==
       if (isCrossFieldRef(value)) {
         const refVal = resolveFieldRef(value, market);

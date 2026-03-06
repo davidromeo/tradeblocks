@@ -203,6 +203,39 @@ describe("buildFilterPredicate", () => {
     });
   });
 
+  describe("day-of-week name resolution", () => {
+    it("== operator resolves day name to number", () => {
+      const pred = buildFilterPredicate({ field: "Day_of_Week", operator: "==", value: "Tuesday" });
+      expect(pred.test({ Day_of_Week: 2 })).toBe(true);
+      expect(pred.test({ Day_of_Week: 3 })).toBe(false);
+    });
+
+    it("== operator is case-insensitive for day names", () => {
+      const pred = buildFilterPredicate({ field: "Day_of_Week", operator: "==", value: "friday" });
+      expect(pred.test({ Day_of_Week: 5 })).toBe(true);
+    });
+
+    it("== operator handles short day names", () => {
+      const pred = buildFilterPredicate({ field: "Day_of_Week", operator: "==", value: "Wed" });
+      expect(pred.test({ Day_of_Week: 3 })).toBe(true);
+    });
+
+    it("in operator resolves day names in array", () => {
+      const pred = buildFilterPredicate({ field: "Day_of_Week", operator: "in", value: ["Monday", "Wednesday", "Friday"] });
+      expect(pred.test({ Day_of_Week: 1 })).toBe(true);
+      expect(pred.test({ Day_of_Week: 3 })).toBe(true);
+      expect(pred.test({ Day_of_Week: 5 })).toBe(true);
+      expect(pred.test({ Day_of_Week: 2 })).toBe(false);
+    });
+
+    it("in operator handles mixed day names and numbers", () => {
+      const pred = buildFilterPredicate({ field: "Day_of_Week", operator: "in", value: ["Tuesday", 4] });
+      expect(pred.test({ Day_of_Week: 2 })).toBe(true);
+      expect(pred.test({ Day_of_Week: 4 })).toBe(true);
+      expect(pred.test({ Day_of_Week: 1 })).toBe(false);
+    });
+  });
+
   describe("NaN / null / undefined handling", () => {
     it("returns false when field value is NaN", () => {
       const pred = buildFilterPredicate({ field: "VIX_Close", operator: "<", value: 20 });
