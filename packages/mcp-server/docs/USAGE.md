@@ -138,6 +138,17 @@ GROUP BY dow ORDER BY dow
 | `suggest_filters` | Suggest trade filters based on market conditions |
 | `calculate_orb` | Opening range breakout analysis from intraday bars |
 
+### Strategy Profile Tools
+| Tool | Purpose |
+|------|---------|
+| `profile_strategy` | Create or update a strategy profile |
+| `get_strategy_profile` | Retrieve a stored strategy profile |
+| `list_profiles` | List all strategy profiles |
+| `delete_profile` | Delete a strategy profile |
+| `analyze_structure_fit` | Analyze performance by regime/condition dimensions |
+| `validate_entry_filters` | Test each entry filter's contribution to edge |
+| `portfolio_structure_map` | Regime x structure coverage matrix |
+
 ### Import Tools
 | Tool | Purpose |
 |------|---------|
@@ -211,7 +222,7 @@ The server detects CSV types by column headers, not just filenames. This means:
 
 - `my-strategy-export.csv` will work if it has the expected columns
 - Files are auto-detected as tradelog, dailylog, or reportinglog
-- Detected mappings are cached in `block.json` for faster loading
+- CSV types are detected on each load via header sniffing (no caching needed)
 
 ---
 

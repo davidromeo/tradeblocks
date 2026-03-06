@@ -8,8 +8,9 @@ Model Context Protocol (MCP) server for options trading analysis. Works with Cla
 - **SQL analytics layer** - `run_sql` for arbitrary queries, `describe_database` for schema discovery
 - **Two transport modes**: stdio (CLI tools) and HTTP (web platforms)
 - **Block-based data organization** - each folder is a trading strategy
-- **Automatic caching** - statistics cached in `block.json` for fast access
+- **DuckDB analytics** - statistics computed from DuckDB, no file caching needed
 - **Flexible CSV detection** - auto-detects file types by column headers
+- **Strategy profiles** - store and retrieve structured strategy metadata for targeted analysis
 
 ## Installation
 
@@ -249,7 +250,6 @@ backtests/
     tradelog.csv      # Required - trade history
     dailylog.csv      # Optional - daily portfolio values
     reportinglog.csv  # Optional - live/reported trades
-    block.json        # Auto-generated - cached metadata
   NDX-Put-Spread/
     my-export.csv     # Works! Auto-detected by columns
     ...
@@ -313,6 +313,17 @@ backtests/
 | `analyze_regime_performance` | Analyze P&L by market regime |
 | `suggest_filters` | Suggest trade filters based on market conditions |
 | `calculate_orb` | Opening range breakout analysis from intraday bars |
+
+### Strategy Profile Tools
+| Tool | Description |
+|------|-------------|
+| `profile_strategy` | Create or update a strategy profile with structured metadata |
+| `get_strategy_profile` | Retrieve a stored strategy profile |
+| `list_profiles` | List all strategy profiles (optionally filtered by block) |
+| `delete_profile` | Delete a strategy profile |
+| `analyze_structure_fit` | Analyze strategy performance by regime/condition dimensions |
+| `validate_entry_filters` | Test each entry filter's contribution to edge |
+| `portfolio_structure_map` | Regime x structure coverage matrix across strategies |
 
 ### Import Tools
 | Tool | Description |

@@ -148,6 +148,8 @@ When adding new metrics, calculations, or chart data to the UI, **consider wheth
 - `src/tools/market-data.ts` - Market regime analysis, filter suggestions, ORB calculation, trade enrichment
 - `src/tools/market-imports.ts` - import_market_csv, import_from_database
 - `src/tools/market-enrichment.ts` - enrich_market_data
+- `src/tools/profiles.ts` - Strategy profile CRUD (profile_strategy, get_strategy_profile, list_profiles, delete_profile)
+- `src/tools/profile-analysis.ts` - Structure-aware analysis (analyze_structure_fit, validate_entry_filters, portfolio_structure_map)
 
 ### Using MCP Tools Natively
 
@@ -321,8 +323,8 @@ GSD plans MUST include a test task for any new utility module. If a plan creates
 
 5. **Version management:**
    - MCP server version (`packages/mcp-server/package.json`), git tags, and GSD milestones all use the same version number
-   - Bump MCP server version to match the milestone version at milestone completion (e.g., milestone v2.10 → package version 2.10.0 → git tag v2.10)
-   - Mid-milestone patch bumps use the milestone version with patch increments (e.g., 2.10.1, 2.10.2)
+   - Bump MCP server version to match the milestone version at milestone completion (e.g., milestone v2.1 → package version 2.1.0 → git tag v2.1)
+   - Mid-milestone patch bumps use the milestone version with patch increments (e.g., 2.1.1, 2.1.2)
 
 6. **Milestone completion checklist:**
    - Archive milestone to `.planning/milestones/`
