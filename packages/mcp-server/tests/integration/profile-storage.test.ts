@@ -55,6 +55,12 @@ function makeProfile(
     ],
     expectedRegimes: ['low_vol', 'neutral_trend'],
     keyMetrics: { expectedWinRate: 0.75, targetPremium: 150, maxLoss: 350 },
+    positionSizing: {
+      method: 'pct_of_portfolio',
+      allocationPct: 5,
+      maxContracts: 10,
+      maxOpenPositions: 3,
+    },
     ...overrides,
   };
 }
@@ -103,6 +109,7 @@ describe('Profile Storage Integration', () => {
     expect(stored.exitRules).toEqual(input.exitRules);
     expect(stored.expectedRegimes).toEqual(input.expectedRegimes);
     expect(stored.keyMetrics).toEqual(input.keyMetrics);
+    expect(stored.positionSizing).toEqual(input.positionSizing);
     expect(stored.createdAt).toBeInstanceOf(Date);
     expect(stored.updatedAt).toBeInstanceOf(Date);
 
@@ -113,6 +120,7 @@ describe('Profile Storage Integration', () => {
     expect(fetched!.legs).toEqual(input.legs);
     expect(fetched!.entryFilters).toEqual(input.entryFilters);
     expect(fetched!.keyMetrics).toEqual(input.keyMetrics);
+    expect(fetched!.positionSizing).toEqual(input.positionSizing);
   });
 
   // Test 3: Composite key — two strategies, same block (STOR-02)
@@ -212,7 +220,22 @@ describe('Profile Storage Integration', () => {
     expect(blockBProfiles.length).toBe(2);
   });
 
-  // Test 7: Schema supports diverse Option Omega strategy types (STOR-03)
+  // Test 7: Backward compat — profile without positionSizing
+  it('stores and retrieves a profile without positionSizing (backward compat)', async () => {
+    const conn = await getConnection(testDir);
+    // Explicitly omit positionSizing by overriding with undefined
+    const input = makeProfile({ positionSizing: undefined });
+    delete (input as Record<string, unknown>).positionSizing;
+
+    const stored = await upsertProfile(conn, input);
+    expect(stored.positionSizing).toBeUndefined();
+
+    const fetched = await getProfile(conn, input.blockId, input.strategyName);
+    expect(fetched).not.toBeNull();
+    expect(fetched!.positionSizing).toBeUndefined();
+  });
+
+  // Test 8: Schema supports diverse Option Omega strategy types (STOR-03)
   it('stores all Option Omega strategy types without schema changes', async () => {
     const conn = await getConnection(testDir);
 

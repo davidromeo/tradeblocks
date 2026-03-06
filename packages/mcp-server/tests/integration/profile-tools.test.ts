@@ -52,6 +52,12 @@ function makeProfileInput(
     ],
     expectedRegimes: ['low_vol', 'range_bound'],
     keyMetrics: { expectedWinRate: 0.85, targetPremium: 1.50 },
+    positionSizing: {
+      method: 'pct_of_portfolio',
+      allocationPct: 5,
+      maxContracts: 10,
+      maxOpenPositions: 3,
+    },
     ...overrides,
   };
 }
@@ -95,6 +101,11 @@ describe('profile_strategy tool', () => {
     expect(data.profile.exitRules).toHaveLength(2);
     expect(data.profile.expectedRegimes).toEqual(['low_vol', 'range_bound']);
     expect(data.profile.keyMetrics.expectedWinRate).toBe(0.85);
+    expect(data.profile.positionSizing).toBeDefined();
+    expect(data.profile.positionSizing.method).toBe('pct_of_portfolio');
+    expect(data.profile.positionSizing.allocationPct).toBe(5);
+    expect(data.profile.positionSizing.maxContracts).toBe(10);
+    expect(data.profile.positionSizing.maxOpenPositions).toBe(3);
     expect(data.profile.createdAt).toBeDefined();
     expect(data.profile.updatedAt).toBeDefined();
   });
@@ -118,6 +129,16 @@ describe('profile_strategy tool', () => {
     // Original fields should be overwritten
     expect(data.profile.blockId).toBe('test-block-1');
     expect(data.profile.strategyName).toBe('Test Iron Condor');
+  });
+
+  it('creates a profile without positionSizing (optional field)', async () => {
+    const input = makeProfileInput();
+    delete (input as Record<string, unknown>).positionSizing;
+    const result = await handleProfileStrategy(input, tempDir);
+
+    const data = JSON.parse(result.content[1].resource.text);
+    expect(data.profile.blockId).toBe('test-block-1');
+    expect(data.profile.positionSizing).toBeUndefined();
   });
 });
 
@@ -177,6 +198,7 @@ describe('list_profiles tool', () => {
     expect(data.profiles[0].strategyName).toBe('Test Iron Condor');
     expect(data.profiles[0].structureType).toBe('iron_condor');
     expect(data.profiles[0].greeksBias).toBe('theta_positive');
+    expect(data.profiles[0].positionSizing).toBe('pct_of_portfolio');
     expect(data.profiles[0].updatedAt).toBeDefined();
     // Summary rows should NOT include full profile details (no legs, entryFilters, etc.)
     expect(data.profiles[0].legs).toBeUndefined();

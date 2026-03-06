@@ -127,6 +127,7 @@ export type {
   EntryFilter,
   ExitRule,
   KeyMetrics,
+  PositionSizing,
 } from './models/strategy-profile.js';
 export {
   ensureProfilesSchema,
