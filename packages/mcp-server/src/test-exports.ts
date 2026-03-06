@@ -21,6 +21,9 @@ export {
   type ImportCsvOptions,
 } from './utils/block-loader.js';
 
+// Export CSV discovery utilities for unit testing (Phase 63)
+export { detectCsvType, discoverCsvFiles, logCsvDiscoveryWarning, type CsvType } from './utils/csv-discovery.js';
+
 // Export PortfolioStatsCalculator for testing block_diff logic
 export { PortfolioStatsCalculator } from '@tradeblocks/lib';
 

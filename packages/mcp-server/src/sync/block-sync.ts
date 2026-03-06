@@ -18,6 +18,7 @@ import {
 } from "./metadata.js";
 import { resolveTickerFromCsvRow } from "../utils/ticker.js";
 import { convertToReportingTrade } from "../utils/block-loader.js";
+import { discoverCsvFiles } from "../utils/csv-discovery.js";
 import type { ReportingTrade } from "@tradeblocks/lib";
 
 /**
@@ -28,35 +29,6 @@ export interface BlockSyncResult {
   status: "synced" | "unchanged" | "deleted" | "error";
   tradeCount?: number;
   error?: string;
-}
-
-/**
- * CSV file mappings from block.json
- */
-interface CsvMappings {
-  tradelog?: string;
-  dailylog?: string;
-  reportinglog?: string;
-}
-
-/**
- * Block.json metadata structure (minimal for our needs)
- */
-interface BlockJson {
-  csvMappings?: CsvMappings;
-}
-
-/**
- * Read block.json metadata if present.
- */
-async function readBlockJson(blockPath: string): Promise<BlockJson | null> {
-  try {
-    const blockJsonPath = path.join(blockPath, "block.json");
-    const blockJsonContent = await fs.readFile(blockJsonPath, "utf-8");
-    return JSON.parse(blockJsonContent) as BlockJson;
-  } catch {
-    return null;
-  }
 }
 
 // --- CSV Parsing Helpers (copied from block-loader.ts to avoid circular imports) ---
@@ -162,102 +134,28 @@ function normalizeCsvDate(value: string | undefined): string | null {
 // --- Tradelog Discovery ---
 
 /**
- * Find the tradelog CSV file for a block.
- * Priority: block.json csvMappings > "tradelog.csv" > first *.csv file
+ * Find the tradelog CSV file for a block using header-sniffing discovery.
+ * No longer reads block.json — uses discoverCsvFiles from csv-discovery.ts.
  */
 async function findTradelogFile(
-  blockPath: string,
-  blockJson?: BlockJson | null
+  blockPath: string
 ): Promise<string | null> {
-  // 1. Check block.json for csvMappings
-  if (blockJson?.csvMappings?.tradelog) {
-    const mappedPath = path.join(blockPath, blockJson.csvMappings.tradelog);
-    try {
-      await fs.access(mappedPath);
-      return blockJson.csvMappings.tradelog;
-    } catch {
-      // Mapped file doesn't exist, continue to fallbacks
-    }
-  }
-
-  // 2. Check for standard "tradelog.csv"
-  try {
-    await fs.access(path.join(blockPath, "tradelog.csv"));
-    return "tradelog.csv";
-  } catch {
-    // No standard tradelog.csv
-  }
-
-  // 3. Find first CSV file (simple discovery)
-  try {
-    const entries = await fs.readdir(blockPath, { withFileTypes: true });
-    const csvFiles = entries
-      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".csv"))
-      .map((e) => e.name);
-    const candidateTradeCsvFiles = csvFiles
-      .filter((name) => {
-        const lower = name.toLowerCase();
-        return lower !== "dailylog.csv" && lower !== "reportinglog.csv";
-      });
-    if (candidateTradeCsvFiles.length > 0) {
-      return candidateTradeCsvFiles[0];
-    }
-  } catch {
-    // Can't read directory
-  }
-
-  return null;
+  const { mappings } = await discoverCsvFiles(blockPath);
+  return mappings.tradelog || null;
 }
 
 /**
- * Find optional log files (dailylog, reportinglog) for a block
+ * Find optional log files (dailylog, reportinglog) for a block using header-sniffing discovery.
+ * No longer reads block.json — uses discoverCsvFiles from csv-discovery.ts.
  */
 async function findOptionalLogFiles(
-  blockPath: string,
-  blockJson?: BlockJson | null
+  blockPath: string
 ): Promise<{ dailylog: string | null; reportinglog: string | null }> {
-  const result = { dailylog: null as string | null, reportinglog: null as string | null };
-
-  // Check block.json first
-  if (blockJson?.csvMappings?.dailylog) {
-    const mappedPath = path.join(blockPath, blockJson.csvMappings.dailylog);
-    try {
-      await fs.access(mappedPath);
-      result.dailylog = blockJson.csvMappings.dailylog;
-    } catch {
-      // Mapped file doesn't exist
-    }
-  }
-  if (blockJson?.csvMappings?.reportinglog) {
-    const mappedPath = path.join(blockPath, blockJson.csvMappings.reportinglog);
-    try {
-      await fs.access(mappedPath);
-      result.reportinglog = blockJson.csvMappings.reportinglog;
-    } catch {
-      // Mapped file doesn't exist
-    }
-  }
-
-  // Check for standard names if not found in mappings
-  if (!result.dailylog) {
-    try {
-      await fs.access(path.join(blockPath, "dailylog.csv"));
-      result.dailylog = "dailylog.csv";
-    } catch {
-      // No standard dailylog.csv
-    }
-  }
-
-  if (!result.reportinglog) {
-    try {
-      await fs.access(path.join(blockPath, "reportinglog.csv"));
-      result.reportinglog = "reportinglog.csv";
-    } catch {
-      // No standard reportinglog.csv
-    }
-  }
-
-  return result;
+  const { mappings } = await discoverCsvFiles(blockPath);
+  return {
+    dailylog: mappings.dailylog || null,
+    reportinglog: mappings.reportinglog || null,
+  };
 }
 
 // --- Database Operations ---
@@ -440,10 +338,9 @@ export async function syncBlockInternal(
   try {
     // Get existing metadata early (needed for missing-file cleanup logic)
     const existingMetadata = await getSyncMetadata(conn, blockId);
-    const blockJson = await readBlockJson(blockPath);
 
-    // Find the tradelog file
-    const tradelogFilename = await findTradelogFile(blockPath, blockJson);
+    // Find the tradelog file via header-sniffing discovery
+    const tradelogFilename = await findTradelogFile(blockPath);
     if (!tradelogFilename) {
       // Previously-synced block lost its tradelog: remove stale data/metadata
       if (existingMetadata) {
@@ -482,7 +379,7 @@ export async function syncBlockInternal(
     // Also check if reportinglog exists but hasn't been synced yet
     if (existingMetadata && existingMetadata.tradelog_hash === tradelogHash) {
       // Check if reporting log needs to be synced (new file or changed)
-      const optionalLogs = await findOptionalLogFiles(blockPath, blockJson);
+      const optionalLogs = await findOptionalLogFiles(blockPath);
       if (optionalLogs.reportinglog) {
         const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
         const reportinglogHash = await hashFileContent(reportinglogPath);
@@ -523,7 +420,7 @@ export async function syncBlockInternal(
       }
 
       // Hash optional log files if they exist
-      const optionalLogs = await findOptionalLogFiles(blockPath, blockJson);
+      const optionalLogs = await findOptionalLogFiles(blockPath);
       let dailylogHash: string | null = null;
       let reportinglogHash: string | null = null;
 
@@ -679,8 +576,7 @@ export async function detectBlockChanges(
     }
 
     // Block exists in metadata - check if hash changed
-    const blockJson = await readBlockJson(blockPath);
-    const tradelogFilename = await findTradelogFile(blockPath, blockJson);
+    const tradelogFilename = await findTradelogFile(blockPath);
     if (!tradelogFilename) {
       // Previously-synced block lost tradelog: mark for cleanup
       toDelete.push(blockId);
@@ -696,7 +592,7 @@ export async function detectBlockChanges(
         toSync.push(blockId);
       } else {
         // Tradelog unchanged - check if reportinglog needs syncing
-        const optionalLogs = await findOptionalLogFiles(blockPath, blockJson);
+        const optionalLogs = await findOptionalLogFiles(blockPath);
         if (optionalLogs.reportinglog) {
           const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
           const reportingHash = await hashFileContent(reportinglogPath);
