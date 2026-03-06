@@ -43,6 +43,7 @@ export interface EntryFilter {
   operator: string;    // ">", "<", ">=", "<=", "==", "between", "in"
   value: string | number | (string | number)[];
   description?: string;
+  source?: "market" | "execution"; // "market" = testable against market data, "execution" = OO/platform-level
 }
 
 export interface ExitRule {

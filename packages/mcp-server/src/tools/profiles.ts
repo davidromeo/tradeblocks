@@ -63,10 +63,11 @@ export const profileStrategySchema = z.object({
           .union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))])
           .describe("Filter value or array for between/in operators"),
         description: z.string().optional().describe("Human-readable description of this filter"),
+        source: z.enum(["market", "execution"]).optional().describe("Filter source: 'market' = testable against market data columns, 'execution' = platform-level (time windows, leg ratios). Defaults to 'market'. Execution filters are documented but skipped during validate_entry_filters analysis."),
       })
     )
     .default([])
-    .describe("Entry condition filters referencing market data fields"),
+    .describe("Entry condition filters. Tag each with source: 'market' (testable in analysis) or 'execution' (OO/platform-level, skipped in analysis)."),
   exitRules: z
     .array(
       z.object({

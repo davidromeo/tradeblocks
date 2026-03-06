@@ -386,8 +386,8 @@ export async function handleAnalyzeStructureFit(
   }
   dimensions["time_of_day"] = todStats;
 
-  // --- Profile-derived dimensions from entry_filters ---
-  for (const filter of profile.entryFilters) {
+  // --- Profile-derived dimensions from entry_filters (market-source only) ---
+  for (const filter of profile.entryFilters.filter((f) => f.source !== "execution")) {
     const predicate = buildFilterPredicate(filter);
     const fieldKey = predicate.fieldKey;
 
@@ -549,6 +549,18 @@ export async function handleValidateEntryFilters(
     );
   }
 
+  // Separate market-testable filters from execution-only filters
+  const allFilters = profile.entryFilters;
+  const marketFilters = allFilters.filter((f) => f.source !== "execution");
+  const executionFilters = allFilters.filter((f) => f.source === "execution");
+
+  if (marketFilters.length === 0) {
+    return createToolOutput(
+      `Profile '${strategyName}' has ${allFilters.length} filter(s) but all are tagged source:'execution' (platform-level). No market-data filters to validate.`,
+      { no_market_filters: true, execution_filters: executionFilters }
+    );
+  }
+
   // Load trades + market data
   const { matched, unmatchedCount, allTrades } = await loadTradesAndMarket(
     baseDir,
@@ -557,6 +569,12 @@ export async function handleValidateEntryFilters(
   );
 
   const warnings: string[] = [];
+
+  if (executionFilters.length > 0) {
+    warnings.push(
+      `${executionFilters.length} execution-level filter(s) skipped (not testable against market data): ${executionFilters.map((f) => f.description || f.field).join(", ")}`
+    );
+  }
 
   if (allTrades.length === 0) {
     return createToolOutput(
@@ -578,8 +596,8 @@ export async function handleValidateEntryFilters(
     );
   }
 
-  // Build predicates for each filter
-  const filters = profile.entryFilters;
+  // Build predicates for market-testable filters only
+  const filters = marketFilters;
   const predicates: FilterPredicate[] = filters.map((f) => buildFilterPredicate(f));
 
   // No-filters baseline: all matched trades
@@ -769,7 +787,8 @@ export async function handleValidateEntryFilters(
   }
 
   // Summary text
-  const summaryText = `Filter validation for '${strategyName}': ${filters.length} filter(s) analyzed across ${matched.length} trades. Baseline (all filters): ${baseline.tradeCount} trades, win rate ${baseline.winRate.toFixed(1)}%, avg P&L $${baseline.avgPl.toFixed(2)}. ${profileUpdateHints.length} update hint(s).`;
+  const execNote = executionFilters.length > 0 ? ` (${executionFilters.length} execution filter(s) skipped)` : "";
+  const summaryText = `Filter validation for '${strategyName}': ${filters.length} market filter(s) analyzed across ${matched.length} trades${execNote}. Baseline (all market filters): ${baseline.tradeCount} trades, win rate ${baseline.winRate.toFixed(1)}%, avg P&L $${baseline.avgPl.toFixed(2)}. ${profileUpdateHints.length} update hint(s).`;
 
   return createToolOutput(summaryText, {
     baseline,
@@ -779,6 +798,7 @@ export async function handleValidateEntryFilters(
       single: ablationSingle,
       pairs: ablationPairs,
     },
+    execution_filters_skipped: executionFilters.map((f) => f.description || `${f.field} ${f.operator} ${f.value}`),
     profile_update_hints: profileUpdateHints,
     warnings,
   });
