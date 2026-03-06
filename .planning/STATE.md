@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.10
+milestone: v2.1
 milestone_name: Strategy Profiles
 status: shipped
-stopped_at: Milestone v2.10 complete
+stopped_at: Milestone v2.1 complete
 last_updated: "2026-03-06T22:10:00.000Z"
-last_activity: "2026-03-06 - Milestone v2.10 Strategy Profiles shipped"
+last_activity: "2026-03-06 - Milestone v2.1 Strategy Profiles shipped"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 
 ## Current Position
 
-Milestone v2.10 Strategy Profiles shipped.
+Milestone v2.1 Strategy Profiles shipped.
 Next: `/gsd:new-milestone` to start next milestone cycle.
 
 ## Accumulated Context
 
 ### Decisions
 
-(Archived to .planning/milestones/v2.10-ROADMAP.md)
+(Archived to .planning/milestones/v2.1-ROADMAP.md)
 
 ### Pending Todos
 
@@ -45,5 +45,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-06T22:10:00Z
-Stopped at: Milestone v2.10 complete
+Stopped at: Milestone v2.1 complete
 Resume file: None
