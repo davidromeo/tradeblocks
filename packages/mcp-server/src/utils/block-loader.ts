@@ -175,7 +175,7 @@ function parseCSVLine(line: string): string[] {
 /**
  * Convert raw CSV record to Trade object
  */
-function convertToTrade(raw: Record<string, string>): Trade | null {
+function convertToTrade(raw: Record<string, string>, blockId?: string): Trade | null {
   try {
     const dateOpened = parseDatePreservingCalendarDay(raw["Date Opened"]);
     if (isNaN(dateOpened.getTime())) return null;
@@ -184,7 +184,7 @@ function convertToTrade(raw: Record<string, string>): Trade | null {
       ? parseDatePreservingCalendarDay(raw["Date Closed"])
       : undefined;
 
-    const strategy = (raw["Strategy"] || "").trim() || "Unknown";
+    const strategy = (raw["Strategy"] || "").trim() || blockId || "Unknown";
 
     const rawPremium = (raw["Premium"] || "").replace(/[$,]/g, "").trim();
     const premiumPrecision: Trade["premiumPrecision"] =
@@ -290,7 +290,8 @@ function convertToDailyLogEntry(
  */
 async function loadTrades(
   blockPath: string,
-  filename: string = "tradelog.csv"
+  filename: string = "tradelog.csv",
+  blockId?: string
 ): Promise<Trade[]> {
   const tradelogPath = path.join(blockPath, filename);
   const content = await fs.readFile(tradelogPath, "utf-8");
@@ -298,7 +299,7 @@ async function loadTrades(
 
   const trades: Trade[] = [];
   for (const record of records) {
-    const trade = convertToTrade(record);
+    const trade = convertToTrade(record, blockId);
     if (trade) {
       trades.push(trade);
     }
@@ -380,7 +381,7 @@ export async function loadBlock(
   // Determine dailylog filename
   const dailylogFilename = mappings.dailylog || "dailylog.csv";
 
-  const trades = await loadTrades(blockPath, tradelogFilename);
+  const trades = await loadTrades(blockPath, tradelogFilename, blockId);
   const dailyLogs = await loadDailyLogs(blockPath, blockId, dailylogFilename);
 
   return {
@@ -931,7 +932,7 @@ export async function importCsv(
     // Parse trades to extract metadata
     const trades: Trade[] = [];
     for (const record of records) {
-      const trade = convertToTrade(record);
+      const trade = convertToTrade(record, blockName);
       if (trade) trades.push(trade);
     }
 
