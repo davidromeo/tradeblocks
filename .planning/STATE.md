@@ -4,7 +4,7 @@ milestone: v2.10
 milestone_name: Strategy Profiles
 status: executing
 stopped_at: Completed 62-02-PLAN.md
-last_updated: "2026-03-05T15:36:38.689Z"
+last_updated: "2026-03-05T15:42:04.561Z"
 last_activity: 2026-03-05 — Completed 62-02 profile analysis fit tools
 progress:
   total_phases: 3
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 
 ## Current Position
 
-Phase: 62 of 62 (Structure-Aware Analysis)
-Plan: 3 of 3 in current phase (62-02 and 62-03 complete)
-Status: Phase 62 in progress (Plans 01+02+03 complete)
-Last activity: 2026-03-05 — Completed 62-02 profile analysis fit tools
+Phase: 63 of 63 (Eliminate block.json)
+Plan: 1 of 2 in current phase (63-01 complete)
+Status: Phase 63 in progress (Plan 01 complete)
+Last activity: 2026-03-06 - Completed 63-01: CSV discovery extraction
 
-Progress: [█████████░] 93%
+Progress: [█████████░] 95%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [█████████░] 93%
 | Phase 62-structure-aware-analysis P01 | 7 | 2 tasks | 10 files |
 | Phase 62 P03 | 9 | 2 tasks | 7 files |
 | Phase 62 P02 | 11 | 2 tasks | 3 files |
+| Phase 63 P01 | 5 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,12 @@ Progress: [█████████░] 93%
 - [Phase 62]: suggest_filters and find_predictive_fields enhanced with strategyName param for profile-aware analysis
 - [Phase 62]: Handlers use fallback defaults for optional params when called directly without Zod parsing
 - [Phase 62]: Time-of-day bucketing: morning 09:30-11:00, midday 11:00-14:00, afternoon 14:00-16:00
+- [Phase 63-01]: Duplicate parseCSVLine in csv-discovery.ts to avoid circular deps with block-loader.ts
+- [Phase 63-01]: Re-export csv-discovery functions from block-loader.ts for backward compatibility
+
+### Roadmap Evolution
+
+- Phase 63 added: Eliminate block.json — Move sync state to DuckDB with CSV header-sniffing role detection
 
 ### Pending Todos
 
@@ -83,8 +90,14 @@ None.
 
 None.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Add positionSizing field to strategy profile schema | 2026-03-06 | 7e31fd2 | [1-add-positionsizing-field-to-strategy-pro](./quick/1-add-positionsizing-field-to-strategy-pro/) |
+
 ## Session Continuity
 
-Last session: 2026-03-05T15:36:38.686Z
-Stopped at: Completed 62-02-PLAN.md
+Last session: 2026-03-06T19:16:50Z
+Stopped at: Completed 63-01-PLAN.md
 Resume file: None

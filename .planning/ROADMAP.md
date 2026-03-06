@@ -89,4 +89,15 @@ Plans:
 | 59. Intraday Market Context Enrichment | v2.9 | 1/1 | Complete | 2026-02-08 |
 | 60. Profile Storage | v2.10 | 1/1 | Complete | 2026-03-04 |
 | 61. Profile CRUD Tools | v2.10 | 1/1 | Complete | 2026-03-05 |
-| 62. Structure-Aware Analysis Tools | 3/3 | Complete   | 2026-03-05 | - |
+| 62. Structure-Aware Analysis Tools | 3/3 | Complete    | 2026-03-05 | - |
+
+### Phase 63: Eliminate block.json — Move sync state to DuckDB with CSV header-sniffing role detection
+
+**Goal:** Eliminate the block.json file entirely from the MCP server sync layer. CSV role detection switches to header sniffing via a shared csv-discovery module. listBlocks computes stats from DuckDB instead of cached block.json data. Syncthing stops syncing block.json.
+**Requirements**: SYNC-01, SYNC-02, SYNC-03, SYNC-04, SYNC-05, SYNC-06
+**Depends on:** Phase 62
+**Plans:** 1/2 plans executed
+
+Plans:
+- [ ] 63-01-PLAN.md — Extract CSV discovery module and remove block.json from sync layer
+- [ ] 63-02-PLAN.md — Rewrite listBlocks to use DuckDB, eliminate all block.json code, update .stignore
