@@ -6,6 +6,15 @@
  * structure, greeks bias, legs, entry/exit rules, and performance benchmarks.
  */
 
+export interface PositionSizing {
+  method: string;              // "pct_of_portfolio" | "fixed_contracts" | "fixed_dollar" | "discretionary"
+  allocationPct?: number;      // e.g., 2, 10
+  maxContracts?: number;       // hard cap per trade
+  maxAllocationDollar?: number; // hard dollar cap per trade
+  maxOpenPositions?: number;   // concurrency limit
+  description?: string;        // free text for anything unusual
+}
+
 export interface StrategyProfile {
   blockId: string;
   strategyName: string;
@@ -17,6 +26,7 @@ export interface StrategyProfile {
   exitRules: ExitRule[];        // Exit criteria
   expectedRegimes: string[];    // Market regimes this strategy targets
   keyMetrics: KeyMetrics;       // Performance benchmarks
+  positionSizing?: PositionSizing; // Per-block position sizing rules
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,6 +74,7 @@ export interface StrategyProfileRow {
   exit_rules: string;       // JSON string
   expected_regimes: string; // JSON string
   key_metrics: string;      // JSON string
+  position_sizing: string;  // JSON string
   created_at: Date;
   updated_at: Date;
 }

@@ -32,6 +32,7 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
       exit_rules JSON,
       expected_regimes JSON,
       key_metrics JSON,
+      position_sizing JSON,
       created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
       updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
       PRIMARY KEY (block_id, strategy_name)
@@ -74,7 +75,7 @@ function toDate(value: unknown): Date {
  *
  * Column order: block_id, strategy_name, structure_type, greeks_bias, thesis,
  *               legs, entry_filters, exit_rules, expected_regimes, key_metrics,
- *               created_at, updated_at
+ *               position_sizing, created_at, updated_at
  */
 function rowToProfile(row: unknown[]): StrategyProfile {
   const parseJson = (v: unknown) => {
@@ -100,15 +101,19 @@ function rowToProfile(row: unknown[]): StrategyProfile {
     exitRules: parseJson(row[7]),
     expectedRegimes: parseJson(row[8]),
     keyMetrics: parseJsonObj(row[9]),
-    createdAt: toDate(row[10]),
-    updatedAt: toDate(row[11]),
+    positionSizing: (() => {
+      const ps = parseJsonObj(row[10]);
+      return ps && Object.keys(ps).length > 0 ? ps : undefined;
+    })(),
+    createdAt: toDate(row[11]),
+    updatedAt: toDate(row[12]),
   };
 }
 
 const SELECT_COLUMNS = `
   block_id, strategy_name, structure_type, greeks_bias, thesis,
   legs, entry_filters, exit_rules, expected_regimes, key_metrics,
-  created_at, updated_at
+  position_sizing, created_at, updated_at
 `.trim();
 
 /**
@@ -129,6 +134,9 @@ export async function upsertProfile(
   const exitRulesJson = escSql(JSON.stringify(profile.exitRules));
   const expectedRegimesJson = escSql(JSON.stringify(profile.expectedRegimes));
   const keyMetricsJson = escSql(JSON.stringify(profile.keyMetrics));
+  const positionSizingJson = profile.positionSizing
+    ? escSql(JSON.stringify(profile.positionSizing))
+    : null;
 
   const nowTs = new Date().toISOString().replace("T", " ").replace("Z", "");
 
@@ -136,7 +144,7 @@ export async function upsertProfile(
     INSERT INTO profiles.strategy_profiles
       (block_id, strategy_name, structure_type, greeks_bias, thesis,
        legs, entry_filters, exit_rules, expected_regimes, key_metrics,
-       created_at, updated_at)
+       position_sizing, created_at, updated_at)
     VALUES (
       '${escSql(profile.blockId)}',
       '${escSql(profile.strategyName)}',
@@ -148,6 +156,7 @@ export async function upsertProfile(
       '${exitRulesJson}'::JSON,
       '${expectedRegimesJson}'::JSON,
       '${keyMetricsJson}'::JSON,
+      ${positionSizingJson ? `'${positionSizingJson}'::JSON` : "NULL"},
       TIMESTAMPTZ '${nowTs}',
       TIMESTAMPTZ '${nowTs}'
     )
@@ -160,6 +169,7 @@ export async function upsertProfile(
       exit_rules = excluded.exit_rules,
       expected_regimes = excluded.expected_regimes,
       key_metrics = excluded.key_metrics,
+      position_sizing = excluded.position_sizing,
       updated_at = TIMESTAMPTZ '${nowTs}'
   `);
 
