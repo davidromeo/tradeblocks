@@ -17,7 +17,7 @@ import {
   calculateCorrelationMatrix,
   performTailRiskAnalysis,
   runMonteCarloSimulation,
-  WalkForwardAnalyzer,
+  analyzeWalkForwardDegradation,
   normalizeToOneLot,
 } from "@tradeblocks/lib";
 import type { MonteCarloParams } from "@tradeblocks/lib";
@@ -235,44 +235,18 @@ export function registerHealthBlockTools(
           // Profile lookup is best-effort; default to no normalization
         }
 
-        // Run WFA if possible (try 5 IS windows, 1 OOS)
+        // Run WFD (walk-forward degradation) with weighted efficiency
         let wfeResult: number | null = null;
         let wfaSkipped = false;
         try {
-          const totalDays = Math.ceil(
-            (new Date(lastTrade.dateOpened).getTime() -
-              new Date(firstTrade.dateOpened).getTime()) /
-              (24 * 60 * 60 * 1000)
-          );
-          const isWindowCount = 5;
-          const oosWindowCount = 1;
-          const totalWindows = isWindowCount + oosWindowCount;
-          const daysPerWindow = Math.floor(totalDays / totalWindows);
-          const inSampleDays = daysPerWindow * isWindowCount;
-          const outOfSampleDays = daysPerWindow * oosWindowCount;
-          const stepSizeDays = daysPerWindow;
-
-          // Only run if we have enough data
-          if (
-            inSampleDays >= 7 &&
-            outOfSampleDays >= 1 &&
-            trades.length >= 20
-          ) {
+          if (trades.length >= 20) {
             const wfTrades = useNormalization ? normalizeToOneLot(trades) : trades;
-            const analyzer = new WalkForwardAnalyzer();
-            const computation = await analyzer.analyze({
-              trades: wfTrades,
-              config: {
-                inSampleDays,
-                outOfSampleDays,
-                stepSizeDays,
-                optimizationTarget: "sharpeRatio",
-                parameterRanges: {},
-                minInSampleTrades: 10,
-                minOutOfSampleTrades: 3,
-              },
+            const wfdResult = analyzeWalkForwardDegradation(wfTrades, {
+              normalizeTo1Lot: false, // Already normalized above if needed
+              weightByTradeCount: true,
+              minOosFraction: 0.5,
             });
-            wfeResult = computation.results.summary.degradationFactor;
+            wfeResult = wfdResult.weightedOverallEfficiency.sharpe;
           } else {
             wfaSkipped = true;
           }
