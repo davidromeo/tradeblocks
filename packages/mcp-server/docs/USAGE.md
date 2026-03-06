@@ -74,6 +74,23 @@ Your AI assistant will:
 3. Assess diversification benefit
 4. Provide ADD/CONSIDER/SKIP recommendation
 
+### Profile a Strategy from a Screenshot
+
+"Here's my iron condor strategy settings" *(attach screenshot of your backtest parameters)*
+
+Your AI assistant will:
+1. Read the screenshot to extract structure type, greeks bias, entry filters, exit rules, legs, etc.
+2. `profile_strategy` - Store the structured profile linked to your block
+3. Confirm what was saved and highlight anything it couldn't extract
+
+Once profiled, your assistant remembers the strategy across sessions. You can then run targeted analysis:
+
+- "How does this strategy perform in different VIX regimes?" → `analyze_structure_fit`
+- "Are my entry filters actually helping?" → `validate_entry_filters`
+- "Where are my portfolio blind spots?" → `portfolio_structure_map`
+
+> **Tip:** You can update a profile anytime by sending a new screenshot or describing changes — the tool uses upsert semantics, so it overwrites the previous profile.
+
 ### Explore with SQL
 
 "What's the best day of week to enter trades?"
