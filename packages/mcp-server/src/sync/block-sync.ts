@@ -208,7 +208,7 @@ async function insertTradeBatch(
       blockId, // block_id
       normalizeCsvDate(record["Date Opened"]), // date_opened
       record["Time Opened"] || null, // time_opened
-      record["Strategy"] || null, // strategy
+      (record["Strategy"] || "").trim() || blockId, // strategy (fallback to blockId)
       record["Legs"] || null, // legs
       isNaN(premium) ? null : premium, // premium
       isNaN(numContracts) ? 1 : numContracts, // num_contracts
@@ -314,6 +314,20 @@ async function insertReportingBatch(
   await conn.run(sql, params);
 }
 
+// --- Parse Versioning ---
+
+/**
+ * Bump this when parsing logic changes to force re-sync of all blocks.
+ * Appended to content hashes so stored hashes will mismatch.
+ *
+ * v2: Use blockId as strategy fallback for empty Strategy columns
+ */
+const PARSE_VERSION = "v2";
+
+function versionedHash(hash: string): string {
+  return `${hash}:${PARSE_VERSION}`;
+}
+
 // --- Core Sync Functions ---
 
 /**
@@ -372,8 +386,8 @@ export async function syncBlockInternal(
 
     const tradelogPath = path.join(blockPath, tradelogFilename);
 
-    // Hash the tradelog file
-    const tradelogHash = await hashFileContent(tradelogPath);
+    // Hash the tradelog file (versioned to force re-sync on parse logic changes)
+    const tradelogHash = versionedHash(await hashFileContent(tradelogPath));
 
     // Check if hash matches (unchanged)
     // Also check if reportinglog exists but hasn't been synced yet
@@ -382,7 +396,7 @@ export async function syncBlockInternal(
       const optionalLogs = await findOptionalLogFiles(blockPath);
       if (optionalLogs.reportinglog) {
         const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
-        const reportinglogHash = await hashFileContent(reportinglogPath);
+        const reportinglogHash = versionedHash(await hashFileContent(reportinglogPath));
         if (existingMetadata.reportinglog_hash !== reportinglogHash) {
           // Reportinglog changed or was never synced - fall through to sync
         } else {
@@ -426,9 +440,9 @@ export async function syncBlockInternal(
 
       if (optionalLogs.dailylog) {
         try {
-          dailylogHash = await hashFileContent(
+          dailylogHash = versionedHash(await hashFileContent(
             path.join(blockPath, optionalLogs.dailylog)
-          );
+          ));
         } catch {
           // Dailylog file can't be read, leave hash null
         }
@@ -436,9 +450,9 @@ export async function syncBlockInternal(
 
       if (optionalLogs.reportinglog) {
         try {
-          reportinglogHash = await hashFileContent(
+          reportinglogHash = versionedHash(await hashFileContent(
             path.join(blockPath, optionalLogs.reportinglog)
-          );
+          ));
         } catch {
           // Reportinglog file can't be read, leave hash null
         }
@@ -585,7 +599,7 @@ export async function detectBlockChanges(
 
     try {
       const tradelogPath = path.join(blockPath, tradelogFilename);
-      const currentHash = await hashFileContent(tradelogPath);
+      const currentHash = versionedHash(await hashFileContent(tradelogPath));
       const metadata = await getSyncMetadata(conn, blockId);
 
       if (!metadata || metadata.tradelog_hash !== currentHash) {
@@ -595,7 +609,7 @@ export async function detectBlockChanges(
         const optionalLogs = await findOptionalLogFiles(blockPath);
         if (optionalLogs.reportinglog) {
           const reportinglogPath = path.join(blockPath, optionalLogs.reportinglog);
-          const reportingHash = await hashFileContent(reportinglogPath);
+          const reportingHash = versionedHash(await hashFileContent(reportinglogPath));
           if (metadata.reportinglog_hash !== reportingHash) {
             // Reportinglog changed or was never synced
             toSync.push(blockId);

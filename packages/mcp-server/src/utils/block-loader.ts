@@ -21,7 +21,7 @@ import { getConnection } from "../db/connection.js";
 
 // Re-export CSV discovery types and functions from shared module
 export { type CsvMappings, type CsvType, detectCsvType, discoverCsvFiles, logCsvDiscoveryWarning } from "./csv-discovery.js";
-import { discoverCsvFiles } from "./csv-discovery.js";
+import { type CsvType, discoverCsvFiles } from "./csv-discovery.js";
 
 /**
  * Block info summary for listing
