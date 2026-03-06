@@ -87,6 +87,13 @@ export function registerPredictiveTools(
           // Apply pre-filters (strategyName takes precedence over strategy)
           const effectiveStrategy = strategyName || strategy;
           trades = filterByStrategy(trades, effectiveStrategy);
+          // Single-strategy fallback: profile strategyName may differ from CSV strategy label
+          if (trades.length === 0 && block.trades.length > 0 && effectiveStrategy) {
+            const uniqueStrategies = new Set(block.trades.map((t) => t.strategy));
+            if (uniqueStrategies.size === 1) {
+              trades = block.trades;
+            }
+          }
           trades = filterByDateRange(trades, startDate, endDate);
 
           if (trades.length === 0) {

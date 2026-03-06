@@ -529,6 +529,13 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const effectiveStrategy = strategyName || strategy;
         if (effectiveStrategy) {
           trades = filterByStrategy(trades, effectiveStrategy);
+          // Single-strategy fallback: profile strategyName may differ from CSV strategy label
+          if (trades.length === 0 && block.trades.length > 0) {
+            const uniqueStrategies = new Set(block.trades.map((t) => t.strategy));
+            if (uniqueStrategies.size === 1) {
+              trades = block.trades;
+            }
+          }
         }
 
         // Load profile for cross-referencing if strategyName provided

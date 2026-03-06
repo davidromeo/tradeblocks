@@ -81,6 +81,24 @@ describe("detectCsvType", () => {
     expect(result).toBe("reportinglog");
   });
 
+  it("identifies a reportinglog CSV (OO format with Initial Premium, no Actual P/L)", async () => {
+    const filePath = await createCsv(
+      "oo-reporting.csv",
+      "Date Opened,Strategy,Legs,No. of Contracts,Initial Premium,P/L"
+    );
+    const result = await detectCsvType(filePath);
+    expect(result).toBe("reportinglog");
+  });
+
+  it("does not misclassify tradelog with Opening Price as reportinglog", async () => {
+    const filePath = await createCsv(
+      "tradelog-with-opening-price.csv",
+      "Date Opened,Time Opened,Date Closed,Time Closed,Opening Price,Closing Price,Legs,Premium,No. of Contracts,P/L,Strategy"
+    );
+    const result = await detectCsvType(filePath);
+    expect(result).toBe("tradelog");
+  });
+
   it("returns null for unrecognized CSV", async () => {
     const filePath = await createCsv(
       "unknown.csv",

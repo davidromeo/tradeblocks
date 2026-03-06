@@ -94,6 +94,16 @@ export async function detectCsvType(filePath: string): Promise<CsvType> {
     );
 
     if (hasPl && matchedTradeColumns.length >= 2) {
+      // Before classifying as tradelog, check if this looks like a reporting log.
+      // Option Omega reporting exports share P/L + Date Opened + Strategy + Contracts
+      // but also have "Initial Premium" (or aliases) which tradelogs use "Premium" instead.
+      const reportingOnlyColumns = ["initial premium", "initial credit", "initial premium ($)"];
+      const hasReportingOnly = reportingOnlyColumns.some((col) =>
+        headers.some((h) => h.includes(col))
+      );
+      if (hasReportingOnly) {
+        return "reportinglog";
+      }
       return "tradelog";
     }
 
