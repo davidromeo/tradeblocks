@@ -3,18 +3,31 @@
  *
  * These tests import from the built test-exports bundle which has all dependencies resolved.
  * Run `npm run build` before running tests if you've made source changes.
+ *
+ * Note: listBlocks now queries DuckDB for stats. Without syncing, unsynced blocks
+ * appear with tradeCount=0. The loadBlock function still reads CSVs directly.
  */
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 // Import from built bundle (test-exports.js has @lib dependencies bundled)
 // @ts-expect-error - importing from bundled output
-import { loadBlock, listBlocks, loadMetadata } from '../dist/test-exports.js';
+import { loadBlock, listBlocks, closeConnection } from '../dist/test-exports.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
+
+afterAll(async () => {
+  // Close DuckDB connection and clean up analytics files created in fixtures dir
+  await closeConnection();
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'analytics.duckdb')); } catch { /* ignore */ }
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'analytics.duckdb.wal')); } catch { /* ignore */ }
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'market.duckdb')); } catch { /* ignore */ }
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'market.duckdb.wal')); } catch { /* ignore */ }
+});
 
 describe('block-loader', () => {
   describe('listBlocks', () => {
@@ -24,12 +37,11 @@ describe('block-loader', () => {
       // Should find mock-block and nonstandard-name (unrecognized-csv should be skipped)
       expect(blocks.length).toBeGreaterThanOrEqual(1);
 
-      // Find our mock-block
-      const mockBlock = blocks.find(b => b.blockId === 'mock-block');
+      // Find our mock-block (discovered via filesystem + csv-discovery)
+      const mockBlock = blocks.find((b: { blockId: string }) => b.blockId === 'mock-block');
       expect(mockBlock).toBeDefined();
-      expect(mockBlock?.tradeCount).toBe(5);
+      // Without sync, blocks appear with tradeCount=0 from filesystem discovery
       expect(mockBlock?.hasDailyLog).toBe(true);
-      expect(mockBlock?.strategies).toContain('Test Strategy');
     });
 
     it('should return empty array for non-existent directory', async () => {
@@ -39,17 +51,15 @@ describe('block-loader', () => {
     it('should handle directory with only unrecognized CSVs', async () => {
       const blocks = await listBlocks(FIXTURES_DIR);
       // unrecognized-csv folder should NOT appear in results
-      const unrecognizedBlock = blocks.find(b => b.blockId === 'unrecognized-csv');
+      const unrecognizedBlock = blocks.find((b: { blockId: string }) => b.blockId === 'unrecognized-csv');
       expect(unrecognizedBlock).toBeUndefined();
     });
 
     it('should discover non-standard CSV filenames', async () => {
       const blocks = await listBlocks(FIXTURES_DIR);
       // nonstandard-name folder has my-custom-trades.csv
-      const nonstandardBlock = blocks.find(b => b.blockId === 'nonstandard-name');
+      const nonstandardBlock = blocks.find((b: { blockId: string }) => b.blockId === 'nonstandard-name');
       expect(nonstandardBlock).toBeDefined();
-      expect(nonstandardBlock?.tradeCount).toBe(2);
-      expect(nonstandardBlock?.strategies).toContain('Custom Strategy');
     });
   });
 
@@ -90,20 +100,6 @@ describe('block-loader', () => {
 
       expect(block.trades.length).toBe(2);
       expect(block.trades[0].strategy).toBe('Custom Strategy');
-    });
-  });
-
-  describe('loadMetadata', () => {
-    it('should return undefined for block without metadata', async () => {
-      // Initially mock-block won't have block.json until listBlocks is called
-      // After listBlocks is called, metadata should exist
-      const metadata = await loadMetadata(path.join(FIXTURES_DIR, 'mock-block'));
-      // Metadata may or may not exist depending on test order
-      // Just verify it returns the expected shape or undefined
-      if (metadata) {
-        expect(metadata).toHaveProperty('blockId');
-        expect(metadata).toHaveProperty('tradeCount');
-      }
     });
   });
 

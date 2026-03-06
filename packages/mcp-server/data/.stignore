@@ -4,3 +4,6 @@
 *.duckdb
 *.duckdb.wal
 *.duckdb.tmp
+.DS_Store
+.syncthing.*.tmp
+block.json
