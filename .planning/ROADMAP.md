@@ -96,7 +96,7 @@ Plans:
 **Goal:** Eliminate the block.json file entirely from the MCP server sync layer. CSV role detection switches to header sniffing via a shared csv-discovery module. listBlocks computes stats from DuckDB instead of cached block.json data. Syncthing stops syncing block.json.
 **Requirements**: SYNC-01, SYNC-02, SYNC-03, SYNC-04, SYNC-05, SYNC-06
 **Depends on:** Phase 62
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 63-01-PLAN.md — Extract CSV discovery module and remove block.json from sync layer

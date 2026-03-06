@@ -38,6 +38,10 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
       PRIMARY KEY (block_id, strategy_name)
     )
   `);
+  // Migration: add position_sizing column if table existed before it was added
+  await conn.run(`
+    ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS position_sizing JSON
+  `);
 }
 
 /**

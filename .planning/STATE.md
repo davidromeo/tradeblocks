@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 ## Current Position
 
 Phase: 63 of 63 (Eliminate block.json)
-Plan: 1 of 2 in current phase (63-01 complete)
-Status: Phase 63 in progress (Plan 01 complete)
-Last activity: 2026-03-06 - Completed 63-01: CSV discovery extraction
+Plan: 2 of 2 in current phase (63-02 complete)
+Status: Phase 63 complete
+Last activity: 2026-03-06 - Completed 63-02: Eliminate block.json from MCP server
 
-Progress: [█████████░] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 95%
 | Phase 62 P03 | 9 | 2 tasks | 7 files |
 | Phase 62 P02 | 11 | 2 tasks | 3 files |
 | Phase 63 P01 | 5 | 2 tasks | 5 files |
+| Phase 63 P02 | 7 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,10 @@ Progress: [█████████░] 95%
 - [Phase 62]: Time-of-day bucketing: morning 09:30-11:00, midday 11:00-14:00, afternoon 14:00-16:00
 - [Phase 63-01]: Duplicate parseCSVLine in csv-discovery.ts to avoid circular deps with block-loader.ts
 - [Phase 63-01]: Re-export csv-discovery functions from block-loader.ts for backward compatibility
+- [Phase 63-02]: listBlocks queries DuckDB with 3 queries (trade stats, reporting stats, sync metadata) instead of reading block.json
+- [Phase 63-02]: Unsynced blocks still appear in listing with tradeCount=0 via filesystem fallback
+- [Phase 63-02]: get_reporting_log_stats computes stats inline from CSV instead of cached block.json stats
+- [Phase 63-02]: importCsv no longer creates block.json; metadata extracted directly from parsed CSV
 
 ### Roadmap Evolution
 
@@ -98,6 +103,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-06T19:16:50Z
-Stopped at: Completed 63-01-PLAN.md
+Last session: 2026-03-06T19:26:30Z
+Stopped at: Completed 63-02-PLAN.md
 Resume file: None

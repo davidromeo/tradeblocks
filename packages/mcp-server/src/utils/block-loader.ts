@@ -397,6 +397,10 @@ export async function loadBlock(
 function toDuckDbDate(val: unknown): Date | null {
   if (val == null) return null;
   if (val instanceof Date) return val;
+  // DuckDB node-api returns DATE as {days: N} object (days since epoch)
+  if (typeof val === "object" && val !== null && "days" in val) {
+    return new Date((val as { days: number }).days * 86400000);
+  }
   if (typeof val === "number") {
     // DuckDB DATE type returns days since epoch as a number
     return new Date(val * 86400000);
@@ -428,7 +432,6 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
       SELECT
         t.block_id,
         COUNT(*) as trade_count,
-        ARRAY_AGG(DISTINCT t.strategy ORDER BY t.strategy) FILTER (WHERE t.strategy IS NOT NULL) as strategies,
         MIN(t.date_opened) as min_date,
         MAX(t.date_opened) as max_date,
         SUM(t.pl) as total_pl,
@@ -436,6 +439,19 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
       FROM trades.trade_data t
       GROUP BY t.block_id
     `);
+
+    // Separate query for strategies (avoids ARRAY_AGG DuckDB node-api serialization issues)
+    const strategiesReader = await conn.runAndReadAll(`
+      SELECT block_id, strategy
+      FROM (SELECT DISTINCT block_id, strategy FROM trades.trade_data WHERE strategy IS NOT NULL)
+      ORDER BY block_id, strategy
+    `);
+    const strategiesByBlock = new Map<string, string[]>();
+    for (const row of strategiesReader.getRows()) {
+      const bid = row[0] as string;
+      if (!strategiesByBlock.has(bid)) strategiesByBlock.set(bid, []);
+      strategiesByBlock.get(bid)!.push(row[1] as string);
+    }
 
     // Build a map of block_id -> trade stats
     const tradeStats = new Map<string, {
@@ -450,15 +466,11 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
     for (const row of tradeStatsReader.getRows()) {
       const blockId = row[0] as string;
       const tradeCount = Number(row[1]);
-      // DuckDB ARRAY_AGG returns an array or null
-      const strategiesRaw = row[2];
-      const strategies: string[] = Array.isArray(strategiesRaw)
-        ? strategiesRaw.map(String)
-        : [];
-      const minDate = toDuckDbDate(row[3]);
-      const maxDate = toDuckDbDate(row[4]);
-      const totalPl = Number(row[5]) || 0;
-      const netPl = Number(row[6]) || 0;
+      const minDate = toDuckDbDate(row[2]);
+      const maxDate = toDuckDbDate(row[3]);
+      const totalPl = Number(row[4]) || 0;
+      const netPl = Number(row[5]) || 0;
+      const strategies = strategiesByBlock.get(blockId) ?? [];
 
       tradeStats.set(blockId, {
         tradeCount,
