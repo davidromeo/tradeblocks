@@ -91,6 +91,17 @@ export const profileStrategySchema = z.object({
     .passthrough()
     .default({})
     .describe("Performance benchmarks and strategy-specific metrics"),
+  positionSizing: z
+    .object({
+      method: z.string().describe("Sizing method: pct_of_portfolio, fixed_contracts, fixed_dollar, discretionary"),
+      allocationPct: z.number().optional().describe("Portfolio allocation percentage (e.g., 2 for 2%)"),
+      maxContracts: z.number().optional().describe("Maximum contracts per trade"),
+      maxAllocationDollar: z.number().optional().describe("Maximum dollar allocation per trade"),
+      maxOpenPositions: z.number().optional().describe("Maximum concurrent open positions"),
+      description: z.string().optional().describe("Free-text sizing notes"),
+    })
+    .optional()
+    .describe("Position sizing rules. Per-block — same strategy in backtest vs portfolio may have different sizing."),
 });
 
 export const getStrategyProfileSchema = z.object({
@@ -132,6 +143,7 @@ export async function handleProfileStrategy(
       exitRules: input.exitRules,
       expectedRegimes: input.expectedRegimes,
       keyMetrics: input.keyMetrics,
+      positionSizing: input.positionSizing,
     });
     return createToolOutput(
       `Profile saved: ${input.strategyName} for block ${input.blockId}`,
@@ -177,6 +189,7 @@ export async function handleListProfiles(
     strategyName: p.strategyName,
     structureType: p.structureType,
     greeksBias: p.greeksBias,
+    positionSizing: p.positionSizing?.method ?? null,
     updatedAt: p.updatedAt,
   }));
   return createToolOutput(
@@ -230,8 +243,11 @@ export function registerProfileTools(server: McpServer, baseDir: string): void {
     {
       description:
         "Create or update a strategy profile for a block. Stores structure type, greeks bias, " +
-        "legs, entry filters, exit rules, expected regimes, and key metrics. " +
-        "If a profile with the same block_id + strategy_name already exists, it is overwritten (upsert).",
+        "legs, entry filters, exit rules, expected regimes, key metrics, and position sizing. " +
+        "If a profile with the same block_id + strategy_name already exists, it is overwritten (upsert). " +
+        "When profiling the same strategy across multiple blocks (e.g., backtest vs live portfolio), " +
+        "retrieve the existing profile with get_strategy_profile and copy its fields, updating only " +
+        "positionSizing or other block-specific params rather than re-asking the user for all details.",
       inputSchema: profileStrategySchema,
     },
     withSyncedBlock(baseDir, async (input, ctx) => {
