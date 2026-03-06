@@ -18,9 +18,12 @@ import {
   performTailRiskAnalysis,
   runMonteCarloSimulation,
   WalkForwardAnalyzer,
+  normalizeToOneLot,
 } from "@tradeblocks/lib";
 import type { MonteCarloParams } from "@tradeblocks/lib";
 import { withSyncedBlock } from "../middleware/sync-middleware.js";
+import { getConnection } from "../../db/connection.js";
+import { listProfiles } from "../../db/profile-schemas.js";
 
 const HEALTH_CHECK_DEFAULTS = {
   correlationThreshold: 0.5,
@@ -220,6 +223,18 @@ export function registerHealthBlockTools(
         const mcPctResult = runMonteCarloSimulation(trades, mcPctParams);
         const mcPctStats = mcPctResult.statistics;
 
+        // Detect percentage-based position sizing from profiles
+        let useNormalization = false;
+        try {
+          const conn = await getConnection(baseDir);
+          const profiles = await listProfiles(conn, blockId);
+          useNormalization = profiles.some(
+            (p) => p.positionSizing?.method === "pct_of_portfolio"
+          );
+        } catch {
+          // Profile lookup is best-effort; default to no normalization
+        }
+
         // Run WFA if possible (try 5 IS windows, 1 OOS)
         let wfeResult: number | null = null;
         let wfaSkipped = false;
@@ -243,9 +258,10 @@ export function registerHealthBlockTools(
             outOfSampleDays >= 1 &&
             trades.length >= 20
           ) {
+            const wfTrades = useNormalization ? normalizeToOneLot(trades) : trades;
             const analyzer = new WalkForwardAnalyzer();
             const computation = await analyzer.analyze({
-              trades,
+              trades: wfTrades,
               config: {
                 inSampleDays,
                 outOfSampleDays,
@@ -445,17 +461,25 @@ export function registerHealthBlockTools(
 
         // WFE below threshold (only if WFA ran)
         if (!wfaSkipped && wfeResult !== null) {
+          const normNote = useNormalization ? " (1-lot normalized)" : "";
           if (wfeResult < wfeThresh) {
             flags.push({
               type: "warning",
               dimension: "robustness",
-              message: `Walk-forward efficiency (${formatPercent(wfeResult * 100)}) below ${formatPercent(wfeThresh * 100)} threshold`,
+              message: `Walk-forward efficiency${normNote} (${formatPercent(wfeResult * 100)}) below ${formatPercent(wfeThresh * 100)} threshold`,
             });
           } else {
             flags.push({
               type: "pass",
               dimension: "robustness",
-              message: `Walk-forward efficiency (${formatPercent(wfeResult * 100)}) meets ${formatPercent(wfeThresh * 100)} threshold`,
+              message: `Walk-forward efficiency${normNote} (${formatPercent(wfeResult * 100)}) meets ${formatPercent(wfeThresh * 100)} threshold`,
+            });
+          }
+          if (useNormalization) {
+            flags.push({
+              type: "info",
+              dimension: "robustness",
+              message: `WFE trades normalized to 1-lot (detected pct_of_portfolio sizing in strategy profiles) to remove position sizing growth bias`,
             });
           }
         }
@@ -540,6 +564,7 @@ export function registerHealthBlockTools(
           mcPctMddMultiplier,
           mcSizingInflated: sizingInflated,
           wfe: wfeResult,
+          wfeNormalized: useNormalization,
         };
 
         // Build grades object
