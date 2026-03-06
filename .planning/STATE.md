@@ -2,90 +2,37 @@
 gsd_state_version: 1.0
 milestone: v2.10
 milestone_name: Strategy Profiles
-status: executing
-stopped_at: Completed 62-02-PLAN.md
-last_updated: "2026-03-05T15:42:04.561Z"
-last_activity: 2026-03-05 — Completed 62-02 profile analysis fit tools
+status: shipped
+stopped_at: Milestone v2.10 complete
+last_updated: "2026-03-06T22:10:00.000Z"
+last_activity: "2026-03-06 - Milestone v2.10 Strategy Profiles shipped"
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
-  percent: 93
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 7
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-04)
+See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** v2.10 Strategy Profiles — Phase 60 ready to plan
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 63 of 63 (Eliminate block.json)
-Plan: 2 of 2 in current phase (63-02 complete)
-Status: Phase 63 complete
-Last activity: 2026-03-06 - Completed 63-02: Eliminate block.json from MCP server
-
-Progress: [██████████] 100%
-
-## Performance Metrics
-
-**Velocity:**
-- Total plans completed: 0 (this milestone)
-- Average duration: —
-- Total execution time: —
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-- Last 5 plans: —
-- Trend: —
-
-*Updated after each plan completion*
-| Phase 60-profile-storage P01 | 5 | 2 tasks | 6 files |
-| Phase 61-profile-crud-tools P01 | 5 | 2 tasks | 5 files |
-| Phase 62-structure-aware-analysis P01 | 7 | 2 tasks | 10 files |
-| Phase 62 P03 | 9 | 2 tasks | 7 files |
-| Phase 62 P02 | 11 | 2 tasks | 3 files |
-| Phase 63 P01 | 5 | 2 tasks | 5 files |
-| Phase 63 P02 | 7 | 2 tasks | 7 files |
+Milestone v2.10 Strategy Profiles shipped.
+Next: `/gsd:new-milestone` to start next milestone cycle.
 
 ## Accumulated Context
 
 ### Decisions
 
-- Profiles are additive only — existing tools remain untouched, zero backwards compat risk
-- New purpose-built tools (profile_strategy, get_strategy_profile, list_profiles, analyze_structure_fit, validate_entry_filters, portfolio_structure_map) consume profiles explicitly
-- Storage in DuckDB new table (strategy_profiles) keyed by block_id + strategy name (composite key, upsert semantics)
-- Profile schema validated against real Pickle RIC v2 analysis: structure type, greeks bias, legs, entry filters, exit rules, thesis, expected regimes, key metrics
-- [Phase 60-profile-storage]: Use TIMESTAMPTZ literal syntax instead of current_timestamp in DuckDB INSERT — parser treats it as column name in ON CONFLICT context
-- [Phase 61-profile-crud-tools]: Export handler functions separately from registration for direct integration testing without MCP transport
-- [Phase 61-profile-crud-tools]: list_profiles uses conditional sync — withSyncedBlock when blockId present, direct query when omitted
-- [Phase 62-01]: classifyTrendDirection uses strict > 1 / < -1 thresholds (not >=), boundary values are "flat"
-- [Phase 62-01]: buildFilterPredicate uses loose equality for "in" and "==" operators for string/number flexibility
-- [Phase 62-01]: Trend_Direction computed via LEFT JOIN to market.daily in Tier 2 enrichment
-- [Phase 62]: portfolio_structure_map uses manual sync pattern for optional blockId (conditional syncBlock vs syncAllBlocks)
-- [Phase 62]: suggest_filters and find_predictive_fields enhanced with strategyName param for profile-aware analysis
-- [Phase 62]: Handlers use fallback defaults for optional params when called directly without Zod parsing
-- [Phase 62]: Time-of-day bucketing: morning 09:30-11:00, midday 11:00-14:00, afternoon 14:00-16:00
-- [Phase 63-01]: Duplicate parseCSVLine in csv-discovery.ts to avoid circular deps with block-loader.ts
-- [Phase 63-01]: Re-export csv-discovery functions from block-loader.ts for backward compatibility
-- [Phase 63-02]: listBlocks queries DuckDB with 3 queries (trade stats, reporting stats, sync metadata) instead of reading block.json
-- [Phase 63-02]: Unsynced blocks still appear in listing with tradeCount=0 via filesystem fallback
-- [Phase 63-02]: get_reporting_log_stats computes stats inline from CSV instead of cached block.json stats
-- [Phase 63-02]: importCsv no longer creates block.json; metadata extracted directly from parsed CSV
-
-### Roadmap Evolution
-
-- Phase 63 added: Eliminate block.json — Move sync state to DuckDB with CSV header-sniffing role detection
+(Archived to .planning/milestones/v2.10-ROADMAP.md)
 
 ### Pending Todos
 
@@ -95,14 +42,8 @@ None.
 
 None.
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 1 | Add positionSizing field to strategy profile schema | 2026-03-06 | 7e31fd2 | [1-add-positionsizing-field-to-strategy-pro](./quick/1-add-positionsizing-field-to-strategy-pro/) |
-
 ## Session Continuity
 
-Last session: 2026-03-06T19:26:30Z
-Stopped at: Completed 63-02-PLAN.md
+Last session: 2026-03-06T22:10:00Z
+Stopped at: Milestone v2.10 complete
 Resume file: None
