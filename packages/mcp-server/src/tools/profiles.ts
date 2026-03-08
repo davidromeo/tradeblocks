@@ -88,9 +88,9 @@ export const profileStrategySchema = z.object({
     .default([])
     .describe("Exit rules and triggers"),
   expectedRegimes: z
-    .array(z.string())
+    .array(z.enum(["very_low", "low", "below_avg", "above_avg", "high", "extreme"]))
     .default([])
-    .describe("Market regimes this strategy targets: low_vol, high_vol, trending_up, etc."),
+    .describe("VIX-based vol regimes this strategy targets. very_low=VIX<13, low=13-16, below_avg=16-20, above_avg=20-25, high=25-30, extreme=30+"),
   keyMetrics: z
     .object({
       expectedWinRate: z.number().optional().describe("Expected win rate (0-1)"),

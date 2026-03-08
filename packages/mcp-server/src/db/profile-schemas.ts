@@ -50,6 +50,76 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
   await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS require_two_prices_pt BOOLEAN`);
   await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS close_on_completion BOOLEAN`);
   await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS ignore_margin_req BOOLEAN`);
+
+  // Migration: normalize expected_regimes to canonical Vol_Regime labels
+  // Old values: "low_vol", "moderate_vol", "high_vol", "normal", "low" (free-text)
+  // Canonical:  "very_low", "low", "below_avg", "above_avg", "high", "extreme"
+  await migrateExpectedRegimes(conn);
+}
+
+/**
+ * One-shot migration: rewrite expected_regimes JSON arrays from free-text
+ * vocabulary to canonical Vol_Regime labels.
+ *
+ * Mapping:
+ *   low_vol      → ["very_low", "low"]
+ *   moderate_vol → ["below_avg", "above_avg"]
+ *   normal       → ["below_avg", "above_avg"]
+ *   high_vol     → ["high", "extreme"]
+ *
+ * Values already in canonical form are kept as-is. Duplicates are removed.
+ * Runs every connection open but only UPDATEs rows containing non-canonical values.
+ */
+async function migrateExpectedRegimes(conn: DuckDBConnection): Promise<void> {
+  const CANONICAL = new Set(["very_low", "low", "below_avg", "above_avg", "high", "extreme"]);
+  const MAPPING: Record<string, string[]> = {
+    low_vol: ["very_low", "low"],
+    moderate_vol: ["below_avg", "above_avg"],
+    normal: ["below_avg", "above_avg"],
+    high_vol: ["high", "extreme"],
+  };
+
+  // Read all profiles with non-empty expected_regimes
+  const result = await conn.runAndReadAll(
+    `SELECT block_id, strategy_name, expected_regimes
+     FROM profiles.strategy_profiles
+     WHERE expected_regimes IS NOT NULL AND expected_regimes != '[]'`
+  );
+
+  for (const row of result.getRows()) {
+    const blockId = String(row[0]);
+    const strategyName = String(row[1]);
+    const rawJson = String(row[2]);
+
+    let regimes: string[];
+    try {
+      regimes = JSON.parse(rawJson);
+    } catch {
+      continue;
+    }
+
+    // Check if any value needs mapping
+    const needsMigration = regimes.some((r) => !CANONICAL.has(r));
+    if (!needsMigration) continue;
+
+    // Expand free-text values to canonical labels
+    const expanded = new Set<string>();
+    for (const r of regimes) {
+      if (CANONICAL.has(r)) {
+        expanded.add(r);
+      } else if (MAPPING[r]) {
+        for (const mapped of MAPPING[r]) expanded.add(mapped);
+      }
+      // Unknown values are dropped silently
+    }
+
+    const newJson = JSON.stringify([...expanded].sort());
+    await conn.run(
+      `UPDATE profiles.strategy_profiles
+       SET expected_regimes = '${escSql(newJson)}', updated_at = current_timestamp
+       WHERE block_id = '${escSql(blockId)}' AND strategy_name = '${escSql(strategyName)}'`
+    );
+  }
 }
 
 /**
