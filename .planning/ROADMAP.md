@@ -38,7 +38,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 
 ## Phases
 
-- [ ] **Phase 64: Schema V2** - Structured fields for position sizing, legs, exits, and behavioral flags with DB migration and backward compatibility
+- [x] **Phase 64: Schema V2** - Structured fields for position sizing, legs, exits, and behavioral flags with DB migration and backward compatibility (completed 2026-03-08)
 - [ ] **Phase 65: Portfolio Analysis Tools** - Enhanced portfolio_health_check, enhanced what_if_scaling, and new regime_allocation_advisor with tiered degradation
 
 ## Phase Details
@@ -53,11 +53,11 @@ See [MILESTONES.md](MILESTONES.md) for full history.
   3. `profile_strategy` accepts structured stop loss (percentage/dollar/sl_ratio/debit_percentage with value), monitoring config, and per-rule slippage on exit rules
   4. `profile_strategy` accepts underlying and behavioral flags (reEntry, capProfits, capLosses, requireTwoPricesPT, closeOnCompletion, ignoreMarginReq)
   5. `get_strategy_profile` and `list_profiles` return all new fields, and existing profiles without new fields load without error
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 64-01-PLAN.md — Extend TypeScript interfaces, Zod schemas, DB migration, and CRUD for all new fields
-- [ ] 64-02-PLAN.md — Unit tests for round-trip, backward compatibility, and read tool output
+- [x] 64-02-PLAN.md — Unit tests for round-trip, backward compatibility, and read tool output
 
 ### Phase 65: Portfolio Analysis Tools
 **Goal**: Users can analyze portfolio-level allocation health, simulate profile-aware scaling, and get regime-specific allocation recommendations
@@ -68,7 +68,13 @@ Plans:
   2. `what_if_scaling` uses backtest block data for profile-aware scaling, flags margin constraints when ignoreMarginReq is true, enforces maxContractsPerTrade ceiling, and accepts multi-strategy arrays for combined impact simulation
   3. `regime_allocation_advisor` cross-references regime performance with allocations, identifies thesis violations (underperforming in expected regimes), and identifies hidden edges (outperforming in unexpected regimes)
   4. All three tools run with partial data, report what was skipped, and suggest profile upgrades when fields are missing
-**Plans**: TBD
+**Plans:** 1/4 plans executed
+
+Plans:
+- [ ] 65-01-PLAN.md — Enhanced portfolio_health_check with 5 new profile-aware grade dimensions
+- [ ] 65-02-PLAN.md — Enhanced what_if_scaling with profile-aware scaling and multi-strategy mode
+- [ ] 65-03-PLAN.md — New regime_allocation_advisor tool with regime vs allocation comparison
+- [ ] 65-04-PLAN.md — Unit tests for all three tools
 
 ## Progress
 
@@ -83,5 +89,5 @@ Plans:
 | 61. Profile CRUD Tools | v2.1-b1 | 1/1 | Complete | 2026-03-05 |
 | 62. Structure-Aware Analysis Tools | v2.1-b1 | 3/3 | Complete | 2026-03-05 |
 | 63. Eliminate block.json | v2.1-b1 | 2/2 | Complete | 2026-03-06 |
-| 64. Schema V2 | v2.1-b2 | 1/2 | In progress | - |
-| 65. Portfolio Analysis Tools | v2.1-b2 | 0/? | Not started | - |
+| 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
+| 65. Portfolio Analysis Tools | 1/4 | In Progress|  | - |
