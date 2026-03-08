@@ -13,6 +13,9 @@ export interface PositionSizing {
   maxAllocationDollar?: number; // hard dollar cap per trade
   maxOpenPositions?: number;   // concurrency limit
   description?: string;        // free text for anything unusual
+  backtestAllocationPct?: number;  // allocation % used in backtest
+  liveAllocationPct?: number;      // allocation % used in live portfolio
+  maxContractsPerTrade?: number;   // per-entry cap (distinct from maxContracts hard cap)
 }
 
 export interface StrategyProfile {
@@ -27,6 +30,13 @@ export interface StrategyProfile {
   expectedRegimes: string[];    // Market regimes this strategy targets
   keyMetrics: KeyMetrics;       // Performance benchmarks
   positionSizing?: PositionSizing; // Per-block position sizing rules
+  underlying?: string;              // e.g., "SPX", "QQQ"
+  reEntry?: boolean;
+  capProfits?: boolean;
+  capLosses?: boolean;
+  requireTwoPricesPT?: boolean;
+  closeOnCompletion?: boolean;
+  ignoreMarginReq?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +46,8 @@ export interface LegDetail {
   strike: string;   // Relative description: "ATM", "5-delta", "30-delta"
   expiry: string;   // Relative: "same-day", "weekly", "45-DTE"
   quantity: number; // Positive = long, negative = short
+  strikeMethod?: 'delta' | 'dollar_price' | 'offset' | 'percentage';
+  strikeValue?: number; // numeric value (e.g., 25 for 25-delta, 3.50 for dollar_price)
 }
 
 export interface EntryFilter {
@@ -46,10 +58,19 @@ export interface EntryFilter {
   source?: "market" | "execution"; // "market" = testable against market data, "execution" = OO/platform-level
 }
 
+export interface ExitRuleMonitoring {
+  granularity?: 'intra_minute' | 'candle_close' | 'end_of_bar';
+  priceSource?: 'nbbo' | 'mid' | 'last';
+}
+
 export interface ExitRule {
   type: string;        // "stop_loss", "profit_target", "time_exit", "conditional"
   trigger: string;     // e.g., "200% of credit", "50% of max profit", "15:00 ET"
   description?: string;
+  stopLossType?: 'percentage' | 'dollar' | 'sl_ratio' | 'debit_percentage';
+  stopLossValue?: number;
+  monitoring?: ExitRuleMonitoring;
+  slippage?: number;   // per-rule slippage override
 }
 
 export interface KeyMetrics {
@@ -76,6 +97,13 @@ export interface StrategyProfileRow {
   expected_regimes: string; // JSON string
   key_metrics: string;      // JSON string
   position_sizing: string;  // JSON string
+  underlying: string | null;
+  re_entry: boolean | null;
+  cap_profits: boolean | null;
+  cap_losses: boolean | null;
+  require_two_prices_pt: boolean | null;
+  close_on_completion: boolean | null;
+  ignore_margin_req: boolean | null;
   created_at: Date;
   updated_at: Date;
 }

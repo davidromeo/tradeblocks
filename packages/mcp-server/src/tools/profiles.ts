@@ -50,6 +50,8 @@ export const profileStrategySchema = z.object({
         strike: z.string().describe("Strike selection: ATM, 5-delta, 30-delta, etc."),
         expiry: z.string().describe("Expiry selection: same-day, weekly, 45-DTE, etc."),
         quantity: z.number().describe("Quantity (positive=long, negative=short)"),
+        strikeMethod: z.enum(['delta', 'dollar_price', 'offset', 'percentage']).optional().describe("How strike is selected"),
+        strikeValue: z.number().optional().describe("Numeric strike value (e.g., 25 for 25-delta)"),
       })
     )
     .default([])
@@ -74,6 +76,13 @@ export const profileStrategySchema = z.object({
         type: z.string().describe("Rule type: stop_loss, profit_target, time_exit, conditional"),
         trigger: z.string().describe("Trigger condition: '200% of credit', '50% of max profit', '15:00 ET'"),
         description: z.string().optional().describe("Human-readable description"),
+        stopLossType: z.enum(['percentage', 'dollar', 'sl_ratio', 'debit_percentage']).optional().describe("Stop loss calculation method"),
+        stopLossValue: z.number().optional().describe("Stop loss numeric value"),
+        monitoring: z.object({
+          granularity: z.enum(['intra_minute', 'candle_close', 'end_of_bar']).optional().describe("Price check frequency"),
+          priceSource: z.enum(['nbbo', 'mid', 'last']).optional().describe("Which price to use"),
+        }).optional().describe("Monitoring configuration for this rule"),
+        slippage: z.number().optional().describe("Per-rule slippage override"),
       })
     )
     .default([])
@@ -100,9 +109,19 @@ export const profileStrategySchema = z.object({
       maxAllocationDollar: z.number().optional().describe("Maximum dollar allocation per trade"),
       maxOpenPositions: z.number().optional().describe("Maximum concurrent open positions"),
       description: z.string().optional().describe("Free-text sizing notes"),
+      backtestAllocationPct: z.number().optional().describe("Allocation % used in backtest"),
+      liveAllocationPct: z.number().optional().describe("Allocation % used in live portfolio"),
+      maxContractsPerTrade: z.number().optional().describe("Per-entry contract cap (distinct from maxContracts hard cap)"),
     })
     .optional()
     .describe("Position sizing rules. Per-block — same strategy in backtest vs portfolio may have different sizing."),
+  underlying: z.string().optional().describe("Underlying symbol: SPX, QQQ, etc."),
+  reEntry: z.boolean().optional().describe("Strategy supports re-entry on same day"),
+  capProfits: z.boolean().optional().describe("Profits are capped by structure"),
+  capLosses: z.boolean().optional().describe("Losses are capped by structure"),
+  requireTwoPricesPT: z.boolean().optional().describe("Profit target requires two prices"),
+  closeOnCompletion: z.boolean().optional().describe("Close entire position when any leg hits target"),
+  ignoreMarginReq: z.boolean().optional().describe("Strategy ignores standard margin requirements"),
 });
 
 export const getStrategyProfileSchema = z.object({
@@ -145,6 +164,13 @@ export async function handleProfileStrategy(
       expectedRegimes: input.expectedRegimes,
       keyMetrics: input.keyMetrics,
       positionSizing: input.positionSizing,
+      underlying: input.underlying,
+      reEntry: input.reEntry,
+      capProfits: input.capProfits,
+      capLosses: input.capLosses,
+      requireTwoPricesPT: input.requireTwoPricesPT,
+      closeOnCompletion: input.closeOnCompletion,
+      ignoreMarginReq: input.ignoreMarginReq,
     });
     return createToolOutput(
       `Profile saved: ${input.strategyName} for block ${input.blockId}`,
@@ -190,6 +216,7 @@ export async function handleListProfiles(
     strategyName: p.strategyName,
     structureType: p.structureType,
     greeksBias: p.greeksBias,
+    underlying: p.underlying ?? null,
     positionSizing: p.positionSizing?.method ?? null,
     updatedAt: p.updatedAt,
   }));
