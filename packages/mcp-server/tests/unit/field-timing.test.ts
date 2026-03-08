@@ -23,7 +23,7 @@ import {
   buildLookaheadFreeQuery,
   buildOutcomeQuery,
   SCHEMA_DESCRIPTIONS,
-} from '../../dist/test-exports.js';
+} from '../../src/test-exports.js';
 
 const dailyColumns = SCHEMA_DESCRIPTIONS.market.tables.daily.columns;
 const contextColumns = SCHEMA_DESCRIPTIONS.market.tables.context.columns;

@@ -1,4 +1,4 @@
-import { computeIntradayTimingFields } from "../../dist/test-exports.js";
+import { computeIntradayTimingFields } from "../../src/test-exports.js";
 
 describe("computeIntradayTimingFields", () => {
   // Helper to create a bar with all required fields

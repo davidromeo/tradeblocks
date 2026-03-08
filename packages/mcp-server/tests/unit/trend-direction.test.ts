@@ -3,7 +3,7 @@
  * Tests Return_20D classification into up/down/flat with boundary cases.
  */
 
-import { classifyTrendDirection } from "../../dist/test-exports.js";
+import { classifyTrendDirection } from "../../src/test-exports.js";
 
 describe("classifyTrendDirection", () => {
   it("classifies positive Return_20D > 1% as 'up'", () => {

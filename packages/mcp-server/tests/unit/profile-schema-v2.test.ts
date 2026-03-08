@@ -11,7 +11,7 @@ import {
   getProfile,
   listProfiles,
   type StrategyProfile,
-} from "../../dist/test-exports.js";
+} from "../../src/test-exports.js";
 
 // --- Test Fixtures ---
 

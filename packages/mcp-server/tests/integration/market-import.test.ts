@@ -19,7 +19,7 @@ import {
   importFromDatabase,
   getConnection,
   closeConnection,
-} from "../../dist/test-exports.js";
+} from "../../src/test-exports.js";
 
 // =============================================================================
 // validateColumnMapping — pure function, no DB needed

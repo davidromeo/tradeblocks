@@ -18,7 +18,7 @@ import {
   handlePortfolioStructureMap,
   upsertProfile,
   ensureProfilesSchema,
-} from "../../dist/test-exports.js";
+} from "../../src/test-exports.js";
 
 let tempDir: string;
 

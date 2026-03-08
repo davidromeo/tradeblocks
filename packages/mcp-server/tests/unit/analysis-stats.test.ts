@@ -3,7 +3,7 @@
  * Tests computeSliceStats with various P&L arrays.
  */
 
-import { computeSliceStats } from "../../dist/test-exports.js";
+import { computeSliceStats } from "../../src/test-exports.js";
 
 describe("computeSliceStats", () => {
   it("returns correct stats for mixed wins and losses", () => {

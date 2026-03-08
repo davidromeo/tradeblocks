@@ -21,11 +21,11 @@ import {
   getProfile,
   listProfiles,
   deleteProfile,
-} from '../../dist/test-exports.js';
+} from '../../src/test-exports.js';
 
 // Import type for test fixture typing only
 // @ts-expect-error - importing from bundled output
-import type { StrategyProfile } from '../../dist/test-exports.js';
+import type { StrategyProfile } from '../../src/test-exports.js';
 
 /**
  * Create a minimal valid StrategyProfile for testing.

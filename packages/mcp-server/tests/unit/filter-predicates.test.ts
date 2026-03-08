@@ -3,8 +3,8 @@
  * Tests buildFilterPredicate with various filter configurations.
  */
 
-import { buildFilterPredicate } from "../../dist/test-exports.js";
-import type { EntryFilter } from "../../dist/test-exports.js";
+import { buildFilterPredicate } from "../../src/test-exports.js";
+import type { EntryFilter } from "../../src/test-exports.js";
 
 describe("buildFilterPredicate", () => {
   describe("lag detection", () => {
