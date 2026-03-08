@@ -3,6 +3,10 @@
     "next-devtools": {
       "command": "npx",
       "args": ["-y", "next-devtools-mcp@latest"]
+    },
+    "tradeblocks": {
+      "command": "node",
+      "args": ["/home/david/code/tradeblocks/packages/mcp-server/server/index.js", "--directory", "/home/david/code/tradeblocks/packages/mcp-server/data"]
     }
   }
 }
