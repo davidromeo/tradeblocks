@@ -68,7 +68,7 @@ Plans:
   2. `what_if_scaling` uses backtest block data for profile-aware scaling, flags margin constraints when ignoreMarginReq is true, enforces maxContractsPerTrade ceiling, and accepts multi-strategy arrays for combined impact simulation
   3. `regime_allocation_advisor` cross-references regime performance with allocations, identifies thesis violations (underperforming in expected regimes), and identifies hidden edges (outperforming in unexpected regimes)
   4. All three tools run with partial data, report what was skipped, and suggest profile upgrades when fields are missing
-**Plans:** 1/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 - [ ] 65-01-PLAN.md — Enhanced portfolio_health_check with 5 new profile-aware grade dimensions
@@ -90,4 +90,4 @@ Plans:
 | 62. Structure-Aware Analysis Tools | v2.1-b1 | 3/3 | Complete | 2026-03-05 |
 | 63. Eliminate block.json | v2.1-b1 | 2/2 | Complete | 2026-03-06 |
 | 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
-| 65. Portfolio Analysis Tools | 1/4 | In Progress|  | - |
+| 65. Portfolio Analysis Tools | 3/4 | In Progress|  | - |
