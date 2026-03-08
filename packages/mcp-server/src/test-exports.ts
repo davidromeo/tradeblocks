@@ -161,3 +161,9 @@ export {
   validateEntryFiltersSchema,
   portfolioStructureMapSchema,
 } from './tools/profile-analysis.js';
+
+// Export Phase 65 regime advisor tool handler and schema for integration testing
+export {
+  handleRegimeAllocationAdvisor,
+  regimeAllocationAdvisorSchema,
+} from './tools/regime-advisor.js';

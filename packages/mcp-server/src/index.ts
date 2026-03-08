@@ -29,6 +29,7 @@ import { registerEdgeDecayTools } from "./tools/edge-decay.js";
 import { registerGuideTools } from "./tools/guides.js";
 import { registerProfileTools } from "./tools/profiles.js";
 import { registerProfileAnalysisTools } from "./tools/profile-analysis.js";
+import { registerRegimeAdvisorTools } from "./tools/regime-advisor.js";
 import {
   installSkills,
   uninstallSkills,
@@ -310,6 +311,7 @@ async function main(): Promise<void> {
     registerGuideTools(server);
     registerProfileTools(server, resolvedDir);
     registerProfileAnalysisTools(server, resolvedDir);
+    registerRegimeAdvisorTools(server, resolvedDir);
     return server;
   };
 
