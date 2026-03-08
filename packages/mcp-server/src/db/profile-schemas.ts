@@ -42,6 +42,14 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
   await conn.run(`
     ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS position_sizing JSON
   `);
+  // Migration: add schema v2 top-level columns (nullable for backward compat)
+  await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS underlying VARCHAR`);
+  await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS re_entry BOOLEAN`);
+  await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS cap_profits BOOLEAN`);
+  await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS cap_losses BOOLEAN`);
+  await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS require_two_prices_pt BOOLEAN`);
+  await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS close_on_completion BOOLEAN`);
+  await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS ignore_margin_req BOOLEAN`);
 }
 
 /**
@@ -79,7 +87,9 @@ function toDate(value: unknown): Date {
  *
  * Column order: block_id, strategy_name, structure_type, greeks_bias, thesis,
  *               legs, entry_filters, exit_rules, expected_regimes, key_metrics,
- *               position_sizing, created_at, updated_at
+ *               position_sizing, underlying, re_entry, cap_profits, cap_losses,
+ *               require_two_prices_pt, close_on_completion, ignore_margin_req,
+ *               created_at, updated_at
  */
 function rowToProfile(row: unknown[]): StrategyProfile {
   const parseJson = (v: unknown) => {
@@ -93,6 +103,9 @@ function rowToProfile(row: unknown[]): StrategyProfile {
     if (typeof v === "string") return JSON.parse(v);
     return v;
   };
+
+  const toBoolOrUndef = (v: unknown): boolean | undefined =>
+    v === null || v === undefined ? undefined : Boolean(v);
 
   return {
     blockId: row[0] as string,
@@ -109,15 +122,24 @@ function rowToProfile(row: unknown[]): StrategyProfile {
       const ps = parseJsonObj(row[10]);
       return ps && Object.keys(ps).length > 0 ? ps : undefined;
     })(),
-    createdAt: toDate(row[11]),
-    updatedAt: toDate(row[12]),
+    underlying: row[11] as string | undefined ?? undefined,
+    reEntry: toBoolOrUndef(row[12]),
+    capProfits: toBoolOrUndef(row[13]),
+    capLosses: toBoolOrUndef(row[14]),
+    requireTwoPricesPT: toBoolOrUndef(row[15]),
+    closeOnCompletion: toBoolOrUndef(row[16]),
+    ignoreMarginReq: toBoolOrUndef(row[17]),
+    createdAt: toDate(row[18]),
+    updatedAt: toDate(row[19]),
   };
 }
 
 const SELECT_COLUMNS = `
   block_id, strategy_name, structure_type, greeks_bias, thesis,
   legs, entry_filters, exit_rules, expected_regimes, key_metrics,
-  position_sizing, created_at, updated_at
+  position_sizing, underlying, re_entry, cap_profits, cap_losses,
+  require_two_prices_pt, close_on_completion, ignore_margin_req,
+  created_at, updated_at
 `.trim();
 
 /**
@@ -144,11 +166,21 @@ export async function upsertProfile(
 
   const nowTs = new Date().toISOString().replace("T", " ").replace("Z", "");
 
+  const underlyingSql = profile.underlying ? `'${escSql(profile.underlying)}'` : "NULL";
+  const reEntrySql = profile.reEntry === undefined ? "NULL" : String(profile.reEntry);
+  const capProfitsSql = profile.capProfits === undefined ? "NULL" : String(profile.capProfits);
+  const capLossesSql = profile.capLosses === undefined ? "NULL" : String(profile.capLosses);
+  const requireTwoPricesPTSql = profile.requireTwoPricesPT === undefined ? "NULL" : String(profile.requireTwoPricesPT);
+  const closeOnCompletionSql = profile.closeOnCompletion === undefined ? "NULL" : String(profile.closeOnCompletion);
+  const ignoreMarginReqSql = profile.ignoreMarginReq === undefined ? "NULL" : String(profile.ignoreMarginReq);
+
   await conn.run(`
     INSERT INTO profiles.strategy_profiles
       (block_id, strategy_name, structure_type, greeks_bias, thesis,
        legs, entry_filters, exit_rules, expected_regimes, key_metrics,
-       position_sizing, created_at, updated_at)
+       position_sizing, underlying, re_entry, cap_profits, cap_losses,
+       require_two_prices_pt, close_on_completion, ignore_margin_req,
+       created_at, updated_at)
     VALUES (
       '${escSql(profile.blockId)}',
       '${escSql(profile.strategyName)}',
@@ -161,6 +193,13 @@ export async function upsertProfile(
       '${expectedRegimesJson}'::JSON,
       '${keyMetricsJson}'::JSON,
       ${positionSizingJson ? `'${positionSizingJson}'::JSON` : "NULL"},
+      ${underlyingSql},
+      ${reEntrySql},
+      ${capProfitsSql},
+      ${capLossesSql},
+      ${requireTwoPricesPTSql},
+      ${closeOnCompletionSql},
+      ${ignoreMarginReqSql},
       TIMESTAMPTZ '${nowTs}',
       TIMESTAMPTZ '${nowTs}'
     )
@@ -174,6 +213,13 @@ export async function upsertProfile(
       expected_regimes = excluded.expected_regimes,
       key_metrics = excluded.key_metrics,
       position_sizing = excluded.position_sizing,
+      underlying = excluded.underlying,
+      re_entry = excluded.re_entry,
+      cap_profits = excluded.cap_profits,
+      cap_losses = excluded.cap_losses,
+      require_two_prices_pt = excluded.require_two_prices_pt,
+      close_on_completion = excluded.close_on_completion,
+      ignore_margin_req = excluded.ignore_margin_req,
       updated_at = TIMESTAMPTZ '${nowTs}'
   `);
 
