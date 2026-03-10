@@ -9,11 +9,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   loadBlock,
   listBlocks,
-  saveMetadata,
-  buildBlockMetadata,
-  loadReportingLogStats,
+  loadReportingLog,
 } from "../../utils/block-loader.js";
-import type { CsvMappings } from "../../utils/block-loader.js";
 import {
   createToolOutput,
   formatCurrency,
@@ -317,9 +314,10 @@ export function registerCoreBlockTools(
     },
     withSyncedBlock(baseDir, async ({ blockId }) => {
       try {
-        const result = await loadReportingLogStats(baseDir, blockId);
-
-        if (!result) {
+        let trades;
+        try {
+          trades = await loadReportingLog(baseDir, blockId);
+        } catch {
           return {
             content: [
               {
@@ -330,23 +328,68 @@ export function registerCoreBlockTools(
           };
         }
 
-        const { stats, stale } = result;
+        if (trades.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Reporting log exists but contains no valid trades for block: ${blockId}.`,
+              },
+            ],
+          };
+        }
+
+        // Compute stats from loaded trades
+        const strategyTrades = new Map<string, typeof trades>();
+        for (const trade of trades) {
+          const key = trade.strategy.trim();
+          if (!strategyTrades.has(key)) strategyTrades.set(key, []);
+          strategyTrades.get(key)!.push(trade);
+        }
+
+        const byStrategy: Record<string, {
+          tradeCount: number;
+          winRate: number;
+          totalPL: number;
+          avgPL: number;
+          contractCount: number;
+        }> = {};
+
+        for (const [strategy, strategyTradeList] of strategyTrades) {
+          const tradeCount = strategyTradeList.length;
+          const winningTrades = strategyTradeList.filter((t) => t.pl > 0).length;
+          const winRate = tradeCount > 0 ? winningTrades / tradeCount : 0;
+          const totalPL = strategyTradeList.reduce((sum, t) => sum + t.pl, 0);
+          const avgPL = tradeCount > 0 ? totalPL / tradeCount : 0;
+          const contractCount = strategyTradeList.reduce(
+            (sum, t) => sum + t.numContracts, 0
+          );
+          byStrategy[strategy] = { tradeCount, winRate, totalPL, avgPL, contractCount };
+        }
+
+        const totalPL = trades.reduce((sum, t) => sum + t.pl, 0);
+        const dates = trades.map((t) => new Date(t.dateOpened).getTime());
+        const dateRange = {
+          start: dates.length > 0 ? new Date(Math.min(...dates)).toISOString() : null,
+          end: dates.length > 0 ? new Date(Math.max(...dates)).toISOString() : null,
+        };
+        const strategies = Array.from(strategyTrades.keys()).sort();
 
         // Brief summary for user display
-        const summary = `Reporting Log: ${blockId} | ${stats.totalTrades} trades | ${stats.strategies.length} strategies | Total P&L: ${formatCurrency(stats.totalPL)}${stale ? " (stale - file modified since last calculation)" : ""}${stats.invalidTrades > 0 ? ` | ${stats.invalidTrades} invalid trades skipped` : ""}`;
+        const summary = `Reporting Log: ${blockId} | ${trades.length} trades | ${strategies.length} strategies | Total P&L: ${formatCurrency(totalPL)}`;
 
         // Build structured data for Claude reasoning
         const structuredData = {
           blockId,
-          totalTrades: stats.totalTrades,
-          invalidTrades: stats.invalidTrades,
-          totalPL: stats.totalPL,
-          dateRange: stats.dateRange,
-          strategyCount: stats.strategies.length,
-          strategies: stats.strategies,
-          byStrategy: stats.byStrategy,
-          calculatedAt: stats.calculatedAt,
-          stale,
+          totalTrades: trades.length,
+          invalidTrades: 0,
+          totalPL,
+          dateRange,
+          strategyCount: strategies.length,
+          strategies,
+          byStrategy,
+          calculatedAt: new Date().toISOString(),
+          stale: false,
         };
 
         return createToolOutput(summary, structuredData);
@@ -400,7 +443,6 @@ export function registerCoreBlockTools(
         const dailyLogs = block.dailyLogs;
 
         // Apply filters
-        const isFiltered = !!(strategy || tickerFilter || startDate || endDate);
         trades = filterByStrategy(trades, strategy);
         trades = filterByDateRange(trades, startDate, endDate);
 
@@ -444,36 +486,6 @@ export function registerCoreBlockTools(
 
         // Brief summary for user display
         const summary = `Stats: ${blockId}${strategy ? ` (${strategy})` : ""} | ${stats.totalTrades} trades | Win: ${formatPercent(stats.winRate * 100)} | Net P&L: ${formatCurrency(stats.netPl)} | Sharpe: ${formatRatio(stats.sharpeRatio)}`;
-
-        // Cache stats if no filters applied
-        if (!isFiltered && !block.metadata) {
-          const blockPath = `${baseDir}/${blockId}`;
-
-          // Build CSV mappings for cache invalidation
-          const csvMappings: CsvMappings = { tradelog: "tradelog.csv" };
-          if (dailyLogs && dailyLogs.length > 0) {
-            csvMappings.dailylog = "dailylog.csv";
-          }
-
-          // Build and save metadata asynchronously (don't block response)
-          buildBlockMetadata({
-            blockId,
-            blockPath,
-            trades: block.trades,
-            dailyLogs,
-            csvMappings,
-            cachedStats: {
-              totalPl: stats.totalPl,
-              netPl: stats.netPl,
-              winRate: stats.winRate,
-              sharpeRatio: stats.sharpeRatio,
-              maxDrawdown: stats.maxDrawdown,
-              calculatedAt: new Date().toISOString(),
-            },
-          })
-            .then((metadata) => saveMetadata(blockPath, metadata))
-            .catch((err) => console.error("Failed to save metadata:", err));
-        }
 
         // Build structured data for Claude reasoning - include full PortfolioStats
         const structuredData = {

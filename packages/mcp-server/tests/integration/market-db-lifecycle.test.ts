@@ -15,7 +15,7 @@ import { tmpdir } from "os";
 import { DuckDBInstance } from "@duckdb/node-api";
 
 // @ts-expect-error - importing from bundled output
-import { getConnection, closeConnection } from "../../dist/test-exports.js";
+import { getConnection, closeConnection } from "../../src/test-exports.js";
 
 describe("Market DB Lifecycle", () => {
   let testDir: string;

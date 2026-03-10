@@ -17,6 +17,8 @@ import {
   type EnrichedTrade,
 } from "./helpers.js";
 import { withSyncedBlock } from "../middleware/sync-middleware.js";
+import { getConnection } from "../../db/connection.js";
+import { getProfile } from "../../db/profile-schemas.js";
 
 /**
  * Register predictive-related report tools
@@ -37,6 +39,10 @@ export function registerPredictiveTools(
           .string()
           .optional()
           .describe("Pre-filter by strategy name (case-insensitive)"),
+        strategyName: z
+          .string()
+          .optional()
+          .describe("Strategy profile name. When provided, auto-filters to that strategy's trades and adds profile context to output."),
         startDate: z
           .string()
           .optional()
@@ -67,6 +73,7 @@ export function registerPredictiveTools(
       async ({
         blockId,
         strategy,
+        strategyName,
         startDate,
         endDate,
         targetField,
@@ -77,8 +84,16 @@ export function registerPredictiveTools(
           const block = await loadBlock(baseDir, blockId);
           let trades = block.trades;
 
-          // Apply pre-filters
-          trades = filterByStrategy(trades, strategy);
+          // Apply pre-filters (strategyName takes precedence over strategy)
+          const effectiveStrategy = strategyName || strategy;
+          trades = filterByStrategy(trades, effectiveStrategy);
+          // Single-strategy fallback: profile strategyName may differ from CSV strategy label
+          if (trades.length === 0 && block.trades.length > 0 && effectiveStrategy) {
+            const uniqueStrategies = new Set(block.trades.map((t) => t.strategy));
+            if (uniqueStrategies.size === 1) {
+              trades = block.trades;
+            }
+          }
           trades = filterByDateRange(trades, startDate, endDate);
 
           if (trades.length === 0) {
@@ -218,11 +233,12 @@ export function registerPredictiveTools(
 
           const summary = `Found ${fieldsWithData} predictive fields out of ${totalAnalyzed} analyzed`;
 
-          const structuredData = {
+          const structuredData: Record<string, unknown> = {
             blockId,
             targetField,
             filters: {
-              strategy: strategy ?? null,
+              strategy: effectiveStrategy ?? null,
+              strategyName: strategyName ?? null,
               startDate: startDate ?? null,
               endDate: endDate ?? null,
               minSamples,
@@ -233,6 +249,36 @@ export function registerPredictiveTools(
             rankedFields,
             fieldsSkipped: skippedFields,
           };
+
+          // Add profile context when strategyName is provided
+          if (strategyName) {
+            try {
+              const conn = await getConnection(baseDir);
+              const profile = await getProfile(conn, blockId, strategyName);
+              if (profile && profile.entryFilters.length > 0) {
+                const profileFilterFields = new Set(
+                  profile.entryFilters.map((f) => f.field)
+                );
+                const alignedFields = rankedFields
+                  .filter((rf) => profileFilterFields.has(rf.field))
+                  .map((rf) => ({
+                    field: rf.field,
+                    correlation: rf.correlation,
+                    direction: rf.direction,
+                    inProfile: true,
+                  }));
+
+                structuredData.profile_context = {
+                  strategyName,
+                  existingFilterFields: [...profileFilterFields],
+                  alignedPredictiveFields: alignedFields,
+                  note: "Fields from the profile's entry_filters that also appear in the predictive rankings.",
+                };
+              }
+            } catch {
+              // Profile lookup is best-effort; don't fail the tool
+            }
+          }
 
           return createToolOutput(summary, structuredData);
         } catch (error) {

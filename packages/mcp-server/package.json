@@ -1,7 +1,7 @@
 {
   "name": "tradeblocks-mcp",
-  "version": "2.0.1",
-  "description": "MCP server for options trade analysis - works with Claude Desktop/Cowork",
+  "version": "2.1.0",
+  "description": "MCP server for options trade analysis",
   "author": "David Romeo <davidmromeo@gmail.com>",
   "type": "module",
   "main": "dist/skill-installer.js",

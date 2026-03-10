@@ -148,10 +148,12 @@ When adding new metrics, calculations, or chart data to the UI, **consider wheth
 - `src/tools/market-data.ts` - Market regime analysis, filter suggestions, ORB calculation, trade enrichment
 - `src/tools/market-imports.ts` - import_market_csv, import_from_database
 - `src/tools/market-enrichment.ts` - enrich_market_data
+- `src/tools/profiles.ts` - Strategy profile CRUD (profile_strategy, get_strategy_profile, list_profiles, delete_profile)
+- `src/tools/profile-analysis.ts` - Structure-aware analysis (analyze_structure_fit, validate_entry_filters, portfolio_structure_map)
 
 ### Using MCP Tools Natively
 
-The TradeBlocks MCP server is connected via `npm link`, making tools available directly as `mcp__tradeblocks__*`. Use these native tools instead of CLI commands for querying portfolio data.
+The TradeBlocks MCP server is configured in `.mcp.json` to run directly from the built server entry point (`packages/mcp-server/server/index.js`), making tools available as `mcp__tradeblocks__*`. After changing MCP server source code, run `npm run build` in `packages/mcp-server/` and restart the Claude Code session for changes to take effect.
 
 **Available tools** (use `ToolSearch` to load before first use):
 - `mcp__tradeblocks__list_blocks` - List all portfolio blocks (START HERE)
@@ -320,9 +322,9 @@ GSD plans MUST include a test task for any new utility module. If a plan creates
 4. **After subagent work:** Always run `npm run typecheck` before final commit
 
 5. **Version management:**
-   - Bump MCP server version in `packages/mcp-server/package.json` when MCP functionality changes (new tools, API changes, bug fixes)
-   - Version bumps can happen mid-milestone if MCP changes are shipped
-   - Follow semver: patch for fixes, minor for new features, major for breaking changes
+   - MCP server version (`packages/mcp-server/package.json`), git tags, and GSD milestones all use the same version number
+   - Bump MCP server version to match the milestone version at milestone completion (e.g., milestone v2.1 → package version 2.1.0 → git tag v2.1)
+   - Mid-milestone patch bumps use the milestone version with patch increments (e.g., 2.1.1, 2.1.2)
 
 6. **Milestone completion checklist:**
    - Archive milestone to `.planning/milestones/`

@@ -117,6 +117,7 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       Term_Structure_State INTEGER,
       VIX_Percentile DOUBLE,
       VIX_Spike_Pct DOUBLE,
+      Trend_Direction VARCHAR,
 
       PRIMARY KEY (date)
     )
@@ -125,6 +126,13 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
   // Migration: add VIX_RTH_Open column to existing databases
   try {
     await conn.run(`ALTER TABLE market.context ADD COLUMN VIX_RTH_Open DOUBLE`);
+  } catch {
+    // Column already exists
+  }
+
+  // Migration: add Trend_Direction column to existing databases
+  try {
+    await conn.run(`ALTER TABLE market.context ADD COLUMN Trend_Direction VARCHAR`);
   } catch {
     // Column already exists
   }

@@ -14,7 +14,7 @@ import {
   filterByStrategy,
   filterByDateRange,
   filterDailyLogsByDateRange,
-} from '../../dist/test-exports.js';
+} from '../../src/test-exports.js';
 
 // =============================================================================
 // Test Data Helpers

@@ -8,18 +8,17 @@
 export {
   loadBlock,
   listBlocks,
-  loadMetadata,
-  saveMetadata,
   loadReportingLog,
-  loadReportingLogStats,
   importCsv,
   type BlockInfo,
   type LoadedBlock,
-  type BlockMetadata,
   type CsvMappings,
   type ImportCsvResult,
   type ImportCsvOptions,
 } from './utils/block-loader.js';
+
+// Export CSV discovery utilities for unit testing (Phase 63)
+export { detectCsvType, discoverCsvFiles, logCsvDiscoveryWarning, type CsvType } from './utils/csv-discovery.js';
 
 // Export PortfolioStatsCalculator for testing block_diff logic
 export { PortfolioStatsCalculator } from '@tradeblocks/lib';
@@ -103,6 +102,7 @@ export {
   isOpex,
   computeVIXDerivedFields,
   classifyVolRegime,
+  classifyTrendDirection,
   classifyTermStructure,
   computeVIXPercentile,
   type BollingerBandRow,
@@ -117,3 +117,53 @@ export {
   type EnrichmentOptions,
   type TierStatus,
 } from './utils/market-enricher.js';
+
+// Export strategy profile types and CRUD functions for integration testing (Phase 60)
+export type {
+  StrategyProfile,
+  StrategyProfileRow,
+  LegDetail,
+  EntryFilter,
+  ExitRule,
+  KeyMetrics,
+  PositionSizing,
+} from './models/strategy-profile.js';
+export {
+  ensureProfilesSchema,
+  upsertProfile,
+  getProfile,
+  listProfiles,
+  deleteProfile,
+} from './db/profile-schemas.js';
+
+// Export Phase 62 analysis utility modules for unit testing
+export { computeSliceStats, type SliceStats } from './utils/analysis-stats.js';
+export { buildFilterPredicate, type FilterPredicate } from './utils/filter-predicates.js';
+
+// Export Phase 61 profile tool handlers and schemas for integration testing
+export {
+  handleProfileStrategy,
+  handleGetStrategyProfile,
+  handleListProfiles,
+  handleDeleteProfile,
+  profileStrategySchema,
+  getStrategyProfileSchema,
+  listProfilesSchema,
+  deleteProfileSchema,
+} from './tools/profiles.js';
+
+// Export Phase 62 profile analysis tool handlers and schemas for integration testing
+export {
+  handleAnalyzeStructureFit,
+  handleValidateEntryFilters,
+  handlePortfolioStructureMap,
+  analyzeStructureFitSchema,
+  validateEntryFiltersSchema,
+  portfolioStructureMapSchema,
+} from './tools/profile-analysis.js';
+
+// Export Phase 65 regime advisor tool handler and schema for integration testing
+export {
+  handleRegimeAllocationAdvisor,
+  regimeAllocationAdvisorSchema,
+} from './tools/regime-advisor.js';

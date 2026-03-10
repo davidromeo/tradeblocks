@@ -12,12 +12,21 @@ import { fileURLToPath } from 'url';
 
 // Import from built bundle (test-exports.js has @lib dependencies bundled)
 // @ts-expect-error - importing from bundled output
-import { listBlocks, loadBlock } from '../dist/test-exports.js';
+import { listBlocks, loadBlock, closeConnection } from '../src/test-exports.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
+
+afterAll(async () => {
+  // Close DuckDB connection and clean up analytics files created in fixtures dir
+  await closeConnection();
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'analytics.duckdb')); } catch { /* ignore */ }
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'analytics.duckdb.wal')); } catch { /* ignore */ }
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'market.duckdb')); } catch { /* ignore */ }
+  try { await fs.unlink(path.join(FIXTURES_DIR, 'market.duckdb.wal')); } catch { /* ignore */ }
+});
 
 describe('CSV type detection', () => {
   describe('trade log detection by columns', () => {
@@ -25,10 +34,12 @@ describe('CSV type detection', () => {
       // The nonstandard-name folder has my-custom-trades.csv
       // Detection should identify it as a tradelog based on column headers
       const blocks = await listBlocks(FIXTURES_DIR);
-      const block = blocks.find(b => b.blockId === 'nonstandard-name');
+      const block = blocks.find((b: { blockId: string }) => b.blockId === 'nonstandard-name');
 
       expect(block).toBeDefined();
-      expect(block?.tradeCount).toBe(2);
+      // Block appears via filesystem scan (unsynced) - tradeCount is 0 until synced
+      // The important thing is that it IS discovered as a valid block
+      expect(block?.tradeCount).toBe(0);
     });
 
     it('should load trades from detected tradelog', async () => {
@@ -43,9 +54,10 @@ describe('CSV type detection', () => {
   describe('daily log detection by columns', () => {
     it('should detect dailylog alongside tradelog', async () => {
       const blocks = await listBlocks(FIXTURES_DIR);
-      const mockBlock = blocks.find(b => b.blockId === 'mock-block');
+      const mockBlock = blocks.find((b: { blockId: string }) => b.blockId === 'mock-block');
 
       expect(mockBlock).toBeDefined();
+      // For unsynced blocks, hasDailyLog comes from csv-discovery
       expect(mockBlock?.hasDailyLog).toBe(true);
     });
 
@@ -63,7 +75,7 @@ describe('CSV type detection', () => {
       const blocks = await listBlocks(FIXTURES_DIR);
 
       // unrecognized-csv folder should be skipped
-      const unrecognized = blocks.find(b => b.blockId === 'unrecognized-csv');
+      const unrecognized = blocks.find((b: { blockId: string }) => b.blockId === 'unrecognized-csv');
       expect(unrecognized).toBeUndefined();
     });
 
@@ -75,20 +87,14 @@ describe('CSV type detection', () => {
     });
   });
 
-  describe('CSV mappings caching', () => {
-    it('should create block.json with csvMappings for non-standard files', async () => {
-      // First call listBlocks to trigger metadata creation
-      await listBlocks(FIXTURES_DIR);
+  describe('CSV discovery via header sniffing', () => {
+    it('should discover non-standard filenames via csv-discovery', async () => {
+      // loadBlock uses csv-discovery to find CSVs regardless of filename
+      const block = await loadBlock(FIXTURES_DIR, 'nonstandard-name');
 
-      // Check if metadata was created for nonstandard-name block
-      const metadataPath = path.join(FIXTURES_DIR, 'nonstandard-name', 'block.json');
-
-      const content = await fs.readFile(metadataPath, 'utf-8');
-      const metadata = JSON.parse(content);
-
-      // Verify csvMappings exists and has the non-standard filename
-      expect(metadata.csvMappings).toBeDefined();
-      expect(metadata.csvMappings.tradelog).toBe('my-custom-trades.csv');
+      // Verify trades loaded from non-standard filename
+      expect(block.trades.length).toBe(2);
+      expect(block.blockId).toBe('nonstandard-name');
     });
   });
 });

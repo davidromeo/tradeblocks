@@ -13,3 +13,4 @@ export {
   tableExists,
 } from "./schemas.js";
 export { ensureMarketTables } from "./market-schemas.js";
+export { ensureProfilesSchema, upsertProfile, getProfile, listProfiles, deleteProfile } from "./profile-schemas.js";

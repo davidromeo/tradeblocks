@@ -23,7 +23,7 @@ import {
   buildLookaheadFreeQuery,
   buildOutcomeQuery,
   SCHEMA_DESCRIPTIONS,
-} from '../../dist/test-exports.js';
+} from '../../src/test-exports.js';
 
 const dailyColumns = SCHEMA_DESCRIPTIONS.market.tables.daily.columns;
 const contextColumns = SCHEMA_DESCRIPTIONS.market.tables.context.columns;
@@ -79,7 +79,7 @@ describe('Derived Sets', () => {
 
     const totalClassified = dailyClassified.length + contextClassified.length;
 
-    expect(allClassified.size).toBe(51);
+    expect(allClassified.size).toBe(52);
     expect(allClassified.size).toBe(totalClassified);
 
     // Every classified column should be in exactly one set
@@ -112,12 +112,12 @@ describe('Derived Sets', () => {
     expect(CONTEXT_OPEN_FIELDS.size).toBe(5);
   });
 
-  test('CLOSE_KNOWN_FIELDS has exactly 38 fields (24 daily + 14 context)', () => {
-    expect(CLOSE_KNOWN_FIELDS.size).toBe(38);
+  test('CLOSE_KNOWN_FIELDS has exactly 39 fields (24 daily + 15 context)', () => {
+    expect(CLOSE_KNOWN_FIELDS.size).toBe(39);
     // Daily close-derived: 18 Tier1 + 4 Tier3 + 2 Tier3 (Opening_Drive_Strength, Intraday_Realized_Vol) = 24
     expect(DAILY_CLOSE_FIELDS.size).toBe(24);
-    // Context close-derived: 14
-    expect(CONTEXT_CLOSE_FIELDS.size).toBe(14);
+    // Context close-derived: 14 + 1 (Trend_Direction) = 15
+    expect(CONTEXT_CLOSE_FIELDS.size).toBe(15);
   });
 
   test('STATIC_FIELDS has exactly 3 fields (all from daily)', () => {

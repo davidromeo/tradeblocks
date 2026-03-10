@@ -32,7 +32,7 @@ import {
   classifyVolRegime,
   classifyTermStructure,
   computeVIXPercentile,
-} from '../../dist/test-exports.js';
+} from '../../src/test-exports.js';
 
 // =============================================================================
 // computeRSI

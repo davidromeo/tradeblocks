@@ -439,6 +439,23 @@ export function computeVIXDerivedFields(rows: ContextRow[]): EnrichedContextRow[
 }
 
 /**
+ * Classify trend direction based on 20-day return percentage.
+ *
+ * Uses Return_20D thresholds:
+ *   > 1%  = "up"
+ *   < -1% = "down"
+ *   else  = "flat" (between -1% and 1% inclusive)
+ *
+ * Returns null for null/NaN input (no Return_20D data available).
+ */
+export function classifyTrendDirection(return20d: number | null): string | null {
+  if (return20d === null || return20d === undefined || isNaN(return20d)) return null;
+  if (return20d > 1) return "up";
+  if (return20d < -1) return "down";
+  return "flat";
+}
+
+/**
  * Classify VIX level into volatility regime 1-6.
  *
  * 1: Very Low  VIX < 13
@@ -576,10 +593,12 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
     return { status: "skipped", reason: "no VIX data in market.context — import context data first" };
   }
 
-  // Fetch all context rows ordered by date
+  // Fetch all context rows with Return_20D from market.daily (for Trend_Direction)
   const reader = await conn.runAndReadAll(
-    `SELECT date, VIX_Open, VIX_Close, VIX_High, VIX9D_Open, VIX9D_Close, VIX3M_Open, VIX3M_Close
-     FROM market.context ORDER BY date ASC`
+    `SELECT c.date, c.VIX_Open, c.VIX_Close, c.VIX_High, c.VIX9D_Open, c.VIX9D_Close, c.VIX3M_Open, c.VIX3M_Close, d.Return_20D
+     FROM market.context c
+     LEFT JOIN market.daily d ON c.date = d.date
+     ORDER BY c.date ASC`
   );
   const rawRows = reader.getRows();
   if (rawRows.length === 0) return { status: "skipped", reason: "no context rows" };
@@ -609,18 +628,24 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
     // market.intraday may not have VIX data — gracefully continue with empty map
   }
 
-  // Map to ContextRow objects
-  const contextRows: ContextRow[] = rawRows.map((r) => ({
-    date: r[0] as string,
-    VIX_Open: r[1] as number | null,
-    VIX_Close: r[2] as number | null,
-    VIX_High: r[3] as number | null,
-    VIX_RTH_Open: rthOpenByDate.get(r[0] as string) ?? null,
-    VIX9D_Open: r[4] as number | null,
-    VIX9D_Close: r[5] as number | null,
-    VIX3M_Open: r[6] as number | null,
-    VIX3M_Close: r[7] as number | null,
-  }));
+  // Map to ContextRow objects and capture Return_20D for Trend_Direction
+  const return20dByDate = new Map<string, number | null>();
+  const contextRows: ContextRow[] = rawRows.map((r) => {
+    const dateStr = r[0] as string;
+    const ret20d = r[8] as number | null;
+    return20dByDate.set(dateStr, ret20d);
+    return {
+      date: dateStr,
+      VIX_Open: r[1] as number | null,
+      VIX_Close: r[2] as number | null,
+      VIX_High: r[3] as number | null,
+      VIX_RTH_Open: rthOpenByDate.get(dateStr) ?? null,
+      VIX9D_Open: r[4] as number | null,
+      VIX9D_Close: r[5] as number | null,
+      VIX3M_Open: r[6] as number | null,
+      VIX3M_Close: r[7] as number | null,
+    };
+  });
 
   // Compute VIX percentile using VIX_Close array
   const vixCloses = contextRows.map((r) => r.VIX_Close ?? NaN);
@@ -642,6 +667,7 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
     "Vol_Regime",
     "Term_Structure_State",
     "VIX_Percentile",
+    "Trend_Direction",
   ];
 
   // Build batch of rows with Tier 2 fields + percentile
@@ -665,6 +691,7 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
           ? classifyTermStructure(v9, vc, v3m)
           : null,
       VIX_Percentile: isNaN(vixPercentiles[i]) ? null : vixPercentiles[i],
+      Trend_Direction: classifyTrendDirection(return20dByDate.get(r.date) ?? null),
     };
   });
 

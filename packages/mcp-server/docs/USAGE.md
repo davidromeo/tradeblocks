@@ -74,6 +74,23 @@ Your AI assistant will:
 3. Assess diversification benefit
 4. Provide ADD/CONSIDER/SKIP recommendation
 
+### Profile a Strategy from a Screenshot
+
+"Here's my iron condor strategy settings" *(attach screenshot of your backtest parameters)*
+
+Your AI assistant will:
+1. Read the screenshot to extract structure type, greeks bias, entry filters, exit rules, legs, etc.
+2. `profile_strategy` - Store the structured profile linked to your block
+3. Confirm what was saved and highlight anything it couldn't extract
+
+Once profiled, your assistant remembers the strategy across sessions. You can then run targeted analysis:
+
+- "How does this strategy perform in different VIX regimes?" → `analyze_structure_fit`
+- "Are my entry filters actually helping?" → `validate_entry_filters`
+- "Where are my portfolio blind spots?" → `portfolio_structure_map`
+
+> **Tip:** You can update a profile anytime by sending a new screenshot or describing changes — the tool uses upsert semantics, so it overwrites the previous profile.
+
 ### Explore with SQL
 
 "What's the best day of week to enter trades?"
@@ -137,6 +154,17 @@ GROUP BY dow ORDER BY dow
 | `analyze_regime_performance` | Analyze P&L by market regime |
 | `suggest_filters` | Suggest trade filters based on market conditions |
 | `calculate_orb` | Opening range breakout analysis from intraday bars |
+
+### Strategy Profile Tools
+| Tool | Purpose |
+|------|---------|
+| `profile_strategy` | Create or update a strategy profile |
+| `get_strategy_profile` | Retrieve a stored strategy profile |
+| `list_profiles` | List all strategy profiles |
+| `delete_profile` | Delete a strategy profile |
+| `analyze_structure_fit` | Analyze performance by regime/condition dimensions |
+| `validate_entry_filters` | Test each entry filter's contribution to edge |
+| `portfolio_structure_map` | Regime x structure coverage matrix |
 
 ### Import Tools
 | Tool | Purpose |
@@ -211,7 +239,7 @@ The server detects CSV types by column headers, not just filenames. This means:
 
 - `my-strategy-export.csv` will work if it has the expected columns
 - Files are auto-detected as tradelog, dailylog, or reportinglog
-- Detected mappings are cached in `block.json` for faster loading
+- CSV types are detected on each load via header sniffing (no caching needed)
 
 ---
 

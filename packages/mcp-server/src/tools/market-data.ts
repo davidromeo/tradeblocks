@@ -37,6 +37,7 @@ import {
   resolveTradeTicker,
 } from "../utils/ticker.js";
 import { checkDataAvailability } from "../utils/data-availability.js";
+import { getProfile } from "../db/profile-schemas.js";
 
 // =============================================================================
 // Types
@@ -514,20 +515,40 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         strategy: z.string().optional().describe("Filter to specific strategy"),
+        strategyName: z.string().optional().describe("Strategy profile name. When provided, auto-filters to that strategy's trades and cross-references suggestions against profile's entry_filters."),
         minImprovementPct: z.number().optional().describe("Only suggest filters with >= X% win rate improvement (default: 3)"),
         ticker: z.string().optional().describe("Underlying ticker symbol (default: SPX)"),
       }),
     },
-    withFullSync(baseDir, async ({ blockId, strategy, minImprovementPct = 3, ticker }) => {
+    withFullSync(baseDir, async ({ blockId, strategy, strategyName, minImprovementPct = 3, ticker }) => {
       try {
         const block = await loadBlock(baseDir, blockId);
         let trades = block.trades;
 
-        if (strategy) {
-          trades = trades.filter(
-            (t) => t.strategy.toLowerCase() === strategy.toLowerCase()
-          );
+        // If strategyName provided, use it to filter trades (takes precedence over strategy)
+        const effectiveStrategy = strategyName || strategy;
+        if (effectiveStrategy) {
+          trades = filterByStrategy(trades, effectiveStrategy);
+          // Single-strategy fallback: profile strategyName may differ from CSV strategy label
+          if (trades.length === 0 && block.trades.length > 0) {
+            const uniqueStrategies = new Set(block.trades.map((t) => t.strategy));
+            if (uniqueStrategies.size === 1) {
+              trades = block.trades;
+            }
+          }
         }
+
+        // Load profile for cross-referencing if strategyName provided
+        let profileEntryFilters: Array<{ field: string; operator: string; value: unknown; description?: string }> | null = null;
+        if (strategyName) {
+          const conn = await getConnection(baseDir);
+          const profile = await getProfile(conn, blockId, strategyName);
+          if (profile) {
+            profileEntryFilters = profile.entryFilters;
+          }
+        }
+
+        // Note: strategy filtering is now handled above via effectiveStrategy
 
         if (trades.length === 0) {
           return {
@@ -809,7 +830,8 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         const sfResponseData: Record<string, unknown> = {
           blockId,
           lagNote: "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Consecutive_Days, VIX_Spike_Pct, Term_Structure_State, BB_Width, Realized_Vol_5D, Realized_Vol_20D, BB_Position) use prior trading day values to prevent lookahead bias. Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR, Day_of_Week, Is_Opex) use same-day values.",
-          strategy: strategy || null,
+          strategy: effectiveStrategy || null,
+          strategyName: strategyName || null,
           currentStats: {
             trades: matchedTrades.length,
             winRate: Math.round(currentWinRate * 100) / 100,
@@ -822,6 +844,36 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         if (availabilitySF.warnings.length > 0) {
           sfResponseData.warnings = availabilitySF.warnings;
+        }
+
+        // Cross-reference suggestions with profile entry_filters when strategyName provided
+        if (profileEntryFilters && profileEntryFilters.length > 0) {
+          const profileContext: Array<{
+            suggestion: string;
+            field: string;
+            status: "already_in_profile" | "new_suggestion";
+            matchedFilter?: { field: string; operator: string; value: unknown };
+          }> = [];
+
+          for (const suggestion of topSuggestions) {
+            const matchedFilter = profileEntryFilters.find(
+              (f) => f.field === suggestion.condition.field
+            );
+            profileContext.push({
+              suggestion: suggestion.filter,
+              field: suggestion.condition.field,
+              status: matchedFilter ? "already_in_profile" : "new_suggestion",
+              matchedFilter: matchedFilter
+                ? { field: matchedFilter.field, operator: matchedFilter.operator, value: matchedFilter.value }
+                : undefined,
+            });
+          }
+
+          sfResponseData.profile_context = {
+            strategyName,
+            existingFilters: profileEntryFilters.length,
+            crossReference: profileContext,
+          };
         }
 
         return createToolOutput(summary, sfResponseData);

@@ -12,7 +12,7 @@
  *   4. ensureMarketTables() — creates market.daily/context/intraday/_sync_metadata
  *   5. ensureSyncTables() / ensureTradeDataTable() / ensureReportingDataTable()
  *
- * On close: DETACH market before closeSync() so WAL is cleanly checkpointed.
+ * On close: CHECKPOINT → DETACH market → closeSync() to flush WAL reliably.
  * On RO open: ATTACH market.duckdb READ_ONLY (no table creation).
  *
  * DuckDB is single-process: only one process can open a database file at a time
@@ -45,6 +45,7 @@ import * as path from "path";
 import { promisify } from "util";
 import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable } from "./schemas.js";
 import { ensureMarketTables } from "./market-schemas.js";
+import { ensureProfilesSchema } from "./profile-schemas.js";
 
 // Module-level singleton state
 let instance: DuckDBInstance | null = null;
@@ -306,6 +307,7 @@ async function openReadWriteConnection(
   await ensureTradeDataTable(connection);
   await ensureReportingDataTable(connection);
   await ensureMarketTables(connection);
+  await ensureProfilesSchema(connection);
   connectionMode = "read_write";
 
   return connection;
@@ -432,6 +434,7 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
  */
 export async function closeConnection(): Promise<void> {
   if (connection) {
+    try { await connection.run("CHECKPOINT"); } catch { /* non-fatal */ }
     try { await detachMarketDb(connection); } catch { /* non-fatal, log debug */ }
     try {
       // closeSync is the synchronous close method for DuckDB connections
