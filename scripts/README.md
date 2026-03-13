@@ -53,6 +53,32 @@ python scripts/generate_custom_indicators.py \
 
 ---
 
+### `generate_indicators.py` — Simplified Indicators CSV
+
+Minimal version that produces only three indicator columns — no regime bins or labels.
+
+| Column | Formula |
+|--------|---------|
+| `VIX_MA20_Ratio` | `VIX_Close / rolling_mean(VIX_Close, 20)` |
+| `VRP_daily` | `IV_straddle(09:45) − RV_GK` (Garman-Klass realized vol) |
+| `VRP_MA20` | `rolling_mean(VRP_daily, 20)` |
+
+**Output:** `custom_indicators.csv` — import via Static Datasets page
+
+```bash
+# VIX_MA20_Ratio only (no tradelog needed):
+python scripts/generate_indicators.py \
+  --output /home/carsten/dev/tradeblocks-data/custom_indicators.csv
+
+# With VRP (requires OptionOmega tradelog at 09:45 ET):
+python scripts/generate_indicators.py \
+  --tradelog /path/to/tradelog.csv \
+  --spx /home/carsten/dev/tradeblocks-data/spx_daily.csv \
+  --output /home/carsten/dev/tradeblocks-data/custom_indicators.csv
+```
+
+---
+
 ## Test Data Setup for Dev Environment
 
 ```bash
