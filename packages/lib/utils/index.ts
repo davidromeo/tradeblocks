@@ -31,6 +31,20 @@ export function truncateStrategyName(
   return `${strategyName.substring(0, maxLength)}...`
 }
 
+/**
+ * UUID generation with fallback for non-secure contexts (plain HTTP over IP).
+ * crypto.randomUUID() requires HTTPS or localhost (secure context).
+ */
+export function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
 // Core utility modules
 export * from './equity-curve'
 export * from './risk-free-rate'

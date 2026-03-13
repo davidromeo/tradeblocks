@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Trade } from '../models/trade'
 import { ReportingTrade } from '../models/reporting-trade'
 import { DailyLogEntry } from '../models/daily-log'
+import { generateId } from '../utils'
 import {
   calculateAdvancedMetrics,
   calculateTradeMetrics,
@@ -1168,7 +1169,7 @@ export const useTradingCalendarStore = create<TradingCalendarState>((set, get) =
           const existingMappings = block.strategyAlignment?.mappings ?? []
           const now = new Date()
           const newMapping = {
-            id: crypto.randomUUID(),
+            id: generateId(),
             reportingStrategies: [backtestStrategy],
             liveStrategies: [actualStrategy],
             createdAt: now,

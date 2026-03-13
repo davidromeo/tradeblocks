@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { generateId } from "../utils";
 import { PortfolioStatsCalculator } from "../calculations/portfolio-stats";
 import {
   deleteBlock as dbDeleteBlock,
@@ -310,7 +311,7 @@ export const useBlockStore = create<BlockStore>((set, get) => ({
     try {
       const newBlock: Block = {
         ...blockData,
-        id: "id" in blockData ? blockData.id : crypto.randomUUID(), // Use provided ID or generate new one
+        id: "id" in blockData ? blockData.id : generateId(), // Use provided ID or generate new one
         created: new Date(),
         lastModified: new Date(),
       };
