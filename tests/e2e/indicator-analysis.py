@@ -181,19 +181,34 @@ def test_indicator_analysis():
             page.wait_for_load_state("networkidle")
             page.wait_for_timeout(1500)
 
-        # Select dataset
-        dataset_select = page.locator("button[role='combobox']").first
-        dataset_select.click()
+        # Page now has X-axis source (combobox 0), dataset (combobox 1), column (combobox 2),
+        # Y-axis source (combobox 3). Default X = "Static Dataset", default Y = "Trade P&L".
+
+        # Combobox 0: X-axis source — already defaults to "Static Dataset", leave as-is
+        xsource_select = page.locator("button[role='combobox']").nth(0)
+        xsource_select.click()
+        page.wait_for_timeout(500)
+        xsource_options = page.locator("[role='option']").all()
+        print(f"  X-source options: {[o.inner_text() for o in xsource_options]}")
+        # Select "Static Dataset" (first option)
+        if xsource_options:
+            xsource_options[0].click()
         page.wait_for_timeout(500)
 
-        options = page.locator("[role='option']").all()
-        if options:
-            print(f"  Dataset options: {[o.inner_text() for o in options]}")
-            options[0].click()
+        # Combobox 1: dataset picker
+        dataset_select = page.locator("button[role='combobox']").nth(1)
+        dataset_select.click()
+        page.wait_for_timeout(500)
+        dataset_options = page.locator("[role='option']").all()
+        print(f"  Dataset options: {[o.inner_text() for o in dataset_options]}")
+
+        if dataset_options:
+            # Pick first dataset (Custom Indicators)
+            dataset_options[0].click()
             page.wait_for_timeout(500)
 
-            # Select column
-            col_select = page.locator("button[role='combobox']").nth(1)
+            # Combobox 2: column picker (now enabled after dataset selected)
+            col_select = page.locator("button[role='combobox']").nth(2)
             col_select.click()
             page.wait_for_timeout(500)
 
@@ -208,7 +223,10 @@ def test_indicator_analysis():
                 col_options[0].click()
             page.wait_for_timeout(500)
 
-            # Run Analysis
+            # Y-axis source defaults to "Trade P&L" — no change needed
+
+        # Run Analysis (outside the if so we always check button state)
+        if dataset_options:
             run_btn = page.get_by_role("button", name="Run Analysis")
             all_passed &= check(not run_btn.is_disabled(), "Run Analysis button enabled")
             run_btn.click()
