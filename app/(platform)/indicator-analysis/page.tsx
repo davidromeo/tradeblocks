@@ -11,7 +11,7 @@ import {
   pearsonCorrelation,
   getRanks,
 } from "@tradeblocks/lib";
-import type { StaticDataset, Trade } from "@tradeblocks/lib";
+import type { StaticDataset, StaticDatasetRow, Trade } from "@tradeblocks/lib";
 import { useBlockStore, useStaticDatasetsStore } from "@tradeblocks/lib/stores";
 
 import { MetricCard } from "@/components/metric-card";
@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 
 // ============================================================
-// Statistics helpers (pure functions, no external stats lib)
+// Statistics helpers
 // ============================================================
 
 function sigStars(p: number): string {
@@ -36,23 +36,6 @@ function sigStars(p: number): string {
   if (p < 0.01) return " **";
   if (p < 0.05) return " *";
   return "";
-}
-
-/** Spearman rank correlation with approximate two-tailed p-value */
-function spearmanR(
-  x: number[],
-  y: number[]
-): { rho: number; pValue: number; n: number } {
-  const n = x.length;
-  if (n < 4) return { rho: NaN, pValue: NaN, n };
-  const rankX = getRanks(x);
-  const rankY = getRanks(y);
-  const rho = pearsonCorrelation(rankX, rankY);
-  // t distribution approximation
-  const tStat = rho * Math.sqrt((n - 2) / Math.max(1 - rho * rho, 1e-12));
-  // Two-tailed p-value via normal approximation (adequate for n > 10)
-  const pValue = Math.min(1, 2 * (1 - normalCDF(Math.abs(tStat))));
-  return { rho, pValue, n };
 }
 
 /** Standard normal CDF (Abramowitz & Stegun approximation) */
@@ -69,89 +52,89 @@ function normalCDF(x: number): number {
   return 0.5 * (1 + sign * (1 - poly * Math.exp(-x * x)));
 }
 
+/** Spearman rank correlation with approximate two-tailed p-value */
+function spearmanR(
+  x: number[],
+  y: number[]
+): { rho: number; pValue: number; n: number } {
+  const n = x.length;
+  if (n < 4) return { rho: NaN, pValue: NaN, n };
+  const rankX = getRanks(x);
+  const rankY = getRanks(y);
+  const rho = pearsonCorrelation(rankX, rankY);
+  const tStat = rho * Math.sqrt((n - 2) / Math.max(1 - rho * rho, 1e-12));
+  const pValue = Math.min(1, 2 * (1 - normalCDF(Math.abs(tStat))));
+  return { rho, pValue, n };
+}
+
 /** Normalised mutual information (0 = independent, 1 = perfect) */
 function mutualInformation(x: number[], y: number[], k: number): number {
   const n = x.length;
   if (n < 2 * k) return NaN;
-
   const rankX = getRanks(x);
   const rankY = getRanks(y);
-
-  // Map ranks to equal-frequency bin indices
-  const binOf = (rank: number) =>
-    Math.min(k - 1, Math.floor((rank / n) * k));
-
-  // Joint count matrix
+  const binOf = (rank: number) => Math.min(k - 1, Math.floor((rank / n) * k));
   const joint: number[][] = Array.from({ length: k }, () =>
     new Array(k).fill(0)
   );
-  for (let i = 0; i < n; i++) {
-    joint[binOf(rankX[i])][binOf(rankY[i])]++;
-  }
-
-  // Marginals
+  for (let i = 0; i < n; i++) joint[binOf(rankX[i])][binOf(rankY[i])]++;
   const px = joint.map((row) => row.reduce((s, v) => s + v, 0) / n);
   const py = Array.from({ length: k }, (_, j) =>
     joint.reduce((s, row) => s + row[j], 0) / n
   );
-
-  let mi = 0;
-  let hy = 0;
+  let mi = 0, hy = 0;
   for (let i = 0; i < k; i++) {
-    if (px[i] > 0) {
+    if (px[i] > 0)
       for (let j = 0; j < k; j++) {
         const pij = joint[i][j] / n;
-        if (pij > 0) {
-          mi += pij * Math.log2(pij / (px[i] * py[j]));
-        }
+        if (pij > 0) mi += pij * Math.log2(pij / (px[i] * py[j]));
       }
-    }
     if (py[i] > 0) hy -= py[i] * Math.log2(py[i]);
   }
   return hy > 0 ? Math.max(0, Math.min(1, mi / hy)) : 0;
 }
 
-/** Two-sample KS test splitting on indicator median */
+/** Two-sample KS test splitting on X median */
 function ksTest(
-  indicatorValues: number[],
-  plValues: number[]
+  xValues: number[],
+  yValues: number[]
 ): { d: number; pValue: number } {
-  const n = indicatorValues.length;
+  const n = xValues.length;
   if (n < 4) return { d: 0, pValue: 1 };
-
-  const sorted = [...indicatorValues].sort((a, b) => a - b);
+  const sorted = [...xValues].sort((a, b) => a - b);
   const median = sorted[Math.floor(n / 2)];
-
-  const group1: number[] = [];
-  const group2: number[] = [];
-  for (let i = 0; i < n; i++) {
-    if (indicatorValues[i] <= median) group1.push(plValues[i]);
-    else group2.push(plValues[i]);
-  }
-  if (group1.length === 0 || group2.length === 0) return { d: 0, pValue: 1 };
-
+  const group1: number[] = [], group2: number[] = [];
+  for (let i = 0; i < n; i++)
+    (xValues[i] <= median ? group1 : group2).push(yValues[i]);
+  if (!group1.length || !group2.length) return { d: 0, pValue: 1 };
   group1.sort((a, b) => a - b);
   group2.sort((a, b) => a - b);
-
-  // Merge and compute empirical CDFs
   const allVals = [...new Set([...group1, ...group2])].sort((a, b) => a - b);
-  const n1 = group1.length,
-    n2 = group2.length;
-  let d = 0,
-    i1 = 0,
-    i2 = 0;
+  const n1 = group1.length, n2 = group2.length;
+  let d = 0, i1 = 0, i2 = 0;
   for (const v of allVals) {
     while (i1 < n1 && group1[i1] <= v) i1++;
     while (i2 < n2 && group2[i2] <= v) i2++;
     d = Math.max(d, Math.abs(i1 / n1 - i2 / n2));
   }
-
-  // Kolmogorov approximation
   const nEff = (n1 * n2) / (n1 + n2);
-  const lambda =
-    (Math.sqrt(nEff) + 0.12 + 0.11 / Math.sqrt(nEff)) * d;
-  const pValue = Math.min(1, 2 * Math.exp(-2 * lambda * lambda));
-  return { d, pValue };
+  const lambda = (Math.sqrt(nEff) + 0.12 + 0.11 / Math.sqrt(nEff)) * d;
+  return { d, pValue: Math.min(1, 2 * Math.exp(-2 * lambda * lambda)) };
+}
+
+/**
+ * Two-sided one-sample t-test H₀: μ = 0
+ * t = mean / (std / √n), p = 2*(1 - Φ(|t|))
+ */
+function tTestOneSample(values: number[]): { t: number; pValue: number } {
+  const n = values.length;
+  if (n < 2) return { t: NaN, pValue: NaN };
+  const mean = values.reduce((s, v) => s + v, 0) / n;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1);
+  const std = Math.sqrt(variance);
+  if (std < 1e-12) return { t: Infinity, pValue: 0 };
+  const t = mean / (std / Math.sqrt(n));
+  return { t, pValue: Math.min(1, 2 * (1 - normalCDF(Math.abs(t)))) };
 }
 
 // ============================================================
@@ -162,67 +145,42 @@ interface BinResult {
   label: string;
   min: number;
   max: number;
-  plValues: number[];
-  indicatorValues: number[];
+  yValues: number[];
+  xValues: number[];
 }
 
 function buildEqualFreqBins(
-  pairs: Array<{ indicatorValue: number; plValue: number }>,
+  pairs: Array<{ xValue: number; yValue: number }>,
   numBins: number
 ): BinResult[] {
-  if (pairs.length === 0) return [];
-  const sorted = [...pairs].sort((a, b) => a.indicatorValue - b.indicatorValue);
+  if (!pairs.length) return [];
+  const sorted = [...pairs].sort((a, b) => a.xValue - b.xValue);
   const n = sorted.length;
-  const bins: BinResult[] = [];
   const chunkSize = Math.ceil(n / numBins);
-
   const fmt = (v: number) =>
     new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(v);
-
+  const bins: BinResult[] = [];
   for (let i = 0; i < numBins; i++) {
     const start = i * chunkSize;
     const end = Math.min(start + chunkSize, n);
     if (start >= n) break;
     const chunk = sorted.slice(start, end);
-    const min = chunk[0].indicatorValue;
-    const max = chunk[chunk.length - 1].indicatorValue;
     bins.push({
-      label: `Bin ${i + 1}\n${fmt(min)} – ${fmt(max)}`,
-      min,
-      max,
-      plValues: chunk.map((p) => p.plValue),
-      indicatorValues: chunk.map((p) => p.indicatorValue),
+      label: `Bin ${i + 1}\n${fmt(chunk[0].xValue)} – ${fmt(chunk[chunk.length - 1].xValue)}`,
+      min: chunk[0].xValue,
+      max: chunk[chunk.length - 1].xValue,
+      yValues: chunk.map((p) => p.yValue),
+      xValues: chunk.map((p) => p.xValue),
     });
   }
   return bins;
 }
 
 // ============================================================
-// Types
+// OLS helper
 // ============================================================
 
-interface AnalysisResult {
-  bins: BinResult[];
-  pairs: Array<{
-    indicatorValue: number;
-    plValue: number;
-    dateOpened: Date;
-  }>;
-  spearman: { rho: number; pValue: number; n: number };
-  mi: number;
-  ks: { d: number; pValue: number };
-  selectedColumn: string;
-  numBins: number;
-}
-
-// ============================================================
-// OLS helper (inline, no external lib)
-// ============================================================
-
-function olsSlope(
-  x: number[],
-  y: number[]
-): { slope: number; intercept: number } {
+function olsSlope(x: number[], y: number[]): { slope: number; intercept: number } {
   const n = x.length;
   if (n < 2) return { slope: 0, intercept: y[0] ?? 0 };
   const sumX = x.reduce((s, v) => s + v, 0);
@@ -232,26 +190,129 @@ function olsSlope(
   const denom = n * sumX2 - sumX * sumX;
   if (Math.abs(denom) < 1e-12) return { slope: 0, intercept: sumY / n };
   const slope = (n * sumXY - sumX * sumY) / denom;
-  const intercept = (sumY - slope * sumX) / n;
-  return { slope, intercept };
+  return { slope, intercept: (sumY - slope * sumX) / n };
 }
 
 // ============================================================
-// Component
+// Types
+// ============================================================
+
+type AxisSource = "dataset" | "trade-pl";
+
+interface AnalysisResult {
+  bins: BinResult[];
+  pairs: Array<{ xValue: number; yValue: number; date: Date }>;
+  spearman: { rho: number; pValue: number; n: number };
+  mi: number;
+  ks: { d: number; pValue: number };
+  xLabel: string;
+  yLabel: string;
+  yIsPl: boolean;
+  numBins: number;
+}
+
+// ============================================================
+// Date helpers
+// ============================================================
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function joinDatasetsByDate(
+  rowsX: StaticDatasetRow[],
+  colX: string,
+  rowsY: StaticDatasetRow[],
+  colY: string
+): Array<{ xValue: number; yValue: number; date: Date }> {
+  const mapY = new Map<string, number>();
+  for (const row of rowsY) {
+    const raw = row.values[colY];
+    const v = typeof raw === "number" ? raw : parseFloat(String(raw));
+    if (isFinite(v)) mapY.set(dateKey(row.timestamp), v);
+  }
+  const pairs: Array<{ xValue: number; yValue: number; date: Date }> = [];
+  for (const row of rowsX) {
+    const raw = row.values[colX];
+    const xv = typeof raw === "number" ? raw : parseFloat(String(raw));
+    if (!isFinite(xv)) continue;
+    const yv = mapY.get(dateKey(row.timestamp));
+    if (yv === undefined) continue;
+    pairs.push({ xValue: xv, yValue: yv, date: row.timestamp });
+  }
+  return pairs;
+}
+
+// ============================================================
+// Constants
 // ============================================================
 
 const BIN_COLORS = [
-  "#3b82f6",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#8b5cf6",
-  "#06b6d4",
-  "#84cc16",
-  "#f97316",
-  "#ec4899",
-  "#14b8a6",
+  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+  "#06b6d4", "#84cc16", "#f97316", "#ec4899", "#14b8a6",
 ];
+
+// ============================================================
+// Sub-component: Dataset + Column selector
+// ============================================================
+
+function DatasetColumnSelect({
+  label,
+  datasets,
+  datasetId,
+  column,
+  onDatasetChange,
+  onColumnChange,
+}: {
+  label: string;
+  datasets: StaticDataset[];
+  datasetId: string;
+  column: string;
+  onDatasetChange: (v: string) => void;
+  onColumnChange: (v: string) => void;
+}) {
+  const ds = datasets.find((d) => d.id === datasetId) ?? null;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {label} — Dataset
+        </label>
+        <Select value={datasetId} onValueChange={onDatasetChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select dataset…" />
+          </SelectTrigger>
+          <SelectContent>
+            {datasets.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {label} — Column
+        </label>
+        <Select value={column} onValueChange={onColumnChange} disabled={!datasetId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select column…" />
+          </SelectTrigger>
+          <SelectContent>
+            {(ds?.columns ?? []).map((col) => (
+              <SelectItem key={col} value={col}>{col}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Main component
+// ============================================================
 
 export default function IndicatorAnalysisPage() {
   // --- Store ---
@@ -261,112 +322,131 @@ export default function IndicatorAnalysisPage() {
   const loadDatasets = useStaticDatasetsStore((s) => s.loadDatasets);
   const getDatasetRows = useStaticDatasetsStore((s) => s.getDatasetRows);
 
-  // --- Local state ---
+  // --- Axis state ---
+  const [xSource, setXSource] = useState<AxisSource>("dataset");
+  const [xDatasetId, setXDatasetId] = useState("");
+  const [xColumn, setXColumn] = useState("");
+
+  const [ySource, setYSource] = useState<AxisSource>("trade-pl");
+  const [yDatasetId, setYDatasetId] = useState("");
+  const [yColumn, setYColumn] = useState("");
+  const [yPlMetric, setYPlMetric] = useState<"total" | "perContract">("total");
+
+  const [numBins, setNumBins] = useState(5);
+
+  // --- UI toggles ---
+  const [showTimeSeries, setShowTimeSeries] = useState(false);
+
+  // --- Trade state ---
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradesLoading, setTradesLoading] = useState(false);
-  const [selectedDatasetId, setSelectedDatasetId] = useState("");
-  const [selectedColumn, setSelectedColumn] = useState("");
-  const [plMetric, setPlMetric] = useState<"total" | "perContract">("total");
-  const [numBins, setNumBins] = useState(5);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
-    null
-  );
+
+  // --- Result state ---
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [tooFewMatches, setTooFewMatches] = useState(false);
 
-  // --- Init datasets store ---
+  // --- Init ---
   useEffect(() => {
     if (!dsInitialized) loadDatasets().catch(console.error);
   }, [dsInitialized, loadDatasets]);
 
-  // --- Load trades when active block changes ---
+  const needsTrades = xSource === "trade-pl" || ySource === "trade-pl";
+
   useEffect(() => {
-    if (!activeBlockId) {
-      setTrades([]);
-      setAnalysisResult(null);
-      return;
-    }
+    if (!needsTrades || !activeBlockId) { setTrades([]); return; }
     setTradesLoading(true);
     setAnalysisResult(null);
     getTradesByBlock(activeBlockId)
       .then(setTrades)
       .catch(console.error)
       .finally(() => setTradesLoading(false));
-  }, [activeBlockId]);
+  }, [activeBlockId, needsTrades]);
 
-  // --- Reset column when dataset changes ---
-  useEffect(() => {
-    setSelectedColumn("");
-    setAnalysisResult(null);
-    setTooFewMatches(false);
-  }, [selectedDatasetId]);
+  useEffect(() => { setXColumn(""); setAnalysisResult(null); setTooFewMatches(false); }, [xDatasetId]);
+  useEffect(() => { setYColumn(""); setAnalysisResult(null); setTooFewMatches(false); }, [yDatasetId]);
+  useEffect(() => { setAnalysisResult(null); setTooFewMatches(false); }, [xSource, ySource]);
+
+  // --- canRun ---
+  const xReady = xSource === "trade-pl"
+    ? Boolean(activeBlockId && trades.length > 0 && !tradesLoading)
+    : Boolean(xDatasetId && xColumn);
+  const yReady = ySource === "trade-pl"
+    ? Boolean(activeBlockId && trades.length > 0 && !tradesLoading)
+    : Boolean(yDatasetId && yColumn);
+  const canRun = xReady && yReady && !isRunning;
 
   // --- Derived ---
-  const selectedDataset: StaticDataset | null = useMemo(
-    () => datasets.find((d) => d.id === selectedDatasetId) ?? null,
-    [datasets, selectedDatasetId]
-  );
+  const xDataset = useMemo(() => datasets.find((d) => d.id === xDatasetId) ?? null, [datasets, xDatasetId]);
+  const yDataset = useMemo(() => datasets.find((d) => d.id === yDatasetId) ?? null, [datasets, yDatasetId]);
 
-  const canRun = Boolean(
-    activeBlockId &&
-      selectedDataset &&
-      selectedColumn &&
-      trades.length > 0 &&
-      !tradesLoading
-  );
+  const xLabel = xSource === "trade-pl" ? "Trade P&L" : xColumn || xDataset?.name || "X";
+  const yLabel = ySource === "trade-pl"
+    ? (yPlMetric === "total" ? "P&L (Total)" : "P&L (per Contract)")
+    : yColumn || yDataset?.name || "Y";
 
   // --- Run analysis ---
   const runAnalysis = useCallback(async () => {
-    if (!activeBlockId || !selectedDataset || !selectedColumn) return;
     setIsRunning(true);
     setTooFewMatches(false);
     try {
-      const rows = await getDatasetRows(selectedDataset.id);
-      const matchResults = matchTradesToDataset(trades, selectedDataset, rows);
+      let pairs: Array<{ xValue: number; yValue: number; date: Date }> = [];
 
-      // Positional zip: matchResults[i] corresponds to trades[i]
-      const pairs = trades
-        .map((trade, i) => ({ trade, match: matchResults[i] }))
-        .filter(({ match }) => match.matchedRow !== null)
-        .flatMap(({ trade, match }) => {
-          const raw = match.matchedRow!.values[selectedColumn];
-          const iv = typeof raw === "number" ? raw : parseFloat(String(raw));
-          if (!isFinite(iv)) return [];
-          const pl =
-            plMetric === "total"
-              ? trade.pl
-              : trade.pl / Math.max(1, trade.numContracts);
-          return [
-            {
-              indicatorValue: iv,
-              plValue: pl,
-              dateOpened: trade.dateOpened,
-            },
-          ];
-        });
-
-      if (pairs.length < 4) {
-        setTooFewMatches(true);
-        setAnalysisResult(null);
-        return;
+      if (xSource === "dataset" && ySource === "trade-pl") {
+        if (!xDataset || !xColumn || !activeBlockId) return;
+        const rows = await getDatasetRows(xDataset.id);
+        const matchResults = matchTradesToDataset(trades, xDataset, rows);
+        pairs = trades
+          .map((trade, i) => ({ trade, match: matchResults[i] }))
+          .filter(({ match }) => match.matchedRow !== null)
+          .flatMap(({ trade, match }) => {
+            const raw = match.matchedRow!.values[xColumn];
+            const xv = typeof raw === "number" ? raw : parseFloat(String(raw));
+            if (!isFinite(xv)) return [];
+            const yv = yPlMetric === "total" ? trade.pl : trade.pl / Math.max(1, trade.numContracts);
+            return [{ xValue: xv, yValue: yv, date: trade.dateOpened }];
+          });
+      } else if (xSource === "trade-pl" && ySource === "dataset") {
+        if (!yDataset || !yColumn || !activeBlockId) return;
+        const rows = await getDatasetRows(yDataset.id);
+        const matchResults = matchTradesToDataset(trades, yDataset, rows);
+        pairs = trades
+          .map((trade, i) => ({ trade, match: matchResults[i] }))
+          .filter(({ match }) => match.matchedRow !== null)
+          .flatMap(({ trade, match }) => {
+            const raw = match.matchedRow!.values[yColumn];
+            const yv = typeof raw === "number" ? raw : parseFloat(String(raw));
+            if (!isFinite(yv)) return [];
+            const xv = yPlMetric === "total" ? trade.pl : trade.pl / Math.max(1, trade.numContracts);
+            return [{ xValue: xv, yValue: yv, date: trade.dateOpened }];
+          });
+      } else if (xSource === "dataset" && ySource === "dataset") {
+        if (!xDataset || !xColumn || !yDataset || !yColumn) return;
+        const [rowsX, rowsY] = await Promise.all([
+          getDatasetRows(xDataset.id),
+          getDatasetRows(yDataset.id),
+        ]);
+        pairs = joinDatasetsByDate(rowsX, xColumn, rowsY, yColumn);
+      } else {
+        if (!activeBlockId || !trades.length) return;
+        pairs = trades
+          .filter((t) => isFinite(t.pl))
+          .map((t) => ({ xValue: t.pl / Math.max(1, t.numContracts), yValue: t.pl, date: t.dateOpened }));
       }
 
-      const xArr = pairs.map((p) => p.indicatorValue);
-      const yArr = pairs.map((p) => p.plValue);
+      if (pairs.length < 4) { setTooFewMatches(true); setAnalysisResult(null); return; }
+
+      const xArr = pairs.map((p) => p.xValue);
+      const yArr = pairs.map((p) => p.yValue);
 
       setAnalysisResult({
-        bins: buildEqualFreqBins(
-          pairs.map((p) => ({
-            indicatorValue: p.indicatorValue,
-            plValue: p.plValue,
-          })),
-          numBins
-        ),
+        bins: buildEqualFreqBins(pairs.map((p) => ({ xValue: p.xValue, yValue: p.yValue })), numBins),
         pairs,
         spearman: spearmanR(xArr, yArr),
         mi: mutualInformation(xArr, yArr, numBins),
         ks: ksTest(xArr, yArr),
-        selectedColumn,
+        xLabel, yLabel,
+        yIsPl: ySource === "trade-pl",
         numBins,
       });
     } catch (err) {
@@ -374,51 +454,36 @@ export default function IndicatorAnalysisPage() {
     } finally {
       setIsRunning(false);
     }
-  }, [
-    activeBlockId,
-    selectedDataset,
-    selectedColumn,
-    trades,
-    plMetric,
-    numBins,
-    getDatasetRows,
-  ]);
+  }, [xSource, ySource, xDataset, xColumn, yDataset, yColumn, yPlMetric, trades, activeBlockId, numBins, xLabel, yLabel, getDatasetRows]);
 
-  // --- Bin table rows ---
+  // --- Bin table rows (with Sharpe + p-value) ---
   const binTableRows = useMemo(() => {
     if (!analysisResult) return [];
     return analysisResult.bins.map((bin, i) => {
-      const pnls = bin.plValues;
-      const wins = pnls.filter((v) => v > 0).length;
-      const avgPl = pnls.reduce((s, v) => s + v, 0) / pnls.length;
-      const sortedPnl = [...pnls].sort((a, b) => a - b);
-      const mid = Math.floor(sortedPnl.length / 2);
-      const median =
-        sortedPnl.length % 2 === 0
-          ? (sortedPnl[mid - 1] + sortedPnl[mid]) / 2
-          : sortedPnl[mid];
-      const variance =
-        pnls.reduce((s, v) => s + (v - avgPl) ** 2, 0) / pnls.length;
-      return {
-        binNum: i + 1,
-        label: bin.label.replace("\n", " "),
-        count: pnls.length,
-        avgPl,
-        winRate: (wins / pnls.length) * 100,
-        median,
-        stdDev: Math.sqrt(variance),
-      };
+      const ys = bin.yValues;
+      const n = ys.length;
+      const wins = ys.filter((v) => v > 0).length;
+      const avgY = ys.reduce((s, v) => s + v, 0) / n;
+      const sortedY = [...ys].sort((a, b) => a - b);
+      const mid = Math.floor(sortedY.length / 2);
+      const median = sortedY.length % 2 === 0
+        ? (sortedY[mid - 1] + sortedY[mid]) / 2
+        : sortedY[mid];
+      // Population std for Sharpe (consistent with bin display)
+      const variance = ys.reduce((s, v) => s + (v - avgY) ** 2, 0) / n;
+      const stdDev = Math.sqrt(variance);
+      const sharpe = stdDev > 1e-12 ? avgY / stdDev : NaN;
+      // Two-sided t-test H₀: μ = 0 (uses sample std, n-1)
+      const { pValue } = tTestOneSample(ys);
+      return { binNum: i + 1, label: bin.label.replace("\n", " "), count: n, avgY, winRate: (wins / n) * 100, median, stdDev, sharpe, pValue };
     });
   }, [analysisResult]);
 
-  // --- Summary stats ---
+  // --- Summary stats cards ---
   const summaryStats = useMemo(() => {
     if (!analysisResult) return null;
     const { spearman, mi, ks } = analysisResult;
-    const fmtP = (p: number) =>
-      p < 0.0001
-        ? "p < 0.0001"
-        : `p = ${p.toFixed(4)}`;
+    const fmtP = (p: number) => p < 0.0001 ? "p < 0.0001" : `p = ${p.toFixed(4)}`;
     return {
       spearman: {
         value: isFinite(spearman.rho) ? spearman.rho.toFixed(3) : "N/A",
@@ -442,224 +507,210 @@ export default function IndicatorAnalysisPage() {
     };
   }, [analysisResult]);
 
-  // --- Violin / Box chart ---
-  const [violinData, violinLayout] = useMemo((): [
-    Data[],
-    Partial<Layout>,
-  ] => {
+  // --- Time series charts (X over time, Y over time) ---
+  const [tsXData, tsXLayout] = useMemo((): [Data[], Partial<Layout>] => {
     if (!analysisResult) return [[], {}];
-    const { bins } = analysisResult;
-    const traces: Data[] = bins.map((bin, i) => {
-      const useViolin = bin.plValues.length >= 10;
-      return {
-        type: useViolin ? "violin" : "box",
-        y: bin.plValues,
-        name: bin.label.replace("\n", " "),
-        marker: { color: BIN_COLORS[i % BIN_COLORS.length] },
-        ...(useViolin
-          ? { box: { visible: true }, meanline: { visible: true } }
-          : {}),
-      } as Data;
-    });
-    const layout: Partial<Layout> = {
-      xaxis: { title: { text: analysisResult.selectedColumn } },
-      yaxis: { title: { text: "P&L" }, zeroline: true },
-      showlegend: false,
-    };
-    return [traces, layout];
+    const sorted = [...analysisResult.pairs].sort((a, b) => a.date.getTime() - b.date.getTime());
+    return [
+      [{
+        type: "scatter",
+        mode: "lines+markers",
+        name: analysisResult.xLabel,
+        x: sorted.map((p) => dateKey(p.date)),
+        y: sorted.map((p) => p.xValue),
+        line: { color: "#3b82f6", width: 1.5 },
+        marker: { size: 3 },
+      } as Data],
+      {
+        xaxis: { title: { text: "Date" } },
+        yaxis: { title: { text: analysisResult.xLabel }, zeroline: false },
+        showlegend: false,
+        hovermode: "x unified",
+      },
+    ];
   }, [analysisResult]);
 
-  // --- Scatter + OLS chart ---
-  const [scatterData, scatterLayout] = useMemo((): [
-    Data[],
-    Partial<Layout>,
-  ] => {
+  const [tsYData, tsYLayout] = useMemo((): [Data[], Partial<Layout>] => {
+    if (!analysisResult) return [[], {}];
+    const sorted = [...analysisResult.pairs].sort((a, b) => a.date.getTime() - b.date.getTime());
+    return [
+      [{
+        type: "scatter",
+        mode: "lines+markers",
+        name: analysisResult.yLabel,
+        x: sorted.map((p) => dateKey(p.date)),
+        y: sorted.map((p) => p.yValue),
+        line: { color: "#10b981", width: 1.5 },
+        marker: { size: 3 },
+        fill: analysisResult.yIsPl ? "tozeroy" : undefined,
+        fillcolor: analysisResult.yIsPl ? "rgba(16,185,129,0.08)" : undefined,
+      } as Data],
+      {
+        xaxis: { title: { text: "Date" } },
+        yaxis: { title: { text: analysisResult.yLabel }, zeroline: analysisResult.yIsPl },
+        showlegend: false,
+        hovermode: "x unified",
+      },
+    ];
+  }, [analysisResult]);
+
+  // --- Violin / Box chart ---
+  const [violinData, violinLayout] = useMemo((): [Data[], Partial<Layout>] => {
+    if (!analysisResult) return [[], {}];
+    const traces: Data[] = analysisResult.bins.map((bin, i) => ({
+      type: bin.yValues.length >= 10 ? "violin" : "box",
+      y: bin.yValues,
+      name: bin.label.replace("\n", " "),
+      marker: { color: BIN_COLORS[i % BIN_COLORS.length] },
+      ...(bin.yValues.length >= 10 ? { box: { visible: true }, meanline: { visible: true } } : {}),
+    } as Data));
+    return [traces, {
+      xaxis: { title: { text: analysisResult.xLabel } },
+      yaxis: { title: { text: analysisResult.yLabel }, zeroline: true },
+      showlegend: false,
+    }];
+  }, [analysisResult]);
+
+  // --- Scatter + OLS ---
+  const [scatterData, scatterLayout] = useMemo((): [Data[], Partial<Layout>] => {
     if (!analysisResult) return [[], {}];
     const { bins, pairs } = analysisResult;
-
     const scatterTraces: Data[] = bins.map((bin, i) => ({
-      type: "scatter",
-      mode: "markers",
+      type: "scatter", mode: "markers",
       name: bin.label.replace("\n", " "),
-      x: bin.indicatorValues,
-      y: bin.plValues,
-      marker: {
-        color: BIN_COLORS[i % BIN_COLORS.length],
-        size: 6,
-        opacity: 0.7,
-      },
+      x: bin.xValues, y: bin.yValues,
+      marker: { color: BIN_COLORS[i % BIN_COLORS.length], size: 6, opacity: 0.7 },
     }));
-
-    const xAll = pairs.map((p) => p.indicatorValue);
-    const yAll = pairs.map((p) => p.plValue);
+    const xAll = pairs.map((p) => p.xValue);
+    const yAll = pairs.map((p) => p.yValue);
     const { slope, intercept } = olsSlope(xAll, yAll);
-    const xMin = Math.min(...xAll);
-    const xMax = Math.max(...xAll);
-
-    const trendTrace: Data = {
-      type: "scatter",
-      mode: "lines",
-      name: "Trend (OLS)",
-      x: [xMin, xMax],
-      y: [slope * xMin + intercept, slope * xMax + intercept],
-      line: { color: "#94a3b8", dash: "dash", width: 2 },
-    };
-
-    const layout: Partial<Layout> = {
-      xaxis: { title: { text: analysisResult.selectedColumn } },
-      yaxis: { title: { text: "P&L" }, zeroline: true },
-      showlegend: true,
-      hovermode: "closest",
-    };
-
-    return [[...scatterTraces, trendTrace], layout];
+    const xMin = Math.min(...xAll), xMax = Math.max(...xAll);
+    return [
+      [...scatterTraces, {
+        type: "scatter", mode: "lines", name: "Trend (OLS)",
+        x: [xMin, xMax], y: [slope * xMin + intercept, slope * xMax + intercept],
+        line: { color: "#94a3b8", dash: "dash", width: 2 },
+      } as Data],
+      {
+        xaxis: { title: { text: analysisResult.xLabel } },
+        yaxis: { title: { text: analysisResult.yLabel }, zeroline: true },
+        showlegend: true, hovermode: "closest",
+      },
+    ];
   }, [analysisResult]);
 
-  // --- Rolling correlation chart ---
-  const [rollingData, rollingLayout] = useMemo((): [
-    Data[],
-    Partial<Layout>,
-  ] => {
+  // --- Rolling correlation ---
+  const [rollingData, rollingLayout] = useMemo((): [Data[], Partial<Layout>] => {
     if (!analysisResult) return [[], {}];
-    const { pairs } = analysisResult;
-
-    const sorted = [...pairs].sort(
-      (a, b) => a.dateOpened.getTime() - b.dateOpened.getTime()
-    );
+    const sorted = [...analysisResult.pairs].sort((a, b) => a.date.getTime() - b.date.getTime());
     if (sorted.length < 30) return [[], {}];
-
     const WINDOW = 30;
-    const xDates: string[] = [];
-    const yCorrs: number[] = [];
-
+    const xDates: string[] = [], yCorrs: number[] = [];
     for (let i = WINDOW - 1; i < sorted.length; i++) {
       const win = sorted.slice(i - WINDOW + 1, i + 1);
-      const wx = win.map((p) => p.indicatorValue);
-      const wy = win.map((p) => p.plValue);
-      const { rho } = spearmanR(wx, wy);
-      if (isFinite(rho)) {
-        // Use local date string to preserve calendar date (Eastern Time)
-        const d = sorted[i].dateOpened;
-        xDates.push(
-          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-        );
-        yCorrs.push(rho);
-      }
+      const { rho } = spearmanR(win.map((p) => p.xValue), win.map((p) => p.yValue));
+      if (isFinite(rho)) { xDates.push(dateKey(sorted[i].date)); yCorrs.push(rho); }
     }
-
-    if (xDates.length === 0) return [[], {}];
-
-    const trace: Data = {
-      type: "scatter",
-      mode: "lines",
-      name: "Rolling Spearman r",
-      x: xDates,
-      y: yCorrs,
-      line: { color: "#3b82f6", width: 2 },
-    };
-
-    const layout: Partial<Layout> = {
-      xaxis: { title: { text: "Date" } },
-      yaxis: { title: { text: "Spearman r" }, range: [-1, 1], zeroline: true },
-      showlegend: false,
-      shapes: [
-        {
-          type: "line",
-          x0: xDates[0],
-          x1: xDates[xDates.length - 1],
-          y0: 0,
-          y1: 0,
-          line: { color: "#94a3b8", dash: "dot", width: 1 },
-        },
-      ],
-    };
-
-    return [[trace], layout];
+    if (!xDates.length) return [[], {}];
+    return [
+      [{ type: "scatter", mode: "lines", name: "Rolling Spearman r", x: xDates, y: yCorrs, line: { color: "#3b82f6", width: 2 } } as Data],
+      {
+        xaxis: { title: { text: "Date" } },
+        yaxis: { title: { text: "Spearman r" }, range: [-1, 1], zeroline: true },
+        showlegend: false,
+        shapes: [{ type: "line", x0: xDates[0], x1: xDates[xDates.length - 1], y0: 0, y1: 0, line: { color: "#94a3b8", dash: "dot", width: 1 } }],
+      },
+    ];
   }, [analysisResult]);
 
   // ============================================================
   // Render
   // ============================================================
 
+  const showNoActiveBlock = needsTrades && !activeBlockId;
+
   return (
     <div className="space-y-6">
-      {/* Controls */}
+
+      {/* ── Controls ── */}
       <Card>
         <CardHeader>
           <CardTitle>Controls</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-            {/* Dataset */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Dataset</label>
-              <Select
-                value={selectedDatasetId}
-                onValueChange={setSelectedDatasetId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select dataset…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {datasets.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+
+            {/* X-Axis panel */}
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded text-xs font-bold bg-primary text-primary-foreground">X</span>
+                <span className="font-medium text-sm">X-Axis</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Source</label>
+                <Select value={xSource} onValueChange={(v) => setXSource(v as AxisSource)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dataset">Static Dataset</SelectItem>
+                    <SelectItem value="trade-pl">Trade P&L</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {xSource === "dataset" ? (
+                <DatasetColumnSelect label="X" datasets={datasets} datasetId={xDatasetId} column={xColumn} onDatasetChange={setXDatasetId} onColumnChange={setXColumn} />
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">P&L Metric</label>
+                  <Select value={yPlMetric} onValueChange={(v) => setYPlMetric(v as "total" | "perContract")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="total">Total P&L</SelectItem>
+                      <SelectItem value="perContract">P&L per Contract</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
-            {/* Indicator Column */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Indicator Column</label>
-              <Select
-                value={selectedColumn}
-                onValueChange={setSelectedColumn}
-                disabled={!selectedDatasetId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select column…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(selectedDataset?.columns ?? []).map((col) => (
-                    <SelectItem key={col} value={col}>
-                      {col}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Y-Axis panel */}
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded text-xs font-bold bg-primary text-primary-foreground">Y</span>
+                <span className="font-medium text-sm">Y-Axis</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Source</label>
+                <Select value={ySource} onValueChange={(v) => setYSource(v as AxisSource)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trade-pl">Trade P&L</SelectItem>
+                    <SelectItem value="dataset">Static Dataset</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {ySource === "trade-pl" ? (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">P&L Metric</label>
+                  <Select value={yPlMetric} onValueChange={(v) => setYPlMetric(v as "total" | "perContract")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="total">Total P&L</SelectItem>
+                      <SelectItem value="perContract">P&L per Contract</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <DatasetColumnSelect label="Y" datasets={datasets} datasetId={yDatasetId} column={yColumn} onDatasetChange={setYDatasetId} onColumnChange={setYColumn} />
+              )}
             </div>
+          </div>
 
-            {/* P&L Metric */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">P&L Metric</label>
-              <Select
-                value={plMetric}
-                onValueChange={(v) =>
-                  setPlMetric(v as "total" | "perContract")
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="total">Total P&L</SelectItem>
-                  <SelectItem value="perContract">P&L per Contract</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Bins */}
+          {/* Bins + Run + Time Series toggle */}
+          <div className="flex flex-wrap items-end gap-4 pt-1">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Bins</label>
-              <Select
-                value={String(numBins)}
-                onValueChange={(v) => setNumBins(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={String(numBins)} onValueChange={(v) => setNumBins(Number(v))}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="3">3</SelectItem>
                   <SelectItem value="5">5 (default)</SelectItem>
@@ -667,73 +718,69 @@ export default function IndicatorAnalysisPage() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="mt-4 flex items-center gap-3">
             <Button onClick={runAnalysis} disabled={!canRun || isRunning}>
               {isRunning ? "Running…" : "Run Analysis"}
             </Button>
+            <Button
+              variant={showTimeSeries ? "default" : "outline"}
+              onClick={() => setShowTimeSeries((v) => !v)}
+              disabled={!analysisResult}
+              className="ml-auto"
+            >
+              {showTimeSeries ? "Hide Time Series" : "Show Time Series"}
+            </Button>
             {tradesLoading && (
-              <span className="text-sm text-muted-foreground">
-                Loading trades…
-              </span>
+              <span className="text-sm text-muted-foreground self-end pb-1">Loading trades…</span>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* No active block */}
-      {!activeBlockId ? (
-        <NoActiveBlock description="Select a block to run indicator correlation analysis." />
+      {/* ── Optional: Time Series charts (directly after Controls) ── */}
+      {showTimeSeries && analysisResult && (
+        <>
+          <ChartWrapper
+            title={`${analysisResult.xLabel} over Time`}
+            description="X-axis values sorted by date."
+            data={tsXData}
+            layout={tsXLayout}
+          />
+          <ChartWrapper
+            title={`${analysisResult.yLabel} over Time`}
+            description="Y-axis values sorted by date."
+            data={tsYData}
+            layout={tsYLayout}
+          />
+        </>
+      )}
+
+      {/* ── No active block ── */}
+      {showNoActiveBlock ? (
+        <NoActiveBlock description="Select a block to use Trade P&L as an axis." />
       ) : (
         <>
-          {/* Too few matches warning */}
           {tooFewMatches && (
             <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
               <CardContent className="pt-4 text-sm text-amber-700 dark:text-amber-400">
-                Not enough matched trades (&lt; 4) for the selected indicator
-                column. Check that the dataset date range overlaps with your
-                block and that the column contains numeric values.
+                Not enough matched data points (&lt; 4). Check that the dataset(s) and block date ranges overlap, and that the selected columns contain numeric values.
               </CardContent>
             </Card>
           )}
 
-          {/* Results */}
           {analysisResult && summaryStats && (
             <>
               {/* Summary cards */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <MetricCard
-                  title="Spearman r"
-                  value={summaryStats.spearman.value}
-                  subtitle={summaryStats.spearman.subtitle}
-                  isPositive={summaryStats.spearman.isPositive}
-                  format="decimal"
-                  decimalPlaces={3}
-                />
-                <MetricCard
-                  title="Mutual Information"
-                  value={summaryStats.mi.value}
-                  subtitle={summaryStats.mi.subtitle}
-                  isPositive={summaryStats.mi.isPositive}
-                  format="decimal"
-                  decimalPlaces={3}
-                />
-                <MetricCard
-                  title="KS Statistic"
-                  value={summaryStats.ks.value}
-                  subtitle={summaryStats.ks.subtitle}
-                  isPositive={summaryStats.ks.isPositive}
-                  format="decimal"
-                  decimalPlaces={3}
-                />
+                <MetricCard title="Spearman r" value={summaryStats.spearman.value} subtitle={summaryStats.spearman.subtitle} isPositive={summaryStats.spearman.isPositive} format="decimal" decimalPlaces={3} />
+                <MetricCard title="Mutual Information" value={summaryStats.mi.value} subtitle={summaryStats.mi.subtitle} isPositive={summaryStats.mi.isPositive} format="decimal" decimalPlaces={3} />
+                <MetricCard title="KS Statistic" value={summaryStats.ks.value} subtitle={summaryStats.ks.subtitle} isPositive={summaryStats.ks.isPositive} format="decimal" decimalPlaces={3} />
               </div>
 
               {/* Bin table */}
               <Card>
                 <CardHeader>
                   <CardTitle>
-                    Bin Summary — {analysisResult.selectedColumn}
+                    Bin Summary — {analysisResult.xLabel} → {analysisResult.yLabel}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -742,44 +789,46 @@ export default function IndicatorAnalysisPage() {
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
                           <th className="pb-2 pr-4">Bin</th>
-                          <th className="pb-2 pr-4">Range</th>
-                          <th className="pb-2 pr-4">Trades</th>
-                          <th className="pb-2 pr-4">Avg P&L</th>
-                          <th className="pb-2 pr-4">Win %</th>
-                          <th className="pb-2 pr-4">Median P&L</th>
-                          <th className="pb-2">Std Dev</th>
+                          <th className="pb-2 pr-4">X Range</th>
+                          <th className="pb-2 pr-4">n</th>
+                          <th className="pb-2 pr-4">Avg {analysisResult.yLabel}</th>
+                          {analysisResult.yIsPl && <th className="pb-2 pr-4">Win %</th>}
+                          <th className="pb-2 pr-4">Median</th>
+                          <th className="pb-2 pr-4">Std Dev</th>
+                          <th className="pb-2 pr-4">Sharpe</th>
+                          <th className="pb-2">p-value</th>
                         </tr>
                       </thead>
                       <tbody>
                         {binTableRows.map((row) => (
-                          <tr
-                            key={row.binNum}
-                            className="border-b last:border-0"
-                          >
-                            <td className="py-2 pr-4 font-medium">
-                              {row.binNum}
-                            </td>
-                            <td className="py-2 pr-4 text-muted-foreground">
-                              {row.label}
-                            </td>
+                          <tr key={row.binNum} className="border-b last:border-0">
+                            <td className="py-2 pr-4 font-medium">{row.binNum}</td>
+                            <td className="py-2 pr-4 text-muted-foreground">{row.label}</td>
                             <td className="py-2 pr-4">{row.count}</td>
-                            <td
-                              className={cn(
-                                "py-2 pr-4 font-medium",
-                                row.avgPl >= 0
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              )}
-                            >
-                              {row.avgPl.toFixed(2)}
+                            <td className={cn("py-2 pr-4 font-medium",
+                              analysisResult.yIsPl ? (row.avgY >= 0 ? "text-green-600" : "text-red-600") : ""
+                            )}>
+                              {row.avgY.toFixed(2)}
                             </td>
-                            <td className="py-2 pr-4">
-                              {row.winRate.toFixed(1)}%
+                            {analysisResult.yIsPl && (
+                              <td className="py-2 pr-4">{row.winRate.toFixed(1)}%</td>
+                            )}
+                            <td className="py-2 pr-4">{row.median.toFixed(2)}</td>
+                            <td className="py-2 pr-4">{row.stdDev.toFixed(2)}</td>
+                            <td className={cn("py-2 pr-4 font-medium",
+                              isFinite(row.sharpe)
+                                ? row.sharpe >= 0.5 ? "text-green-600" : row.sharpe <= -0.5 ? "text-red-600" : ""
+                                : "text-muted-foreground"
+                            )}>
+                              {isFinite(row.sharpe) ? row.sharpe.toFixed(2) : "—"}
                             </td>
-                            <td className="py-2 pr-4">
-                              {row.median.toFixed(2)}
+                            <td className={cn("py-2",
+                              isFinite(row.pValue) && row.pValue < 0.05 ? "font-medium" : "text-muted-foreground"
+                            )}>
+                              {isFinite(row.pValue)
+                                ? `${row.pValue < 0.0001 ? "<0.0001" : row.pValue.toFixed(4)}${sigStars(row.pValue)}`
+                                : "—"}
                             </td>
-                            <td className="py-2">{row.stdDev.toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -788,18 +837,18 @@ export default function IndicatorAnalysisPage() {
                 </CardContent>
               </Card>
 
-              {/* Violin / Box chart */}
+              {/* Violin / Box */}
               <ChartWrapper
-                title="P&L Distribution by Bin"
-                description="Equal-frequency bins. Violin when n ≥ 10 per bin, box otherwise."
+                title={`Y Distribution by Bin — ${analysisResult.yLabel}`}
+                description="Equal-frequency bins along X-axis. Violin when n ≥ 10 per bin, box otherwise."
                 data={violinData}
                 layout={violinLayout}
               />
 
               {/* Scatter + OLS */}
               <ChartWrapper
-                title={`Indicator vs P&L — ${analysisResult.selectedColumn}`}
-                description="Each point is a matched trade. Dashed line is OLS regression."
+                title={`${analysisResult.xLabel} vs ${analysisResult.yLabel}`}
+                description="Each point is one matched data pair. Dashed line is OLS regression."
                 data={scatterData}
                 layout={scatterLayout}
               />
@@ -807,8 +856,8 @@ export default function IndicatorAnalysisPage() {
               {/* Rolling correlation */}
               {rollingData.length > 0 && (
                 <ChartWrapper
-                  title="Rolling Correlation (30-trade window)"
-                  description="Spearman r over a sliding window of 30 trades, sorted by open date."
+                  title="Rolling Correlation (30-point window)"
+                  description="Spearman r over a sliding window of 30 data points, sorted by date."
                   data={rollingData}
                   layout={rollingLayout}
                 />
