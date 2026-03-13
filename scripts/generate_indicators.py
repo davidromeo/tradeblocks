@@ -1,20 +1,98 @@
 #!/usr/bin/env python3
 """
-generate_indicators.py — Minimal custom indicator generator for TradeBlocks.
+generate_indicators.py — Custom indicator generator for TradeBlocks 0DTE strategies.
 
-Produces a CSV with three columns:
-  date, VIX_MA20_Ratio, VRP_daily, VRP_MA20
+OUTPUT COLUMNS
+--------------
+  date            Trading date
+  VIX_MA20_Ratio  Regime filter based on VIX level
+  VRP_daily       Daily Volatility Risk Premium (annualised %)
+  VRP_MA20        20-day MA of VRP_daily
+  MRP_realized    Daily Move Risk Premium (dollars, ex-post)
+  MRP_MA20        20-day MA of MRP_realized  ← primary regime signal
 
-VIX_MA20_Ratio  = VIX / 20-day rolling mean of VIX
-VRP_daily       = Implied Volatility − Garman-Klass Realised Volatility
-VRP_MA20        = 20-day rolling mean of VRP_daily
+════════════════════════════════════════════════════════════════════
+VRP — Volatility Risk Premium  (annualised %)
+════════════════════════════════════════════════════════════════════
+VRP_daily = IV − RV
 
+  IV  (Implied Volatility, annualised %)
+  ───────────────────────────────────────
+  Derived by inverting the Black-Scholes ATM straddle formula:
+
+      Straddle_price = BS_Call(S, K, T, σ) + BS_Put(S, K, T, σ)
+
+  where:
+      S  = SPX price at 09:45 (Opening Price from tradelog)
+      K  = Strike (nearest integer, from Legs field)
+      T  = 375 / 390 / 252  (trading minutes remaining / mins per day / days per year)
+           = 0.003816 years  (09:45 → 16:00 = 375 trading minutes)
+      σ  = solved numerically via Brent's method → this is IV (annualised)
+
+  ATM approximation (for intuition):
+      Straddle_price ≈ S · σ · √T · √(2/π)   [factor √(2/π) ≈ 0.7979]
+      Implied move   = S · σ · √T             [≈ Straddle_price · 1.2533]
+
+  Note: IV is annualised (like VIX). To get today's expected move in %:
+      σ_today = IV · √T = IV · √(375/390/252)
+
+  RV  (Realised Volatility, intraday-only Garman-Klass, annualised %)
+  ────────────────────────────────────────────────────────────────────
+  Uses only the intraday components of the Garman-Klass estimator:
+
+      var = 0.5 · ln(H/L)²  −  (2·ln2 − 1) · ln(C/O)²
+      RV  = √(var · 252) · 100
+
+  where O/H/L/C are the SPX daily OHLC bars (from yfinance ^GSPC).
+
+  IMPORTANT — overnight gap excluded intentionally:
+  The full GK estimator also includes the overnight gap ln(O/C_prev)²,
+  which adds ~4 pp annualised to RV on average. A 0DTE straddle entered
+  at 09:45 carries NO overnight gap risk (the gap has already occurred),
+  so including it would create a spurious negative VRP bias. Only the
+  intraday components (H/L range and O-to-C move) are comparable to IV.
+
+  VRP interpretation:
+      VRP > 0  →  IV > RV  →  options overpriced vs realised vol  →  good for short premium
+      VRP_MA20 used as regime filter (sustained premium environment)
+      Typical range: −5% to +15%, median ~1.4% annualised
+
+════════════════════════════════════════════════════════════════════
+MRP — Move Risk Premium  (dollars, ex-post)
+════════════════════════════════════════════════════════════════════
+MRP_realized = Straddle_entry_price − |SPX_close − Strike|
+
+  where:
+      Straddle_entry_price  = Premium / 100  (tradelog Premium is in cents × 100)
+                            = implied move priced by market at 09:45
+      |SPX_close − Strike|  = intrinsic value at expiry
+                            = realized move (distance close landed from strike)
+
+  MRP_realized is the ex-post dollar profit per share of the short straddle
+  (before commissions), assuming held to expiry at 16:00.
+  Relationship to P&L:  P&L = MRP_realized × 100  (1 contract = 100 shares)
+
+  Correlation with daily P&L: ~0.9998 (near-perfect by construction)
+
+  MRP_MA20 interpretation:
+      MRP_MA20 > 0  →  market systematically overestimates daily moves
+                     →  move risk premium is being harvested  →  good regime
+      MRP_MA20 < 0  →  realized moves exceed implied  →  avoid or reduce size
+      Typical range: −$10 to +$15, median ~$4 per share
+
+  Difference from VRP:
+      VRP measures vol premium in annualised % space  (signal, forward-looking feel)
+      MRP measures dollar premium actually earned     (P&L attribution, ex-post)
+      Correlation between VRP_MA20 and MRP_MA20: ~0.47 (related but distinct)
+      They diverge when intraday path vol is high but close lands near strike.
+
+════════════════════════════════════════════════════════════════════
 Usage
------
+════════════════════════════════════════════════════════════════════
 # Only VIX_MA20_Ratio (no tradelog needed):
 python generate_indicators.py --output custom_indicators.csv
 
-# With VRP (requires OptionOmega tradelog):
+# With VRP + MRP (requires OptionOmega tradelog):
 python generate_indicators.py --tradelog /path/to/tradelog.csv --output custom_indicators.csv
 
 # With local SPX OHLC CSV instead of yfinance download:
@@ -82,10 +160,19 @@ def _iv_from_straddle(S, K, T, straddle_price):
         return np.nan
 
 
-# ── Garman-Klass realised volatility ────────────────────────────────────────
+# ── Garman-Klass realised volatility (intraday only, no overnight gap) ─────
 
 def _gk_rv(O, H, L, C):
-    """Annualised Garman-Klass RV (%)."""
+    """Annualised intraday-only Garman-Klass RV (%).
+
+    Uses only H/L range and C/O (open-to-close) components.
+    Deliberately excludes the overnight gap (O / C_prev) so that RV is
+    directly comparable to the IV implied from a 0DTE straddle entered at
+    09:45, which carries no overnight gap risk. Including the gap inflates
+    RV by ~4 pp annualised, creating a spurious negative VRP bias.
+
+    Formula:  var = 0.5 * ln(H/L)^2  -  (2*ln2 - 1) * ln(C/O)^2
+    """
     hl = np.log(H / L)
     co = np.log(C / O)
     var = 0.5 * hl**2 - (2 * np.log(2) - 1) * co**2
@@ -133,10 +220,18 @@ def _download_vix(start, end):
 
 
 def _compute_vrp(tradelog_path, spx_source=None):
+    """Return (vrp_series, mrp_series).
+
+    VRP_daily    = IV (annualised %) - GK Intraday RV (annualised %)
+    MRP_realized = straddle_entry_price - |SPX_close - Strike|  (dollars)
+                   ex-post: known only after market close.
+                   MRP_MA20 > 0 over time signals a harvestabl move risk premium.
+    """
     snaps = _load_vrp_snapshots(tradelog_path)
+    empty = pd.Series(dtype=float), pd.Series(dtype=float)
     if snaps.empty:
-        print("  [VRP] No 09:45 snapshots found — skipping VRP")
-        return pd.Series(dtype=float)
+        print("  [VRP] No 09:45 snapshots found — skipping VRP/MRP")
+        return empty
 
     print(f"  [VRP] {len(snaps)} snapshots "
           f"({snaps.index.min().date()} → {snaps.index.max().date()})")
@@ -155,19 +250,26 @@ def _compute_vrp(tradelog_path, spx_source=None):
         raw.index = pd.to_datetime(raw.index).normalize()
         spx = raw[["Open", "High", "Low", "Close"]].rename(columns=str.lower)
 
-    results = {}
+    vrp_results = {}
+    mrp_results = {}
     for date, row in snaps.iterrows():
         if date not in spx.index:
             continue
         ohlc = spx.loc[date]
-        rv = _gk_rv(ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"])
-        iv = _iv_from_straddle(row["S"], row["K"], row["T"], row["straddle_price"])
+        rv  = _gk_rv(ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"])
+        iv  = _iv_from_straddle(row["S"], row["K"], row["T"], row["straddle_price"])
         if not np.isnan(iv):
-            results[date] = iv - rv
+            vrp_results[date] = iv - rv
+        # MRP: straddle entry price minus realized move (dollars, ex-post)
+        spx_close = float(ohlc["close"])
+        realized_move = abs(spx_close - row["K"])
+        mrp_results[date] = row["straddle_price"] - realized_move
 
-    vrp = pd.Series(results, name="VRP_daily").sort_index()
-    print(f"  [VRP] {len(vrp)} values (mean={vrp.mean():.2f}, median={vrp.median():.2f})")
-    return vrp
+    vrp = pd.Series(vrp_results, name="VRP_daily").sort_index()
+    mrp = pd.Series(mrp_results, name="MRP_realized").sort_index()
+    print(f"  [VRP] {len(vrp)} values  mean={vrp.mean():.2f}  median={vrp.median():.2f}")
+    print(f"  [MRP] {len(mrp)} values  mean={mrp.mean():.2f}  median={mrp.median():.2f}")
+    return vrp, mrp
 
 
 def build(start, end, ma_window=20, tradelog_path=None, spx_source=None):
@@ -180,14 +282,18 @@ def build(start, end, ma_window=20, tradelog_path=None, spx_source=None):
 
     df = pd.DataFrame({"VIX_MA20_Ratio": ratio})
     df.index.name = "date"
-    df["VRP_daily"] = np.nan
-    df["VRP_MA20"] = np.nan
+    df["VRP_daily"]    = np.nan
+    df["VRP_MA20"]     = np.nan
+    df["MRP_realized"] = np.nan
+    df["MRP_MA20"]     = np.nan
 
     if tradelog_path:
-        print("[3] Computing VRP (IV − Garman-Klass RV) ...")
-        vrp = _compute_vrp(tradelog_path, spx_source=spx_source)
-        df["VRP_daily"] = vrp.round(4)
-        df["VRP_MA20"] = df["VRP_daily"].rolling(ma_window).mean().round(4)
+        print("[3] Computing VRP (IV − Garman-Klass Intraday RV) and MRP (implied − realized move) ...")
+        vrp, mrp = _compute_vrp(tradelog_path, spx_source=spx_source)
+        df["VRP_daily"]    = vrp.round(4)
+        df["VRP_MA20"]     = df["VRP_daily"].rolling(ma_window).mean().round(4)
+        df["MRP_realized"] = mrp.round(4)
+        df["MRP_MA20"]     = df["MRP_realized"].rolling(ma_window).mean().round(4)
 
     print(f"[done] {len(df)} rows, {df['VIX_MA20_Ratio'].notna().sum()} valid ratio values")
     return df
