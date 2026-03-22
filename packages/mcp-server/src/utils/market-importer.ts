@@ -732,14 +732,14 @@ export async function importFromMassive(
       assetClass: resolvedClass,
     });
 
-    // MassiveBarRow fields already match market.daily column names
+    // MassiveBarRow fields mapped to market.daily schema columns.
+    // Volume is intentionally omitted — market.daily schema has no volume column.
     const mappedRows: Array<Record<string, unknown>> = rows.map((row) => ({
       date: row.date,
       open: row.open,
       high: row.high,
       low: row.low,
       close: row.close,
-      volume: row.volume,
       ticker: row.ticker,
     }));
 
