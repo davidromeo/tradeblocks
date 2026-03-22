@@ -8,6 +8,7 @@
  */
 
 import type { MassiveBarRow } from './massive-client.js';
+import { computeLegGreeks, type GreeksResult } from './black-scholes.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +35,24 @@ export interface PnlPoint {
   timestamp: string;       // "YYYY-MM-DD HH:MM" ET
   strategyPnl: number;     // Combined P&L across all legs at this minute
   legPrices: number[];     // HL2 mark price for each leg at this minute
+  // Per-leg greeks (Phase 69) — array parallel to legPrices
+  legGreeks?: GreeksResult[];
+  // Net position greeks — quantity-weighted aggregation across legs
+  netDelta?: number | null;
+  netGamma?: number | null;
+  netTheta?: number | null;
+  netVega?: number | null;
+  // IVP from market.context
+  ivp?: number | null;
+}
+
+/** Configuration for greeks computation in P&L path. */
+export interface GreeksConfig {
+  underlyingPrices: Map<string, number>;  // timestamp -> underlying price
+  legs: Array<{ strike: number; type: 'C' | 'P'; expiryDate: string }>;  // per-leg BS inputs
+  riskFreeRate: number;       // e.g. 0.045
+  dividendYield: number;      // e.g. 0.015 for SPX, 0 otherwise
+  ivpByDate?: Map<string, number>;  // date -> IVP value
 }
 
 /** Complete replay result with P&L path, MFE/MAE, and metadata. */
@@ -241,6 +260,7 @@ export function buildOccTicker(
 export function computeStrategyPnlPath(
   legs: ReplayLeg[],
   barsByLeg: MassiveBarRow[][],
+  greeksConfig?: GreeksConfig,
 ): PnlPoint[] {
   if (legs.length === 0 || barsByLeg.length === 0) return [];
 
@@ -293,7 +313,79 @@ export function computeStrategyPnlPath(
     }
 
     if (complete) {
-      path.push({ timestamp: ts, strategyPnl, legPrices });
+      const point: PnlPoint = { timestamp: ts, strategyPnl, legPrices };
+
+      // Compute greeks if config provided
+      if (greeksConfig) {
+        // Look up underlying price — try full timestamp first, then date-only (daily fallback)
+        let underlyingPrice = greeksConfig.underlyingPrices.get(ts);
+        if (underlyingPrice === undefined) {
+          const dateOnly = ts.split(' ')[0];
+          underlyingPrice = greeksConfig.underlyingPrices.get(dateOnly);
+        }
+
+        if (underlyingPrice !== undefined) {
+          const legGreeksArr: GreeksResult[] = [];
+          let netDelta = 0, netGamma = 0, netTheta = 0, netVega = 0;
+          let allNull = true;
+
+          for (let j = 0; j < legs.length; j++) {
+            const legCfg = greeksConfig.legs[j];
+            if (!legCfg || !legCfg.expiryDate) {
+              legGreeksArr.push({ delta: null, gamma: null, theta: null, vega: null, iv: null });
+              continue;
+            }
+
+            // Compute fractional DTE from bar timestamp to leg expiry
+            const dateStr = ts.split(' ')[0];
+            const timePart = ts.split(' ')[1] ?? '09:30';
+            const [eyy, emm, edd] = legCfg.expiryDate.split('-').map(Number);
+            const [byy, bmm, bdd] = dateStr.split('-').map(Number);
+            const [hh, min] = timePart.split(':').map(Number);
+
+            const expiryMs = new Date(eyy, emm - 1, edd).getTime();
+            const barMs = new Date(byy, bmm - 1, bdd).getTime() + (hh * 60 + min) * 60 * 1000;
+            const dte = (expiryMs - barMs) / (1000 * 60 * 60 * 24);
+
+            if (dte <= 0) {
+              legGreeksArr.push({ delta: null, gamma: null, theta: null, vega: null, iv: null });
+              continue;
+            }
+
+            const g = computeLegGreeks(
+              legPrices[j],
+              underlyingPrice,
+              legCfg.strike,
+              dte,
+              legCfg.type,
+              greeksConfig.riskFreeRate,
+              greeksConfig.dividendYield,
+            );
+            legGreeksArr.push(g);
+
+            if (g.delta !== null) {
+              allNull = false;
+              const weight = legs[j].quantity * legs[j].multiplier / 100;
+              netDelta += g.delta * weight;
+              netGamma += g.gamma! * weight;
+              netTheta += g.theta! * weight;
+              netVega += g.vega! * weight;
+            }
+          }
+
+          point.legGreeks = legGreeksArr;
+          point.netDelta = allNull ? null : netDelta;
+          point.netGamma = allNull ? null : netGamma;
+          point.netTheta = allNull ? null : netTheta;
+          point.netVega = allNull ? null : netVega;
+
+          // IVP lookup by date
+          const ivpDate = ts.split(' ')[0];
+          point.ivp = greeksConfig.ivpByDate?.get(ivpDate) ?? null;
+        }
+      }
+
+      path.push(point);
     }
   }
 

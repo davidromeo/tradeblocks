@@ -200,6 +200,7 @@ export {
   type PnlPoint,
   type ParsedLeg,
   type ParsedLegOO,
+  type GreeksConfig,
 } from './utils/trade-replay.js';
 
 // Export trade replay tool handler and schema for integration testing (Phase 68)
