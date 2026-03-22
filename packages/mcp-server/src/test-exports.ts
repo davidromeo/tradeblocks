@@ -167,3 +167,21 @@ export {
   handleRegimeAllocationAdvisor,
   regimeAllocationAdvisorSchema,
 } from './tools/regime-advisor.js';
+
+// Export Massive.com API client utilities for unit testing (Phase 66)
+export {
+  fetchBars,
+  toMassiveTicker,
+  fromMassiveTicker,
+  massiveTimestampToETDate,
+  MassiveBarSchema,
+  MassiveAggregateResponseSchema,
+  MASSIVE_BASE_URL,
+  MASSIVE_MAX_LIMIT,
+  MASSIVE_MAX_PAGES,
+  type MassiveBar,
+  type MassiveAggregateResponse,
+  type MassiveBarRow,
+  type MassiveAssetClass,
+  type FetchBarsOptions,
+} from './utils/massive-client.js';

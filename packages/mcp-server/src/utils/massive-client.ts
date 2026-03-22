@@ -1,21 +1,21 @@
 /**
  * massive-client.ts
  *
- * Pure utility layer for the Massive.com (formerly Polygon.io) REST API adapter.
+ * HTTP adapter layer for the Massive.com (formerly Polygon.io) REST API.
  *
  * This module provides:
  * - TypeScript types and Zod validation schemas for API responses
  * - Bidirectional ticker normalization (plain storage format ↔ Massive API format)
  * - Unix millisecond timestamp to Eastern Time date string conversion
- *
- * All exports are pure functions or values with no HTTP, fetch, or side effects.
- * The HTTP client layer (Plan 02) imports from this module to map API responses
- * to DuckDB storage rows.
+ * - fetchBars() — HTTP client function for the aggregates endpoint with pagination,
+ *   rate-limit retry, Zod validation, and error handling
  *
  * Key design decisions (per Phase 66 CONTEXT.md):
- * - D-09/D-10/D-11: Ticker prefixes (I: for indices, O: for options) are managed
- *   here — callers always use plain tickers (VIX, SPX, AAPL).
- * - adjusted=false is enforced at the HTTP call site (Plan 02).
+ * - D-01/D-02/D-03: API key read at call site via process.env.MASSIVE_API_KEY
+ * - D-05: Pagination loop guard with seen-cursor Set + MAX_PAGES=500 safety net
+ * - D-06: adjusted=false and limit=50000 in all aggregate API calls
+ * - D-07: 429 retry with Retry-After header or exponential backoff
+ * - D-09/D-10/D-11: Ticker prefixes (I: for indices, O: for options) managed here
  * - Timestamps are Unix milliseconds — NOT seconds — from the Massive aggregates API.
  */
 
@@ -157,3 +157,198 @@ export const MASSIVE_MAX_LIMIT = 50000;
  * Per D-05: Also track seen cursors in a Set<string> to detect loops before hitting this cap.
  */
 export const MASSIVE_MAX_PAGES = 500;
+
+// ---------------------------------------------------------------------------
+// HTTP Client Options
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for fetching OHLCV bars from the Massive aggregates endpoint.
+ * Callers always use plain tickers — the client handles I: and O: prefixes internally.
+ */
+export interface FetchBarsOptions {
+  /** Plain ticker — VIX, AAPL, SPX251219C05000000 (no I: or O: prefix) */
+  ticker: string;
+  /** Start date "YYYY-MM-DD" */
+  from: string;
+  /** End date "YYYY-MM-DD" */
+  to: string;
+  /** Bar timespan (default: "day") */
+  timespan?: "day" | "minute" | "hour";
+  /** Bar multiplier (default: 1) */
+  multiplier?: number;
+  /** Asset class — determines Massive ticker prefix (default: "stock") */
+  assetClass?: MassiveAssetClass;
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Read MASSIVE_API_KEY from the environment at call site (per D-01/D-02).
+ * Throws with descriptive error if missing (per D-03).
+ */
+function getApiKey(): string {
+  const key = process.env.MASSIVE_API_KEY;
+  if (!key) {
+    throw new Error(
+      "Set MASSIVE_API_KEY environment variable to use Massive.com data import"
+    );
+  }
+  return key;
+}
+
+/**
+ * Fetch a URL with auth headers and automatic retry on 429 (per D-07).
+ * Reads Retry-After header when available; falls back to exponential backoff.
+ * Throws with human-readable message after exhausting retries.
+ */
+async function fetchWithRetry(
+  url: string,
+  headers: Record<string, string>,
+  maxRetries = 2
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (response.status === 429) {
+      if (attempt === maxRetries) {
+        throw new Error(
+          "Massive.com rate limit exceeded — try again in a few minutes"
+        );
+      }
+      const retryAfter = response.headers.get("Retry-After");
+      const backoffMs = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : Math.pow(2, attempt + 1) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      continue;
+    }
+
+    return response;
+  }
+  // This path is unreachable but satisfies TypeScript's control-flow analysis
+  throw new Error("Massive.com rate limit exceeded after retries");
+}
+
+// ---------------------------------------------------------------------------
+// HTTP Client — Main Export
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch OHLCV bars from the Massive.com aggregates endpoint.
+ *
+ * Handles:
+ * - Auth via MASSIVE_API_KEY env var (read at call site, per D-01)
+ * - Pagination with loop guard (seen-cursor Set + MAX_PAGES safety net, per D-05)
+ * - adjusted=false and limit=50000 query params (per D-06)
+ * - 429 rate-limit retry with backoff (per D-07)
+ * - 401 auth error with distinct message (per D-03)
+ * - Zod validation of each page before mapping to rows
+ * - Timestamp conversion: Unix ms → YYYY-MM-DD ET string
+ * - Ticker normalization: API format → plain storage format
+ *
+ * @throws Error if MASSIVE_API_KEY is not set
+ * @throws Error if API returns 401 (invalid key)
+ * @throws Error if API returns 429 after max retries (rate limit)
+ * @throws Error if response fails Zod validation
+ * @throws Error if pagination cursor repeats (loop guard)
+ * @throws Error if MAX_PAGES safety limit is reached
+ */
+export async function fetchBars(
+  options: FetchBarsOptions
+): Promise<MassiveBarRow[]> {
+  const apiKey = getApiKey();
+  const {
+    ticker,
+    from,
+    to,
+    timespan = "day",
+    multiplier = 1,
+    assetClass = "stock",
+  } = options;
+
+  const apiTicker = toMassiveTicker(ticker, assetClass);
+  const storageTicker = fromMassiveTicker(apiTicker);
+  const headers = { Authorization: `Bearer ${apiKey}` };
+
+  // Build initial URL (per D-06: adjusted=false, limit=50000)
+  let url: string | null =
+    `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(apiTicker)}/range/${multiplier}/${timespan}/${from}/${to}?adjusted=false&limit=${MASSIVE_MAX_LIMIT}`;
+
+  const allRows: MassiveBarRow[] = [];
+  const seenCursors = new Set<string>();
+  let pageCount = 0;
+
+  while (url) {
+    // Safety net: max pages (per D-05)
+    pageCount++;
+    if (pageCount > MASSIVE_MAX_PAGES) {
+      throw new Error(
+        `Pagination safety limit reached (${MASSIVE_MAX_PAGES} pages) — possible API issue`
+      );
+    }
+
+    const response = await fetchWithRetry(url, headers);
+
+    // Handle auth errors (per D-03)
+    if (response.status === 401) {
+      throw new Error(
+        "MASSIVE_API_KEY rejected by Massive.com — check your key"
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Massive.com API error: HTTP ${response.status} ${response.statusText}`
+      );
+    }
+
+    const json = await response.json();
+
+    // Zod validation — fail loudly on schema drift before mapping to DuckDB rows
+    const parsed = MassiveAggregateResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      const issues = parsed.error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      throw new Error(`Massive API response validation failed: ${issues}`);
+    }
+
+    const data = parsed.data;
+
+    // Map API bars to DuckDB storage rows
+    for (const bar of data.results) {
+      allRows.push({
+        date: massiveTimestampToETDate(bar.t),
+        open: bar.o,
+        high: bar.h,
+        low: bar.l,
+        close: bar.c,
+        volume: bar.v,
+        ticker: storageTicker,
+      });
+    }
+
+    // Pagination (per D-05: seen-cursor guard against documented Massive loop bug)
+    if (data.next_url) {
+      const nextUrlObj = new URL(data.next_url);
+      const cursor = nextUrlObj.searchParams.get("cursor") ?? data.next_url;
+      if (seenCursors.has(cursor)) {
+        throw new Error(
+          `Pagination loop detected — cursor repeated: ${cursor.slice(0, 50)}...`
+        );
+      }
+      seenCursors.add(cursor);
+      url = data.next_url;
+    } else {
+      url = null;
+    }
+  }
+
+  return allRows;
+}
