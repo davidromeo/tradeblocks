@@ -199,6 +199,7 @@ export {
   type ReplayResult,
   type PnlPoint,
   type ParsedLeg,
+  type ParsedLegOO,
 } from './utils/trade-replay.js';
 
 // Export trade replay tool handler and schema for integration testing (Phase 68)

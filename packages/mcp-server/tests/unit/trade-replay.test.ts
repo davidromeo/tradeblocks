@@ -60,6 +60,44 @@ describe('parseLegsString', () => {
     const result = parseLegsString('SPY 0.50C');
     expect(result).toEqual([{ root: 'SPY', strike: 0.5, type: 'C', quantity: 1 }]);
   });
+
+  // Option Omega pipe-delimited format
+  it('parses OO format ITM put spread (2 legs)', () => {
+    const result = parseLegsString(
+      '27 Mar 17 6740 P BTO 14.00 | 27 Mar 17 6760 P STO 23.70'
+    );
+    expect(result).toEqual([
+      { root: '', strike: 6740, type: 'P', quantity: 1, entryPrice: 14.00, contracts: 27 },
+      { root: '', strike: 6760, type: 'P', quantity: -1, entryPrice: 23.70, contracts: 27 },
+    ]);
+  });
+
+  it('parses OO format DC strangle (4 legs, deduplicates open/close)', () => {
+    const result = parseLegsString(
+      '397 Mar 12 6610 P STO 35.85 | 397 Mar 12 6925 C STO 10.90 | 397 Mar 13 6610 P BTO 42.80 | 397 Mar 13 6925 C BTO 15.15'
+    );
+    // Only opening legs (first occurrence of each strike+type)
+    expect(result).toEqual([
+      { root: '', strike: 6610, type: 'P', quantity: -1, entryPrice: 35.85, contracts: 397 },
+      { root: '', strike: 6925, type: 'C', quantity: -1, entryPrice: 10.90, contracts: 397 },
+    ]);
+  });
+
+  it('OO format preserves BTO/STO direction correctly', () => {
+    const result = parseLegsString(
+      '26 Feb 6 6870 P BTO 19.10 | 26 Feb 6 6890 P STO 27.90'
+    );
+    expect(result[0].quantity).toBe(1);   // BTO = long
+    expect(result[1].quantity).toBe(-1);  // STO = short
+  });
+
+  it('OO format includes entry prices from fill data', () => {
+    const result = parseLegsString(
+      '29 Mar 13 6725 P BTO 19.50 | 29 Mar 13 6745 P STO 29.35'
+    );
+    expect(result[0].entryPrice).toBe(19.50);
+    expect(result[1].entryPrice).toBe(29.35);
+  });
 });
 
 describe('buildOccTicker', () => {

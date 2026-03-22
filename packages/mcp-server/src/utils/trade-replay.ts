@@ -60,6 +60,16 @@ const COMPACT_NO_ROOT_RE = /^(\d+(?:\.\d+)?)\s*(C|P)$/i;
 // Verbose format: "SPY Jan25 470 Call", "SPX Feb25 4500 Put"
 const VERBOSE_LEG_RE = /^([A-Z]+)\s+\w+\s+(\d+(?:\.\d+)?)\s+(Call|Put)$/i;
 
+// Option Omega format: "{contracts} {Mon} {day} {strike} {P|C} {STO|BTO} {price}"
+// Example: "397 Mar 12 6610 P STO 35.85"
+const OO_LEG_RE = /^(\d+)\s+\w+\s+\d+\s+(\d+(?:\.\d+)?)\s+(C|P)\s+(STO|BTO)\s+(\d+(?:\.\d+)?)$/i;
+
+/** Extended parsed leg with entry price from OO format. */
+export interface ParsedLegOO extends ParsedLeg {
+  entryPrice?: number;   // Fill price from OO leg (e.g., 35.85)
+  contracts?: number;    // Contract count from OO leg
+}
+
 /**
  * Parse a tradelog "legs" string into structured ParsedLeg objects.
  *
@@ -68,18 +78,25 @@ const VERBOSE_LEG_RE = /^([A-Z]+)\s+\w+\s+(\d+(?:\.\d+)?)\s+(Call|Put)$/i;
  *   - "SPY 470C/465C" (two-leg spread, "/" delimiter)
  *   - "SPY 490C/500C/510C" (butterfly)
  *   - "SPY Jan25 470 Call" (verbose format)
- *
- * Convention: first leg is bought (+1), subsequent legs alternate -1, +1, -1.
+ *   - Option Omega pipe-delimited format:
+ *     "397 Mar 12 6610 P STO 35.85 | 397 Mar 12 6925 C STO 10.90 | ..."
+ *     Direction: STO = short (-1), BTO = long (+1)
+ *     Includes per-leg entry price and contract count
  *
  * @throws Error if legs string is empty or cannot be parsed
  */
-export function parseLegsString(legsStr: string): ParsedLeg[] {
+export function parseLegsString(legsStr: string): ParsedLegOO[] {
   if (!legsStr || legsStr.trim() === '') {
     throw new Error('Cannot parse legs "" — use hypothetical mode with explicit strikes');
   }
 
+  // Detect Option Omega pipe-delimited format
+  if (legsStr.includes('|')) {
+    return parseOOLegs(legsStr);
+  }
+
   const parts = legsStr.includes('/') ? legsStr.split('/') : [legsStr];
-  const legs: ParsedLeg[] = [];
+  const legs: ParsedLegOO[] = [];
   let inheritedRoot = '';
 
   for (let i = 0; i < parts.length; i++) {
@@ -121,6 +138,54 @@ export function parseLegsString(legsStr: string): ParsedLeg[] {
     const quantity = i === 0 ? 1 : (i % 2 === 0 ? 1 : -1);
 
     legs.push({ root, strike, type, quantity });
+  }
+
+  return legs;
+}
+
+/**
+ * Parse Option Omega pipe-delimited legs format.
+ *
+ * Each segment: "{contracts} {Mon} {day} {strike} {P|C} {STO|BTO} {price}"
+ * STO = sell-to-open (short, quantity = -1), BTO = buy-to-open (long, quantity = +1)
+ *
+ * OO format includes opening AND closing legs. Opening legs have STO/BTO,
+ * closing legs have the opposite direction for the same strike. We only want
+ * the opening legs (the first occurrence of each unique strike+type combo).
+ */
+function parseOOLegs(legsStr: string): ParsedLegOO[] {
+  const segments = legsStr.split('|').map(s => s.trim());
+  const legs: ParsedLegOO[] = [];
+  const seen = new Set<string>();
+
+  for (const seg of segments) {
+    const match = seg.match(OO_LEG_RE);
+    if (!match) {
+      throw new Error(
+        `Cannot parse OO leg segment "${seg}" — use hypothetical mode with explicit strikes`
+      );
+    }
+
+    const contracts = parseInt(match[1], 10);
+    const strike = parseFloat(match[2]);
+    const type = match[3].toUpperCase() as 'C' | 'P';
+    const direction = match[4].toUpperCase();
+    const price = parseFloat(match[5]);
+
+    // Deduplicate: OO format has open + close legs for the same strike.
+    // Keep only the first occurrence (the opening leg).
+    const key = `${strike}${type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    legs.push({
+      root: '',  // OO format doesn't include root — caller provides via trade's ticker field
+      strike,
+      type,
+      quantity: direction === 'BTO' ? 1 : -1,
+      entryPrice: price,
+      contracts,
+    });
   }
 
   return legs;

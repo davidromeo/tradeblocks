@@ -149,6 +149,9 @@ export async function handleReplayTrade(
     const perContractPremium =
       numContracts > 0 ? premium / numContracts : premium;
 
+    // OO format provides per-leg entry price and contract count directly
+    const hasOOData = parsedLegs.some(l => l.entryPrice !== undefined);
+
     replayLegs = parsedLegs.map((leg) => ({
       occTicker: buildOccTicker(
         root,
@@ -156,8 +159,12 @@ export async function handleReplayTrade(
         leg.type,
         leg.strike
       ),
-      quantity: leg.quantity * (numContracts > 0 ? numContracts : 1),
-      entryPrice: perContractPremium / parsedLegs.length,
+      quantity: hasOOData
+        ? leg.quantity * (leg.contracts ?? 1)
+        : leg.quantity * (numContracts > 0 ? numContracts : 1),
+      entryPrice: hasOOData
+        ? leg.entryPrice!
+        : perContractPremium / parsedLegs.length,
       multiplier,
     }));
   } else {
