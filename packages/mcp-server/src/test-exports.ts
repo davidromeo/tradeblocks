@@ -221,3 +221,18 @@ export {
   computeLegGreeks,
   type GreeksResult,
 } from './utils/black-scholes.js';
+
+// Export Massive snapshot client for unit testing (Phase 70)
+export {
+  fetchOptionSnapshot,
+  MassiveSnapshotResponseSchema,
+  MassiveSnapshotContractSchema,
+  type OptionContract,
+  type FetchOptionSnapshotOptions,
+} from './utils/massive-snapshot.js';
+
+// Export snapshot tool handler and schema for integration testing (Phase 70)
+export {
+  handleGetOptionSnapshot,
+  getOptionSnapshotSchema,
+} from './tools/snapshot.js';
