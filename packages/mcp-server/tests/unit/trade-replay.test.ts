@@ -67,19 +67,21 @@ describe('parseLegsString', () => {
       '27 Mar 17 6740 P BTO 14.00 | 27 Mar 17 6760 P STO 23.70'
     );
     expect(result).toEqual([
-      { root: '', strike: 6740, type: 'P', quantity: 1, entryPrice: 14.00, contracts: 27 },
-      { root: '', strike: 6760, type: 'P', quantity: -1, entryPrice: 23.70, contracts: 27 },
+      { root: '', strike: 6740, type: 'P', quantity: 1, entryPrice: 14.00, contracts: 27, expiryHint: 'Mar 17' },
+      { root: '', strike: 6760, type: 'P', quantity: -1, entryPrice: 23.70, contracts: 27, expiryHint: 'Mar 17' },
     ]);
   });
 
-  it('parses OO format DC strangle (4 legs, deduplicates open/close)', () => {
+  it('parses OO format double calendar (4 legs, same strikes different expiries)', () => {
     const result = parseLegsString(
       '397 Mar 12 6610 P STO 35.85 | 397 Mar 12 6925 C STO 10.90 | 397 Mar 13 6610 P BTO 42.80 | 397 Mar 13 6925 C BTO 15.15'
     );
-    // Only opening legs (first occurrence of each strike+type)
+    // All 4 legs kept — same strikes but different dates (calendar spread)
     expect(result).toEqual([
-      { root: '', strike: 6610, type: 'P', quantity: -1, entryPrice: 35.85, contracts: 397 },
-      { root: '', strike: 6925, type: 'C', quantity: -1, entryPrice: 10.90, contracts: 397 },
+      { root: '', strike: 6610, type: 'P', quantity: -1, entryPrice: 35.85, contracts: 397, expiryHint: 'Mar 12' },
+      { root: '', strike: 6925, type: 'C', quantity: -1, entryPrice: 10.90, contracts: 397, expiryHint: 'Mar 12' },
+      { root: '', strike: 6610, type: 'P', quantity: 1, entryPrice: 42.80, contracts: 397, expiryHint: 'Mar 13' },
+      { root: '', strike: 6925, type: 'C', quantity: 1, entryPrice: 15.15, contracts: 397, expiryHint: 'Mar 13' },
     ]);
   });
 
@@ -89,6 +91,7 @@ describe('parseLegsString', () => {
     );
     expect(result[0].quantity).toBe(1);   // BTO = long
     expect(result[1].quantity).toBe(-1);  // STO = short
+    expect(result[0].expiryHint).toBe('Feb 6');
   });
 
   it('OO format includes entry prices from fill data', () => {
@@ -97,6 +100,16 @@ describe('parseLegsString', () => {
     );
     expect(result[0].entryPrice).toBe(19.50);
     expect(result[1].entryPrice).toBe(29.35);
+  });
+
+  it('OO format deduplicates same-date same-strike fills (close fills)', () => {
+    // Same date, same strike, opposite direction — second is a close fill
+    const result = parseLegsString(
+      '10 Mar 12 6610 P STO 35.85 | 10 Mar 12 6610 P BTC 30.00'
+    );
+    expect(result.length).toBe(1);
+    expect(result[0].strike).toBe(6610);
+    expect(result[0].quantity).toBe(-1); // keeps the opening STO
   });
 });
 

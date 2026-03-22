@@ -62,12 +62,14 @@ const VERBOSE_LEG_RE = /^([A-Z]+)\s+\w+\s+(\d+(?:\.\d+)?)\s+(Call|Put)$/i;
 
 // Option Omega format: "{contracts} {Mon} {day} {strike} {P|C} {STO|BTO} {price}"
 // Example: "397 Mar 12 6610 P STO 35.85"
-const OO_LEG_RE = /^(\d+)\s+\w+\s+\d+\s+(\d+(?:\.\d+)?)\s+(C|P)\s+(STO|BTO)\s+(\d+(?:\.\d+)?)$/i;
+// Captures: (1)contracts (2)month (3)day (4)strike (5)C|P (6)STO|BTO (7)price
+const OO_LEG_RE = /^(\d+)\s+(\w+)\s+(\d+)\s+(\d+(?:\.\d+)?)\s+(C|P)\s+(STO|BTO|STC|BTC)\s+(\d+(?:\.\d+)?)$/i;
 
 /** Extended parsed leg with entry price from OO format. */
 export interface ParsedLegOO extends ParsedLeg {
   entryPrice?: number;   // Fill price from OO leg (e.g., 35.85)
   contracts?: number;    // Contract count from OO leg
+  expiryHint?: string;   // "Mon DD" from OO format (e.g., "Mar 12") for multi-expiry strategies
 }
 
 /**
@@ -149,9 +151,9 @@ export function parseLegsString(legsStr: string): ParsedLegOO[] {
  * Each segment: "{contracts} {Mon} {day} {strike} {P|C} {STO|BTO} {price}"
  * STO = sell-to-open (short, quantity = -1), BTO = buy-to-open (long, quantity = +1)
  *
- * OO format includes opening AND closing legs. Opening legs have STO/BTO,
- * closing legs have the opposite direction for the same strike. We only want
- * the opening legs (the first occurrence of each unique strike+type combo).
+ * Dedup key includes date+strike+type to handle:
+ * - Calendar spreads: same strike, different expiry (both kept)
+ * - Open+close fills: same strike, same date, opposite direction (close dropped)
  */
 function parseOOLegs(legsStr: string): ParsedLegOO[] {
   const segments = legsStr.split('|').map(s => s.trim());
@@ -167,14 +169,16 @@ function parseOOLegs(legsStr: string): ParsedLegOO[] {
     }
 
     const contracts = parseInt(match[1], 10);
-    const strike = parseFloat(match[2]);
-    const type = match[3].toUpperCase() as 'C' | 'P';
-    const direction = match[4].toUpperCase();
-    const price = parseFloat(match[5]);
+    const month = match[2];
+    const day = match[3];
+    const strike = parseFloat(match[4]);
+    const type = match[5].toUpperCase() as 'C' | 'P';
+    const direction = match[6].toUpperCase();
+    const price = parseFloat(match[7]);
 
-    // Deduplicate: OO format has open + close legs for the same strike.
-    // Keep only the first occurrence (the opening leg).
-    const key = `${strike}${type}`;
+    // Dedup by date+strike+type: keeps calendar legs (different dates),
+    // drops close fills (same date+strike+type, opposite direction)
+    const key = `${month}${day}:${strike}${type}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
@@ -185,6 +189,7 @@ function parseOOLegs(legsStr: string): ParsedLegOO[] {
       quantity: direction === 'BTO' ? 1 : -1,
       entryPrice: price,
       contracts,
+      expiryHint: `${month} ${day}`,
     });
   }
 

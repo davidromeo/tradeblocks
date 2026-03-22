@@ -75,6 +75,23 @@ export const replayTradeSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const MONTH_MAP: Record<string, string> = {
+  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+};
+
+/** Convert OO expiry hint "Mar 13" + year "2026" → "2026-03-13" */
+function resolveOOExpiryHint(hint: string, year: string): string {
+  const [mon, day] = hint.split(' ');
+  const mm = MONTH_MAP[mon] ?? '01';
+  const dd = day.padStart(2, '0');
+  return `${year}-${mm}-${dd}`;
+}
+
+// ---------------------------------------------------------------------------
 // Handler (exported for testing)
 // ---------------------------------------------------------------------------
 
@@ -144,29 +161,32 @@ export async function handleReplayTrade(
     }
 
     // Build ReplayLeg[] from parsed legs
-    // Expiry approximated as close_date (best available without explicit expiry in tradelog)
     const root = ticker || parsedLegs[0].root;
     const perContractPremium =
       numContracts > 0 ? premium / numContracts : premium;
 
-    // OO format provides per-leg entry price and contract count directly
+    // OO format provides per-leg entry price, contract count, and expiry hint
     const hasOOData = parsedLegs.some(l => l.entryPrice !== undefined);
 
-    replayLegs = parsedLegs.map((leg) => ({
-      occTicker: buildOccTicker(
-        root,
-        close_date!,
-        leg.type,
-        leg.strike
-      ),
-      quantity: hasOOData
-        ? leg.quantity * (leg.contracts ?? 1)
-        : leg.quantity * (numContracts > 0 ? numContracts : 1),
-      entryPrice: hasOOData
-        ? leg.entryPrice!
-        : perContractPremium / parsedLegs.length,
-      multiplier,
-    }));
+    // Resolve per-leg expiry: OO expiryHint ("Mar 13") + year from trade date
+    const tradeYear = (open_date || dateOpened).split('-')[0];
+
+    replayLegs = parsedLegs.map((leg) => {
+      let legExpiry = close_date!;
+      if (hasOOData && leg.expiryHint) {
+        legExpiry = resolveOOExpiryHint(leg.expiryHint, tradeYear);
+      }
+      return {
+        occTicker: buildOccTicker(root, legExpiry, leg.type, leg.strike),
+        quantity: hasOOData
+          ? leg.quantity * (leg.contracts ?? 1)
+          : leg.quantity * (numContracts > 0 ? numContracts : 1),
+        entryPrice: hasOOData
+          ? leg.entryPrice!
+          : perContractPremium / parsedLegs.length,
+        multiplier,
+      };
+    });
   } else {
     throw new Error(
       "Provide either legs[] for hypothetical mode or block_id + trade_index for tradelog mode"
