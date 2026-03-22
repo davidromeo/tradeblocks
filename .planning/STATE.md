@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 67-03-PLAN.md
-last_updated: "2026-03-22T19:26:24.080Z"
+stopped_at: Completed 68-01-PLAN.md
+last_updated: "2026-03-22T20:33:14.535Z"
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 67 — Import Tool & Enrichment
+**Current focus:** Phase 68 — trade-replay-documentation
 
 ## Current Position
 
-Phase: 67 (Import Tool & Enrichment) — EXECUTING
-Plan: 3 of 3
+Phase: 68 (trade-replay-documentation) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -38,6 +38,7 @@ Plan: 3 of 3
 | Phase 67 P01 | 20 | 2 tasks | 5 files |
 | Phase 67 P02 | 25 | 3 tasks | 9 files |
 | Phase 67-import-tool-enrichment P03 | 15 | 1 tasks | 2 files |
+| Phase 68 P01 | 172 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,9 @@ Plan: 3 of 3
 - [Phase 67]: Removed computeVIXPercentile entirely: superseded by computeIVP with cleaner <= semantics
 - [Phase 67]: In-memory DuckDB per test for integration tests (no filesystem cleanup needed, faster isolation)
 - [Phase 67]: volume column intentionally stripped from market.daily daily import (schema has no volume column — same pattern as intraday)
+- [Phase 68]: Root propagation: subsequent spread legs inherit root from first leg in slash-delimited notation
+- [Phase 68]: HL2 mark pricing: (high + low) / 2 at each minute bar for option mark price
+- [Phase 68]: Spread quantity convention: first leg +1, subsequent alternate -1, +1, -1
 
 ### Pending Todos
 
@@ -78,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T19:26:24.077Z
-Stopped at: Completed 67-03-PLAN.md
+Last session: 2026-03-22T20:33:14.532Z
+Stopped at: Completed 68-01-PLAN.md
 Resume file: None

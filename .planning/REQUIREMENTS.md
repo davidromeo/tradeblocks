@@ -29,11 +29,11 @@ Requirements for Massive.com market data integration milestone.
 
 ### Trade Replay
 
-- [ ] **RPL-01**: User can replay a trade by providing trade details (legs, open date, close date), and the system fetches minute-level option bars for each leg from Massive
-- [ ] **RPL-02**: System resolves tradelog leg descriptions to OCC option tickers (strike, expiration, put/call -> O:SPX format)
-- [ ] **RPL-03**: System combines per-leg minute bars into a weighted strategy P&L path based on position quantities and directions
-- [ ] **RPL-04**: System calculates MFE (maximum favorable excursion) and MAE (maximum adverse excursion) from the strategy P&L path
-- [ ] **RPL-05**: System returns the full minute-by-minute P&L path with timestamps, per-leg prices, combined strategy value, and MFE/MAE summary
+- [x] **RPL-01**: User can replay a trade by providing trade details (legs, open date, close date), and the system fetches minute-level option bars for each leg from Massive
+- [x] **RPL-02**: System resolves tradelog leg descriptions to OCC option tickers (strike, expiration, put/call -> O:SPX format)
+- [x] **RPL-03**: System combines per-leg minute bars into a weighted strategy P&L path based on position quantities and directions
+- [x] **RPL-04**: System calculates MFE (maximum favorable excursion) and MAE (maximum adverse excursion) from the strategy P&L path
+- [x] **RPL-05**: System returns the full minute-by-minute P&L path with timestamps, per-leg prices, combined strategy value, and MFE/MAE summary
 - [ ] **RPL-06**: User can replay a trade directly from a block's tradelog by providing block_id and trade index
 
 ### Enrichment
@@ -54,7 +54,7 @@ Requirements for Massive.com market data integration milestone.
 
 - [x] **TST-01**: Unit tests for `massive-client.ts` using mocked `fetch` (timestamp conversion, pagination, ticker normalization, error handling)
 - [x] **TST-02**: Integration tests for `import_from_massive` tool with real DuckDB and mocked API responses
-- [ ] **TST-03**: Unit tests for OCC ticker resolution and strategy P&L path combination
+- [x] **TST-03**: Unit tests for OCC ticker resolution and strategy P&L path combination
 - [ ] **TST-04**: Integration tests for trade replay with mocked Massive API responses
 
 ## Future Requirements
@@ -107,16 +107,16 @@ Deferred to future releases. Tracked but not in current roadmap.
 | ENR-04 | Phase 67 | Complete |
 | ENR-05 | Phase 67 | Complete |
 | TST-02 | Phase 67 | Complete |
-| RPL-01 | Phase 68 | Pending |
-| RPL-02 | Phase 68 | Pending |
-| RPL-03 | Phase 68 | Pending |
-| RPL-04 | Phase 68 | Pending |
-| RPL-05 | Phase 68 | Pending |
+| RPL-01 | Phase 68 | Complete |
+| RPL-02 | Phase 68 | Complete |
+| RPL-03 | Phase 68 | Complete |
+| RPL-04 | Phase 68 | Complete |
+| RPL-05 | Phase 68 | Complete |
 | RPL-06 | Phase 68 | Pending |
 | DOC-01 | Phase 68 | Pending |
 | DOC-02 | Phase 68 | Pending |
 | DOC-03 | Phase 68 | Pending |
-| TST-03 | Phase 68 | Pending |
+| TST-03 | Phase 68 | Complete |
 | TST-04 | Phase 68 | Pending |
 
 **Coverage:**
