@@ -72,6 +72,14 @@ export const replayTradeSchema = z.object({
     .number()
     .default(100)
     .describe("Contract multiplier (default 100 for standard options)"),
+  format: z
+    .enum(["full", "summary", "sampled"])
+    .default("summary")
+    .describe(
+      "Output format: 'summary' returns MFE/MAE/P&L without minute-level path (default), " +
+      "'full' returns complete minute-by-minute P&L path, " +
+      "'sampled' returns path sampled at ~15min intervals"
+    ),
 });
 
 // ---------------------------------------------------------------------------
@@ -284,10 +292,32 @@ export async function handleReplayTrade(
   );
 
   // ----- Compute P&L path + MFE/MAE -----
-  const pnlPath = computeStrategyPnlPath(replayLegs, barsByLeg);
+  const fullPath = computeStrategyPnlPath(replayLegs, barsByLeg);
   const { mfe, mae, mfeTimestamp, maeTimestamp } =
-    computeReplayMfeMae(pnlPath);
-  const totalPnl = pnlPath.length > 0 ? pnlPath[pnlPath.length - 1].strategyPnl : 0;
+    computeReplayMfeMae(fullPath);
+  const totalPnl = fullPath.length > 0 ? fullPath[fullPath.length - 1].strategyPnl : 0;
+
+  // Apply format filter
+  const { format } = params;
+  let pnlPath: typeof fullPath;
+  if (format === "summary") {
+    // Return only MFE, MAE, and boundary points (first, last, MFE timestamp, MAE timestamp)
+    const keyTimestamps = new Set([
+      fullPath[0]?.timestamp,
+      fullPath[fullPath.length - 1]?.timestamp,
+      mfeTimestamp,
+      maeTimestamp,
+    ]);
+    pnlPath = fullPath.filter(p => keyTimestamps.has(p.timestamp));
+  } else if (format === "sampled") {
+    // Sample at ~15min intervals (keep every 15th bar, plus first/last/MFE/MAE)
+    const keyTimestamps = new Set([mfeTimestamp, maeTimestamp]);
+    pnlPath = fullPath.filter((p, i) =>
+      i === 0 || i === fullPath.length - 1 || i % 15 === 0 || keyTimestamps.has(p.timestamp)
+    );
+  } else {
+    pnlPath = fullPath;
+  }
 
   return {
     pnlPath,
@@ -296,6 +326,7 @@ export async function handleReplayTrade(
     mfeTimestamp,
     maeTimestamp,
     totalPnl,
+    totalBars: fullPath.length,
     legs: replayLegs,
   };
 }

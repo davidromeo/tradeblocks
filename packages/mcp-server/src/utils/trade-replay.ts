@@ -44,6 +44,7 @@ export interface ReplayResult {
   mfeTimestamp: string;    // When MFE occurred
   maeTimestamp: string;    // When MAE occurred
   totalPnl: number;        // Final P&L at last bar
+  totalBars?: number;      // Total minute bars before format filtering
   legs: ReplayLeg[];       // The legs that were replayed
 }
 
