@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 68-03-PLAN.md
-last_updated: "2026-03-22T20:33:47.230Z"
+stopped_at: Completed 68-02-PLAN.md
+last_updated: "2026-03-22T20:39:17.056Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -40,6 +40,7 @@ Plan: 3 of 3
 | Phase 67-import-tool-enrichment P03 | 15 | 1 tasks | 2 files |
 | Phase 68 P01 | 172 | 1 tasks | 3 files |
 | Phase 68 P03 | 213 | 2 tasks | 7 files |
+| Phase 68 P02 | 192 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Plan: 3 of 3
 - [Phase 68]: Spread quantity convention: first leg +1, subsequent alternate -1, +1, -1
 - [Phase 68]: Four docs/ guide files (getting-started, market-data, mcp-tools, architecture) per D-14
 - [Phase 68]: Fixed #248: broken scripts/README.md refs were in MCP server docs, not root README
+- [Phase 68]: Tradelog mode uses date_closed as expiry approximation (best available without explicit expiry in tradelog)
+- [Phase 68]: jest.unstable_mockModule for ESM-compatible getConnection mocking in integration tests
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T20:33:47.228Z
-Stopped at: Completed 68-03-PLAN.md
+Last session: 2026-03-22T20:39:17.053Z
+Stopped at: Completed 68-02-PLAN.md
 Resume file: None
