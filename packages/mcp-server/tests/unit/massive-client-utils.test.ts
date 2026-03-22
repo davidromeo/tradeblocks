@@ -161,11 +161,14 @@ describe("MassiveAggregateResponseSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects a response with results field missing", () => {
+  it("defaults to empty array when results field missing", () => {
     const withoutResults = { ...VALID_RESPONSE };
     delete (withoutResults as Record<string, unknown>).results;
     const result = MassiveAggregateResponseSchema.safeParse(withoutResults);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.results).toEqual([]);
+    }
   });
 
   it("rejects a response where results is not an array", () => {

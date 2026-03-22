@@ -52,7 +52,7 @@ export const MassiveAggregateResponseSchema = z.object({
   queryCount: z.number(),
   resultsCount: z.number().optional(),
   adjusted: z.boolean().optional(),
-  results: z.array(MassiveBarSchema),
+  results: z.array(MassiveBarSchema).default([]),
   status: z.string(),
   request_id: z.string(),
   next_url: z.string().optional(),
