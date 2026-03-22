@@ -194,16 +194,44 @@ export async function handleReplayTrade(
   }
 
   // ----- Fetch minute bars for each leg -----
-  const barsByLeg = await Promise.all(
-    replayLegs.map((leg) =>
-      fetchBars({
-        ticker: leg.occTicker,
+  // SPX weekly options trade under SPXW on Massive. If SPX fetch fails or
+  // returns empty, retry with SPXW root automatically.
+  const fetchLegBars = async (occTicker: string): Promise<import("../utils/massive-client.js").MassiveBarRow[]> => {
+    try {
+      const bars = await fetchBars({
+        ticker: occTicker,
         from: open_date!,
         to: close_date!,
         timespan: "minute",
         assetClass: "option",
-      })
-    )
+      });
+      if (bars.length > 0) return bars;
+    } catch {
+      // Fall through to SPXW retry
+    }
+
+    // Retry with SPXW if ticker starts with SPX (not already SPXW)
+    if (occTicker.startsWith("SPX") && !occTicker.startsWith("SPXW")) {
+      const spxwTicker = "SPXW" + occTicker.slice(3);
+      const bars = await fetchBars({
+        ticker: spxwTicker,
+        from: open_date!,
+        to: close_date!,
+        timespan: "minute",
+        assetClass: "option",
+      });
+      if (bars.length > 0) {
+        // Update the leg's OCC ticker to reflect what actually resolved
+        const leg = replayLegs.find(l => l.occTicker === occTicker);
+        if (leg) leg.occTicker = spxwTicker;
+        return bars;
+      }
+    }
+    return [];
+  };
+
+  const barsByLeg = await Promise.all(
+    replayLegs.map((leg) => fetchLegBars(leg.occTicker))
   );
 
   // ----- Compute P&L path + MFE/MAE -----
