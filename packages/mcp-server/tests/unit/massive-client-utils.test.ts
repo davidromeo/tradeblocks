@@ -116,7 +116,8 @@ describe("MassiveBarSchema", () => {
   });
 
   it("rejects a bar missing required field h (high)", () => {
-    const { h: _h, ...withoutH } = VALID_BAR;
+    const withoutH = { ...VALID_BAR };
+    delete (withoutH as Record<string, unknown>).h;
     const result = MassiveBarSchema.safeParse(withoutH);
     expect(result.success).toBe(false);
   });
@@ -161,7 +162,8 @@ describe("MassiveAggregateResponseSchema", () => {
   });
 
   it("rejects a response with results field missing", () => {
-    const { results: _results, ...withoutResults } = VALID_RESPONSE;
+    const withoutResults = { ...VALID_RESPONSE };
+    delete (withoutResults as Record<string, unknown>).results;
     const result = MassiveAggregateResponseSchema.safeParse(withoutResults);
     expect(result.success).toBe(false);
   });
