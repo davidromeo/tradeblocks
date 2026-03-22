@@ -1,3 +1,5 @@
+import { jest } from "@jest/globals";
+
 /**
  * Unit tests for fetchBars() HTTP client in massive-client.ts.
  *
