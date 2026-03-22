@@ -80,7 +80,8 @@ export const replayTradeSchema = z.object({
 
 export async function handleReplayTrade(
   params: z.infer<typeof replayTradeSchema>,
-  baseDir: string
+  baseDir: string,
+  injectedConn?: import("@duckdb/node-api").DuckDBConnection
 ): Promise<ReplayResult> {
   const { legs: inputLegs, block_id, trade_index, multiplier } = params;
   let { open_date, close_date } = params;
@@ -103,7 +104,7 @@ export async function handleReplayTrade(
     }));
   } else if (block_id !== undefined && trade_index !== undefined) {
     // ----- Mode B: Tradelog replay -----
-    const conn = await getConnection(baseDir);
+    const conn = injectedConn ?? await getConnection(baseDir);
 
     const result = await conn.runAndReadAll(
       `SELECT legs, premium, date_opened, date_closed, ticker, num_contracts

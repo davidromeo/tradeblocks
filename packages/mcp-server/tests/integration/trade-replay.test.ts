@@ -5,27 +5,14 @@ import { jest } from "@jest/globals";
  *
  * Tests both hypothetical and tradelog replay modes with:
  *   - Mocked fetch for Massive.com minute bar requests
- *   - Real in-memory DuckDB for tradelog mode (mocked via getConnection)
+ *   - Real in-memory DuckDB for tradelog mode (injected connection)
  *
  * Requirements: TST-04, RPL-01, RPL-05, RPL-06
  */
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
+import { handleReplayTrade } from "../../src/tools/replay.js";
 import type { MassiveAggregateResponse } from "../../src/utils/massive-client.js";
-
-// We need to mock getConnection before importing handleReplayTrade
-// so that tradelog mode uses our in-memory DuckDB
-const mockGetConnection = jest.fn<() => Promise<DuckDBConnection>>();
-jest.unstable_mockModule("../../src/db/connection.js", () => ({
-  getConnection: mockGetConnection,
-  upgradeToReadWrite: jest.fn(),
-  downgradeToReadOnly: jest.fn(),
-  closeConnection: jest.fn(),
-  isConnected: jest.fn(() => true),
-}));
-
-// Import after mocking
-const { handleReplayTrade } = await import("../../src/tools/replay.js");
 
 // =============================================================================
 // Test helpers
@@ -126,9 +113,6 @@ describe("replay_trade integration", () => {
         ticker VARCHAR
       )
     `);
-
-    // Wire mock getConnection to return our in-memory conn
-    mockGetConnection.mockResolvedValue(conn);
 
     process.env.MASSIVE_API_KEY = "test-key-replay";
   });
@@ -297,7 +281,8 @@ describe("replay_trade integration", () => {
           trade_index: 0,
           multiplier: 100,
         },
-        "/tmp/test-replay"
+        "/tmp/test-replay",
+        conn
       );
 
       expect(result.pnlPath.length).toBe(3);
@@ -324,7 +309,8 @@ describe("replay_trade integration", () => {
             trade_index: 0,
             multiplier: 100,
           },
-          "/tmp/test-replay"
+          "/tmp/test-replay",
+          conn
         )
       ).rejects.toThrow("hypothetical mode");
     });
@@ -338,7 +324,8 @@ describe("replay_trade integration", () => {
             trade_index: 0,
             multiplier: 100,
           },
-          "/tmp/test-replay"
+          "/tmp/test-replay",
+          conn
         )
       ).rejects.toThrow("No trade found");
     });
