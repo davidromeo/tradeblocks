@@ -27,17 +27,18 @@ import { z } from "zod";
 
 /**
  * Schema for a single aggregate bar from the Massive API.
- * All numeric fields are required. Timestamps are Unix milliseconds.
+ * OHLC and timestamp are required. Volume-related fields (v, vw, n) are optional
+ * because the Massive API omits them for index tickers (SPX, VIX, etc.).
  */
 export const MassiveBarSchema = z.object({
-  v: z.number(),   // volume
-  vw: z.number(),  // volume-weighted average price
-  o: z.number(),   // open
-  c: z.number(),   // close
-  h: z.number(),   // high
-  l: z.number(),   // low
-  t: z.number(),   // Unix millisecond timestamp
-  n: z.number(),   // number of transactions
+  v: z.number().optional(),   // volume (missing for indices)
+  vw: z.number().optional(),  // volume-weighted average price (missing for indices)
+  o: z.number(),              // open
+  c: z.number(),              // close
+  h: z.number(),              // high
+  l: z.number(),              // low
+  t: z.number(),              // Unix millisecond timestamp
+  n: z.number().optional(),   // number of transactions (missing for indices)
 });
 
 export type MassiveBar = z.infer<typeof MassiveBarSchema>;
@@ -49,8 +50,8 @@ export type MassiveBar = z.infer<typeof MassiveBarSchema>;
 export const MassiveAggregateResponseSchema = z.object({
   ticker: z.string(),
   queryCount: z.number(),
-  resultsCount: z.number(),
-  adjusted: z.boolean(),
+  resultsCount: z.number().optional(),
+  adjusted: z.boolean().optional(),
   results: z.array(MassiveBarSchema),
   status: z.string(),
   request_id: z.string(),
@@ -349,7 +350,7 @@ export async function fetchBars(
         high: bar.h,
         low: bar.l,
         close: bar.c,
-        volume: bar.v,
+        volume: bar.v ?? 0,
         ticker: storageTicker,
       };
       // For intraday bars, also extract the HH:MM Eastern Time component
