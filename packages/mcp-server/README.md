@@ -361,12 +361,12 @@ Market data lives in a separate `market.duckdb` (configurable via `MARKET_DB_PAT
 - `market.context` — VIX / volatility context (keyed by `date`)
 - `market.intraday` — Intraday bars at any resolution (keyed by `ticker, date, time`)
 
-See [scripts/README.md](../../scripts/README.md) for import examples and column mapping reference.
+See the [Market Data Guide](../../docs/market-data.md) for import examples, ticker formats, and column mapping reference.
 
 ## Related
 
 - [Usage Guide](docs/USAGE.md) - Detailed usage examples and workflows
 - [Web Platforms Guide](docs/WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
 - [Agent Skills](../agent-skills/README.md) - Conversational workflows for guided analysis
-- [Market Data Import](../../scripts/README.md) - Import workflow and column mapping reference
+- [Market Data Guide](../../docs/market-data.md) - Import workflow, Massive API, and column mapping reference
 - [Main Application](../../README.md) - Web-based UI for TradeBlocks

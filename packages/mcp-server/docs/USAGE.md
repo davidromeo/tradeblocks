@@ -377,11 +377,11 @@ No Pine Scripts needed — TradingView exports raw OHLCV natively from any chart
 | `market.context` | VIX / volatility context | VIX, VIX9D, VIX3M daily |
 | `market.intraday` | Intraday bars (any resolution) | SPX 5-min, VIX 5-min |
 
-See [scripts/README.md](../../../scripts/README.md) for import examples and column mapping reference.
+See the [Market Data Guide](../../../docs/market-data.md) for import examples, ticker formats, and column mapping reference.
 
 ## Related Documentation
 
 - [README.md](../README.md) - Installation and setup
 - [Web Platforms Guide](./WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
-- [Market Data Import](../../../scripts/README.md) - Import workflow and column mappings
+- [Market Data Guide](../../../docs/market-data.md) - Import workflow, Massive API, and column mappings
 - [Agent Skills](../../agent-skills/README.md) - Conversational workflows
