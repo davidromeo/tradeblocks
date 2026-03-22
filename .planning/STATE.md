@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 66-02-PLAN.md
-last_updated: "2026-03-22T17:05:24.500Z"
+stopped_at: Completed 67-01-PLAN.md
+last_updated: "2026-03-22T19:17:45.550Z"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 5
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 66 — Massive API Adapter Foundation
+**Current focus:** Phase 67 — Import Tool & Enrichment
 
 ## Current Position
 
-Phase: 66 (Massive API Adapter Foundation) — EXECUTING
-Plan: 2 of 2
+Phase: 67 (Import Tool & Enrichment) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -35,6 +35,7 @@ Plan: 2 of 2
 | Tests added | 86 | TBD |
 | Phase 66 P01 | 179 | 2 tasks | 2 files |
 | Phase 66 P02 | 245 | 2 tasks | 3 files |
+| Phase 67 P01 | 20 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -55,6 +56,9 @@ Plan: 2 of 2
 - [Phase 66]: MassiveAssetClass type enum drives toMassiveTicker prefix selection — callers always use plain tickers
 - [Phase 66]: fetchWithRetry reads Retry-After header; falls back to 2^(attempt+1) seconds exponential backoff on 429
 - [Phase 66]: fetchBars derives storageTicker via round-trip fromMassiveTicker(toMassiveTicker()) ensuring storage format is always prefix-free
+- [Phase 67]: Context merge uses Map<date,row> keyed approach — handles partial data gracefully when dates missing from one index
+- [Phase 67]: runContextEnrichment() delegates to private runTier2() without modifying triggerEnrichment semantics
+- [Phase 67]: Volume stripped from intraday rows — market.intraday schema has no volume column
 
 ### Pending Todos
 
@@ -67,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:05:24.497Z
-Stopped at: Completed 66-02-PLAN.md
+Last session: 2026-03-22T19:17:45.547Z
+Stopped at: Completed 67-01-PLAN.md
 Resume file: None

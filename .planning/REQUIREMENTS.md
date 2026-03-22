@@ -19,14 +19,13 @@ Requirements for Massive.com market data integration milestone.
 
 ### Import Tool
 
-- [ ] **IMP-01**: User can import daily OHLCV bars into `market.daily` via `import_from_massive` MCP tool with ticker, from, to, and target_table parameters
-- [ ] **IMP-02**: User can import VIX context data by specifying `target_table: "context"`, which auto-fetches I:VIX, I:VIX9D, I:VIX3M and merges into `market.context`
-- [ ] **IMP-03**: User can import intraday bars into `market.intraday` with configurable timespan (1m, 5m, 15m, 1h)
-- [ ] **IMP-04**: System auto-triggers enrichment pipeline after daily imports (unless `skip_enrichment: true`)
-- [ ] **IMP-05**: User can import historical option minute bars using OCC ticker format (O:SPX...)
-- [ ] **IMP-06**: User can sync/gap-fill missing dates by specifying `sync: true`, which detects existing data in DuckDB and fetches only gaps
+- [x] **IMP-01**: User can import daily OHLCV bars into `market.daily` via `import_from_massive` MCP tool with ticker, from, to, and target_table parameters
+- [x] **IMP-02**: User can import VIX context data by specifying `target_table: "context"`, which auto-fetches I:VIX, I:VIX9D, I:VIX3M and merges into `market.context`
+- [x] **IMP-03**: User can import intraday bars into `market.intraday` with configurable timespan (1m, 5m, 15m, 1h)
+- [x] **IMP-04**: System auto-triggers enrichment pipeline after daily imports (unless `skip_enrichment: true`)
+- [x] **IMP-05**: User can import historical option minute bars using OCC ticker format (O:SPX...)
 - [x] **IMP-07**: System returns clear error when `MASSIVE_API_KEY` is not set
-- [ ] **IMP-08**: System upserts imported data using existing ON CONFLICT merge semantics (no duplicates)
+- [x] **IMP-08**: System upserts imported data using existing ON CONFLICT merge semantics (no duplicates)
 
 ### Trade Replay
 
@@ -40,10 +39,10 @@ Requirements for Massive.com market data integration milestone.
 ### Enrichment
 
 - [ ] **ENR-01**: Tier 2 enrichment computes VIX_IVR (252-day rank: (current - min) / (max - min) * 100) and stores in `market.context`
-- [ ] **ENR-02**: Tier 2 enrichment computes VIX9D_IVR and VIX9D_Percentile (252-day rank and percentile for VIX9D)
-- [ ] **ENR-03**: Tier 2 enrichment computes VIX3M_IVR and VIX3M_Percentile (252-day rank and percentile for VIX3M)
+- [ ] **ENR-02**: Tier 2 enrichment computes VIX9D_IVR and VIX9D_IVP (252-day rank and percentile for VIX9D)
+- [ ] **ENR-03**: Tier 2 enrichment computes VIX3M_IVR and VIX3M_IVP (252-day rank and percentile for VIX3M)
 - [ ] **ENR-04**: Remove Bollinger Bands fields (BB_Position, BB_Width) from Tier 1 enrichment and `market.daily` schema
-- [ ] **ENR-05**: Existing VIX_Percentile field retained (already IVP for VIX)
+- [ ] **ENR-05**: VIX_Percentile renamed to VIX_IVP for naming consistency with IVR/IVP scheme
 
 ### Documentation
 
@@ -95,14 +94,13 @@ Deferred to future releases. Tracked but not in current roadmap.
 | API-06 | Phase 66 | Complete |
 | API-07 | Phase 66 | Complete |
 | TST-01 | Phase 66 | Complete |
-| IMP-01 | Phase 67 | Pending |
-| IMP-02 | Phase 67 | Pending |
-| IMP-03 | Phase 67 | Pending |
-| IMP-04 | Phase 67 | Pending |
-| IMP-05 | Phase 67 | Pending |
-| IMP-06 | Phase 67 | Pending |
+| IMP-01 | Phase 67 | Complete |
+| IMP-02 | Phase 67 | Complete |
+| IMP-03 | Phase 67 | Complete |
+| IMP-04 | Phase 67 | Complete |
+| IMP-05 | Phase 67 | Complete |
 | IMP-07 | Phase 66 | Complete |
-| IMP-08 | Phase 67 | Pending |
+| IMP-08 | Phase 67 | Complete |
 | ENR-01 | Phase 67 | Pending |
 | ENR-02 | Phase 67 | Pending |
 | ENR-03 | Phase 67 | Pending |
@@ -122,8 +120,8 @@ Deferred to future releases. Tracked but not in current roadmap.
 | TST-04 | Phase 68 | Pending |
 
 **Coverage:**
-- v2.2 requirements: 33 total
-- Mapped to phases: 33
+- v2.2 requirements: 32 total
+- Mapped to phases: 32
 - Unmapped: 0
 
 ---

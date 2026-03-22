@@ -48,7 +48,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 ## Phases
 
 - [x] **Phase 66: Massive API Adapter Foundation** — Build and unit-test `massive-client.ts` in isolation: timestamps, pagination guard, ticker normalization, Zod validation, rate limit detection, API key check (completed 2026-03-22)
-- [ ] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, sync/gap-fill, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1
+- [ ] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1
 - [ ] **Phase 68: Trade Replay & Documentation** — Build `replay_trade` MCP tool (OCC ticker resolution, multi-leg P&L path, MFE/MAE); market data docs overhaul fixing #248
 
 ## Phase Details
@@ -72,14 +72,18 @@ Plans:
 ### Phase 67: Import Tool & Enrichment
 **Goal**: Users can import market data from Massive.com via a single MCP tool, and enrichment produces accurate IVR/IVP fields for VIX term structure without Bollinger Band noise
 **Depends on**: Phase 66
-**Requirements**: IMP-01, IMP-02, IMP-03, IMP-04, IMP-05, IMP-06, IMP-08, ENR-01, ENR-02, ENR-03, ENR-04, ENR-05, TST-02
+**Requirements**: IMP-01, IMP-02, IMP-03, IMP-04, IMP-05, IMP-08, ENR-01, ENR-02, ENR-03, ENR-04, ENR-05, TST-02
 **Success Criteria** (what must be TRUE):
   1. `import_from_massive` with `target_table: "daily"` fetches OHLCV bars for any stock or index ticker and upserts them into `market.daily` without duplicates on re-import
   2. `import_from_massive` with `target_table: "context"` makes three API calls (VIX, VIX9D, VIX3M), merges by date, and upserts into `market.context` in one operation
   3. `import_from_massive` with `target_table: "intraday"` stores minute bars with the requested timespan (1m, 5m, 15m, 1h) in `market.intraday`
-  4. After a daily import, enrichment runs automatically and `market.context` contains VIX_IVR, VIX9D_IVR, VIX9D_Percentile, VIX3M_IVR, and VIX3M_Percentile columns populated from 252-day lookback
+  4. After a daily import, enrichment runs automatically and `market.context` contains VIX_IVP, VIX_IVR, VIX9D_IVR, VIX9D_IVP, VIX3M_IVR, and VIX3M_IVP columns populated from 252-day lookback
   5. `market.daily` no longer contains BB_Position or BB_Width columns; existing queries that referenced those fields receive a clear schema error rather than silent null results
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [x] 67-01-PLAN.md — Register import_from_massive MCP tool, wire fetchBars to DuckDB import pipeline
+- [ ] 67-02-PLAN.md — Remove Bollinger Bands from Tier 1, add IVR/IVP to Tier 2 enrichment
+- [ ] 67-03-PLAN.md — Integration tests for import_from_massive with mocked API and real DuckDB
 
 ### Phase 68: Trade Replay & Documentation
 **Goal**: Users can replay any historical trade using Massive.com option minute bars to get a minute-by-minute strategy P&L path with MFE and MAE, without any broker dependency
@@ -109,6 +113,6 @@ Plans:
 | 63. Eliminate block.json | v2.1-b1 | 2/2 | Complete | 2026-03-06 |
 | 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
 | 65. Portfolio Analysis Tools | v2.1-b2 | 4/4 | Complete | 2026-03-08 |
-| 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete   | 2026-03-22 |
-| 67. Import Tool & Enrichment | v2.2 | 0/? | Not started | — |
+| 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete    | 2026-03-22 |
+| 67. Import Tool & Enrichment | v2.2 | 1/3 | In Progress|  |
 | 68. Trade Replay & Documentation | v2.2 | 0/? | Not started | — |
