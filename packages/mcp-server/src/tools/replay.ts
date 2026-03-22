@@ -91,6 +91,36 @@ function resolveOOExpiryHint(hint: string, year: string): string {
   return `${year}-${mm}-${dd}`;
 }
 
+/**
+ * Derive fetch date range from OO leg expiryHints.
+ *
+ * For calendar spreads (different expiries): min(expiry)→max(expiry).
+ * For single-expiry trades: tradeOpenDate→expiry.
+ * Returns null if no legs have expiryHint (caller falls back to trade dates).
+ */
+export function resolveOODateRange(
+  parsedLegs: import("../utils/trade-replay.js").ParsedLegOO[],
+  tradeYear: string,
+  tradeOpenDate: string,
+): { from: string; to: string } | null {
+  const hints = parsedLegs
+    .filter(l => l.expiryHint)
+    .map(l => resolveOOExpiryHint(l.expiryHint!, tradeYear));
+
+  if (hints.length === 0) return null;
+
+  const sorted = [...hints].sort();
+  const minDate = sorted[0];
+  const maxDate = sorted[sorted.length - 1];
+
+  if (minDate === maxDate) {
+    // Single expiry — fetch from trade open to expiry
+    return { from: tradeOpenDate, to: maxDate };
+  }
+  // Calendar spread — near-term to far-term expiry
+  return { from: minDate, to: maxDate };
+}
+
 // ---------------------------------------------------------------------------
 // Handler (exported for testing)
 // ---------------------------------------------------------------------------
@@ -170,6 +200,15 @@ export async function handleReplayTrade(
 
     // Resolve per-leg expiry: OO expiryHint ("Mar 13") + year from trade date
     const tradeYear = (open_date || dateOpened).split('-')[0];
+
+    // Override fetch date range from OO expiryHints when available
+    if (hasOOData) {
+      const ooRange = resolveOODateRange(parsedLegs, tradeYear, open_date || dateOpened);
+      if (ooRange) {
+        open_date = ooRange.from;
+        close_date = ooRange.to;
+      }
+    }
 
     replayLegs = parsedLegs.map((leg) => {
       let legExpiry = close_date!;

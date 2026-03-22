@@ -206,4 +206,5 @@ export {
 export {
   handleReplayTrade,
   replayTradeSchema,
+  resolveOODateRange,
 } from './tools/replay.js';

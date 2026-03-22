@@ -3,6 +3,7 @@ import {
   buildOccTicker,
   computeStrategyPnlPath,
   computeReplayMfeMae,
+  resolveOODateRange,
   type ReplayLeg,
   type PnlPoint,
   type MassiveBarRow,
@@ -324,5 +325,39 @@ describe('computeReplayMfeMae', () => {
     expect(result.mae).toBe(42);
     expect(result.mfeTimestamp).toBe('2025-01-17 09:31');
     expect(result.maeTimestamp).toBe('2025-01-17 09:31');
+  });
+});
+
+describe('resolveOODateRange', () => {
+  it('returns min/max expiry range for calendar spread legs', () => {
+    const legs = [
+      { root: '', strike: 6610, type: 'P' as const, quantity: -1, expiryHint: 'Mar 12' },
+      { root: '', strike: 6925, type: 'C' as const, quantity: -1, expiryHint: 'Mar 12' },
+      { root: '', strike: 6610, type: 'P' as const, quantity: 1, expiryHint: 'Mar 13' },
+      { root: '', strike: 6925, type: 'C' as const, quantity: 1, expiryHint: 'Mar 13' },
+    ];
+
+    const result = resolveOODateRange(legs, '2026', '2026-03-10');
+    expect(result).toEqual({ from: '2026-03-12', to: '2026-03-13' });
+  });
+
+  it('returns tradeOpenDate→expiry for single-expiry legs', () => {
+    const legs = [
+      { root: '', strike: 6740, type: 'P' as const, quantity: 1, expiryHint: 'Mar 17' },
+      { root: '', strike: 6760, type: 'P' as const, quantity: -1, expiryHint: 'Mar 17' },
+    ];
+
+    const result = resolveOODateRange(legs, '2026', '2026-03-14');
+    expect(result).toEqual({ from: '2026-03-14', to: '2026-03-17' });
+  });
+
+  it('returns null when no legs have expiryHint', () => {
+    const legs = [
+      { root: 'SPY', strike: 470, type: 'C' as const, quantity: 1 },
+      { root: 'SPY', strike: 465, type: 'C' as const, quantity: -1 },
+    ];
+
+    const result = resolveOODateRange(legs, '2025', '2025-01-14');
+    expect(result).toBeNull();
   });
 });
