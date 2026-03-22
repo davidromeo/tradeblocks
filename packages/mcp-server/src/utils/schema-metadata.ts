@@ -209,7 +209,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
       daily: {
         description:
           "Per-ticker daily OHLCV with Tier 1 enrichment indicators and calendar fields. One row per ticker per trading day. JOIN with trades on ticker+date (e.g., d.ticker = 'SPX' AND t.date_opened = d.date). For trade-entry queries, use LAG() on close-derived fields or JOIN market.context with LEFT JOIN for global VIX/regime data.",
-        keyColumns: ["ticker", "date", "RSI_14", "ATR_Pct", "BB_Position", "BB_Width", "Realized_Vol_20D"],
+        keyColumns: ["ticker", "date", "RSI_14", "ATR_Pct", "Realized_Vol_20D"],
         columns: {
           ticker: {
             description: "Underlying ticker symbol (part of composite primary key with date).",
@@ -279,16 +279,6 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           Price_vs_SMA50_Pct: {
             description: "Price vs 50-day SMA as percentage ((close - SMA50) / SMA50 * 100)",
-            hypothesis: true,
-            timing: 'close',
-          },
-          BB_Position: {
-            description: "Bollinger Band position (0=lower band, 0.5=middle, 1=upper band)",
-            hypothesis: true,
-            timing: 'close',
-          },
-          BB_Width: {
-            description: "Bollinger Band width (upper - lower) / middle, measures volatility compression",
             hypothesis: true,
             timing: 'close',
           },
@@ -389,7 +379,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
       context: {
         description:
           "Global VIX and volatility term structure data per trading day. One row per trading day, shared across all tickers. JOIN with market.daily on date to get VIX/regime context alongside per-ticker indicators. Always use LEFT JOIN (context data may not be populated yet).",
-        keyColumns: ["date", "Vol_Regime", "VIX_Close", "Term_Structure_State", "VIX_Percentile"],
+        keyColumns: ["date", "Vol_Regime", "VIX_Close", "Term_Structure_State", "VIX_IVP", "VIX_IVR"],
         columns: {
           date: {
             description: "Trading date (VARCHAR, format YYYY-MM-DD). Primary key.",
@@ -482,8 +472,33 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             hypothesis: true,
             timing: 'close',
           },
-          VIX_Percentile: {
-            description: "VIX percentile rank (0-100) vs historical",
+          VIX_IVR: {
+            description: "VIX Implied Volatility Rank: where current VIX sits in its 252-day range (0=min, 100=max). IVR = (current - min) / (max - min) * 100.",
+            hypothesis: true,
+            timing: 'close',
+          },
+          VIX_IVP: {
+            description: "VIX Implied Volatility Percentile: percentage of prior 251 trading days where VIX was at or below current level (0-100). Higher = historically elevated volatility.",
+            hypothesis: true,
+            timing: 'close',
+          },
+          VIX9D_IVR: {
+            description: "VIX9D Implied Volatility Rank: where current VIX9D sits in its 252-day range (0=min, 100=max).",
+            hypothesis: true,
+            timing: 'close',
+          },
+          VIX9D_IVP: {
+            description: "VIX9D Implied Volatility Percentile: percentage of prior 251 trading days where VIX9D was at or below current level (0-100).",
+            hypothesis: true,
+            timing: 'close',
+          },
+          VIX3M_IVR: {
+            description: "VIX3M Implied Volatility Rank: where current VIX3M sits in its 252-day range (0=min, 100=max).",
+            hypothesis: true,
+            timing: 'close',
+          },
+          VIX3M_IVP: {
+            description: "VIX3M Implied Volatility Percentile: percentage of prior 251 trading days where VIX3M was at or below current level (0-100).",
             hypothesis: true,
             timing: 'close',
           },
@@ -561,8 +576,8 @@ ORDER BY date_opened`,
     },
     {
       description: "Recent market conditions (last 20 days)",
-      sql: `SELECT d.date, d.close, d.RSI_14, d.ATR_Pct, d.BB_Width,
-  c.VIX_Close, c.Vol_Regime, c.Term_Structure_State
+      sql: `SELECT d.date, d.close, d.RSI_14, d.ATR_Pct,
+  c.VIX_Close, c.Vol_Regime, c.Term_Structure_State, c.VIX_IVR, c.VIX_IVP
 FROM market.daily d
 LEFT JOIN market.context c ON d.date = c.date
 WHERE d.ticker = 'SPX'
@@ -622,8 +637,8 @@ ORDER BY t.date_opened`,
   SELECT d.ticker, d.date,
     d.Gap_Pct, d.Prior_Close, d.Prev_Return_Pct,
     c.VIX_Open,
-    d.RSI_14, d.BB_Width, d.Realized_Vol_20D,
-    c.VIX_Close, c.Vol_Regime, c.Term_Structure_State
+    d.RSI_14, d.Realized_Vol_20D,
+    c.VIX_Close, c.Vol_Regime, c.Term_Structure_State, c.VIX_IVP
   FROM market.daily d
   LEFT JOIN market.context c ON d.date = c.date
   WHERE d.ticker = 'SPX'
@@ -631,7 +646,7 @@ ORDER BY t.date_opened`,
 lagged AS (
   SELECT *,
     LAG(RSI_14) OVER (PARTITION BY ticker ORDER BY date) AS prev_RSI_14,
-    LAG(BB_Width) OVER (PARTITION BY ticker ORDER BY date) AS prev_BB_Width,
+    LAG(VIX_IVP) OVER (PARTITION BY ticker ORDER BY date) AS prev_VIX_IVP,
     LAG(VIX_Close) OVER (PARTITION BY ticker ORDER BY date) AS prev_VIX_Close,
     LAG(Vol_Regime) OVER (PARTITION BY ticker ORDER BY date) AS prev_Vol_Regime
   FROM joined
@@ -639,7 +654,7 @@ lagged AS (
 SELECT
   t.date_opened, t.strategy, t.pl,
   m.Gap_Pct, m.VIX_Open,
-  m.prev_RSI_14, m.prev_BB_Width, m.prev_VIX_Close, m.prev_Vol_Regime
+  m.prev_RSI_14, m.prev_VIX_IVP, m.prev_VIX_Close, m.prev_Vol_Regime
 FROM trades.trade_data t
 JOIN lagged m ON t.date_opened = m.date
 WHERE t.block_id = 'my-block'

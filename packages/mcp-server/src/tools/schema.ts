@@ -125,13 +125,13 @@ ${contextOpenCols},
     -- Static fields (safe same-day)
 ${staticCols},
     -- Close-derived fields from both tables (will be LAGged below)
-    d.high, d.low, d.close, d.RSI_14, d.ATR_Pct, d.BB_Position, d.BB_Width,
+    d.high, d.low, d.close, d.RSI_14, d.ATR_Pct,
     d.Realized_Vol_5D, d.Realized_Vol_20D, d.Return_5D, d.Return_20D,
     d.Intraday_Range_Pct, d.Intraday_Return_Pct, d.Close_Position_In_Range,
     d.Gap_Filled, d.Consecutive_Days,
     c.VIX_Close, c.VIX_High, c.VIX_Low, c.VIX_Change_Pct,
     c.VIX9D_Close, c.VIX3M_Close, c.Vol_Regime, c.Term_Structure_State,
-    c.VIX_Percentile, c.VIX_Spike_Pct
+    c.VIX_IVR, c.VIX_IVP, c.VIX9D_IVR, c.VIX9D_IVP, c.VIX3M_IVR, c.VIX3M_IVP, c.VIX_Spike_Pct
   FROM market.daily d
   LEFT JOIN market.context c ON d.date = c.date
   WHERE d.ticker IN (SELECT ticker FROM requested)
@@ -141,11 +141,11 @@ lagged AS (
     -- Close-derived fields (prior trading day via LAG)
     LAG(high) OVER (PARTITION BY ticker ORDER BY date) AS prev_high,
     LAG(RSI_14) OVER (PARTITION BY ticker ORDER BY date) AS prev_RSI_14,
-    LAG(BB_Width) OVER (PARTITION BY ticker ORDER BY date) AS prev_BB_Width,
     LAG(Realized_Vol_20D) OVER (PARTITION BY ticker ORDER BY date) AS prev_Realized_Vol_20D,
     LAG(VIX_Close) OVER (PARTITION BY ticker ORDER BY date) AS prev_VIX_Close,
     LAG(Vol_Regime) OVER (PARTITION BY ticker ORDER BY date) AS prev_Vol_Regime,
-    LAG(Term_Structure_State) OVER (PARTITION BY ticker ORDER BY date) AS prev_Term_Structure_State
+    LAG(Term_Structure_State) OVER (PARTITION BY ticker ORDER BY date) AS prev_Term_Structure_State,
+    LAG(VIX_IVP) OVER (PARTITION BY ticker ORDER BY date) AS prev_VIX_IVP
   FROM joined
 )
 SELECT t.*, m.*
@@ -291,7 +291,7 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
           description: "Two-step pipeline to populate market tables from CSV exports.",
           steps: [
             "1. import_market_csv — ingest raw CSV (daily OHLCV, context, or intraday bars) into market.daily / market.context / market.intraday",
-            "2. enrich_market_data — compute ~40 derived indicators (RSI, ATR, BB, Vol_Regime, etc.) from raw OHLCV and write back to market.daily and market.context",
+            "2. enrich_market_data — compute ~40 derived indicators (RSI, ATR, Vol_Regime, VIX_IVR, VIX_IVP, etc.) from raw OHLCV and write back to market.daily and market.context",
           ],
         },
         syncInfo: {
