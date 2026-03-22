@@ -208,3 +208,15 @@ export {
   replayTradeSchema,
   resolveOODateRange,
 } from './tools/replay.js';
+
+// Export Black-Scholes greeks computation for unit testing (Phase 69)
+export {
+  bsPrice,
+  bsDelta,
+  bsGamma,
+  bsTheta,
+  bsVega,
+  solveIV,
+  computeLegGreeks,
+  type GreeksResult,
+} from './utils/black-scholes.js';
