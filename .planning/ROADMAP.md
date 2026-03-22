@@ -66,7 +66,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
   6. Calling the client without `MASSIVE_API_KEY` set returns an error message that names the missing variable
 **Plans**: 2 plans
 Plans:
-- [ ] 66-01-PLAN.md — Types, Zod schemas, ticker normalization, timestamp conversion + unit tests
+- [x] 66-01-PLAN.md — Types, Zod schemas, ticker normalization, timestamp conversion + unit tests
 - [ ] 66-02-PLAN.md — fetchBars() HTTP client with pagination, auth, rate limiting + unit tests
 
 ### Phase 67: Import Tool & Enrichment
@@ -109,6 +109,6 @@ Plans:
 | 63. Eliminate block.json | v2.1-b1 | 2/2 | Complete | 2026-03-06 |
 | 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
 | 65. Portfolio Analysis Tools | v2.1-b2 | 4/4 | Complete | 2026-03-08 |
-| 66. Massive API Adapter Foundation | v2.2 | 0/2 | Not started | — |
+| 66. Massive API Adapter Foundation | v2.2 | 1/2 | In Progress|  |
 | 67. Import Tool & Enrichment | v2.2 | 0/? | Not started | — |
 | 68. Trade Replay & Documentation | v2.2 | 0/? | Not started | — |

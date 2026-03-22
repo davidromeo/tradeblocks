@@ -1,54 +1,57 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Profile Schema V2 & Portfolio Analysis (beta 2)
-status: executing
-stopped_at: Completed 65-04-PLAN.md
-last_updated: "2026-03-08T18:26:58.708Z"
-last_activity: 2026-03-08 — Completed 65-02 profile-aware what_if_scaling with multi-strategy mode
+milestone: v2.2
+milestone_name: Massive.com Market Data Integration
+status: unknown
+stopped_at: Completed 66-01-PLAN.md
+last_updated: "2026-03-22T16:59:32.200Z"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-08)
+See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 65 — Portfolio Analysis Tools (health check dimensions, edge decay, what-if scaling)
+**Current focus:** Phase 66 — Massive API Adapter Foundation
 
 ## Current Position
 
-Phase: 65 of 65 (Portfolio Analysis Tools)
-Plan: 4 of 4 complete
-Status: Phase Complete
-Last activity: 2026-03-08 — Completed 65-04 unit tests for portfolio analysis tools
+Phase: 66 (Massive API Adapter Foundation) — EXECUTING
+Plan: 2 of 2
 
-Progress: [██████████] 100%
+## Performance Metrics
+
+| Metric | v2.1-b2 | v2.2 (current) |
+|--------|---------|----------------|
+| Phases | 2 | 3 |
+| Plans | 6 | TBD |
+| Tests added | 86 | TBD |
+| Phase 66 P01 | 179 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
 ### Decisions
 
-- v2.1-beta.1 shipped 2026-03-06 (phases 60-63, PR #227)
-- Continuing on `feature/strategy-profiles` branch
-- Phase numbering continues from 64
-- 2-phase structure: schema first (64), analysis tools second (65)
-- Behavioral flags as individual nullable columns (not JSON blob) for SQL queryability
-- Nested fields (strikeMethod, monitoring) stored in existing JSON columns
-- [Phase 64]: In-memory DuckDB for fast isolated unit tests of profile schema
-- [Phase 65]: Classification uses 10pp win rate delta for thesis_violation and hidden_edge
-- [Phase 65-01]: Profile-aware health dimensions use neutral observations, never recommendations
-- [Phase 65-01]: Each health section independently try/catch wrapped for graceful degradation
-- [Phase 65-02]: Profile lookups are best-effort with try/catch for graceful degradation when no profiles exist
-- [Phase 65-02]: maxContractsPerTrade ceiling enforced per-trade by clamping weight when effective contracts exceed ceiling
-- [Phase 65]: Extracted classification logic as pure function in test for isolated validation
+- v2.1 completed (phases 60-65, strategy profiles + portfolio analysis)
+- Massive.com REST API chosen over MCP server (structured JSON, fits import pipeline)
+- Single `import_from_massive` tool with target_table parameter (mirrors import_market_csv)
+- API key via MASSIVE_API_KEY env var (not in conversation history)
+- Auto-enrichment after daily imports (reuse existing pipeline unchanged)
+- Trade replay broker-independent — no TastyTrade dependency (addresses #234 partially)
+- Fixes #248 (broken market data docs reference) in Phase 68
+- No new core dependencies — native fetch, AbortSignal.timeout(), existing Zod 4.3.6
+- `adjusted=false` explicit in all Massive API calls (prevents retroactive price changes)
+- Pagination loop guard using seen-cursor Set + MAX_PAGES=500 (addresses documented Massive bug)
+- [Phase 66]: en-CA locale with timeZone America/New_York produces YYYY-MM-DD ET dates without manual string formatting
+- [Phase 66]: fromMassiveTicker uses /^[IO]:/ regex to strip I: and O: prefixes in one operation
+- [Phase 66]: MassiveAssetClass type enum drives toMassiveTicker prefix selection — callers always use plain tickers
 
 ### Pending Todos
 
@@ -56,10 +59,11 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- Phase 67 planning note: options ticker canonicalization via Massive reference/contracts endpoint — confirm response format before coding lookup step
+- Phase 66 validation: I:VIX ticker format for aggregates endpoint is inferred from unified snapshot docs; verify with live API call during implementation (low risk — HTTP 200 with 0 rows is detectable)
 
 ## Session Continuity
 
-Last session: 2026-03-08T18:26:58.706Z
-Stopped at: Completed 65-04-PLAN.md
+Last session: 2026-03-22T16:59:32.197Z
+Stopped at: Completed 66-01-PLAN.md
 Resume file: None
