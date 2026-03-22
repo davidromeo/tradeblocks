@@ -188,6 +188,93 @@ describe('computeStrategyPnlPath', () => {
     const result = computeStrategyPnlPath(legs, bars);
     expect(result[0].legPrices).toEqual([5.50]);
   });
+
+  // Forward-fill tests
+  it('forward-fills leg 2 missing bar at 09:32 using 09:31 price', () => {
+    const legs: ReplayLeg[] = [
+      { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
+      { occTicker: 'LEG2', quantity: -1, entryPrice: 3.00, multiplier: 100 },
+    ];
+    const bars: MassiveBarRow[][] = [
+      // Leg 1 has bars at 09:31, 09:32, 09:33
+      [
+        { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 10, ticker: 'LEG1' },
+        { date: '2025-01-17', time: '09:32', open: 5.50, high: 5.70, low: 5.50, close: 5.65, volume: 10, ticker: 'LEG1' },
+        { date: '2025-01-17', time: '09:33', open: 5.30, high: 5.50, low: 5.30, close: 5.45, volume: 10, ticker: 'LEG1' },
+      ],
+      // Leg 2 has bars at 09:31 and 09:33 only (missing 09:32)
+      [
+        { date: '2025-01-17', time: '09:31', open: 3.20, high: 3.40, low: 3.20, close: 3.35, volume: 10, ticker: 'LEG2' },
+        { date: '2025-01-17', time: '09:33', open: 3.10, high: 3.30, low: 3.10, close: 3.25, volume: 10, ticker: 'LEG2' },
+      ],
+    ];
+
+    const result = computeStrategyPnlPath(legs, bars);
+    // Should have 3 data points (union with forward-fill), not 2 (intersection)
+    expect(result).toHaveLength(3);
+    // At 09:32: leg 2 forward-fills from 09:31 bar → HL2 = (3.40+3.20)/2 = 3.30
+    expect(result[1].timestamp).toBe('2025-01-17 09:32');
+    expect(result[1].legPrices[1]).toBeCloseTo(3.30, 5); // forward-filled from 09:31
+    // Leg 1 at 09:32: HL2 = (5.70+5.50)/2 = 5.60
+    // P&L = (5.60 - 5.00) * 1 * 100 + (3.30 - 3.00) * -1 * 100 = 60 + (-30) = 30
+    expect(result[1].strategyPnl).toBeCloseTo(30, 5);
+  });
+
+  it('forward-fills across multiple missing bars', () => {
+    const legs: ReplayLeg[] = [
+      { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
+      { occTicker: 'LEG2', quantity: -1, entryPrice: 3.00, multiplier: 100 },
+    ];
+    const bars: MassiveBarRow[][] = [
+      // Leg 1 has bars at 09:31, 09:32, 09:33
+      [
+        { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 10, ticker: 'LEG1' },
+        { date: '2025-01-17', time: '09:32', open: 5.50, high: 5.70, low: 5.50, close: 5.65, volume: 10, ticker: 'LEG1' },
+        { date: '2025-01-17', time: '09:33', open: 5.30, high: 5.50, low: 5.30, close: 5.45, volume: 10, ticker: 'LEG1' },
+      ],
+      // Leg 2 only has bar at 09:31 and 09:33 (09:32 forward-filled)
+      [
+        { date: '2025-01-17', time: '09:31', open: 3.20, high: 3.40, low: 3.20, close: 3.35, volume: 10, ticker: 'LEG2' },
+        { date: '2025-01-17', time: '09:33', open: 3.10, high: 3.30, low: 3.10, close: 3.25, volume: 10, ticker: 'LEG2' },
+      ],
+    ];
+
+    const result = computeStrategyPnlPath(legs, bars);
+    expect(result).toHaveLength(3);
+    // 09:32 uses leg 2's 09:31 price (forward-fill)
+    expect(result[1].legPrices[1]).toBeCloseTo(3.30, 5);
+  });
+
+  it('returns empty when a leg has NO bars at all (nothing to forward-fill from)', () => {
+    const legs: ReplayLeg[] = [
+      { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
+      { occTicker: 'LEG2', quantity: -1, entryPrice: 3.00, multiplier: 100 },
+    ];
+    const bars: MassiveBarRow[][] = [
+      [
+        { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 10, ticker: 'LEG1' },
+      ],
+      [], // Leg 2 has no bars at all
+    ];
+
+    const result = computeStrategyPnlPath(legs, bars);
+    expect(result).toEqual([]);
+  });
+
+  it('single leg needs no forward-fill (same behavior as before)', () => {
+    const legs: ReplayLeg[] = [
+      { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
+    ];
+    const bars: MassiveBarRow[][] = [[
+      { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 100, ticker: 'LEG1' },
+      { date: '2025-01-17', time: '09:32', open: 4.70, high: 4.90, low: 4.70, close: 4.85, volume: 100, ticker: 'LEG1' },
+    ]];
+
+    const result = computeStrategyPnlPath(legs, bars);
+    expect(result).toHaveLength(2);
+    expect(result[0].strategyPnl).toBeCloseTo(50, 5);
+    expect(result[1].strategyPnl).toBeCloseTo(-20, 5);
+  });
 });
 
 describe('computeReplayMfeMae', () => {

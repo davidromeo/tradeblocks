@@ -258,28 +258,42 @@ export function computeStrategyPnlPath(
     return map;
   });
 
-  // Use first leg's timestamps as reference, filter to only those present in all legs
-  const refTimestamps: string[] = [];
-  for (const bar of barsByLeg[0]) {
-    const ts = `${bar.date} ${bar.time ?? ''}`.trim();
-    const allHave = legMaps.every((m) => m.has(ts));
-    if (allHave) refTimestamps.push(ts);
+  // Collect ALL unique timestamps across ALL legs (union, not intersection)
+  const allTimestamps = new Set<string>();
+  for (const bars of barsByLeg) {
+    for (const bar of bars) {
+      allTimestamps.add(`${bar.date} ${bar.time ?? ''}`.trim());
+    }
   }
+  const sortedTimestamps = [...allTimestamps].sort();
 
-  // Build P&L path
+  // Build P&L path with forward-fill for missing bars
   const path: PnlPoint[] = [];
-  for (const ts of refTimestamps) {
-    let strategyPnl = 0;
+  const lastBar: (MassiveBarRow | undefined)[] = new Array(legs.length).fill(undefined);
+
+  for (const ts of sortedTimestamps) {
+    let complete = true;
     const legPrices: number[] = [];
+    let strategyPnl = 0;
 
     for (let i = 0; i < legs.length; i++) {
-      const bar = legMaps[i].get(ts)!;
-      const hl2 = (bar.high + bar.low) / 2;
+      const bar = legMaps[i].get(ts);
+      if (bar) {
+        lastBar[i] = bar;
+      }
+      const effective = bar ?? lastBar[i];
+      if (!effective) {
+        complete = false;
+        break;
+      }
+      const hl2 = (effective.high + effective.low) / 2;
       legPrices.push(hl2);
       strategyPnl += (hl2 - legs[i].entryPrice) * legs[i].quantity * legs[i].multiplier;
     }
 
-    path.push({ timestamp: ts, strategyPnl, legPrices });
+    if (complete) {
+      path.push({ timestamp: ts, strategyPnl, legPrices });
+    }
   }
 
   return path;

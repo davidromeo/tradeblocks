@@ -194,8 +194,14 @@ export async function handleReplayTrade(
   }
 
   // ----- Fetch minute bars for each leg -----
-  // SPX weekly options trade under SPXW on Massive. If SPX fetch fails or
-  // returns empty, retry with SPXW root automatically.
+  // Index options often trade under a weekly root on Massive (e.g., SPX→SPXW).
+  // If the primary root fetch returns empty, retry with the mapped fallback root.
+  const ROOT_FALLBACK_MAP: Record<string, string> = {
+    SPX: 'SPXW',
+    NDX: 'NDXP',
+    RUT: 'RUTW',
+  };
+
   const fetchLegBars = async (occTicker: string): Promise<import("../utils/massive-client.js").MassiveBarRow[]> => {
     try {
       const bars = await fetchBars({
@@ -207,14 +213,18 @@ export async function handleReplayTrade(
       });
       if (bars.length > 0) return bars;
     } catch {
-      // Fall through to SPXW retry
+      // Fall through to fallback root retry
     }
 
-    // Retry with SPXW if ticker starts with SPX (not already SPXW)
-    if (occTicker.startsWith("SPX") && !occTicker.startsWith("SPXW")) {
-      const spxwTicker = "SPXW" + occTicker.slice(3);
+    // Extract root from OCC ticker (letters before first digit)
+    const rootMatch = occTicker.match(/^([A-Z]+)/);
+    const root = rootMatch ? rootMatch[1] : '';
+    const fallbackRoot = ROOT_FALLBACK_MAP[root];
+
+    if (fallbackRoot && !occTicker.startsWith(fallbackRoot)) {
+      const fallbackTicker = fallbackRoot + occTicker.slice(root.length);
       const bars = await fetchBars({
-        ticker: spxwTicker,
+        ticker: fallbackTicker,
         from: open_date!,
         to: close_date!,
         timespan: "minute",
@@ -223,7 +233,7 @@ export async function handleReplayTrade(
       if (bars.length > 0) {
         // Update the leg's OCC ticker to reflect what actually resolved
         const leg = replayLegs.find(l => l.occTicker === occTicker);
-        if (leg) leg.occTicker = spxwTicker;
+        if (leg) leg.occTicker = fallbackTicker;
         return bars;
       }
     }
