@@ -48,7 +48,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 ## Phases
 
 - [x] **Phase 66: Massive API Adapter Foundation** — Build and unit-test `massive-client.ts` in isolation: timestamps, pagination guard, ticker normalization, Zod validation, rate limit detection, API key check (completed 2026-03-22)
-- [ ] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1
+- [x] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1 (completed 2026-03-22)
 - [ ] **Phase 68: Trade Replay & Documentation** — Build `replay_trade` MCP tool (OCC ticker resolution, multi-leg P&L path, MFE/MAE); market data docs overhaul fixing #248
 
 ## Phase Details
@@ -83,7 +83,7 @@ Plans:
 Plans:
 - [x] 67-01-PLAN.md — Register import_from_massive MCP tool, wire fetchBars to DuckDB import pipeline
 - [x] 67-02-PLAN.md — Remove Bollinger Bands from Tier 1, add IVR/IVP to Tier 2 enrichment
-- [ ] 67-03-PLAN.md — Integration tests for import_from_massive with mocked API and real DuckDB
+- [x] 67-03-PLAN.md — Integration tests for import_from_massive with mocked API and real DuckDB
 
 ### Phase 68: Trade Replay & Documentation
 **Goal**: Users can replay any historical trade using Massive.com option minute bars to get a minute-by-minute strategy P&L path with MFE and MAE, without any broker dependency
@@ -114,5 +114,5 @@ Plans:
 | 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
 | 65. Portfolio Analysis Tools | v2.1-b2 | 4/4 | Complete | 2026-03-08 |
 | 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete    | 2026-03-22 |
-| 67. Import Tool & Enrichment | v2.2 | 2/3 | In Progress|  |
+| 67. Import Tool & Enrichment | v2.2 | 3/3 | Complete   | 2026-03-22 |
 | 68. Trade Replay & Documentation | v2.2 | 0/? | Not started | — |

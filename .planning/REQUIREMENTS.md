@@ -53,7 +53,7 @@ Requirements for Massive.com market data integration milestone.
 ### Testing
 
 - [x] **TST-01**: Unit tests for `massive-client.ts` using mocked `fetch` (timestamp conversion, pagination, ticker normalization, error handling)
-- [ ] **TST-02**: Integration tests for `import_from_massive` tool with real DuckDB and mocked API responses
+- [x] **TST-02**: Integration tests for `import_from_massive` tool with real DuckDB and mocked API responses
 - [ ] **TST-03**: Unit tests for OCC ticker resolution and strategy P&L path combination
 - [ ] **TST-04**: Integration tests for trade replay with mocked Massive API responses
 
@@ -106,7 +106,7 @@ Deferred to future releases. Tracked but not in current roadmap.
 | ENR-03 | Phase 67 | Complete |
 | ENR-04 | Phase 67 | Complete |
 | ENR-05 | Phase 67 | Complete |
-| TST-02 | Phase 67 | Pending |
+| TST-02 | Phase 67 | Complete |
 | RPL-01 | Phase 68 | Pending |
 | RPL-02 | Phase 68 | Pending |
 | RPL-03 | Phase 68 | Pending |
