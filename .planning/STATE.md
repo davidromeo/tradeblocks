@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 69-01-PLAN.md
-last_updated: "2026-03-22T22:21:44.291Z"
+stopped_at: Completed 69-02-PLAN.md
+last_updated: "2026-03-22T22:27:47.455Z"
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -42,6 +42,7 @@ Plan: 2 of 2
 | Phase 68 P03 | 213 | 2 tasks | 7 files |
 | Phase 68 P02 | 192 | 2 tasks | 4 files |
 | Phase 69 P01 | 211 | 1 tasks | 3 files |
+| Phase 69 P02 | 255 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Plan: 2 of 2
 - [Phase 69]: Abramowitz & Stegun 26.2.17 CDF approximation for BS module — zero external math dependencies
 - [Phase 69]: Newton-Raphson IV solver with bisection fallback when vega < 1e-10; initial guess sigma=0.3
 - [Phase 69]: Theta per calendar day (annual/365), vega per 1% IV move (raw/100)
+- [Phase 69]: GreeksConfig as optional parameter keeps computeStrategyPnlPath backwards compatible
+- [Phase 69]: Underlying bar HL2 mark pricing consistent with option pricing; batch INSERT OR REPLACE for market.intraday caching
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T22:21:44.287Z
-Stopped at: Completed 69-01-PLAN.md
+Last session: 2026-03-22T22:27:47.452Z
+Stopped at: Completed 69-02-PLAN.md
 Resume file: None
