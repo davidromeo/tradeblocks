@@ -76,9 +76,11 @@ export {
   validateColumnMapping,
   importMarketCsvFile,
   importFromDatabase,
+  importFromMassive,
   triggerEnrichment,
   type ImportMarketCsvOptions,
   type ImportFromDatabaseOptions,
+  type ImportFromMassiveOptions,
   type ImportResult,
 } from './utils/market-importer.js';
 
@@ -95,7 +97,6 @@ export {
   computeATR,
   computeEMA,
   computeSMA,
-  computeBollingerBands,
   computeRealizedVol,
   computeConsecutiveDays,
   isGapFilled,
@@ -104,8 +105,8 @@ export {
   classifyVolRegime,
   classifyTrendDirection,
   classifyTermStructure,
-  computeVIXPercentile,
-  type BollingerBandRow,
+  computeIVR,
+  computeIVP,
   type ContextRow,
   type EnrichedContextRow,
 } from './utils/market-enricher.js';
@@ -113,6 +114,7 @@ export {
 // Export market enrichment utilities for integration testing
 export {
   runEnrichment,
+  runContextEnrichment,
   type EnrichmentResult,
   type EnrichmentOptions,
   type TierStatus,
@@ -174,6 +176,7 @@ export {
   toMassiveTicker,
   fromMassiveTicker,
   massiveTimestampToETDate,
+  massiveTimestampToETTime,
   MassiveBarSchema,
   MassiveAggregateResponseSchema,
   MASSIVE_BASE_URL,

@@ -42,8 +42,6 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       RSI_14 DOUBLE,
       Price_vs_EMA21_Pct DOUBLE,
       Price_vs_SMA50_Pct DOUBLE,
-      BB_Position DOUBLE,
-      BB_Width DOUBLE,
       Realized_Vol_5D DOUBLE,
       Realized_Vol_20D DOUBLE,
       Return_5D DOUBLE,
@@ -78,6 +76,15 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
     await conn.run(`ALTER TABLE market.daily DROP COLUMN Trend_Score`);
   } catch {
     // Column already gone — ignore
+  }
+
+  // Migration: drop Bollinger Band columns (Phase 67 — ENR-04)
+  for (const col of ["BB_Position", "BB_Width"]) {
+    try {
+      await conn.run(`ALTER TABLE market.daily DROP COLUMN ${col}`);
+    } catch {
+      // Column already gone — ignore
+    }
   }
 
   // Migration: add Tier 3 columns that were added after initial schema
@@ -115,7 +122,12 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       VIX_VIX3M_Ratio DOUBLE,
       Vol_Regime INTEGER,
       Term_Structure_State INTEGER,
-      VIX_Percentile DOUBLE,
+      VIX_IVR DOUBLE,
+      VIX_IVP DOUBLE,
+      VIX9D_IVR DOUBLE,
+      VIX9D_IVP DOUBLE,
+      VIX3M_IVR DOUBLE,
+      VIX3M_IVP DOUBLE,
       VIX_Spike_Pct DOUBLE,
       Trend_Direction VARCHAR,
 
@@ -135,6 +147,22 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
     await conn.run(`ALTER TABLE market.context ADD COLUMN Trend_Direction VARCHAR`);
   } catch {
     // Column already exists
+  }
+
+  // Migration: rename VIX_Percentile → VIX_IVP (Phase 67 — D-08)
+  try {
+    await conn.run(`ALTER TABLE market.context RENAME COLUMN VIX_Percentile TO VIX_IVP`);
+  } catch {
+    // Column already renamed or doesn't exist — ignore
+  }
+
+  // Migration: add IVR/IVP columns (Phase 67 — D-09)
+  for (const col of ["VIX_IVR", "VIX9D_IVR", "VIX9D_IVP", "VIX3M_IVR", "VIX3M_IVP"]) {
+    try {
+      await conn.run(`ALTER TABLE market.context ADD COLUMN ${col} DOUBLE`);
+    } catch {
+      // Column already exists — ignore
+    }
   }
 
   // Raw intraday bars per ticker, per day, per time slot (Eastern Time "HH:MM")

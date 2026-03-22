@@ -8,12 +8,11 @@
  * - RSI: Wilder smoothing seeded with SMA of first period changes
  * - ATR: Wilder smoothing seeded with SMA of first period TR values
  * - EMA: Standard EMA seeded with SMA of first period bars
- * - Bollinger Bands: Population stddev (N denominator)
  * - Realized Vol: Population stddev, annualized by sqrt(252)*100
  *
  * References:
  * - Wilder, J.W. (1978) "New Concepts in Technical Trading Systems"
- * - TradingView Pine Script documentation (ta.rsi, ta.atr, ta.ema, ta.bb)
+ * - TradingView Pine Script documentation (ta.rsi, ta.atr, ta.ema)
  */
 
 import type { DuckDBConnection } from "@duckdb/node-api";
@@ -22,16 +21,6 @@ import { upsertMarketImportMetadata } from "../sync/metadata.js";
 // =============================================================================
 // Interfaces
 // =============================================================================
-
-export interface BollingerBandRow {
-  upper: number;
-  middle: number;
-  lower: number;
-  /** position = (close - lower) / (upper - lower) */
-  position: number;
-  /** width = (upper - lower) / middle */
-  width: number;
-}
 
 export interface ContextRow {
   date: string;
@@ -55,7 +44,12 @@ export interface EnrichedContextRow extends ContextRow {
   VIX_Spike_Pct?: number | null;
   Vol_Regime?: number | null;
   Term_Structure_State?: number | null;
-  VIX_Percentile?: number | null;
+  VIX_IVR?: number | null;
+  VIX_IVP?: number | null;
+  VIX9D_IVR?: number | null;
+  VIX9D_IVP?: number | null;
+  VIX3M_IVR?: number | null;
+  VIX3M_IVP?: number | null;
 }
 
 // =============================================================================
@@ -201,47 +195,6 @@ export function computeSMA(closes: number[], period: number): number[] {
 // =============================================================================
 // Composite Indicators
 // =============================================================================
-
-/**
- * Bollinger Bands using population stddev (N denominator, TradingView convention).
- * Returns array same length as input; first `period-1` entries are null.
- *
- * Middle = SMA(period)
- * Upper = Middle + multiplier * stddev
- * Lower = Middle - multiplier * stddev
- * BB_Position = (close - lower) / (upper - lower)
- * BB_Width = (upper - lower) / middle
- */
-export function computeBollingerBands(
-  closes: number[],
-  period = 20,
-  multiplier = 2
-): Array<BollingerBandRow | null> {
-  const n = closes.length;
-  const result: Array<BollingerBandRow | null> = new Array(n).fill(null);
-
-  for (let i = period - 1; i < n; i++) {
-    const window = closes.slice(i - period + 1, i + 1);
-    const mean = window.reduce((a, b) => a + b, 0) / period;
-    // Population stddev (N denominator)
-    const variance = window.reduce((sum, v) => sum + (v - mean) ** 2, 0) / period;
-    const stddev = Math.sqrt(variance);
-
-    const upper = mean + multiplier * stddev;
-    const lower = mean - multiplier * stddev;
-    const range = upper - lower;
-
-    result[i] = {
-      upper,
-      middle: mean,
-      lower,
-      position: range > 0 ? (closes[i] - lower) / range : 0.5,
-      width: mean > 0 ? range / mean : 0,
-    };
-  }
-
-  return result;
-}
 
 /**
  * Realized Volatility using log returns, population stddev, annualized.
@@ -495,23 +448,45 @@ export function classifyTermStructure(
 }
 
 /**
- * Rolling VIX percentile rank.
- * percentile[i] = count(v < vixCloses[i] in window [i-period+1..i]) / period * 100
+ * Implied Volatility Rank (IVR) over a rolling window.
+ * IVR[i] = (current - min) / (max - min) * 100
  * Returns array same length as input; first `period-1` entries are NaN.
+ * Per D-10: Shows where current value sits in its 252-day range.
+ * When range is 0 (all values identical), returns 50 (middle).
  */
-export function computeVIXPercentile(vixCloses: number[], period = 252): number[] {
-  const n = vixCloses.length;
+export function computeIVR(values: number[], period = 252): number[] {
+  const n = values.length;
   const result = new Array<number>(n).fill(NaN);
-
   for (let i = period - 1; i < n; i++) {
-    const currentVal = vixCloses[i];
-    let countLess = 0;
+    let min = Infinity, max = -Infinity;
     for (let j = i - period + 1; j <= i; j++) {
-      if (vixCloses[j] < currentVal) countLess++;
+      if (values[j] < min) min = values[j];
+      if (values[j] > max) max = values[j];
     }
-    result[i] = (countLess / period) * 100;
+    const range = max - min;
+    result[i] = range > 0 ? ((values[i] - min) / range) * 100 : 50;
   }
+  return result;
+}
 
+/**
+ * Implied Volatility Percentile (IVP) over a rolling window.
+ * IVP[i] = count(prior 251 days where value <= current) / 251 * 100
+ * Returns array same length as input; first `period-1` entries are NaN.
+ * Per D-10: Shows what percentage of past year was at or below current.
+ * Note: divides by (period - 1) = 251 because we compare against prior days only.
+ */
+export function computeIVP(values: number[], period = 252): number[] {
+  const n = values.length;
+  const result = new Array<number>(n).fill(NaN);
+  for (let i = period - 1; i < n; i++) {
+    let countLessOrEqual = 0;
+    // Compare current against prior (period-1) days (not including current day itself)
+    for (let j = i - period + 1; j < i; j++) {
+      if (values[j] <= values[i]) countLessOrEqual++;
+    }
+    result[i] = (countLessOrEqual / (period - 1)) * 100;
+  }
   return result;
 }
 
@@ -647,9 +622,18 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
     };
   });
 
-  // Compute VIX percentile using VIX_Close array
+  // Compute IVR and IVP for VIX, VIX9D, VIX3M (D-11)
   const vixCloses = contextRows.map((r) => r.VIX_Close ?? NaN);
-  const vixPercentiles = computeVIXPercentile(vixCloses, 252);
+  const vixIVR = computeIVR(vixCloses, 252);
+  const vixIVP = computeIVP(vixCloses, 252);
+
+  const vix9dCloses = contextRows.map((r) => r.VIX9D_Close ?? NaN);
+  const vix9dIVR = computeIVR(vix9dCloses, 252);
+  const vix9dIVP = computeIVP(vix9dCloses, 252);
+
+  const vix3mCloses = contextRows.map((r) => r.VIX3M_Close ?? NaN);
+  const vix3mIVR = computeIVR(vix3mCloses, 252);
+  const vix3mIVP = computeIVP(vix3mCloses, 252);
 
   // Enrich each row with derived fields
   const enrichedContext = computeVIXDerivedFields(contextRows);
@@ -666,11 +650,16 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
     "VIX_Spike_Pct",
     "Vol_Regime",
     "Term_Structure_State",
-    "VIX_Percentile",
+    "VIX_IVR",
+    "VIX_IVP",
+    "VIX9D_IVR",
+    "VIX9D_IVP",
+    "VIX3M_IVR",
+    "VIX3M_IVP",
     "Trend_Direction",
   ];
 
-  // Build batch of rows with Tier 2 fields + percentile
+  // Build batch of rows with Tier 2 fields + IVR/IVP
   const updateRows = enrichedContext.map((r, i) => {
     const vc = r.VIX_Close ?? null;
     const v9 = r.VIX9D_Close ?? null;
@@ -690,7 +679,12 @@ async function runTier2(conn: DuckDBConnection): Promise<TierStatus> {
         v9 !== null && vc !== null && v3m !== null
           ? classifyTermStructure(v9, vc, v3m)
           : null,
-      VIX_Percentile: isNaN(vixPercentiles[i]) ? null : vixPercentiles[i],
+      VIX_IVR: isNaN(vixIVR[i]) ? null : vixIVR[i],
+      VIX_IVP: isNaN(vixIVP[i]) ? null : vixIVP[i],
+      VIX9D_IVR: isNaN(vix9dIVR[i]) ? null : vix9dIVR[i],
+      VIX9D_IVP: isNaN(vix9dIVP[i]) ? null : vix9dIVP[i],
+      VIX3M_IVR: isNaN(vix3mIVR[i]) ? null : vix3mIVR[i],
+      VIX3M_IVP: isNaN(vix3mIVP[i]) ? null : vix3mIVP[i],
       Trend_Direction: classifyTrendDirection(return20dByDate.get(r.date) ?? null),
     };
   });
@@ -729,6 +723,25 @@ async function hasTier3Data(conn: DuckDBConnection, ticker: string): Promise<boo
     [ticker]
   );
   return Number(r.getRows()[0]?.[0] ?? 0) > 0;
+}
+
+// =============================================================================
+// Context Enrichment (Tier 2 standalone)
+// =============================================================================
+
+/**
+ * Run Tier 2 context enrichment directly, computing VIX-derived fields
+ * (VIX_Gap_Pct, VIX_Change_Pct, VIX9D_VIX_Ratio, Vol_Regime, etc.) and
+ * writing them to market.context.
+ *
+ * Used by importFromMassive() for context table imports — after importing
+ * VIX/VIX9D/VIX3M bars, Tier 2 needs to run immediately to populate derived
+ * fields. Unlike runEnrichment(), this does not require a ticker with daily data.
+ *
+ * Returns a TierStatus describing the outcome.
+ */
+export async function runContextEnrichment(conn: DuckDBConnection): Promise<TierStatus> {
+  return runTier2(conn);
 }
 
 // =============================================================================
@@ -809,7 +822,6 @@ export async function runEnrichment(
   const atrArr = computeATR(highs, lows, closes, 14);
   const ema21 = computeEMA(closes, 21);
   const sma50 = computeSMA(closes, 50);
-  const bbArr = computeBollingerBands(closes, 20, 2);
   const rvol5 = computeRealizedVol(closes, 5);
   const rvol20 = computeRealizedVol(closes, 20);
   const consecutiveDays = computeConsecutiveDays(closes);
@@ -860,7 +872,6 @@ export async function runEnrichment(
       i >= 20 && closes[i - 20] > 0
         ? ((closes[i] - closes[i - 20]) / closes[i - 20]) * 100
         : null;
-    const bb = bbArr[i];
     const gapFilled =
       priorClose !== null ? isGapFilled(opens[i], highs[i], lows[i], priorClose) : null;
     const dateObj = parseDateStr(dates[i]);
@@ -899,8 +910,6 @@ export async function runEnrichment(
       ATR_Pct: atrPct,
       Price_vs_EMA21_Pct: priceVsEma21,
       Price_vs_SMA50_Pct: priceVsSma50,
-      BB_Position: bb ? bb.position : null,
-      BB_Width: bb ? bb.width : null,
       Realized_Vol_5D: isNaN(rvol5[i]) ? null : rvol5[i],
       Realized_Vol_20D: isNaN(rvol20[i]) ? null : rvol20[i],
       Return_5D: ret5d,
@@ -927,8 +936,6 @@ export async function runEnrichment(
     "ATR_Pct",
     "Price_vs_EMA21_Pct",
     "Price_vs_SMA50_Pct",
-    "BB_Position",
-    "BB_Width",
     "Realized_Vol_5D",
     "Realized_Vol_20D",
     "Return_5D",
