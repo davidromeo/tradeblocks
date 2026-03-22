@@ -188,3 +188,15 @@ export {
   type MassiveAssetClass,
   type FetchBarsOptions,
 } from './utils/massive-client.js';
+
+// Export trade replay utilities for unit testing (Phase 68)
+export {
+  parseLegsString,
+  buildOccTicker,
+  computeStrategyPnlPath,
+  computeReplayMfeMae,
+  type ReplayLeg,
+  type ReplayResult,
+  type PnlPoint,
+  type ParsedLeg,
+} from './utils/trade-replay.js';

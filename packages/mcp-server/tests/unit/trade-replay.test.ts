@@ -95,9 +95,9 @@ describe('computeStrategyPnlPath', () => {
     expect(result).toHaveLength(3);
     // HL2 = (5.60+5.40)/2=5.50, (4.90+4.70)/2=4.80, (5.30+5.10)/2=5.20
     // P&L = (HL2 - 5.00) * 1 * 100 = 50, -20, 20
-    expect(result[0].strategyPnl).toBe(50);
-    expect(result[1].strategyPnl).toBe(-20);
-    expect(result[2].strategyPnl).toBe(20);
+    expect(result[0].strategyPnl).toBeCloseTo(50, 5);
+    expect(result[1].strategyPnl).toBeCloseTo(-20, 5);
+    expect(result[2].strategyPnl).toBeCloseTo(20, 5);
   });
 
   it('computes P&L for two-leg spread', () => {
@@ -115,7 +115,7 @@ describe('computeStrategyPnlPath', () => {
     // Leg1: (5.70 - 5.00) * 1 * 100 = 70
     // Leg2: (3.70 - 3.00) * -1 * 100 = -70
     // Combined = 0
-    expect(result[0].strategyPnl).toBe(0);
+    expect(result[0].strategyPnl).toBeCloseTo(0, 5);
   });
 
   it('returns empty array for empty bars', () => {
