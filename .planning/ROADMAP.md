@@ -120,3 +120,44 @@ Plans:
 | 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete    | 2026-03-22 |
 | 67. Import Tool & Enrichment | v2.2 | 3/3 | Complete    | 2026-03-22 |
 | 68. Trade Replay & Documentation | v2.2 | 3/3 | Complete    | 2026-03-22 |
+
+### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
+
+**Goal:** Each replay_trade P&L path point includes per-leg greeks (delta, gamma, theta, vega, IV), net position greeks, and IVP, computed via pure Black-Scholes with Newton's method IV solver using underlying minute bars from Massive (with daily close fallback)
+**Requirements**: BS-01, BS-02, BS-03, BS-04, BS-05, BS-06, BS-07, BS-08, BS-09, BS-10, BS-11, BS-12
+**Depends on:** Phase 68
+**Plans:** 2 plans
+
+Plans:
+- [ ] 69-01-PLAN.md — Pure Black-Scholes module: BS pricing, greeks, Newton's method IV solver + unit tests
+- [ ] 69-02-PLAN.md — Wire greeks into replay pipeline: extend PnlPoint, fetch underlying bars, IVP lookup, caching
+
+### Phase 70: Live Options Snapshot — Integrate Massive /v3/snapshot/options endpoint for current greeks, IV, and open interest on active positions
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 69
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 70 to break down)
+
+### Phase 71: Exit Trigger Analysis — Port analyze_exit_triggers and analyze_tent_sag from TastyTrade MCP to TradeBlocks using replay + greeks data
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 70
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 71 to break down)
+
+### Phase 72: Exit Policy Comparison — Port compare_exit_policies and batch_exit_analysis for multi-trade policy testing across entire blocks
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 71
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 72 to break down)
