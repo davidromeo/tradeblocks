@@ -100,7 +100,7 @@ Plans:
 Plans:
 - [x] 68-01-PLAN.md — Trade replay pure logic: OCC ticker construction, legs parsing, P&L path, MFE/MAE + unit tests
 - [ ] 68-02-PLAN.md — replay_trade MCP tool registration, tradelog mode, integration tests
-- [ ] 68-03-PLAN.md — Documentation overhaul: docs/ directory with four guides, README update, fix #248
+- [x] 68-03-PLAN.md — Documentation overhaul: docs/ directory with four guides, README update, fix #248
 
 ## Progress
 
@@ -119,4 +119,4 @@ Plans:
 | 65. Portfolio Analysis Tools | v2.1-b2 | 4/4 | Complete | 2026-03-08 |
 | 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete    | 2026-03-22 |
 | 67. Import Tool & Enrichment | v2.2 | 3/3 | Complete    | 2026-03-22 |
-| 68. Trade Replay & Documentation | v2.2 | 1/3 | In Progress|  |
+| 68. Trade Replay & Documentation | v2.2 | 2/3 | In Progress|  |

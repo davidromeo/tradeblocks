@@ -46,9 +46,9 @@ Requirements for Massive.com market data integration milestone.
 
 ### Documentation
 
-- [ ] **DOC-01**: README market data section documents both CSV import and Massive API import paths with examples
-- [ ] **DOC-02**: Broken `scripts/README.md` reference removed and replaced with correct documentation (fixes #248)
-- [ ] **DOC-03**: Documentation includes required env vars, ticker format reference, and target_table usage
+- [x] **DOC-01**: README market data section documents both CSV import and Massive API import paths with examples
+- [x] **DOC-02**: Broken `scripts/README.md` reference removed and replaced with correct documentation (fixes #248)
+- [x] **DOC-03**: Documentation includes required env vars, ticker format reference, and target_table usage
 
 ### Testing
 
@@ -113,9 +113,9 @@ Deferred to future releases. Tracked but not in current roadmap.
 | RPL-04 | Phase 68 | Complete |
 | RPL-05 | Phase 68 | Complete |
 | RPL-06 | Phase 68 | Pending |
-| DOC-01 | Phase 68 | Pending |
-| DOC-02 | Phase 68 | Pending |
-| DOC-03 | Phase 68 | Pending |
+| DOC-01 | Phase 68 | Complete |
+| DOC-02 | Phase 68 | Complete |
+| DOC-03 | Phase 68 | Complete |
 | TST-03 | Phase 68 | Complete |
 | TST-04 | Phase 68 | Pending |
 

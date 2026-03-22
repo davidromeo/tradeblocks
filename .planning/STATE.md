@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 68-01-PLAN.md
-last_updated: "2026-03-22T20:33:14.535Z"
+stopped_at: Completed 68-03-PLAN.md
+last_updated: "2026-03-22T20:33:47.230Z"
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 68 (trade-replay-documentation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Plan: 2 of 3
 | Phase 67 P02 | 25 | 3 tasks | 9 files |
 | Phase 67-import-tool-enrichment P03 | 15 | 1 tasks | 2 files |
 | Phase 68 P01 | 172 | 1 tasks | 3 files |
+| Phase 68 P03 | 213 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Plan: 2 of 3
 - [Phase 68]: Root propagation: subsequent spread legs inherit root from first leg in slash-delimited notation
 - [Phase 68]: HL2 mark pricing: (high + low) / 2 at each minute bar for option mark price
 - [Phase 68]: Spread quantity convention: first leg +1, subsequent alternate -1, +1, -1
+- [Phase 68]: Four docs/ guide files (getting-started, market-data, mcp-tools, architecture) per D-14
+- [Phase 68]: Fixed #248: broken scripts/README.md refs were in MCP server docs, not root README
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T20:33:14.532Z
-Stopped at: Completed 68-01-PLAN.md
+Last session: 2026-03-22T20:33:47.228Z
+Stopped at: Completed 68-03-PLAN.md
 Resume file: None
