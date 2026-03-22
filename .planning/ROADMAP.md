@@ -47,7 +47,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 
 ## Phases
 
-- [ ] **Phase 66: Massive API Adapter Foundation** — Build and unit-test `massive-client.ts` in isolation: timestamps, pagination guard, ticker normalization, Zod validation, rate limit detection, API key check
+- [x] **Phase 66: Massive API Adapter Foundation** — Build and unit-test `massive-client.ts` in isolation: timestamps, pagination guard, ticker normalization, Zod validation, rate limit detection, API key check (completed 2026-03-22)
 - [ ] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, sync/gap-fill, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1
 - [ ] **Phase 68: Trade Replay & Documentation** — Build `replay_trade` MCP tool (OCC ticker resolution, multi-leg P&L path, MFE/MAE); market data docs overhaul fixing #248
 
@@ -67,7 +67,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 **Plans**: 2 plans
 Plans:
 - [x] 66-01-PLAN.md — Types, Zod schemas, ticker normalization, timestamp conversion + unit tests
-- [ ] 66-02-PLAN.md — fetchBars() HTTP client with pagination, auth, rate limiting + unit tests
+- [x] 66-02-PLAN.md — fetchBars() HTTP client with pagination, auth, rate limiting + unit tests
 
 ### Phase 67: Import Tool & Enrichment
 **Goal**: Users can import market data from Massive.com via a single MCP tool, and enrichment produces accurate IVR/IVP fields for VIX term structure without Bollinger Band noise
@@ -109,6 +109,6 @@ Plans:
 | 63. Eliminate block.json | v2.1-b1 | 2/2 | Complete | 2026-03-06 |
 | 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
 | 65. Portfolio Analysis Tools | v2.1-b2 | 4/4 | Complete | 2026-03-08 |
-| 66. Massive API Adapter Foundation | v2.2 | 1/2 | In Progress|  |
+| 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete   | 2026-03-22 |
 | 67. Import Tool & Enrichment | v2.2 | 0/? | Not started | — |
 | 68. Trade Replay & Documentation | v2.2 | 0/? | Not started | — |

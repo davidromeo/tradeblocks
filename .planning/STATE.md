@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 66-01-PLAN.md
-last_updated: "2026-03-22T16:59:32.200Z"
+stopped_at: Completed 66-02-PLAN.md
+last_updated: "2026-03-22T17:05:24.500Z"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -34,6 +34,7 @@ Plan: 2 of 2
 | Plans | 6 | TBD |
 | Tests added | 86 | TBD |
 | Phase 66 P01 | 179 | 2 tasks | 2 files |
+| Phase 66 P02 | 245 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -52,6 +53,8 @@ Plan: 2 of 2
 - [Phase 66]: en-CA locale with timeZone America/New_York produces YYYY-MM-DD ET dates without manual string formatting
 - [Phase 66]: fromMassiveTicker uses /^[IO]:/ regex to strip I: and O: prefixes in one operation
 - [Phase 66]: MassiveAssetClass type enum drives toMassiveTicker prefix selection — callers always use plain tickers
+- [Phase 66]: fetchWithRetry reads Retry-After header; falls back to 2^(attempt+1) seconds exponential backoff on 429
+- [Phase 66]: fetchBars derives storageTicker via round-trip fromMassiveTicker(toMassiveTicker()) ensuring storage format is always prefix-free
 
 ### Pending Todos
 
@@ -64,6 +67,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T16:59:32.197Z
-Stopped at: Completed 66-01-PLAN.md
+Last session: 2026-03-22T17:05:24.497Z
+Stopped at: Completed 66-02-PLAN.md
 Resume file: None
