@@ -7,7 +7,8 @@
 - ✅ **v2.8 Market Data Consolidation** — Phases 51-54 (shipped 2026-02-07)
 - ✅ **v2.9 Lookahead-Free Market Analytics** — Phases 55-59 (shipped 2026-02-09)
 - ✅ **v2.1 Strategy Profiles (beta 1)** — Phases 60-63 (shipped 2026-03-06)
-- 🚧 **v2.1 Profile Schema V2 & Portfolio Analysis (beta 2)** — Phases 64-65 (in progress)
+- ✅ **v2.1 Profile Schema V2 & Portfolio Analysis (beta 2)** — Phases 64-65 (shipped 2026-03-08)
+- 🚧 **v2.2 Massive.com Market Data Integration** — Phases 66-68 (in progress)
 
 See [MILESTONES.md](MILESTONES.md) for full history.
 
@@ -32,49 +33,66 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 
 </details>
 
-## v2.1-beta.2: Profile Schema V2 & Portfolio Analysis
+<details>
+<summary>✅ v2.1 Profile Schema V2 & Portfolio Analysis — beta 2 (Phases 64-65) — SHIPPED 2026-03-08</summary>
 
-**Milestone Goal:** Upgrade profile schema with structured position sizing, strike selection, stop loss mechanics, and behavioral flags. Build portfolio-level analysis tools that consume the richer schema for allocation optimization, gap detection, and regime-aware recommendations.
+- [x] Phase 64: Schema V2 (2/2 plans) — completed 2026-03-08
+- [x] Phase 65: Portfolio Analysis Tools (4/4 plans) — completed 2026-03-08
+
+</details>
+
+## v2.2: Massive.com Market Data Integration
+
+**Milestone Goal:** Add Massive.com REST API as an optional market data source, eliminating manual CSV export/import for users with a Massive subscription. Deliver broker-independent trade replay with MFE/MAE analysis. Fix market data documentation gaps.
 
 ## Phases
 
-- [x] **Phase 64: Schema V2** - Structured fields for position sizing, legs, exits, and behavioral flags with DB migration and backward compatibility (completed 2026-03-08)
-- [x] **Phase 65: Portfolio Analysis Tools** - Enhanced portfolio_health_check, enhanced what_if_scaling, and new regime_allocation_advisor with tiered degradation (completed 2026-03-08)
+- [ ] **Phase 66: Massive API Adapter Foundation** — Build and unit-test `massive-client.ts` in isolation: timestamps, pagination guard, ticker normalization, Zod validation, rate limit detection, API key check
+- [ ] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, sync/gap-fill, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1
+- [ ] **Phase 68: Trade Replay & Documentation** — Build `replay_trade` MCP tool (OCC ticker resolution, multi-leg P&L path, MFE/MAE); market data docs overhaul fixing #248
 
 ## Phase Details
 
-### Phase 64: Schema V2
-**Goal**: Users can profile strategies with structured position sizing, strike selection methods, stop loss mechanics, and behavioral flags
-**Depends on**: Phase 63 (v2.1-beta.1 shipped)
-**Requirements**: SCHEMA-01, SCHEMA-02, SCHEMA-03, SCHEMA-04, SCHEMA-05, SCHEMA-06, SCHEMA-07, SCHEMA-08, SCHEMA-09, SCHEMA-10, SCHEMA-11, SCHEMA-12
+### Phase 66: Massive API Adapter Foundation
+**Goal**: A fully tested HTTP adapter exists that can fetch and translate Massive.com bar data correctly, safely, and without data integrity failures
+**Depends on**: Phase 65 (v2.1 shipped)
+**Requirements**: API-01, API-02, API-03, API-04, API-05, API-06, API-07, IMP-07, TST-01
 **Success Criteria** (what must be TRUE):
-  1. `profile_strategy` accepts split allocation (backtestAllocationPct, liveAllocationPct, maxContractsPerTrade) and falls back to allocationPct when split fields are absent
-  2. `profile_strategy` accepts structured strike method (delta/dollar_price/offset/percentage with value) on each leg while preserving the existing strike string label
-  3. `profile_strategy` accepts structured stop loss (percentage/dollar/sl_ratio/debit_percentage with value), monitoring config, and per-rule slippage on exit rules
-  4. `profile_strategy` accepts underlying and behavioral flags (reEntry, capProfits, capLosses, requireTwoPricesPT, closeOnCompletion, ignoreMarginReq)
-  5. `get_strategy_profile` and `list_profiles` return all new fields, and existing profiles without new fields load without error
-**Plans:** 2/2 plans complete
-
+  1. Calling the client with a valid ticker, date range, and API key returns rows with YYYY-MM-DD date strings in Eastern Time (not Unix milliseconds, no UTC off-by-one)
+  2. A repeated `next_url` cursor terminates with a clear error rather than looping indefinitely
+  3. Ticker normalization converts `VIX` to `I:VIX` for API calls and back to `VIX` for storage; OCC-format options tickers pass through unchanged
+  4. A Zod-invalid API response is rejected with a descriptive parse error before any rows reach DuckDB
+  5. An HTTP 429 response surfaces a human-readable rate limit error (not an unhandled rejection)
+  6. Calling the client without `MASSIVE_API_KEY` set returns an error message that names the missing variable
+**Plans**: 2 plans
 Plans:
-- [x] 64-01-PLAN.md — Extend TypeScript interfaces, Zod schemas, DB migration, and CRUD for all new fields
-- [x] 64-02-PLAN.md — Unit tests for round-trip, backward compatibility, and read tool output
+- [ ] 66-01-PLAN.md — Types, Zod schemas, ticker normalization, timestamp conversion + unit tests
+- [ ] 66-02-PLAN.md — fetchBars() HTTP client with pagination, auth, rate limiting + unit tests
 
-### Phase 65: Portfolio Analysis Tools
-**Goal**: Users can analyze portfolio-level allocation health, simulate profile-aware scaling, and get regime-specific allocation recommendations
-**Depends on**: Phase 64
-**Requirements**: ANLYS-01, ANLYS-02, ANLYS-03, ANLYS-04, ANLYS-05, ANLYS-06, ANLYS-07, ANLYS-08, ANLYS-09, ANLYS-10, ANLYS-11, ANLYS-12, TIER-01
+### Phase 67: Import Tool & Enrichment
+**Goal**: Users can import market data from Massive.com via a single MCP tool, and enrichment produces accurate IVR/IVP fields for VIX term structure without Bollinger Band noise
+**Depends on**: Phase 66
+**Requirements**: IMP-01, IMP-02, IMP-03, IMP-04, IMP-05, IMP-06, IMP-08, ENR-01, ENR-02, ENR-03, ENR-04, ENR-05, TST-02
 **Success Criteria** (what must be TRUE):
-  1. `portfolio_health_check` reports regime coverage matrix, day-of-week coverage heatmap, allocation concentration by structure/underlying/DTE, correlation risk flags, and backtest-to-live scaling ratios with outlier flags
-  2. `what_if_scaling` uses backtest block data for profile-aware scaling, flags margin constraints when ignoreMarginReq is true, enforces maxContractsPerTrade ceiling, and accepts multi-strategy arrays for combined impact simulation
-  3. `regime_allocation_advisor` cross-references regime performance with allocations, identifies thesis violations (underperforming in expected regimes), and identifies hidden edges (outperforming in unexpected regimes)
-  4. All three tools run with partial data, report what was skipped, and suggest profile upgrades when fields are missing
-**Plans:** 4/4 plans complete
+  1. `import_from_massive` with `target_table: "daily"` fetches OHLCV bars for any stock or index ticker and upserts them into `market.daily` without duplicates on re-import
+  2. `import_from_massive` with `target_table: "context"` makes three API calls (VIX, VIX9D, VIX3M), merges by date, and upserts into `market.context` in one operation
+  3. `import_from_massive` with `target_table: "intraday"` stores minute bars with the requested timespan (1m, 5m, 15m, 1h) in `market.intraday`
+  4. After a daily import, enrichment runs automatically and `market.context` contains VIX_IVR, VIX9D_IVR, VIX9D_Percentile, VIX3M_IVR, and VIX3M_Percentile columns populated from 252-day lookback
+  5. `market.daily` no longer contains BB_Position or BB_Width columns; existing queries that referenced those fields receive a clear schema error rather than silent null results
+**Plans**: TBD
 
-Plans:
-- [ ] 65-01-PLAN.md — Enhanced portfolio_health_check with 5 new profile-aware grade dimensions
-- [ ] 65-02-PLAN.md — Enhanced what_if_scaling with profile-aware scaling and multi-strategy mode
-- [ ] 65-03-PLAN.md — New regime_allocation_advisor tool with regime vs allocation comparison
-- [ ] 65-04-PLAN.md — Unit tests for all three tools
+### Phase 68: Trade Replay & Documentation
+**Goal**: Users can replay any historical trade using Massive.com option minute bars to get a minute-by-minute strategy P&L path with MFE and MAE, without any broker dependency
+**Depends on**: Phase 67
+**Requirements**: RPL-01, RPL-02, RPL-03, RPL-04, RPL-05, RPL-06, DOC-01, DOC-02, DOC-03, TST-03, TST-04
+**Success Criteria** (what must be TRUE):
+  1. `replay_trade` accepts trade legs (strike, expiration, put/call, quantity) plus open and close dates, fetches minute bars from Massive, and returns a timestamped P&L series covering the full holding period
+  2. Tradelog leg description strings are parsed into valid OCC option tickers (`O:SPX...`) without manual formatting by the user
+  3. Multi-leg strategies (spreads, iron condors) produce a single combined P&L path that weights each leg by its quantity and direction
+  4. MFE and MAE values in the response match the actual peak and trough of the strategy P&L path computed from the minute series
+  5. `replay_trade` also accepts `block_id` and a trade index, resolves the trade from the block's tradelog, and replays it without the user re-entering leg details
+  6. The README market data section documents both CSV and Massive API import paths with env var setup, ticker formats, and `target_table` examples; the broken `scripts/README.md` reference is gone
+**Plans**: TBD
 
 ## Progress
 
@@ -90,4 +108,7 @@ Plans:
 | 62. Structure-Aware Analysis Tools | v2.1-b1 | 3/3 | Complete | 2026-03-05 |
 | 63. Eliminate block.json | v2.1-b1 | 2/2 | Complete | 2026-03-06 |
 | 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
-| 65. Portfolio Analysis Tools | 4/4 | Complete   | 2026-03-08 | - |
+| 65. Portfolio Analysis Tools | v2.1-b2 | 4/4 | Complete | 2026-03-08 |
+| 66. Massive API Adapter Foundation | v2.2 | 0/2 | Not started | — |
+| 67. Import Tool & Enrichment | v2.2 | 0/? | Not started | — |
+| 68. Trade Replay & Documentation | v2.2 | 0/? | Not started | — |
