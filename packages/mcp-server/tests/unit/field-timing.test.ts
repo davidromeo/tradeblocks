@@ -61,7 +61,7 @@ describe('Field Classification', () => {
 });
 
 describe('Derived Sets', () => {
-  test('derived sets cover all 48 classified columns across both tables', () => {
+  test('derived sets cover all classified columns across both tables', () => {
     const allClassified = new Set([
       ...OPEN_KNOWN_FIELDS,
       ...CLOSE_KNOWN_FIELDS,
@@ -79,7 +79,7 @@ describe('Derived Sets', () => {
 
     const totalClassified = dailyClassified.length + contextClassified.length;
 
-    expect(allClassified.size).toBe(52);
+    expect(allClassified.size).toBe(55);
     expect(allClassified.size).toBe(totalClassified);
 
     // Every classified column should be in exactly one set
@@ -112,12 +112,12 @@ describe('Derived Sets', () => {
     expect(CONTEXT_OPEN_FIELDS.size).toBe(5);
   });
 
-  test('CLOSE_KNOWN_FIELDS has exactly 39 fields (24 daily + 15 context)', () => {
-    expect(CLOSE_KNOWN_FIELDS.size).toBe(39);
-    // Daily close-derived: 18 Tier1 + 4 Tier3 + 2 Tier3 (Opening_Drive_Strength, Intraday_Realized_Vol) = 24
-    expect(DAILY_CLOSE_FIELDS.size).toBe(24);
-    // Context close-derived: 14 + 1 (Trend_Direction) = 15
-    expect(CONTEXT_CLOSE_FIELDS.size).toBe(15);
+  test('CLOSE_KNOWN_FIELDS has exactly 42 fields (22 daily + 20 context)', () => {
+    expect(CLOSE_KNOWN_FIELDS.size).toBe(42);
+    // Daily close-derived: 16 Tier1 (BB removed) + 4 Tier3 + 2 Tier3 = 22
+    expect(DAILY_CLOSE_FIELDS.size).toBe(22);
+    // Context close-derived: 14 + 1 (Trend_Direction) + 5 (IVR/IVP for VIX9D, VIX3M) = 20
+    expect(CONTEXT_CLOSE_FIELDS.size).toBe(20);
   });
 
   test('STATIC_FIELDS has exactly 3 fields (all from daily)', () => {
@@ -148,11 +148,6 @@ describe('Derived Sets', () => {
 
   test('Consecutive_Days is close-derived', () => {
     expect(CLOSE_KNOWN_FIELDS.has('Consecutive_Days')).toBe(true);
-  });
-
-  test('BB_Width is close-derived (volatility compression — only known after close)', () => {
-    expect(CLOSE_KNOWN_FIELDS.has('BB_Width')).toBe(true);
-    expect(OPEN_KNOWN_FIELDS.has('BB_Width')).toBe(false);
   });
 
   test('Realized_Vol_5D is close-derived', () => {
