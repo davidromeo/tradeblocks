@@ -215,16 +215,16 @@ describe("pagination", () => {
 
 describe("greeks fallback", () => {
   it("uses BS fallback when greeks object is null", async () => {
+    // OTM call: strike 5200, underlying 5050, price 120 — plenty of time value for IV solver
     const noGreeks = makeContract({
       greeks: undefined,
-      // Use realistic values for BS computation
       implied_volatility: 0.20,
-      last_trade: { price: 50.0, size: 5, sip_timestamp: 1736253000000000000, timeframe: "REAL-TIME" },
+      last_trade: { price: 120.0, size: 5, sip_timestamp: 1736253000000000000, timeframe: "REAL-TIME" },
       details: {
-        ticker: "O:SPX251219C05000000",
+        ticker: "O:SPX261219C05200000",
         contract_type: "call",
-        strike_price: 5000,
-        expiration_date: "2026-12-19", // far out for BS to work well
+        strike_price: 5200,
+        expiration_date: "2027-12-19", // far out for BS to work well
         exercise_style: "european",
         shares_per_contract: 100,
       },
@@ -251,24 +251,25 @@ describe("greeks fallback", () => {
   });
 
   it("uses midpoint when last_trade is missing for BS fallback", async () => {
+    // OTM call: strike 5200, underlying 5050, midpoint 120 — time value for IV solver
     const noGreeksNoTrade = makeContract({
       greeks: undefined,
       implied_volatility: 0.20,
       last_trade: undefined,
       last_quote: {
-        bid: 48.0,
-        ask: 52.0,
-        midpoint: 50.0,
+        bid: 115.0,
+        ask: 125.0,
+        midpoint: 120.0,
         bid_size: 10,
         ask_size: 15,
         last_updated: 1736253000000000000,
         timeframe: "REAL-TIME",
       },
       details: {
-        ticker: "O:SPX251219C05000000",
+        ticker: "O:SPX261219C05200000",
         contract_type: "call",
-        strike_price: 5000,
-        expiration_date: "2026-12-19",
+        strike_price: 5200,
+        expiration_date: "2027-12-19",
         exercise_style: "european",
         shares_per_contract: 100,
       },
