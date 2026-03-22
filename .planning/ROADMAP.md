@@ -50,6 +50,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 - [x] **Phase 66: Massive API Adapter Foundation** — Build and unit-test `massive-client.ts` in isolation: timestamps, pagination guard, ticker normalization, Zod validation, rate limit detection, API key check (completed 2026-03-22)
 - [x] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1 (completed 2026-03-22)
 - [x] **Phase 68: Trade Replay & Documentation** — Build `replay_trade` MCP tool (OCC ticker resolution, multi-leg P&L path, MFE/MAE); market data docs overhaul fixing #248 (completed 2026-03-22)
+- [x] **Phase 69: Black-Scholes Greeks Engine** — Pure BS greeks computation (delta, gamma, theta, vega, IV) + IV solver, wired into replay_trade with underlying bar fetching, caching, IVP lookup (completed 2026-03-22)
 
 ## Phase Details
 
@@ -120,6 +121,7 @@ Plans:
 | 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete    | 2026-03-22 |
 | 67. Import Tool & Enrichment | v2.2 | 3/3 | Complete    | 2026-03-22 |
 | 68. Trade Replay & Documentation | v2.2 | 3/3 | Complete    | 2026-03-22 |
+| 69. Black-Scholes Greeks Engine | v2.2 | 2/2 | Complete    | 2026-03-22 |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -134,13 +136,14 @@ Plans:
 
 ### Phase 70: Live Options Snapshot — Integrate Massive /v3/snapshot/options endpoint for current greeks, IV, and open interest on active positions
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** A `get_option_snapshot` MCP tool fetches live option chain data (greeks, IV, OI, quotes) from Massive's v3/snapshot/options endpoint with auto-pagination and BS greeks fallback for contracts where the API returns empty greeks
+**Requirements**: SNAP-01, SNAP-02, SNAP-03, SNAP-04, SNAP-05, SNAP-06, SNAP-07, SNAP-08, SNAP-09
 **Depends on:** Phase 69
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 70 to break down)
+- [ ] 70-01-PLAN.md — Snapshot client: Zod schemas, fetchOptionSnapshot with pagination, BS greeks fallback + unit tests
+- [ ] 70-02-PLAN.md — get_option_snapshot MCP tool registration, test exports
 
 ### Phase 71: Exit Trigger Analysis — Port analyze_exit_triggers and analyze_tent_sag from TastyTrade MCP to TradeBlocks using replay + greeks data
 
