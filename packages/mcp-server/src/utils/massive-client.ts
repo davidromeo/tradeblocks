@@ -66,6 +66,7 @@ export type MassiveAggregateResponse = z.infer<typeof MassiveAggregateResponseSc
 /**
  * Shape returned to callers after translating a Massive API bar to DuckDB format.
  * Dates are YYYY-MM-DD strings in Eastern Time. Ticker uses storage format (no prefix).
+ * For intraday bars (timespan != "day"), `time` is populated with HH:MM Eastern Time.
  */
 export interface MassiveBarRow {
   date: string;    // "YYYY-MM-DD" Eastern Time
@@ -75,6 +76,7 @@ export interface MassiveBarRow {
   close: number;
   volume: number;
   ticker: string;  // Storage format — no I: or O: prefix
+  time?: string;   // "HH:MM" Eastern Time — only set for intraday (minute/hour) bars
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +140,24 @@ export function fromMassiveTicker(apiTicker: string): string {
 export function massiveTimestampToETDate(unixMs: number): string {
   return new Date(unixMs).toLocaleDateString("en-CA", {
     timeZone: "America/New_York",
+  });
+}
+
+/**
+ * Convert a Unix millisecond timestamp from the Massive API to a HH:MM time string
+ * in Eastern Time (America/New_York), with full DST awareness.
+ *
+ * Used for intraday bar imports where both date and time are needed.
+ * The returned string is always zero-padded "HH:MM" format (24-hour).
+ *
+ * IMPORTANT: Massive returns milliseconds (not seconds). Do NOT divide by 1000.
+ */
+export function massiveTimestampToETTime(unixMs: number): string {
+  return new Date(unixMs).toLocaleTimeString("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
   });
 }
 
@@ -323,7 +343,7 @@ export async function fetchBars(
 
     // Map API bars to DuckDB storage rows
     for (const bar of data.results) {
-      allRows.push({
+      const row: MassiveBarRow = {
         date: massiveTimestampToETDate(bar.t),
         open: bar.o,
         high: bar.h,
@@ -331,7 +351,12 @@ export async function fetchBars(
         close: bar.c,
         volume: bar.v,
         ticker: storageTicker,
-      });
+      };
+      // For intraday bars, also extract the HH:MM Eastern Time component
+      if (timespan !== "day") {
+        row.time = massiveTimestampToETTime(bar.t);
+      }
+      allRows.push(row);
     }
 
     // Pagination (per D-05: seen-cursor guard against documented Massive loop bug)
