@@ -139,10 +139,10 @@ Plans:
 **Goal:** A `get_option_snapshot` MCP tool fetches live option chain data (greeks, IV, OI, quotes) from Massive's v3/snapshot/options endpoint with auto-pagination and BS greeks fallback for contracts where the API returns empty greeks
 **Requirements**: SNAP-01, SNAP-02, SNAP-03, SNAP-04, SNAP-05, SNAP-06, SNAP-07, SNAP-08, SNAP-09
 **Depends on:** Phase 69
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 70-01-PLAN.md — Snapshot client: Zod schemas, fetchOptionSnapshot with pagination, BS greeks fallback + unit tests
+- [x] 70-01-PLAN.md — Snapshot client: Zod schemas, fetchOptionSnapshot with pagination, BS greeks fallback + unit tests
 - [ ] 70-02-PLAN.md — get_option_snapshot MCP tool registration, test exports
 
 ### Phase 71: Exit Trigger Analysis — Port analyze_exit_triggers and analyze_tent_sag from TastyTrade MCP to TradeBlocks using replay + greeks data

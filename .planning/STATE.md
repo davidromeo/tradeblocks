@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 69-02-PLAN.md
-last_updated: "2026-03-22T22:27:47.455Z"
+stopped_at: Completed 70-01-PLAN.md
+last_updated: "2026-03-22T23:28:08.454Z"
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 69 — black-scholes-greeks-engine
+**Current focus:** Phase 70 — live-options-snapshot
 
 ## Current Position
 
-Phase: 69 (black-scholes-greeks-engine) — EXECUTING
+Phase: 70 (live-options-snapshot) — EXECUTING
 Plan: 2 of 2
 
 ## Performance Metrics
@@ -43,6 +43,7 @@ Plan: 2 of 2
 | Phase 68 P02 | 192 | 2 tasks | 4 files |
 | Phase 69 P01 | 211 | 1 tasks | 3 files |
 | Phase 69 P02 | 255 | 2 tasks | 4 files |
+| Phase 70 P01 | 4 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ Plan: 2 of 2
 - [Phase 69]: Theta per calendar day (annual/365), vega per 1% IV move (raw/100)
 - [Phase 69]: GreeksConfig as optional parameter keeps computeStrategyPnlPath backwards compatible
 - [Phase 69]: Underlying bar HL2 mark pricing consistent with option pricing; batch INSERT OR REPLACE for market.intraday caching
+- [Phase 70]: Re-implemented getApiKey and fetchWithRetry locally since private in massive-client.ts
+- [Phase 70]: INDEX_TICKERS set for asset class detection: SPX, NDX, RUT, DJX, VIX, VIX9D, VIX3M, OEX, XSP
+- [Phase 70]: greeks_source provenance field distinguishes API greeks (massive) from BS model greeks (computed)
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T22:27:47.452Z
-Stopped at: Completed 69-02-PLAN.md
+Last session: 2026-03-22T23:28:08.451Z
+Stopped at: Completed 70-01-PLAN.md
 Resume file: None
