@@ -11,7 +11,6 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createToolOutput } from "../utils/output-formatter.js";
 import { fetchOptionSnapshot } from "../utils/massive-snapshot.js";
 
 // ---------------------------------------------------------------------------
@@ -56,7 +55,8 @@ export const getOptionSnapshotSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export async function handleGetOptionSnapshot(
-  params: z.infer<typeof getOptionSnapshotSchema>
+  params: z.infer<typeof getOptionSnapshotSchema>,
+  injectedFetcher?: typeof fetchOptionSnapshot
 ): Promise<string> {
   try {
     const {
@@ -69,7 +69,8 @@ export async function handleGetOptionSnapshot(
       limit,
     } = params;
 
-    const result = await fetchOptionSnapshot({
+    const fetcher = injectedFetcher ?? fetchOptionSnapshot;
+    const result = await fetcher({
       underlying,
       strike_price_gte,
       strike_price_lte,
