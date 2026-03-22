@@ -22,7 +22,9 @@ import {
   computeReplayMfeMae,
   type ReplayLeg,
   type ReplayResult,
+  type GreeksConfig,
 } from "../utils/trade-replay.js";
+import type { MassiveBarRow } from "../utils/massive-client.js";
 
 // ---------------------------------------------------------------------------
 // Zod schema
@@ -291,8 +293,133 @@ export async function handleReplayTrade(
     replayLegs.map((leg) => fetchLegBars(leg.occTicker))
   );
 
+  // ----- Fetch underlying bars + build greeks config -----
+  // Reverse-map weekly roots back to standard root for underlying fetch
+  const REVERSE_ROOT_MAP: Record<string, string> = {
+    SPXW: 'SPX', NDXP: 'NDX', RUTW: 'RUT',
+  };
+  const DIVIDEND_YIELDS: Record<string, number> = {
+    SPX: 0.015, SPXW: 0.015, NDX: 0.015, NDXP: 0.015,
+  };
+
+  // Extract root from first leg's OCC ticker
+  const firstRootMatch = replayLegs[0]?.occTicker.match(/^([A-Z]+)/);
+  const rawRoot = firstRootMatch ? firstRootMatch[1] : '';
+  const underlyingTicker = REVERSE_ROOT_MAP[rawRoot] ?? rawRoot;
+  const dividendYield = DIVIDEND_YIELDS[rawRoot] ?? 0;
+
+  let underlyingBars: MassiveBarRow[] = [];
+  try {
+    underlyingBars = await fetchBars({
+      ticker: underlyingTicker,
+      from: open_date!,
+      to: close_date!,
+      timespan: "minute",
+      assetClass: underlyingTicker === "SPX" || underlyingTicker === "NDX" || underlyingTicker === "RUT" ? "index" : "stock",
+    });
+  } catch {
+    // Fall through to daily fallback
+  }
+
+  // Cache underlying bars in market.intraday (best-effort)
+  if (underlyingBars.length > 0) {
+    try {
+      const conn = injectedConn ?? await getConnection(baseDir);
+      const values = underlyingBars
+        .filter(b => b.time)
+        .map(b =>
+          `('${underlyingTicker}', '${b.date}', '${b.time}', ${b.open}, ${b.high}, ${b.low}, ${b.close})`
+        );
+      if (values.length > 0) {
+        // Batch insert in chunks of 500 to avoid query size limits
+        for (let i = 0; i < values.length; i += 500) {
+          const chunk = values.slice(i, i + 500);
+          await conn.run(
+            `INSERT OR REPLACE INTO market.intraday (ticker, date, time, open, high, low, close) VALUES ${chunk.join(', ')}`
+          );
+        }
+      }
+    } catch {
+      // Caching is best-effort — don't fail the replay
+    }
+  }
+
+  // Daily fallback when minute bars unavailable
+  if (underlyingBars.length === 0) {
+    try {
+      const conn = injectedConn ?? await getConnection(baseDir);
+      const result = await conn.runAndReadAll(
+        `SELECT date, close FROM market.daily
+         WHERE ticker = '${underlyingTicker}'
+         AND date >= '${open_date}' AND date <= '${close_date}'
+         ORDER BY date`
+      );
+      const dailyRows = result.getRows();
+      underlyingBars = dailyRows.map(r => ({
+        date: String(r[0]),
+        open: Number(r[1]),
+        high: Number(r[1]),
+        low: Number(r[1]),
+        close: Number(r[1]),
+        volume: 0,
+        ticker: underlyingTicker,
+      }));
+    } catch {
+      // No fallback available — greeks will be omitted
+    }
+  }
+
+  // Build underlying price map for greeks config
+  const underlyingPrices = new Map<string, number>();
+  for (const b of underlyingBars) {
+    const ts = `${b.date} ${b.time ?? ''}`.trim();
+    underlyingPrices.set(ts, (b.high + b.low) / 2);
+  }
+
+  // IVP lookup from market.context
+  let ivpByDate: Map<string, number> | undefined;
+  try {
+    const conn = injectedConn ?? await getConnection(baseDir);
+    const ivpResult = await conn.runAndReadAll(
+      `SELECT date, VIX_IVP FROM market.context
+       WHERE date >= '${open_date}' AND date <= '${close_date}'
+       AND VIX_IVP IS NOT NULL
+       ORDER BY date`
+    );
+    const ivpRows = ivpResult.getRows();
+    if (ivpRows.length > 0) {
+      ivpByDate = new Map();
+      for (const r of ivpRows) {
+        ivpByDate.set(String(r[0]), Number(r[1]));
+      }
+    }
+  } catch {
+    // IVP is optional enrichment — don't fail
+  }
+
+  // Build GreeksConfig
+  let greeksConfig: GreeksConfig | undefined;
+  if (underlyingPrices.size > 0) {
+    greeksConfig = {
+      underlyingPrices,
+      legs: replayLegs.map(leg => {
+        // Extract strike, type, expiry from OCC ticker: ROOT{YYMMDD}{C|P}{strike*1000}
+        const occMatch = leg.occTicker.match(/^[A-Z]+(\d{6})([CP])(\d{8})$/);
+        if (!occMatch) return { strike: 0, type: 'C' as const, expiryDate: '' };
+        const yymmdd = occMatch[1];
+        const type = occMatch[2] as 'C' | 'P';
+        const strike = parseInt(occMatch[3], 10) / 1000;
+        const expiryDate = `20${yymmdd.slice(0, 2)}-${yymmdd.slice(2, 4)}-${yymmdd.slice(4, 6)}`;
+        return { strike, type, expiryDate };
+      }),
+      riskFreeRate: 0.045,
+      dividendYield,
+      ivpByDate,
+    };
+  }
+
   // ----- Compute P&L path + MFE/MAE -----
-  const fullPath = computeStrategyPnlPath(replayLegs, barsByLeg);
+  const fullPath = computeStrategyPnlPath(replayLegs, barsByLeg, greeksConfig);
   const { mfe, mae, mfeTimestamp, maeTimestamp } =
     computeReplayMfeMae(fullPath);
   const totalPnl = fullPath.length > 0 ? fullPath[fullPath.length - 1].strategyPnl : 0;
@@ -357,7 +484,7 @@ export function registerReplayTools(
         const summary =
           `Replayed ${result.legs.length}-leg strategy from ${params.open_date ?? "trade dates"} to ${params.close_date ?? "trade dates"}: ` +
           `$${result.totalPnl.toFixed(2)} P&L, MFE=$${result.mfe.toFixed(2)}, MAE=$${result.mae.toFixed(2)}, ` +
-          `${result.pnlPath.length} minute bars`;
+          `${result.pnlPath.length} minute bars, greeks=${result.pnlPath[0]?.legGreeks ? 'yes' : 'no'}`;
 
         return createToolOutput(summary, result);
       } catch (error) {
