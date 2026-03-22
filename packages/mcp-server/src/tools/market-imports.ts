@@ -18,7 +18,7 @@ import * as os from "os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getConnection, upgradeToReadWrite, downgradeToReadOnly } from "../db/connection.js";
 import { createToolOutput } from "../utils/output-formatter.js";
-import { importMarketCsvFile, importFromDatabase } from "../utils/market-importer.js";
+import { importMarketCsvFile, importFromDatabase, importFromMassive } from "../utils/market-importer.js";
 
 /**
  * Register market import MCP tools on the given server.
@@ -210,6 +210,110 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
             {
               type: "text" as const,
               text: `Error importing from database: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      } finally {
+        await downgradeToReadOnly(baseDir);
+      }
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Tool: import_from_massive
+  // ---------------------------------------------------------------------------
+  server.registerTool(
+    "import_from_massive",
+    {
+      description:
+        "Import market data from Massive.com API into market.daily, market.context, or market.intraday. " +
+        "Requires MASSIVE_API_KEY environment variable. " +
+        "For daily: fetches OHLCV bars for any stock/index ticker. " +
+        "For context: ignores ticker param, auto-fetches VIX + VIX9D + VIX3M and merges into one row per date. " +
+        "For intraday: fetches minute or hour bars (use timespan param). " +
+        "Supports OCC option tickers (e.g., SPX251219C05000000). " +
+        "Upserts on conflict — safe to re-import overlapping date ranges.",
+      inputSchema: z.object({
+        ticker: z.string().describe(
+          "Ticker symbol (e.g., 'SPX', 'AAPL', 'VIX'). For context imports, this is ignored (VIX/VIX9D/VIX3M fetched automatically). For options, use OCC format (e.g., 'SPX251219C05000000')."
+        ),
+        from: z.string().describe("Start date YYYY-MM-DD"),
+        to: z.string().describe("End date YYYY-MM-DD"),
+        target_table: z.enum(["daily", "context", "intraday"]).describe(
+          "Target table: 'daily' for OHLCV, 'context' for VIX term structure (auto-fetches VIX+VIX9D+VIX3M), 'intraday' for minute/hour bars."
+        ),
+        timespan: z.enum(["1m", "5m", "15m", "1h"]).optional().describe(
+          "Bar timespan for intraday imports. Maps to Massive API: '1m'→1 minute, '5m'→5 minute, '15m'→15 minute, '1h'→1 hour. Ignored for daily/context."
+        ),
+        asset_class: z.enum(["stock", "index", "option"]).optional().describe(
+          "Asset class for ticker prefix. Auto-detected if omitted: VIX/SPX/NDX→index, OCC format→option, else stock."
+        ),
+        dry_run: z.boolean().default(false).describe(
+          "If true, validates parameters and shows what would be imported without writing."
+        ),
+        skip_enrichment: z.boolean().default(false).describe(
+          "If true, skips automatic enrichment after import."
+        ),
+      }),
+    },
+    async ({ ticker, from, to, target_table, timespan, asset_class, dry_run, skip_enrichment }) => {
+      // Parse timespan string to { timespan, multiplier } for Massive API
+      let parsedTimespan: "minute" | "hour" | undefined;
+      let parsedMultiplier: number | undefined;
+      if (timespan) {
+        if (timespan === "1m") {
+          parsedTimespan = "minute";
+          parsedMultiplier = 1;
+        } else if (timespan === "5m") {
+          parsedTimespan = "minute";
+          parsedMultiplier = 5;
+        } else if (timespan === "15m") {
+          parsedTimespan = "minute";
+          parsedMultiplier = 15;
+        } else if (timespan === "1h") {
+          parsedTimespan = "hour";
+          parsedMultiplier = 1;
+        }
+      }
+
+      await upgradeToReadWrite(baseDir);
+      try {
+        const conn = await getConnection(baseDir);
+
+        const result = await importFromMassive(conn, {
+          ticker: ticker.toUpperCase(),
+          from,
+          to,
+          targetTable: target_table,
+          timespan: parsedTimespan,
+          multiplier: parsedMultiplier,
+          assetClass: asset_class,
+          dryRun: dry_run,
+          skipEnrichment: skip_enrichment,
+        });
+
+        const tickerDisplay = target_table === "context" ? "VIX/VIX9D/VIX3M" : ticker.toUpperCase();
+        const summary = dry_run
+          ? `[DRY RUN] Would import ${result.inputRowCount} rows into market.${target_table} (${tickerDisplay}) — no data written`
+          : `Imported ${result.rowsInserted} of ${result.inputRowCount} rows into market.${target_table} (${tickerDisplay})${result.rowsUpdated ? `; ${result.rowsUpdated} merged into existing rows` : ""}${result.rowsSkipped ? `; ${result.rowsSkipped} skipped` : ""}`;
+
+        return createToolOutput(summary, {
+          ticker: tickerDisplay,
+          targetTable: target_table,
+          inputRowCount: result.inputRowCount,
+          rowsInserted: result.rowsInserted,
+          rowsSkipped: result.rowsSkipped,
+          dateRange: result.dateRange,
+          enrichment: result.enrichment,
+          dryRun: dry_run,
+        });
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error importing from Massive.com: ${(error as Error).message}`,
             },
           ],
           isError: true,
