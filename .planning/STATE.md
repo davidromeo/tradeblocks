@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 67-01-PLAN.md
-last_updated: "2026-03-22T19:17:45.550Z"
+stopped_at: Completed 67-02-PLAN.md
+last_updated: "2026-03-22T19:20:26.780Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 67 (Import Tool & Enrichment) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -36,6 +36,7 @@ Plan: 2 of 3
 | Phase 66 P01 | 179 | 2 tasks | 2 files |
 | Phase 66 P02 | 245 | 2 tasks | 3 files |
 | Phase 67 P01 | 20 | 2 tasks | 5 files |
+| Phase 67 P02 | 25 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,9 @@ Plan: 2 of 3
 - [Phase 67]: Context merge uses Map<date,row> keyed approach — handles partial data gracefully when dates missing from one index
 - [Phase 67]: runContextEnrichment() delegates to private runTier2() without modifying triggerEnrichment semantics
 - [Phase 67]: Volume stripped from intraday rows — market.intraday schema has no volume column
+- [Phase 67]: computeIVP divides by period-1 (251): compares current against prior days only, not itself
+- [Phase 67]: computeIVR returns 50 when range=0: avoids division by zero, semantically middle-of-range
+- [Phase 67]: Removed computeVIXPercentile entirely: superseded by computeIVP with cleaner <= semantics
 
 ### Pending Todos
 
@@ -71,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T19:17:45.547Z
-Stopped at: Completed 67-01-PLAN.md
+Last session: 2026-03-22T19:20:26.777Z
+Stopped at: Completed 67-02-PLAN.md
 Resume file: None

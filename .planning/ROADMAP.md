@@ -82,7 +82,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 67-01-PLAN.md — Register import_from_massive MCP tool, wire fetchBars to DuckDB import pipeline
-- [ ] 67-02-PLAN.md — Remove Bollinger Bands from Tier 1, add IVR/IVP to Tier 2 enrichment
+- [x] 67-02-PLAN.md — Remove Bollinger Bands from Tier 1, add IVR/IVP to Tier 2 enrichment
 - [ ] 67-03-PLAN.md — Integration tests for import_from_massive with mocked API and real DuckDB
 
 ### Phase 68: Trade Replay & Documentation
@@ -114,5 +114,5 @@ Plans:
 | 64. Schema V2 | v2.1-b2 | 2/2 | Complete | 2026-03-08 |
 | 65. Portfolio Analysis Tools | v2.1-b2 | 4/4 | Complete | 2026-03-08 |
 | 66. Massive API Adapter Foundation | v2.2 | 2/2 | Complete    | 2026-03-22 |
-| 67. Import Tool & Enrichment | v2.2 | 1/3 | In Progress|  |
+| 67. Import Tool & Enrichment | v2.2 | 2/3 | In Progress|  |
 | 68. Trade Replay & Documentation | v2.2 | 0/? | Not started | — |

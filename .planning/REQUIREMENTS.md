@@ -38,11 +38,11 @@ Requirements for Massive.com market data integration milestone.
 
 ### Enrichment
 
-- [ ] **ENR-01**: Tier 2 enrichment computes VIX_IVR (252-day rank: (current - min) / (max - min) * 100) and stores in `market.context`
-- [ ] **ENR-02**: Tier 2 enrichment computes VIX9D_IVR and VIX9D_IVP (252-day rank and percentile for VIX9D)
-- [ ] **ENR-03**: Tier 2 enrichment computes VIX3M_IVR and VIX3M_IVP (252-day rank and percentile for VIX3M)
-- [ ] **ENR-04**: Remove Bollinger Bands fields (BB_Position, BB_Width) from Tier 1 enrichment and `market.daily` schema
-- [ ] **ENR-05**: VIX_Percentile renamed to VIX_IVP for naming consistency with IVR/IVP scheme
+- [x] **ENR-01**: Tier 2 enrichment computes VIX_IVR (252-day rank: (current - min) / (max - min) * 100) and stores in `market.context`
+- [x] **ENR-02**: Tier 2 enrichment computes VIX9D_IVR and VIX9D_IVP (252-day rank and percentile for VIX9D)
+- [x] **ENR-03**: Tier 2 enrichment computes VIX3M_IVR and VIX3M_IVP (252-day rank and percentile for VIX3M)
+- [x] **ENR-04**: Remove Bollinger Bands fields (BB_Position, BB_Width) from Tier 1 enrichment and `market.daily` schema
+- [x] **ENR-05**: VIX_Percentile renamed to VIX_IVP for naming consistency with IVR/IVP scheme
 
 ### Documentation
 
@@ -101,11 +101,11 @@ Deferred to future releases. Tracked but not in current roadmap.
 | IMP-05 | Phase 67 | Complete |
 | IMP-07 | Phase 66 | Complete |
 | IMP-08 | Phase 67 | Complete |
-| ENR-01 | Phase 67 | Pending |
-| ENR-02 | Phase 67 | Pending |
-| ENR-03 | Phase 67 | Pending |
-| ENR-04 | Phase 67 | Pending |
-| ENR-05 | Phase 67 | Pending |
+| ENR-01 | Phase 67 | Complete |
+| ENR-02 | Phase 67 | Complete |
+| ENR-03 | Phase 67 | Complete |
+| ENR-04 | Phase 67 | Complete |
+| ENR-05 | Phase 67 | Complete |
 | TST-02 | Phase 67 | Pending |
 | RPL-01 | Phase 68 | Pending |
 | RPL-02 | Phase 68 | Pending |
