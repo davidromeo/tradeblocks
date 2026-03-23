@@ -268,3 +268,17 @@ export {
   analyzeExitTriggersSchema,
   decomposeGreeksSchema,
 } from './tools/exit-analysis.js';
+
+// Export batch exit analysis engine for unit testing (Phase 72)
+export {
+  analyzeBatch,
+  computeAggregateStats,
+  computeTriggerAttribution,
+  type BatchExitConfig,
+  type BatchExitResult,
+  type TradeExitResult,
+  type TradeInput,
+  type AggregateStats,
+  type TriggerAttribution,
+  type BaselineMode,
+} from './utils/batch-exit-analysis.js';
