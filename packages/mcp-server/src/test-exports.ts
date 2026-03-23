@@ -248,3 +248,23 @@ export {
   type LegGroupDef,
   type FactorName,
 } from './utils/greeks-decomposition.js';
+
+// Export exit trigger analysis utilities for unit testing (Phase 71)
+export {
+  evaluateTrigger,
+  analyzeExitTriggers,
+  type ExitTriggerConfig,
+  type ExitTriggerResult,
+  type TriggerFireEvent,
+  type TriggerType,
+  type LegGroupConfig,
+  type LegGroupResult,
+} from './utils/exit-triggers.js';
+
+// Export exit analysis tool handlers and schemas for integration testing (Phase 71)
+export {
+  handleAnalyzeExitTriggers,
+  handleDecomposeGreeks,
+  analyzeExitTriggersSchema,
+  decomposeGreeksSchema,
+} from './tools/exit-analysis.js';
