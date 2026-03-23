@@ -236,3 +236,15 @@ export {
   handleGetOptionSnapshot,
   getOptionSnapshotSchema,
 } from './tools/snapshot.js';
+
+// Export greeks decomposition utilities for unit testing (Phase 71)
+export {
+  decomposeGreeks,
+  computeTimeDeltaDays,
+  type GreeksDecompositionConfig,
+  type GreeksDecompositionResult,
+  type FactorContribution,
+  type LegGroupVega,
+  type LegGroupDef,
+  type FactorName,
+} from './utils/greeks-decomposition.js';
