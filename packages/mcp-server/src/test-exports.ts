@@ -282,3 +282,9 @@ export {
   type TriggerAttribution,
   type BaselineMode,
 } from './utils/batch-exit-analysis.js';
+
+// Export batch exit analysis tool handler and schema for integration testing (Phase 72)
+export {
+  handleBatchExitAnalysis,
+  batchExitAnalysisSchema,
+} from './tools/batch-exit-analysis.js';

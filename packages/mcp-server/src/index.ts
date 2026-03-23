@@ -33,6 +33,7 @@ import { registerRegimeAdvisorTools } from "./tools/regime-advisor.js";
 import { registerReplayTools } from "./tools/replay.js";
 import { registerSnapshotTools } from "./tools/snapshot.js";
 import { registerExitAnalysisTools } from "./tools/exit-analysis.js";
+import { registerBatchExitAnalysisTools } from "./tools/batch-exit-analysis.js";
 import {
   installSkills,
   uninstallSkills,
@@ -318,6 +319,7 @@ async function main(): Promise<void> {
     registerReplayTools(server, resolvedDir);
     registerSnapshotTools(server);
     registerExitAnalysisTools(server, resolvedDir);
+    registerBatchExitAnalysisTools(server, resolvedDir);
     return server;
   };
 
