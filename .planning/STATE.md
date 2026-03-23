@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 71-01-PLAN.md
-last_updated: "2026-03-23T03:11:50.161Z"
+stopped_at: Completed 71-03-PLAN.md
+last_updated: "2026-03-23T03:16:23.202Z"
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -47,6 +47,7 @@ Plan: 3 of 3
 | Phase 70 P02 | 160 | 3 tasks | 4 files |
 | Phase 71 P02 | 238 | 2 tasks | 3 files |
 | Phase 71 P01 | 5 | 2 tasks | 2 files |
+| Phase 71 P03 | 130 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ Plan: 3 of 3
 - [Phase 71]: Per-leg-group vega uses position-weighted vega: legGreek.vega * quantity * multiplier / 100
 - [Phase 71]: 14 exit trigger types as pure evaluator functions against PnlPoint paths; first-to-fire orchestration with actual exit P&L comparison
 - [Phase 71]: vix9dVixRatio bidirectional threshold: >= for contango (threshold >= 1), <= for backwardation (threshold < 1)
+- [Phase 71]: Both exit analysis tools fetch VIX/VIX9D/underlying price maps on-demand based on trigger types
+- [Phase 71]: Composite tool pattern: MCP tool runs replay internally then passes to pure analysis engine
 
 ### Pending Todos
 
@@ -114,6 +117,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T03:11:50.157Z
-Stopped at: Completed 71-01-PLAN.md
+Last session: 2026-03-23T03:16:23.198Z
+Stopped at: Completed 71-03-PLAN.md
 Resume file: None
