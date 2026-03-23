@@ -122,6 +122,8 @@ Plans:
 | 67. Import Tool & Enrichment | v2.2 | 3/3 | Complete    | 2026-03-22 |
 | 68. Trade Replay & Documentation | v2.2 | 3/3 | Complete    | 2026-03-22 |
 | 69. Black-Scholes Greeks Engine | v2.2 | 2/2 | Complete    | 2026-03-22 |
+| 70. Live Options Snapshot | v2.2 | 2/2 | Complete    | 2026-03-22 |
+| 71. Exit Trigger Analysis | v2.2 | 0/3 | Planned     | — |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -145,15 +147,17 @@ Plans:
 - [x] 70-01-PLAN.md — Snapshot client: Zod schemas, fetchOptionSnapshot with pagination, BS greeks fallback + unit tests
 - [x] 70-02-PLAN.md — get_option_snapshot MCP tool registration, test exports
 
-### Phase 71: Exit Trigger Analysis — Port analyze_exit_triggers and analyze_tent_sag from TastyTrade MCP to TradeBlocks using replay + greeks data
+### Phase 71: Exit Trigger Analysis — Port analyze_exit_triggers and decompose_greeks from TastyTrade MCP to TradeBlocks using replay + greeks data
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Two MCP tools (`analyze_exit_triggers` and `decompose_greeks`) that run replay internally, evaluate 14 exit trigger types against the greeks-enriched P&L path, and decompose P&L into ranked greek factor contributions with per-leg-group vega attribution for calendar strategies
+**Requirements**: EXIT-01, EXIT-02, EXIT-03, EXIT-04, EXIT-05, EXIT-06, EXIT-07, EXIT-08, EXIT-09, EXIT-10, EXIT-11, TST-05, TST-06, TST-07
 **Depends on:** Phase 70
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 71 to break down)
+- [ ] 71-01-PLAN.md — Exit trigger evaluators: 14 trigger types + analysis engine + unit tests
+- [ ] 71-02-PLAN.md — Greeks decomposition engine: factor attribution + per-leg-group vega + unit tests
+- [ ] 71-03-PLAN.md — MCP tool registration for both tools, server wiring, test exports
 
 ### Phase 72: Exit Policy Comparison — Port compare_exit_policies and batch_exit_analysis for multi-trade policy testing across entire blocks
 

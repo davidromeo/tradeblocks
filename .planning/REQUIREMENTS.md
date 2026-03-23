@@ -50,12 +50,29 @@ Requirements for Massive.com market data integration milestone.
 - [x] **DOC-02**: Broken `scripts/README.md` reference removed and replaced with correct documentation (fixes #248)
 - [x] **DOC-03**: Documentation includes required env vars, ticker format reference, and target_table usage
 
+### Exit Trigger Analysis
+
+- [ ] **EXIT-01**: `analyze_exit_triggers` MCP tool accepts block_id + trade_index (or explicit legs) and trigger configs, runs replay internally, and returns when each trigger would fire
+- [ ] **EXIT-02**: System evaluates all 14 trigger types at every P&L path point: profitTarget, stopLoss, trailingStop, dteExit, ditExit, clockTimeExit, underlyingPriceMove, positionDelta, perLegDelta, vixMove, vix9dMove, vix9dVixRatio, slRatioThreshold, slRatioMove
+- [ ] **EXIT-03**: System identifies first-to-fire trigger across all configured triggers with timestamp and P&L at fire
+- [ ] **EXIT-04**: System compares trigger fire time against actualExitTimestamp showing P&L difference
+- [ ] **EXIT-05**: System supports legGroups parameter for per-group exit triggers (e.g., put spread vs call spread in iron condor)
+- [ ] **EXIT-06**: Triggers requiring external data (underlyingPriceMove, vixMove, vix9dMove) fetch minute bars from Massive automatically
+- [ ] **EXIT-07**: `decompose_greeks` MCP tool accepts same replay inputs and returns P&L decomposed into delta, gamma, theta, vega, and residual contributions
+- [ ] **EXIT-08**: Greek attribution computed between consecutive timestamps per D-09: delta_pnl = netDelta * underlyingChange, gamma_pnl = 0.5 * netGamma * underlyingChange^2, theta_pnl = netTheta * dt, vega_pnl = netVega * ivChange
+- [ ] **EXIT-09**: For calendar strategies, decompose_greeks includes per-leg-group vega attribution showing front vs back month IV divergence
+- [ ] **EXIT-10**: Both tools are registered in MCP server and available via tool listing
+- [ ] **EXIT-11**: Both tools handle errors gracefully (missing API key, invalid trade, no greeks data)
+
 ### Testing
 
 - [x] **TST-01**: Unit tests for `massive-client.ts` using mocked `fetch` (timestamp conversion, pagination, ticker normalization, error handling)
 - [x] **TST-02**: Integration tests for `import_from_massive` tool with real DuckDB and mocked API responses
 - [x] **TST-03**: Unit tests for OCC ticker resolution and strategy P&L path combination
 - [x] **TST-04**: Integration tests for trade replay with mocked Massive API responses
+- [ ] **TST-05**: Unit tests for all 14 exit trigger evaluators
+- [ ] **TST-06**: Unit tests for greeks decomposition math and leg-group vega attribution
+- [ ] **TST-07**: Tool handlers and schemas exported via test-exports.ts for integration testing
 
 ## Future Requirements
 
@@ -118,12 +135,26 @@ Deferred to future releases. Tracked but not in current roadmap.
 | DOC-03 | Phase 68 | Complete |
 | TST-03 | Phase 68 | Complete |
 | TST-04 | Phase 68 | Complete |
+| EXIT-01 | Phase 71 | Planned |
+| EXIT-02 | Phase 71 | Planned |
+| EXIT-03 | Phase 71 | Planned |
+| EXIT-04 | Phase 71 | Planned |
+| EXIT-05 | Phase 71 | Planned |
+| EXIT-06 | Phase 71 | Planned |
+| EXIT-07 | Phase 71 | Planned |
+| EXIT-08 | Phase 71 | Planned |
+| EXIT-09 | Phase 71 | Planned |
+| EXIT-10 | Phase 71 | Planned |
+| EXIT-11 | Phase 71 | Planned |
+| TST-05 | Phase 71 | Planned |
+| TST-06 | Phase 71 | Planned |
+| TST-07 | Phase 71 | Planned |
 
 **Coverage:**
-- v2.2 requirements: 32 total
-- Mapped to phases: 32
+- v2.2 requirements: 46 total
+- Mapped to phases: 46
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after roadmap creation*
+*Last updated: 2026-03-23 after Phase 71 planning*
