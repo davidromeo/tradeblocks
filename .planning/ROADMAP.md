@@ -124,7 +124,7 @@ Plans:
 | 69. Black-Scholes Greeks Engine | v2.2 | 2/2 | Complete    | 2026-03-22 |
 | 70. Live Options Snapshot | v2.2 | 2/2 | Complete    | 2026-03-22 |
 | 71. Exit Trigger Analysis | v2.2 | 3/3 | Complete   | 2026-03-23 |
-| 72. Exit Policy Comparison | v2.2 | 2/3 | In Progress|  |
+| 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -165,9 +165,9 @@ Plans:
 **Goal:** A `batch_exit_analysis` MCP tool that replays matching trades from a block, evaluates a candidate exit policy against each trade's minute-level P&L path, and returns aggregate statistics (win rate, Sharpe, total P&L, profit factor) with per-trigger attribution — directly comparable to get_statistics output. Option bars are cached in market.intraday for instant re-analysis.
 **Requirements**: BATCH-01, BATCH-02, BATCH-03, BATCH-04, BATCH-05, BATCH-06, BATCH-07, BATCH-08, BATCH-09, BATCH-10, BATCH-11, BATCH-12, BATCH-13, BATCH-14, BATCH-15, CACHE-01, TST-08, TST-09, TST-10
 **Depends on:** Phase 71
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 72-01-PLAN.md — Option bar caching in replay + batch exit analysis pure engine
 - [x] 72-02-PLAN.md — Unit tests for batch exit analysis engine
-- [ ] 72-03-PLAN.md — MCP tool registration, server wiring, test exports
+- [x] 72-03-PLAN.md — MCP tool registration, server wiring, test exports

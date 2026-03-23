@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 72-02-PLAN.md
-last_updated: "2026-03-23T13:04:55.850Z"
+stopped_at: Completed 72-03-PLAN.md
+last_updated: "2026-03-23T13:05:38.674Z"
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -50,6 +50,7 @@ Plan: 3 of 3
 | Phase 71 P03 | 130 | 2 tasks | 3 files |
 | Phase 72 P01 | 232 | 2 tasks | 4 files |
 | Phase 72 P02 | 64 | 1 tasks | 1 files |
+| Phase 72-exit-policy-comparison P03 | 8 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,9 @@ Plan: 3 of 3
 - [Phase 72]: analyzeBatch noTrigger case: candidatePnl = last pnlPath point (hold to end of replay)
 - [Phase 72]: Sharpe ratio trade-level (not annualized): mean/sample stddev (N-1), null if < 2 trades
 - [Phase 72]: Test file was created in Plan 72-01 TDD RED phase before implementation — Plan 72-02 confirms all 13 tests pass against pure batch exit analysis engine
+- [Phase 72-exit-policy-comparison]: Always pass format:'full' to handleReplayTrade regardless of params.format — params.format controls batch output density, not replay resolution needed by analyzeBatch
+- [Phase 72-exit-policy-comparison]: ROW_NUMBER CTE uses ORDER BY date_opened, rowid for deterministic trade_idx when multiple trades share the same date_opened
+- [Phase 72-exit-policy-comparison]: Profile context lookup in batch_exit_analysis swallows errors — non-critical informational enrichment
 
 ### Pending Todos
 
@@ -123,6 +127,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T13:04:55.847Z
-Stopped at: Completed 72-02-PLAN.md
+Last session: 2026-03-23T13:05:38.671Z
+Stopped at: Completed 72-03-PLAN.md
 Resume file: None

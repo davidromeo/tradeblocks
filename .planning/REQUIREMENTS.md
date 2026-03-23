@@ -77,9 +77,9 @@ Requirements for Massive.com market data integration milestone.
 - [x] **BATCH-09**: Strategy profile context included in output when profile exists for block+strategy (informational, not input)
 - [x] **BATCH-10**: Aggregate stats include: winningTrades, losingTrades, winRate, totalPnl, avgPnl, avgWin, avgLoss, maxWin, maxLoss, profitFactor, maxDrawdown, sharpeRatio, maxWinStreak, maxLossStreak
 - [x] **BATCH-11**: Pure analysis engine (no I/O) computes aggregates from pre-analyzed trade results; tool handler orchestrates replay + engine
-- [ ] **BATCH-12**: Tool registered in MCP server and available via tool listing
-- [ ] **BATCH-13**: Tool handles errors gracefully: skips trades that fail replay, reports skip count in summary
-- [ ] **BATCH-14**: Handler and schema exported via test-exports.ts for integration testing
+- [x] **BATCH-12**: Tool registered in MCP server and available via tool listing
+- [x] **BATCH-13**: Tool handles errors gracefully: skips trades that fail replay, reports skip count in summary
+- [x] **BATCH-14**: Handler and schema exported via test-exports.ts for integration testing
 - [x] **BATCH-15**: Tool checks market.intraday for existing option bars before calling Massive; first run populates, subsequent runs are local reads
 
 ### Option Bar Caching
@@ -97,7 +97,7 @@ Requirements for Massive.com market data integration milestone.
 - [x] **TST-07**: Tool handlers and schemas exported via test-exports.ts for integration testing
 - [x] **TST-08**: Unit tests for batch exit analysis aggregate stats (win rate, profit factor, Sharpe, drawdown, streaks)
 - [x] **TST-09**: Unit tests for both baseline modes and per-trigger attribution counting
-- [ ] **TST-10**: Batch exit analysis handler and pure engine functions exported via test-exports.ts
+- [x] **TST-10**: Batch exit analysis handler and pure engine functions exported via test-exports.ts
 
 ## Future Requirements
 
