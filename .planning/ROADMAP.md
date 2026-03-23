@@ -8,7 +8,7 @@
 - ✅ **v2.9 Lookahead-Free Market Analytics** — Phases 55-59 (shipped 2026-02-09)
 - ✅ **v2.1 Strategy Profiles (beta 1)** — Phases 60-63 (shipped 2026-03-06)
 - ✅ **v2.1 Profile Schema V2 & Portfolio Analysis (beta 2)** — Phases 64-65 (shipped 2026-03-08)
-- 🚧 **v2.2 Massive.com Market Data Integration** — Phases 66-72 (in progress)
+- 🚧 **v2.2 Massive.com Market Data Integration** — Phases 66-73 (in progress)
 
 See [MILESTONES.md](MILESTONES.md) for full history.
 
@@ -51,6 +51,10 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 - [x] **Phase 67: Import Tool & Enrichment** — Register `import_from_massive` MCP tool; wire daily OHLCV, VIX context (3-call merge), intraday bars, auto-enrichment; add IVR/IVP fields to Tier 2; remove Bollinger Bands from Tier 1 (completed 2026-03-22)
 - [x] **Phase 68: Trade Replay & Documentation** — Build `replay_trade` MCP tool (OCC ticker resolution, multi-leg P&L path, MFE/MAE); market data docs overhaul fixing #248 (completed 2026-03-22)
 - [x] **Phase 69: Black-Scholes Greeks Engine** — Pure BS greeks computation (delta, gamma, theta, vega, IV) + IV solver, wired into replay_trade with underlying bar fetching, caching, IVP lookup (completed 2026-03-22)
+- [x] **Phase 70: Live Options Snapshot** — Integrate Massive /v3/snapshot/options endpoint for current greeks, IV, and open interest on active positions (completed 2026-03-22)
+- [x] **Phase 71: Exit Trigger Analysis** — Port analyze_exit_triggers and decompose_greeks from TastyTrade MCP to TradeBlocks using replay + greeks data (completed 2026-03-23)
+- [x] **Phase 72: Exit Policy Comparison** — Batch exit analysis tool for multi-trade policy testing across entire blocks (completed 2026-03-23)
+- [ ] **Phase 73: 0DTE Greeks Engine + Exit Trigger Usability** — Fix DTE bug, Bachelier normal model fallback, percentage-based exit triggers, greeks warnings, UX fixes
 
 ## Phase Details
 
@@ -125,6 +129,7 @@ Plans:
 | 70. Live Options Snapshot | v2.2 | 2/2 | Complete    | 2026-03-22 |
 | 71. Exit Trigger Analysis | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
+| 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 0/3 | Planned | — |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -171,3 +176,15 @@ Plans:
 - [x] 72-01-PLAN.md — Option bar caching in replay + batch exit analysis pure engine
 - [x] 72-02-PLAN.md — Unit tests for batch exit analysis engine
 - [x] 72-03-PLAN.md — MCP tool registration, server wiring, test exports
+
+### Phase 73: 0DTE Greeks Engine + Exit Trigger Usability — Fix DTE calculation bug, implement Bachelier normal model as fallback for short-dated options, add unit field to exit trigger schema, warn on null greeks, minor UX fixes
+
+**Goal:** 0DTE options get correct greeks via Bachelier normal model (replacing null greeks from BS gamma explosion), exit triggers support percentage-based thresholds, and tool UX is improved with better defaults and error reporting
+**Requirements**: DTE-01, DTE-02, BACH-01, BACH-02, BACH-03, UNIT-01, UNIT-02, UNIT-03, UNIT-04, UNIT-05, WARN-01, WARN-02, UX-01, UX-02, TST-11, TST-12, TST-13
+**Depends on:** Phase 72
+**Plans:** 3 plans
+
+Plans:
+- [ ] 73-01-PLAN.md — Bachelier normal model: pricing, greeks, IV solver, model selection in computeLegGreeks + TDD tests
+- [ ] 73-02-PLAN.md — Exit trigger unit field: percentage-based profitTarget/stopLoss + TDD tests
+- [ ] 73-03-PLAN.md — Wire into tools: DTE fix, greeks warnings, Zod schemas, UX fixes, test exports

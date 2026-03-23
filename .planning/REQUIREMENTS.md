@@ -99,6 +99,41 @@ Requirements for Massive.com market data integration milestone.
 - [x] **TST-09**: Unit tests for both baseline modes and per-trigger attribution counting
 - [x] **TST-10**: Batch exit analysis handler and pure engine functions exported via test-exports.ts
 
+### 0DTE Greeks Engine
+
+- [ ] **DTE-01**: DTE calculation in trade-replay.ts uses 4:00 PM ET expiry time instead of midnight, making DTE positive for all bars on expiry day (e.g., 9:30 AM bar = 6.5h/24h = 0.27 days)
+- [ ] **DTE-02**: The `dte <= 0` guard remains for post-close bars; the fix is to the expiry time, not the guard
+
+### Bachelier Normal Model
+
+- [ ] **BACH-01**: Bachelier pricing model (`bachelierPrice`) implemented for short-dated options where Black-Scholes gamma explodes
+- [ ] **BACH-02**: Bachelier greeks (delta, gamma, theta, vega) and normal IV solver (`solveNormalIV`) implemented with same `GreeksResult` interface
+- [ ] **BACH-03**: `computeLegGreeks` selects model based on `BACHELIER_DTE_THRESHOLD = 0.5` days: BS for dte >= 0.5, Bachelier for dte < 0.5
+
+### Exit Trigger Unit Field
+
+- [ ] **UNIT-01**: `ExitTriggerConfig` includes optional `unit` field (`'percent'` | `'dollar'`), defaulting to `'dollar'` for backwards compatibility
+- [ ] **UNIT-02**: `profitTarget` trigger with `unit: 'percent'` fires when P&L >= threshold * abs(entryCost)
+- [ ] **UNIT-03**: `stopLoss` trigger with `unit: 'percent'` fires when P&L <= -(threshold * abs(entryCost))
+- [ ] **UNIT-04**: Other trigger types ignore the `unit` field (only profitTarget and stopLoss are percentage-aware)
+- [ ] **UNIT-05**: Both `exit-analysis` and `batch-exit-analysis` Zod schemas include `unit` field with `'dollar'` default; handlers compute `entryCost` from replay legs
+
+### Greeks Warnings
+
+- [ ] **WARN-01**: `replay_trade` response includes `greeksWarning` field when >50% of leg-timestamp greeks are null
+- [ ] **WARN-02**: `decompose_greeks` result includes `warning` field when total residual exceeds 80% of total P&L change
+
+### UX Improvements
+
+- [ ] **UX-01**: `replay_trade` default format changed from `'summary'` to `'sampled'` (25-30 data points vs 4)
+- [ ] **UX-02**: `batch_exit_analysis` reports skipped trades as `skippedTrades` array with `{ tradeIndex, dateOpened, error }` objects instead of opaque count
+
+### Phase 73 Testing
+
+- [ ] **TST-11**: Unit tests for Bachelier pricing, greeks, IV solver, and model selection in computeLegGreeks
+- [ ] **TST-12**: Unit tests for percentage-based profitTarget and stopLoss triggers with various entryCost values
+- [ ] **TST-13**: New Bachelier functions and pdf/cdf exported via test-exports.ts
+
 ## Future Requirements
 
 Deferred to future releases. Tracked but not in current roadmap.
@@ -130,6 +165,9 @@ Deferred to future releases. Tracked but not in current roadmap.
 | Scheduler/cron integration | Outside MCP tool scope |
 | TastyTrade integration or dependency | Trade replay must be broker-independent |
 | Profile exit rule auto-translation to trigger configs | Would require parsing human-readable exit rule text |
+| SVJD (stochastic volatility jump-diffusion) model | Research paper shows 1.7x better accuracy but requires neural network training |
+| Numerical finite-difference greeks | Noisy for minute-bar data, better suited as validation tool |
+| Blended BS/Bachelier crossover zone | Hard cutover is simpler and both models agree well at DTE=0.5 |
 
 ## Traceability
 
@@ -167,45 +205,62 @@ Deferred to future releases. Tracked but not in current roadmap.
 | DOC-03 | Phase 68 | Complete |
 | TST-03 | Phase 68 | Complete |
 | TST-04 | Phase 68 | Complete |
-| EXIT-01 | Phase 71 | Planned |
-| EXIT-02 | Phase 71 | Planned |
-| EXIT-03 | Phase 71 | Planned |
-| EXIT-04 | Phase 71 | Planned |
-| EXIT-05 | Phase 71 | Planned |
-| EXIT-06 | Phase 71 | Planned |
-| EXIT-07 | Phase 71 | Planned |
-| EXIT-08 | Phase 71 | Planned |
-| EXIT-09 | Phase 71 | Planned |
-| EXIT-10 | Phase 71 | Planned |
-| EXIT-11 | Phase 71 | Planned |
-| TST-05 | Phase 71 | Planned |
-| TST-06 | Phase 71 | Planned |
-| TST-07 | Phase 71 | Planned |
-| BATCH-01 | Phase 72 | Planned |
-| BATCH-02 | Phase 72 | Planned |
-| BATCH-03 | Phase 72 | Planned |
-| BATCH-04 | Phase 72 | Planned |
-| BATCH-05 | Phase 72 | Planned |
-| BATCH-06 | Phase 72 | Planned |
-| BATCH-07 | Phase 72 | Planned |
-| BATCH-08 | Phase 72 | Planned |
-| BATCH-09 | Phase 72 | Planned |
-| BATCH-10 | Phase 72 | Planned |
-| BATCH-11 | Phase 72 | Planned |
-| BATCH-12 | Phase 72 | Planned |
-| BATCH-13 | Phase 72 | Planned |
-| BATCH-14 | Phase 72 | Planned |
-| BATCH-15 | Phase 72 | Planned |
-| CACHE-01 | Phase 72 | Planned |
-| TST-08 | Phase 72 | Planned |
-| TST-09 | Phase 72 | Planned |
-| TST-10 | Phase 72 | Planned |
+| EXIT-01 | Phase 71 | Complete |
+| EXIT-02 | Phase 71 | Complete |
+| EXIT-03 | Phase 71 | Complete |
+| EXIT-04 | Phase 71 | Complete |
+| EXIT-05 | Phase 71 | Complete |
+| EXIT-06 | Phase 71 | Complete |
+| EXIT-07 | Phase 71 | Complete |
+| EXIT-08 | Phase 71 | Complete |
+| EXIT-09 | Phase 71 | Complete |
+| EXIT-10 | Phase 71 | Complete |
+| EXIT-11 | Phase 71 | Complete |
+| TST-05 | Phase 71 | Complete |
+| TST-06 | Phase 71 | Complete |
+| TST-07 | Phase 71 | Complete |
+| BATCH-01 | Phase 72 | Complete |
+| BATCH-02 | Phase 72 | Complete |
+| BATCH-03 | Phase 72 | Complete |
+| BATCH-04 | Phase 72 | Complete |
+| BATCH-05 | Phase 72 | Complete |
+| BATCH-06 | Phase 72 | Complete |
+| BATCH-07 | Phase 72 | Complete |
+| BATCH-08 | Phase 72 | Complete |
+| BATCH-09 | Phase 72 | Complete |
+| BATCH-10 | Phase 72 | Complete |
+| BATCH-11 | Phase 72 | Complete |
+| BATCH-12 | Phase 72 | Complete |
+| BATCH-13 | Phase 72 | Complete |
+| BATCH-14 | Phase 72 | Complete |
+| BATCH-15 | Phase 72 | Complete |
+| CACHE-01 | Phase 72 | Complete |
+| TST-08 | Phase 72 | Complete |
+| TST-09 | Phase 72 | Complete |
+| TST-10 | Phase 72 | Complete |
+| DTE-01 | Phase 73 | Planned |
+| DTE-02 | Phase 73 | Planned |
+| BACH-01 | Phase 73 | Planned |
+| BACH-02 | Phase 73 | Planned |
+| BACH-03 | Phase 73 | Planned |
+| UNIT-01 | Phase 73 | Planned |
+| UNIT-02 | Phase 73 | Planned |
+| UNIT-03 | Phase 73 | Planned |
+| UNIT-04 | Phase 73 | Planned |
+| UNIT-05 | Phase 73 | Planned |
+| WARN-01 | Phase 73 | Planned |
+| WARN-02 | Phase 73 | Planned |
+| UX-01 | Phase 73 | Planned |
+| UX-02 | Phase 73 | Planned |
+| TST-11 | Phase 73 | Planned |
+| TST-12 | Phase 73 | Planned |
+| TST-13 | Phase 73 | Planned |
 
 **Coverage:**
-- v2.2 requirements: 65 total
-- Mapped to phases: 65
+- v2.2 requirements: 82 total
+- Mapped to phases: 82
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-23 after Phase 72 planning*
+*Last updated: 2026-03-23 after Phase 73 planning*
