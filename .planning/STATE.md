@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 71-03-PLAN.md
-last_updated: "2026-03-23T03:16:23.202Z"
+stopped_at: Completed 72-01-PLAN.md
+last_updated: "2026-03-23T13:00:50.971Z"
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 18
+  completed_plans: 16
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 71 — exit-trigger-analysis
+**Current focus:** Phase 72 — exit-policy-comparison
 
 ## Current Position
 
-Phase: 71 (exit-trigger-analysis) — EXECUTING
-Plan: 3 of 3
+Phase: 72 (exit-policy-comparison) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Plan: 3 of 3
 | Phase 71 P02 | 238 | 2 tasks | 3 files |
 | Phase 71 P01 | 5 | 2 tasks | 2 files |
 | Phase 71 P03 | 130 | 2 tasks | 3 files |
+| Phase 72 P01 | 232 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ Plan: 3 of 3
 - [Phase 71]: vix9dVixRatio bidirectional threshold: >= for contango (threshold >= 1), <= for backwardation (threshold < 1)
 - [Phase 71]: Both exit analysis tools fetch VIX/VIX9D/underlying price maps on-demand based on trigger types
 - [Phase 71]: Composite tool pattern: MCP tool runs replay internally then passes to pure analysis engine
+- [Phase 72]: Cache-read returns early from fetchLegBars: avoids Massive API call for already-fetched option bars (BATCH-15)
+- [Phase 72]: analyzeBatch noTrigger case: candidatePnl = last pnlPath point (hold to end of replay)
+- [Phase 72]: Sharpe ratio trade-level (not annualized): mean/sample stddev (N-1), null if < 2 trades
 
 ### Pending Todos
 
@@ -117,6 +121,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T03:16:23.198Z
-Stopped at: Completed 71-03-PLAN.md
+Last session: 2026-03-23T13:00:50.968Z
+Stopped at: Completed 72-01-PLAN.md
 Resume file: None
