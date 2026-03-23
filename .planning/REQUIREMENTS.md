@@ -66,25 +66,25 @@ Requirements for Massive.com market data integration milestone.
 
 ### Batch Exit Analysis
 
-- [ ] **BATCH-01**: `batch_exit_analysis` MCP tool accepts block_id, optional strategy/date_range filters, a candidate_policy (array of trigger configs), and baseline_mode
-- [ ] **BATCH-02**: Candidate policy uses same 14 trigger type schema as analyze_exit_triggers, with optional leg_groups for per-group exits
-- [ ] **BATCH-03**: Two baseline modes: `actual` (candidate vs trade's actual P&L) and `holdToEnd` (candidate vs last replay timestamp)
-- [ ] **BATCH-04**: Trades queried from DuckDB by block_id with optional strategy (ILIKE), date_range, min_pl, max_pl filters
-- [ ] **BATCH-05**: Default limit 50 trades, configurable up to 200; most recent trades selected (ORDER BY date_opened DESC)
-- [ ] **BATCH-06**: Output includes aggregate stats comparable to get_statistics: total trades, win rate, avg P&L, total P&L, profit factor, max drawdown, Sharpe ratio, plus delta vs baseline
-- [ ] **BATCH-07**: Per-trigger attribution: which trigger fired first on how many trades, avg P&L when that trigger fired
-- [ ] **BATCH-08**: Per-trade breakdown available in format="full"; format="summary" returns aggregate stats + trigger attribution only
-- [ ] **BATCH-09**: Strategy profile context included in output when profile exists for block+strategy (informational, not input)
-- [ ] **BATCH-10**: Aggregate stats include: winningTrades, losingTrades, winRate, totalPnl, avgPnl, avgWin, avgLoss, maxWin, maxLoss, profitFactor, maxDrawdown, sharpeRatio, maxWinStreak, maxLossStreak
-- [ ] **BATCH-11**: Pure analysis engine (no I/O) computes aggregates from pre-analyzed trade results; tool handler orchestrates replay + engine
+- [x] **BATCH-01**: `batch_exit_analysis` MCP tool accepts block_id, optional strategy/date_range filters, a candidate_policy (array of trigger configs), and baseline_mode
+- [x] **BATCH-02**: Candidate policy uses same 14 trigger type schema as analyze_exit_triggers, with optional leg_groups for per-group exits
+- [x] **BATCH-03**: Two baseline modes: `actual` (candidate vs trade's actual P&L) and `holdToEnd` (candidate vs last replay timestamp)
+- [x] **BATCH-04**: Trades queried from DuckDB by block_id with optional strategy (ILIKE), date_range, min_pl, max_pl filters
+- [x] **BATCH-05**: Default limit 50 trades, configurable up to 200; most recent trades selected (ORDER BY date_opened DESC)
+- [x] **BATCH-06**: Output includes aggregate stats comparable to get_statistics: total trades, win rate, avg P&L, total P&L, profit factor, max drawdown, Sharpe ratio, plus delta vs baseline
+- [x] **BATCH-07**: Per-trigger attribution: which trigger fired first on how many trades, avg P&L when that trigger fired
+- [x] **BATCH-08**: Per-trade breakdown available in format="full"; format="summary" returns aggregate stats + trigger attribution only
+- [x] **BATCH-09**: Strategy profile context included in output when profile exists for block+strategy (informational, not input)
+- [x] **BATCH-10**: Aggregate stats include: winningTrades, losingTrades, winRate, totalPnl, avgPnl, avgWin, avgLoss, maxWin, maxLoss, profitFactor, maxDrawdown, sharpeRatio, maxWinStreak, maxLossStreak
+- [x] **BATCH-11**: Pure analysis engine (no I/O) computes aggregates from pre-analyzed trade results; tool handler orchestrates replay + engine
 - [ ] **BATCH-12**: Tool registered in MCP server and available via tool listing
 - [ ] **BATCH-13**: Tool handles errors gracefully: skips trades that fail replay, reports skip count in summary
 - [ ] **BATCH-14**: Handler and schema exported via test-exports.ts for integration testing
-- [ ] **BATCH-15**: Tool checks market.intraday for existing option bars before calling Massive; first run populates, subsequent runs are local reads
+- [x] **BATCH-15**: Tool checks market.intraday for existing option bars before calling Massive; first run populates, subsequent runs are local reads
 
 ### Option Bar Caching
 
-- [ ] **CACHE-01**: replay_trade persists fetched option minute bars in market.intraday after fetching from Massive, using same INSERT OR REPLACE pattern as underlying bar caching
+- [x] **CACHE-01**: replay_trade persists fetched option minute bars in market.intraday after fetching from Massive, using same INSERT OR REPLACE pattern as underlying bar caching
 
 ### Testing
 
@@ -95,8 +95,8 @@ Requirements for Massive.com market data integration milestone.
 - [x] **TST-05**: Unit tests for all 14 exit trigger evaluators
 - [x] **TST-06**: Unit tests for greeks decomposition math and leg-group vega attribution
 - [x] **TST-07**: Tool handlers and schemas exported via test-exports.ts for integration testing
-- [ ] **TST-08**: Unit tests for batch exit analysis aggregate stats (win rate, profit factor, Sharpe, drawdown, streaks)
-- [ ] **TST-09**: Unit tests for both baseline modes and per-trigger attribution counting
+- [x] **TST-08**: Unit tests for batch exit analysis aggregate stats (win rate, profit factor, Sharpe, drawdown, streaks)
+- [x] **TST-09**: Unit tests for both baseline modes and per-trigger attribution counting
 - [ ] **TST-10**: Batch exit analysis handler and pure engine functions exported via test-exports.ts
 
 ## Future Requirements
