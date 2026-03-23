@@ -64,6 +64,28 @@ Requirements for Massive.com market data integration milestone.
 - [x] **EXIT-10**: Both tools are registered in MCP server and available via tool listing
 - [x] **EXIT-11**: Both tools handle errors gracefully (missing API key, invalid trade, no greeks data)
 
+### Batch Exit Analysis
+
+- [ ] **BATCH-01**: `batch_exit_analysis` MCP tool accepts block_id, optional strategy/date_range filters, a candidate_policy (array of trigger configs), and baseline_mode
+- [ ] **BATCH-02**: Candidate policy uses same 14 trigger type schema as analyze_exit_triggers, with optional leg_groups for per-group exits
+- [ ] **BATCH-03**: Two baseline modes: `actual` (candidate vs trade's actual P&L) and `holdToEnd` (candidate vs last replay timestamp)
+- [ ] **BATCH-04**: Trades queried from DuckDB by block_id with optional strategy (ILIKE), date_range, min_pl, max_pl filters
+- [ ] **BATCH-05**: Default limit 50 trades, configurable up to 200; most recent trades selected (ORDER BY date_opened DESC)
+- [ ] **BATCH-06**: Output includes aggregate stats comparable to get_statistics: total trades, win rate, avg P&L, total P&L, profit factor, max drawdown, Sharpe ratio, plus delta vs baseline
+- [ ] **BATCH-07**: Per-trigger attribution: which trigger fired first on how many trades, avg P&L when that trigger fired
+- [ ] **BATCH-08**: Per-trade breakdown available in format="full"; format="summary" returns aggregate stats + trigger attribution only
+- [ ] **BATCH-09**: Strategy profile context included in output when profile exists for block+strategy (informational, not input)
+- [ ] **BATCH-10**: Aggregate stats include: winningTrades, losingTrades, winRate, totalPnl, avgPnl, avgWin, avgLoss, maxWin, maxLoss, profitFactor, maxDrawdown, sharpeRatio, maxWinStreak, maxLossStreak
+- [ ] **BATCH-11**: Pure analysis engine (no I/O) computes aggregates from pre-analyzed trade results; tool handler orchestrates replay + engine
+- [ ] **BATCH-12**: Tool registered in MCP server and available via tool listing
+- [ ] **BATCH-13**: Tool handles errors gracefully: skips trades that fail replay, reports skip count in summary
+- [ ] **BATCH-14**: Handler and schema exported via test-exports.ts for integration testing
+- [ ] **BATCH-15**: Tool checks market.intraday for existing option bars before calling Massive; first run populates, subsequent runs are local reads
+
+### Option Bar Caching
+
+- [ ] **CACHE-01**: replay_trade persists fetched option minute bars in market.intraday after fetching from Massive, using same INSERT OR REPLACE pattern as underlying bar caching
+
 ### Testing
 
 - [x] **TST-01**: Unit tests for `massive-client.ts` using mocked `fetch` (timestamp conversion, pagination, ticker normalization, error handling)
@@ -73,6 +95,9 @@ Requirements for Massive.com market data integration milestone.
 - [x] **TST-05**: Unit tests for all 14 exit trigger evaluators
 - [x] **TST-06**: Unit tests for greeks decomposition math and leg-group vega attribution
 - [x] **TST-07**: Tool handlers and schemas exported via test-exports.ts for integration testing
+- [ ] **TST-08**: Unit tests for batch exit analysis aggregate stats (win rate, profit factor, Sharpe, drawdown, streaks)
+- [ ] **TST-09**: Unit tests for both baseline modes and per-trigger attribution counting
+- [ ] **TST-10**: Batch exit analysis handler and pure engine functions exported via test-exports.ts
 
 ## Future Requirements
 
@@ -87,6 +112,12 @@ Deferred to future releases. Tracked but not in current roadmap.
 
 - **EXT-01**: `multiplier` parameter for non-standard bar sizes (5-min, 15-min)
 
+### Batch Exit Enhancements
+
+- **BEXT-01**: Multi-policy sweep in one call (test PT at 30%, 50%, 70% simultaneously)
+- **BEXT-02**: Automated exit rule optimization (find optimal trigger thresholds via grid search)
+- **BEXT-03**: Greek attribution aggregation across batch (aggregate delta/theta/vega contribution across all trades)
+
 ## Out of Scope
 
 | Feature | Reason |
@@ -98,6 +129,7 @@ Deferred to future releases. Tracked but not in current roadmap.
 | Storing raw API response JSON | Doubles storage, creates second source of truth |
 | Scheduler/cron integration | Outside MCP tool scope |
 | TastyTrade integration or dependency | Trade replay must be broker-independent |
+| Profile exit rule auto-translation to trigger configs | Would require parsing human-readable exit rule text |
 
 ## Traceability
 
@@ -149,12 +181,31 @@ Deferred to future releases. Tracked but not in current roadmap.
 | TST-05 | Phase 71 | Planned |
 | TST-06 | Phase 71 | Planned |
 | TST-07 | Phase 71 | Planned |
+| BATCH-01 | Phase 72 | Planned |
+| BATCH-02 | Phase 72 | Planned |
+| BATCH-03 | Phase 72 | Planned |
+| BATCH-04 | Phase 72 | Planned |
+| BATCH-05 | Phase 72 | Planned |
+| BATCH-06 | Phase 72 | Planned |
+| BATCH-07 | Phase 72 | Planned |
+| BATCH-08 | Phase 72 | Planned |
+| BATCH-09 | Phase 72 | Planned |
+| BATCH-10 | Phase 72 | Planned |
+| BATCH-11 | Phase 72 | Planned |
+| BATCH-12 | Phase 72 | Planned |
+| BATCH-13 | Phase 72 | Planned |
+| BATCH-14 | Phase 72 | Planned |
+| BATCH-15 | Phase 72 | Planned |
+| CACHE-01 | Phase 72 | Planned |
+| TST-08 | Phase 72 | Planned |
+| TST-09 | Phase 72 | Planned |
+| TST-10 | Phase 72 | Planned |
 
 **Coverage:**
-- v2.2 requirements: 46 total
-- Mapped to phases: 46
+- v2.2 requirements: 65 total
+- Mapped to phases: 65
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-23 after Phase 71 planning*
+*Last updated: 2026-03-23 after Phase 72 planning*
