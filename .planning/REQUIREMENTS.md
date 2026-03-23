@@ -52,12 +52,12 @@ Requirements for Massive.com market data integration milestone.
 
 ### Exit Trigger Analysis
 
-- [ ] **EXIT-01**: `analyze_exit_triggers` MCP tool accepts block_id + trade_index (or explicit legs) and trigger configs, runs replay internally, and returns when each trigger would fire
-- [ ] **EXIT-02**: System evaluates all 14 trigger types at every P&L path point: profitTarget, stopLoss, trailingStop, dteExit, ditExit, clockTimeExit, underlyingPriceMove, positionDelta, perLegDelta, vixMove, vix9dMove, vix9dVixRatio, slRatioThreshold, slRatioMove
-- [ ] **EXIT-03**: System identifies first-to-fire trigger across all configured triggers with timestamp and P&L at fire
-- [ ] **EXIT-04**: System compares trigger fire time against actualExitTimestamp showing P&L difference
-- [ ] **EXIT-05**: System supports legGroups parameter for per-group exit triggers (e.g., put spread vs call spread in iron condor)
-- [ ] **EXIT-06**: Triggers requiring external data (underlyingPriceMove, vixMove, vix9dMove) fetch minute bars from Massive automatically
+- [x] **EXIT-01**: `analyze_exit_triggers` MCP tool accepts block_id + trade_index (or explicit legs) and trigger configs, runs replay internally, and returns when each trigger would fire
+- [x] **EXIT-02**: System evaluates all 14 trigger types at every P&L path point: profitTarget, stopLoss, trailingStop, dteExit, ditExit, clockTimeExit, underlyingPriceMove, positionDelta, perLegDelta, vixMove, vix9dMove, vix9dVixRatio, slRatioThreshold, slRatioMove
+- [x] **EXIT-03**: System identifies first-to-fire trigger across all configured triggers with timestamp and P&L at fire
+- [x] **EXIT-04**: System compares trigger fire time against actualExitTimestamp showing P&L difference
+- [x] **EXIT-05**: System supports legGroups parameter for per-group exit triggers (e.g., put spread vs call spread in iron condor)
+- [x] **EXIT-06**: Triggers requiring external data (underlyingPriceMove, vixMove, vix9dMove) fetch minute bars from Massive automatically
 - [x] **EXIT-07**: `decompose_greeks` MCP tool accepts same replay inputs and returns P&L decomposed into delta, gamma, theta, vega, and residual contributions
 - [x] **EXIT-08**: Greek attribution computed between consecutive timestamps per D-09: delta_pnl = netDelta * underlyingChange, gamma_pnl = 0.5 * netGamma * underlyingChange^2, theta_pnl = netTheta * dt, vega_pnl = netVega * ivChange
 - [x] **EXIT-09**: For calendar strategies, decompose_greeks includes per-leg-group vega attribution showing front vs back month IV divergence
@@ -70,7 +70,7 @@ Requirements for Massive.com market data integration milestone.
 - [x] **TST-02**: Integration tests for `import_from_massive` tool with real DuckDB and mocked API responses
 - [x] **TST-03**: Unit tests for OCC ticker resolution and strategy P&L path combination
 - [x] **TST-04**: Integration tests for trade replay with mocked Massive API responses
-- [ ] **TST-05**: Unit tests for all 14 exit trigger evaluators
+- [x] **TST-05**: Unit tests for all 14 exit trigger evaluators
 - [x] **TST-06**: Unit tests for greeks decomposition math and leg-group vega attribution
 - [ ] **TST-07**: Tool handlers and schemas exported via test-exports.ts for integration testing
 

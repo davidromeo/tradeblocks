@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 71-02-PLAN.md
-last_updated: "2026-03-23T03:10:06.422Z"
+stopped_at: Completed 71-01-PLAN.md
+last_updated: "2026-03-23T03:11:50.161Z"
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 71 (exit-trigger-analysis) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: 2 of 3
 | Phase 70 P01 | 4 | 1 tasks | 2 files |
 | Phase 70 P02 | 160 | 3 tasks | 4 files |
 | Phase 71 P02 | 238 | 2 tasks | 3 files |
+| Phase 71 P01 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,8 @@ Plan: 2 of 3
 - [Phase 70]: registerSnapshotTools takes no baseDir — snapshot is pure API proxy
 - [Phase 71]: IV change converted decimal to percentage points (*100) since vega is per 1% IV move
 - [Phase 71]: Per-leg-group vega uses position-weighted vega: legGreek.vega * quantity * multiplier / 100
+- [Phase 71]: 14 exit trigger types as pure evaluator functions against PnlPoint paths; first-to-fire orchestration with actual exit P&L comparison
+- [Phase 71]: vix9dVixRatio bidirectional threshold: >= for contango (threshold >= 1), <= for backwardation (threshold < 1)
 
 ### Pending Todos
 
@@ -111,6 +114,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T03:10:06.419Z
-Stopped at: Completed 71-02-PLAN.md
+Last session: 2026-03-23T03:11:50.157Z
+Stopped at: Completed 71-01-PLAN.md
 Resume file: None
