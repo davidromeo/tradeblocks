@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 70-02-PLAN.md
-last_updated: "2026-03-22T23:32:59.770Z"
+stopped_at: Completed 71-02-PLAN.md
+last_updated: "2026-03-23T03:10:06.422Z"
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 15
+  completed_plans: 13
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 70 — live-options-snapshot
+**Current focus:** Phase 71 — exit-trigger-analysis
 
 ## Current Position
 
-Phase: 70 (live-options-snapshot) — EXECUTING
-Plan: 2 of 2
+Phase: 71 (exit-trigger-analysis) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: 2 of 2
 | Phase 69 P02 | 255 | 2 tasks | 4 files |
 | Phase 70 P01 | 4 | 1 tasks | 2 files |
 | Phase 70 P02 | 160 | 3 tasks | 4 files |
+| Phase 71 P02 | 238 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,8 @@ Plan: 2 of 2
 - [Phase 70]: greeks_source provenance field distinguishes API greeks (massive) from BS model greeks (computed)
 - [Phase 70]: Handler returns JSON string directly — snapshot tool is stateless API proxy, no DB needed
 - [Phase 70]: registerSnapshotTools takes no baseDir — snapshot is pure API proxy
+- [Phase 71]: IV change converted decimal to percentage points (*100) since vega is per 1% IV move
+- [Phase 71]: Per-leg-group vega uses position-weighted vega: legGreek.vega * quantity * multiplier / 100
 
 ### Pending Todos
 
@@ -108,6 +111,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T23:32:59.767Z
-Stopped at: Completed 70-02-PLAN.md
+Last session: 2026-03-23T03:10:06.419Z
+Stopped at: Completed 71-02-PLAN.md
 Resume file: None

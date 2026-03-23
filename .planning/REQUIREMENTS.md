@@ -58,9 +58,9 @@ Requirements for Massive.com market data integration milestone.
 - [ ] **EXIT-04**: System compares trigger fire time against actualExitTimestamp showing P&L difference
 - [ ] **EXIT-05**: System supports legGroups parameter for per-group exit triggers (e.g., put spread vs call spread in iron condor)
 - [ ] **EXIT-06**: Triggers requiring external data (underlyingPriceMove, vixMove, vix9dMove) fetch minute bars from Massive automatically
-- [ ] **EXIT-07**: `decompose_greeks` MCP tool accepts same replay inputs and returns P&L decomposed into delta, gamma, theta, vega, and residual contributions
-- [ ] **EXIT-08**: Greek attribution computed between consecutive timestamps per D-09: delta_pnl = netDelta * underlyingChange, gamma_pnl = 0.5 * netGamma * underlyingChange^2, theta_pnl = netTheta * dt, vega_pnl = netVega * ivChange
-- [ ] **EXIT-09**: For calendar strategies, decompose_greeks includes per-leg-group vega attribution showing front vs back month IV divergence
+- [x] **EXIT-07**: `decompose_greeks` MCP tool accepts same replay inputs and returns P&L decomposed into delta, gamma, theta, vega, and residual contributions
+- [x] **EXIT-08**: Greek attribution computed between consecutive timestamps per D-09: delta_pnl = netDelta * underlyingChange, gamma_pnl = 0.5 * netGamma * underlyingChange^2, theta_pnl = netTheta * dt, vega_pnl = netVega * ivChange
+- [x] **EXIT-09**: For calendar strategies, decompose_greeks includes per-leg-group vega attribution showing front vs back month IV divergence
 - [ ] **EXIT-10**: Both tools are registered in MCP server and available via tool listing
 - [ ] **EXIT-11**: Both tools handle errors gracefully (missing API key, invalid trade, no greeks data)
 
@@ -71,7 +71,7 @@ Requirements for Massive.com market data integration milestone.
 - [x] **TST-03**: Unit tests for OCC ticker resolution and strategy P&L path combination
 - [x] **TST-04**: Integration tests for trade replay with mocked Massive API responses
 - [ ] **TST-05**: Unit tests for all 14 exit trigger evaluators
-- [ ] **TST-06**: Unit tests for greeks decomposition math and leg-group vega attribution
+- [x] **TST-06**: Unit tests for greeks decomposition math and leg-group vega attribution
 - [ ] **TST-07**: Tool handlers and schemas exported via test-exports.ts for integration testing
 
 ## Future Requirements
