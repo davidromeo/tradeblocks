@@ -125,8 +125,6 @@ const REVERSE_ROOT_MAP: Record<string, string> = {
   SPXW: 'SPX', NDXP: 'NDX', RUTW: 'RUT',
 };
 
-const INDEX_TICKERS = new Set(['SPX', 'NDX', 'RUT', 'DJX', 'VIX', 'VIX9D', 'VIX3M', 'OEX', 'XSP']);
-
 /**
  * Extract the underlying root ticker from the first replay leg's OCC ticker.
  * Maps weekly roots (SPXW, NDXP) back to their standard root.
@@ -135,13 +133,6 @@ function extractUnderlyingTicker(occTicker: string): string {
   const rootMatch = occTicker.match(/^([A-Z]+)/);
   const rawRoot = rootMatch ? rootMatch[1] : '';
   return REVERSE_ROOT_MAP[rawRoot] ?? rawRoot;
-}
-
-/**
- * Determine asset class for a ticker (index vs stock).
- */
-function getAssetClass(ticker: string): "index" | "stock" {
-  return INDEX_TICKERS.has(ticker) ? "index" : "stock";
 }
 
 /**

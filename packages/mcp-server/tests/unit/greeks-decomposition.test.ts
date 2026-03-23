@@ -2,7 +2,6 @@ import {
   decomposeGreeks,
   computeTimeDeltaDays,
   type GreeksDecompositionConfig,
-  type GreeksDecompositionResult,
 } from '../../src/test-exports.js';
 
 import type { PnlPoint, ReplayLeg } from '../../src/test-exports.js';
