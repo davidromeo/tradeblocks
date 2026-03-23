@@ -252,6 +252,35 @@ export async function handleReplayTrade(
   };
 
   const fetchLegBars = async (occTicker: string): Promise<import("../utils/massive-client.js").MassiveBarRow[]> => {
+    // Cache-read: check market.intraday for existing option bars (per BATCH-15)
+    // Historical option data is immutable -- cached bars are always valid.
+    try {
+      const conn = injectedConn ?? await getConnection(baseDir);
+      const cached = await conn.runAndReadAll(
+        `SELECT open, high, low, close, time, date
+         FROM market.intraday
+         WHERE ticker = '${occTicker.replace(/'/g, "''")}'
+           AND date >= '${open_date}'
+           AND date <= '${close_date}'
+         ORDER BY date, time`
+      );
+      const cachedRows = cached.getRows();
+      if (cachedRows.length > 0) {
+        return cachedRows.map((row: unknown[]) => ({
+          open: Number(row[0]),
+          high: Number(row[1]),
+          low: Number(row[2]),
+          close: Number(row[3]),
+          time: String(row[4]),
+          date: String(row[5]),
+          ticker: occTicker,
+          volume: 0,  // market.intraday has no volume column
+        }));
+      }
+    } catch {
+      // Cache miss or table not available -- fall through to Massive fetch
+    }
+
     try {
       const bars = await fetchBars({
         ticker: occTicker,
@@ -292,6 +321,32 @@ export async function handleReplayTrade(
   const barsByLeg = await Promise.all(
     replayLegs.map((leg) => fetchLegBars(leg.occTicker))
   );
+
+  // Cache option bars in market.intraday (best-effort, per D-09)
+  // Historical option data is immutable -- this is storage, not cache.
+  for (let legIdx = 0; legIdx < replayLegs.length; legIdx++) {
+    const legBars = barsByLeg[legIdx];
+    if (legBars.length === 0) continue;
+    try {
+      const conn = injectedConn ?? await getConnection(baseDir);
+      const legTicker = replayLegs[legIdx].occTicker;
+      const values = legBars
+        .filter(b => b.time)
+        .map(b =>
+          `('${legTicker}', '${b.date}', '${b.time}', ${b.open}, ${b.high}, ${b.low}, ${b.close})`
+        );
+      if (values.length > 0) {
+        for (let i = 0; i < values.length; i += 500) {
+          const chunk = values.slice(i, i + 500);
+          await conn.run(
+            `INSERT OR REPLACE INTO market.intraday (ticker, date, time, open, high, low, close) VALUES ${chunk.join(', ')}`
+          );
+        }
+      }
+    } catch {
+      // Caching is best-effort -- don't fail the replay
+    }
+  }
 
   // ----- Fetch underlying bars + build greeks config -----
   // Reverse-map weekly roots back to standard root for underlying fetch
