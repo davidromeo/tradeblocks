@@ -56,7 +56,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 - [x] **Phase 72: Exit Policy Comparison** — Batch exit analysis tool for multi-trade policy testing across entire blocks (completed 2026-03-23)
 - [x] **Phase 73: 0DTE Greeks Engine + Exit Trigger Usability** — Fix DTE bug, Bachelier normal model fallback, percentage-based exit triggers, greeks warnings, UX fixes (completed 2026-03-24)
 - [x] **Phase 74: Pre-ship Polish** — stopLoss abs fix, shared fetchBarsWithCache, midpoint greeks attribution, tolerant timestamp lookup, numerical fallback, lower Bachelier threshold, model field, parallel batch replay (completed 2026-03-24)
-- [ ] **Phase 75: Normalized VIX Term Structure** — Replace hardcoded VIX9D/VIX3M columns with market.daily ticker rows, support any VIX tenor, market._context_derived for cross-ticker fields, migration + query layer rewrite
+- [x] **Phase 75: Normalized VIX Term Structure** — Replace hardcoded VIX9D/VIX3M columns with market.daily ticker rows, support any VIX tenor, market._context_derived for cross-ticker fields, migration + query layer rewrite (completed 2026-03-24)
 
 ## Phase Details
 
@@ -133,7 +133,7 @@ Plans:
 | 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 3/3 | Complete   | 2026-03-24 |
 | 74. Pre-ship Polish | v2.2 | 4/4 | Complete   | 2026-03-24 |
-| 75. Normalized VIX Term Structure | v2.2 | 3/4 | In Progress|  |
+| 75. Normalized VIX Term Structure | v2.2 | 4/4 | Complete   | 2026-03-24 |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -211,10 +211,10 @@ Plans:
 **Goal:** VIX tenors (VIX, VIX9D, VIX3M, VIX1D, VIX6M, etc.) are stored as regular ticker rows in market.daily with ivr/ivp columns, cross-ticker derived fields live in market._context_derived, enrichment discovers VIX tickers dynamically, and all query builders and tool descriptions reference the normalized schema
 **Requirements**: VTS-01, VTS-02, VTS-03, VTS-04, VTS-05, VTS-06, VTS-07, VTS-08, VTS-09, VTS-10, VTS-11, VTS-12, VTS-13, VTS-14, VTS-15, VTS-16, TST-18, TST-19
 **Depends on:** Phase 74
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 75-01-PLAN.md — Schema changes: ivr/ivp columns on market.daily, market._context_derived table, idempotent migration from market.context
 - [x] 75-02-PLAN.md — Enrichment rewrite + context import redirect: Tier 2 reads from market.daily, writes to market.daily + _context_derived; context convenience import stores VIX tickers in market.daily
 - [x] 75-03-PLAN.md — Query layer migration: field-timing.ts multi-table JOINs, schema-metadata.ts update, data-availability.ts normalized checks
-- [ ] 75-04-PLAN.md — Tool descriptions + describe_database VIX tenor auto-discovery + tests
+- [x] 75-04-PLAN.md — Tool descriptions + describe_database VIX tenor auto-discovery + tests

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 75-03-PLAN.md
-last_updated: "2026-03-24T15:04:47.684Z"
+stopped_at: Completed 75-04-PLAN.md
+last_updated: "2026-03-24T15:19:34.837Z"
 progress:
   total_phases: 10
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 29
-  completed_plans: 28
+  completed_plans: 29
 ---
 
 # Project State
@@ -61,6 +61,7 @@ Plan: 4 of 4
 | Phase 75 P01 | 2 | 2 tasks | 2 files |
 | Phase 75 P02 | 4 | 2 tasks | 2 files |
 | Phase 75 P03 | 4 | 2 tasks | 3 files |
+| Phase 75 P04 | 14 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -143,6 +144,8 @@ Plan: 4 of 4
 - [Phase 75]: Backward compat: market.context still gets Tier 2 writes in try/catch during transition — will be removed in future phase
 - [Phase 75]: VIX_FIELD_MAPPINGS drives JOIN generation and SELECT column aliasing — adding any new VIX ticker to the array automatically extends both JOIN and SELECT clauses in buildLookaheadFreeQuery
 - [Phase 75]: CONTEXT_OPEN/CLOSE_FIELDS export names preserved in field-timing.ts — derived from VIX_FIELD_MAPPINGS + _context_derived columns for backward compat with all downstream tools
+- [Phase 75]: vixTenors field added to describe_database output: AI tools auto-discover available VIX tenors without guessing column names
+- [Phase 75]: market.context kept in ALLOWED_TABLES (legacy entry) alongside new market._context_derived — backward compat for existing user queries
 
 ### Roadmap Evolution
 
@@ -168,6 +171,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T15:04:47.681Z
-Stopped at: Completed 75-03-PLAN.md
+Last session: 2026-03-24T15:19:34.833Z
+Stopped at: Completed 75-04-PLAN.md
 Resume file: None

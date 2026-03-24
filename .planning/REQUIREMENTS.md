@@ -174,13 +174,13 @@ Requirements for Massive.com market data integration milestone.
 - [x] **VTS-12**: `buildLookaheadFreeQuery` generates JOINs on `market.daily` VIX ticker rows + `market._context_derived` instead of `market.context`
 - [x] **VTS-13**: `schema-metadata.ts` describes normalized schema (`_context_derived` table, `ivr`/`ivp` on daily, legacy note on context)
 - [x] **VTS-14**: `data-availability.ts` checks `market.daily` for VIX ticker data instead of `market.context`
-- [ ] **VTS-15**: `describe_database` auto-discovers available VIX tenors via `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%'`
-- [ ] **VTS-16**: All tool descriptions reference normalized schema (market.daily for VIX data, market._context_derived for derived fields)
+- [x] **VTS-15**: `describe_database` auto-discovers available VIX tenors via `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%'`
+- [x] **VTS-16**: All tool descriptions reference normalized schema (market.daily for VIX data, market._context_derived for derived fields)
 
 ### Phase 75 Testing
 
 - [x] **TST-18**: Enrichment correctly computes IVR/IVP for dynamically discovered VIX tickers and writes to market.daily
-- [ ] **TST-19**: All existing tests pass after schema migration and query layer rewrite
+- [x] **TST-19**: All existing tests pass after schema migration and query layer rewrite
 
 ## Future Requirements
 
