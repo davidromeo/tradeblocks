@@ -160,26 +160,26 @@ Requirements for Massive.com market data integration milestone.
 
 ### Normalized VIX Term Structure
 
-- [ ] **VTS-01**: `market.daily` table has `ivr DOUBLE` and `ivp DOUBLE` columns for per-ticker IVR/IVP values
-- [ ] **VTS-02**: `market._context_derived` table created with `date VARCHAR PRIMARY KEY, Vol_Regime INTEGER, Term_Structure_State INTEGER, Trend_Direction VARCHAR, VIX_Spike_Pct DOUBLE, VIX_Gap_Pct DOUBLE`
-- [ ] **VTS-03**: Migration copies VIX/VIX9D/VIX3M OHLCV data from `market.context` to `market.daily` rows (ticker='VIX', etc.)
-- [ ] **VTS-04**: Migration copies Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct from `market.context` to `market._context_derived`
-- [ ] **VTS-05**: Migration is idempotent — uses INSERT OR IGNORE so re-running is safe
-- [ ] **VTS-06**: `market.context` table kept intact (not dropped) for backward compatibility
-- [ ] **VTS-07**: IVR/IVP enrichment discovers VIX tickers dynamically: `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%'`
-- [ ] **VTS-08**: Enrichment writes ivr/ivp to `market.daily.ivr` and `market.daily.ivp` columns (not `market.context`)
-- [ ] **VTS-09**: Enrichment writes Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct to `market._context_derived`
-- [ ] **VTS-10**: Enrichment is tolerant of missing tenors — compute what exists, NULLs for missing data, never fail
-- [ ] **VTS-11**: `target_table: "context"` convenience import stores VIX+VIX9D+VIX3M into `market.daily` (not `market.context`)
-- [ ] **VTS-12**: `buildLookaheadFreeQuery` generates JOINs on `market.daily` VIX ticker rows + `market._context_derived` instead of `market.context`
-- [ ] **VTS-13**: `schema-metadata.ts` describes normalized schema (`_context_derived` table, `ivr`/`ivp` on daily, legacy note on context)
-- [ ] **VTS-14**: `data-availability.ts` checks `market.daily` for VIX ticker data instead of `market.context`
+- [x] **VTS-01**: `market.daily` table has `ivr DOUBLE` and `ivp DOUBLE` columns for per-ticker IVR/IVP values
+- [x] **VTS-02**: `market._context_derived` table created with `date VARCHAR PRIMARY KEY, Vol_Regime INTEGER, Term_Structure_State INTEGER, Trend_Direction VARCHAR, VIX_Spike_Pct DOUBLE, VIX_Gap_Pct DOUBLE`
+- [x] **VTS-03**: Migration copies VIX/VIX9D/VIX3M OHLCV data from `market.context` to `market.daily` rows (ticker='VIX', etc.)
+- [x] **VTS-04**: Migration copies Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct from `market.context` to `market._context_derived`
+- [x] **VTS-05**: Migration is idempotent — uses INSERT OR IGNORE so re-running is safe
+- [x] **VTS-06**: `market.context` table kept intact (not dropped) for backward compatibility
+- [x] **VTS-07**: IVR/IVP enrichment discovers VIX tickers dynamically: `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%'`
+- [x] **VTS-08**: Enrichment writes ivr/ivp to `market.daily.ivr` and `market.daily.ivp` columns (not `market.context`)
+- [x] **VTS-09**: Enrichment writes Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct to `market._context_derived`
+- [x] **VTS-10**: Enrichment is tolerant of missing tenors — compute what exists, NULLs for missing data, never fail
+- [x] **VTS-11**: `target_table: "context"` convenience import stores VIX+VIX9D+VIX3M into `market.daily` (not `market.context`)
+- [x] **VTS-12**: `buildLookaheadFreeQuery` generates JOINs on `market.daily` VIX ticker rows + `market._context_derived` instead of `market.context`
+- [x] **VTS-13**: `schema-metadata.ts` describes normalized schema (`_context_derived` table, `ivr`/`ivp` on daily, legacy note on context)
+- [x] **VTS-14**: `data-availability.ts` checks `market.daily` for VIX ticker data instead of `market.context`
 - [ ] **VTS-15**: `describe_database` auto-discovers available VIX tenors via `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%'`
 - [ ] **VTS-16**: All tool descriptions reference normalized schema (market.daily for VIX data, market._context_derived for derived fields)
 
 ### Phase 75 Testing
 
-- [ ] **TST-18**: Enrichment correctly computes IVR/IVP for dynamically discovered VIX tickers and writes to market.daily
+- [x] **TST-18**: Enrichment correctly computes IVR/IVP for dynamically discovered VIX tickers and writes to market.daily
 - [ ] **TST-19**: All existing tests pass after schema migration and query layer rewrite
 
 ## Future Requirements
