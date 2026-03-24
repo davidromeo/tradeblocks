@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getConnection } from "../db/connection.js";
 import { createToolOutput } from "../utils/output-formatter.js";
-import { fetchBars } from "../utils/massive-client.js";
+import { fetchBarsWithCache } from "../utils/bar-cache.js";
 import {
   parseLegsString,
   buildOccTicker,
@@ -251,68 +251,37 @@ export async function handleReplayTrade(
     RUT: 'RUTW',
   };
 
-  const fetchLegBars = async (occTicker: string): Promise<import("../utils/massive-client.js").MassiveBarRow[]> => {
-    // Cache-read: check market.intraday for existing option bars (per BATCH-15)
-    // Historical option data is immutable -- cached bars are always valid.
-    try {
-      const conn = injectedConn ?? await getConnection(baseDir);
-      const cached = await conn.runAndReadAll(
-        `SELECT open, high, low, close, time, date
-         FROM market.intraday
-         WHERE ticker = '${occTicker.replace(/'/g, "''")}'
-           AND date >= '${open_date}'
-           AND date <= '${close_date}'
-         ORDER BY date, time`
-      );
-      const cachedRows = cached.getRows();
-      if (cachedRows.length > 0) {
-        return cachedRows.map((row: unknown[]) => ({
-          open: Number(row[0]),
-          high: Number(row[1]),
-          low: Number(row[2]),
-          close: Number(row[3]),
-          time: String(row[4]),
-          date: String(row[5]),
-          ticker: occTicker,
-          volume: 0,  // market.intraday has no volume column
-        }));
-      }
-    } catch {
-      // Cache miss or table not available -- fall through to Massive fetch
-    }
+  const fetchLegBars = async (occTicker: string): Promise<MassiveBarRow[]> => {
+    const bars = await fetchBarsWithCache({
+      ticker: occTicker,
+      from: open_date!,
+      to: close_date!,
+      timespan: 'minute',
+      assetClass: 'option',
+      conn: injectedConn,
+      baseDir,
+    });
+    if (bars.length > 0) return bars;
 
-    try {
-      const bars = await fetchBars({
-        ticker: occTicker,
-        from: open_date!,
-        to: close_date!,
-        timespan: "minute",
-        assetClass: "option",
-      });
-      if (bars.length > 0) return bars;
-    } catch {
-      // Fall through to fallback root retry
-    }
-
-    // Extract root from OCC ticker (letters before first digit)
+    // Fallback root retry (SPX→SPXW, NDX→NDXP, RUT→RUTW)
     const rootMatch = occTicker.match(/^([A-Z]+)/);
     const root = rootMatch ? rootMatch[1] : '';
     const fallbackRoot = ROOT_FALLBACK_MAP[root];
-
     if (fallbackRoot && !occTicker.startsWith(fallbackRoot)) {
       const fallbackTicker = fallbackRoot + occTicker.slice(root.length);
-      const bars = await fetchBars({
+      const fallbackBars = await fetchBarsWithCache({
         ticker: fallbackTicker,
         from: open_date!,
         to: close_date!,
-        timespan: "minute",
-        assetClass: "option",
+        timespan: 'minute',
+        assetClass: 'option',
+        conn: injectedConn,
+        baseDir,
       });
-      if (bars.length > 0) {
-        // Update the leg's OCC ticker to reflect what actually resolved
+      if (fallbackBars.length > 0) {
         const leg = replayLegs.find(l => l.occTicker === occTicker);
         if (leg) leg.occTicker = fallbackTicker;
-        return bars;
+        return fallbackBars;
       }
     }
     return [];
@@ -321,32 +290,6 @@ export async function handleReplayTrade(
   const barsByLeg = await Promise.all(
     replayLegs.map((leg) => fetchLegBars(leg.occTicker))
   );
-
-  // Cache option bars in market.intraday (best-effort, per D-09)
-  // Historical option data is immutable -- this is storage, not cache.
-  for (let legIdx = 0; legIdx < replayLegs.length; legIdx++) {
-    const legBars = barsByLeg[legIdx];
-    if (legBars.length === 0) continue;
-    try {
-      const conn = injectedConn ?? await getConnection(baseDir);
-      const legTicker = replayLegs[legIdx].occTicker;
-      const values = legBars
-        .filter(b => b.time)
-        .map(b =>
-          `('${legTicker}', '${b.date}', '${b.time}', ${b.open}, ${b.high}, ${b.low}, ${b.close})`
-        );
-      if (values.length > 0) {
-        for (let i = 0; i < values.length; i += 500) {
-          const chunk = values.slice(i, i + 500);
-          await conn.run(
-            `INSERT OR REPLACE INTO market.intraday (ticker, date, time, open, high, low, close) VALUES ${chunk.join(', ')}`
-          );
-        }
-      }
-    } catch {
-      // Caching is best-effort -- don't fail the replay
-    }
-  }
 
   // ----- Fetch underlying bars + build greeks config -----
   // Reverse-map weekly roots back to standard root for underlying fetch
@@ -363,75 +306,16 @@ export async function handleReplayTrade(
   const underlyingTicker = REVERSE_ROOT_MAP[rawRoot] ?? rawRoot;
   const dividendYield = DIVIDEND_YIELDS[rawRoot] ?? 0;
 
-  let underlyingBars: MassiveBarRow[] = [];
-
-  // Cache-read: check market.intraday for previously stored underlying bars.
-  // This allows replay to compute greeks without MASSIVE_API_KEY when
-  // underlying data was imported in a prior session.
-  try {
-    const conn = injectedConn ?? await getConnection(baseDir);
-    const cached = await conn.runAndReadAll(
-      `SELECT open, high, low, close, time, date
-       FROM market.intraday
-       WHERE ticker = '${underlyingTicker}'
-         AND date >= '${open_date}'
-         AND date <= '${close_date}'
-       ORDER BY date, time`
-    );
-    const cachedRows = cached.getRows();
-    if (cachedRows.length > 0) {
-      underlyingBars = cachedRows.map((row: unknown[]) => ({
-        open: Number(row[0]),
-        high: Number(row[1]),
-        low: Number(row[2]),
-        close: Number(row[3]),
-        time: String(row[4]),
-        date: String(row[5]),
-        ticker: underlyingTicker,
-        volume: 0,
-      }));
-    }
-  } catch {
-    // Cache miss or table not available — fall through to Massive fetch
-  }
-
-  // If no cached bars, try Massive API
-  if (underlyingBars.length === 0) {
-    try {
-      underlyingBars = await fetchBars({
-        ticker: underlyingTicker,
-        from: open_date!,
-        to: close_date!,
-        timespan: "minute",
-        assetClass: underlyingTicker === "SPX" || underlyingTicker === "NDX" || underlyingTicker === "RUT" ? "index" : "stock",
-      });
-    } catch {
-      // Fall through to daily fallback
-    }
-  }
-
-  // Cache underlying bars in market.intraday (best-effort)
-  if (underlyingBars.length > 0) {
-    try {
-      const conn = injectedConn ?? await getConnection(baseDir);
-      const values = underlyingBars
-        .filter(b => b.time)
-        .map(b =>
-          `('${underlyingTicker}', '${b.date}', '${b.time}', ${b.open}, ${b.high}, ${b.low}, ${b.close})`
-        );
-      if (values.length > 0) {
-        // Batch insert in chunks of 500 to avoid query size limits
-        for (let i = 0; i < values.length; i += 500) {
-          const chunk = values.slice(i, i + 500);
-          await conn.run(
-            `INSERT OR REPLACE INTO market.intraday (ticker, date, time, open, high, low, close) VALUES ${chunk.join(', ')}`
-          );
-        }
-      }
-    } catch {
-      // Caching is best-effort — don't fail the replay
-    }
-  }
+  // Fetch underlying minute bars via shared cache utility (cache-read → API → cache-write)
+  let underlyingBars: MassiveBarRow[] = await fetchBarsWithCache({
+    ticker: underlyingTicker,
+    from: open_date!,
+    to: close_date!,
+    timespan: 'minute',
+    assetClass: underlyingTicker === 'SPX' || underlyingTicker === 'NDX' || underlyingTicker === 'RUT' ? 'index' : 'stock',
+    conn: injectedConn,
+    baseDir,
+  });
 
   // Daily fallback when minute bars unavailable
   if (underlyingBars.length === 0) {
@@ -465,6 +349,11 @@ export async function handleReplayTrade(
     underlyingPrices.set(ts, (b.high + b.low) / 2);
   }
 
+  // Build sorted timestamps array for tolerant nearest-timestamp lookup (D-07/D-08)
+  const sortedTimestamps = Array.from(underlyingPrices.keys())
+    .filter(k => k.includes(' '))  // Only intraday timestamps, not date-only keys
+    .sort();
+
   // IVP lookup from market.context
   let ivpByDate: Map<string, number> | undefined;
   try {
@@ -491,6 +380,7 @@ export async function handleReplayTrade(
   if (underlyingPrices.size > 0) {
     greeksConfig = {
       underlyingPrices,
+      sortedTimestamps,
       legs: replayLegs.map(leg => {
         // Extract strike, type, expiry from OCC ticker: ROOT{YYMMDD}{C|P}{strike*1000}
         const occMatch = leg.occTicker.match(/^[A-Z]+(\d{6})([CP])(\d{8})$/);

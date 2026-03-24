@@ -195,6 +195,7 @@ export {
   buildOccTicker,
   computeStrategyPnlPath,
   computeReplayMfeMae,
+  findNearestTimestamp,
   type ReplayLeg,
   type ReplayResult,
   type PnlPoint,

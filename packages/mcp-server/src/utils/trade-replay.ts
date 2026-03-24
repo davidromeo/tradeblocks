@@ -53,6 +53,8 @@ export interface GreeksConfig {
   riskFreeRate: number;       // e.g. 0.045
   dividendYield: number;      // e.g. 0.015 for SPX, 0 otherwise
   ivpByDate?: Map<string, number>;  // date -> IVP value
+  /** Sorted intraday timestamps from underlyingPrices for nearest-timestamp binary search. */
+  sortedTimestamps?: string[];
 }
 
 /** Complete replay result with P&L path, MFE/MAE, and metadata. */
@@ -66,6 +68,57 @@ export interface ReplayResult {
   totalBars?: number;      // Total minute bars before format filtering
   legs: ReplayLeg[];       // The legs that were replayed
   greeksWarning?: string | null;  // D-12: warning when >50% of leg-timestamps have null greeks
+}
+
+// ---------------------------------------------------------------------------
+// findNearestTimestamp
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the nearest timestamp in a sorted array within tolerance (seconds).
+ * Uses binary search for O(log n) performance.
+ *
+ * Timestamps are compared by minutes-since-midnight (HH:MM format).
+ * Returns undefined if no timestamp is within the tolerance.
+ *
+ * Per D-07/D-08: Tolerates up to 60s mismatch between option and underlying bars.
+ */
+export function findNearestTimestamp(
+  sortedTimestamps: string[],
+  target: string,
+  toleranceSec: number = 60,
+): string | undefined {
+  if (sortedTimestamps.length === 0) return undefined;
+
+  const targetMin = timestampToMinutes(target);
+  if (targetMin === null) return undefined;
+
+  let lo = 0, hi = sortedTimestamps.length - 1;
+  let bestIdx = 0;
+  let bestDiff = Infinity;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const midMin = timestampToMinutes(sortedTimestamps[mid]);
+    if (midMin === null) { lo = mid + 1; continue; }
+
+    const diff = Math.abs(midMin - targetMin);
+    if (diff < bestDiff) { bestDiff = diff; bestIdx = mid; }
+    if (midMin < targetMin) lo = mid + 1;
+    else if (midMin > targetMin) hi = mid - 1;
+    else break; // exact match
+  }
+
+  // bestDiff is in minutes; convert tolerance from seconds
+  return bestDiff <= toleranceSec / 60 ? sortedTimestamps[bestIdx] : undefined;
+}
+
+function timestampToMinutes(ts: string): number | null {
+  const timePart = ts.split(' ')[1];
+  if (!timePart) return null;
+  const [h, m] = timePart.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
 }
 
 // ---------------------------------------------------------------------------
@@ -319,8 +372,12 @@ export function computeStrategyPnlPath(
 
       // Compute greeks if config provided
       if (greeksConfig) {
-        // Look up underlying price — try full timestamp first, then date-only (daily fallback)
+        // Look up underlying price — try exact timestamp, then nearest within 60s, then date-only
         let underlyingPrice = greeksConfig.underlyingPrices.get(ts);
+        if (underlyingPrice === undefined && greeksConfig.sortedTimestamps) {
+          const nearest = findNearestTimestamp(greeksConfig.sortedTimestamps, ts, 60);
+          if (nearest) underlyingPrice = greeksConfig.underlyingPrices.get(nearest);
+        }
         if (underlyingPrice === undefined) {
           const dateOnly = ts.split(' ')[0];
           underlyingPrice = greeksConfig.underlyingPrices.get(dateOnly);
