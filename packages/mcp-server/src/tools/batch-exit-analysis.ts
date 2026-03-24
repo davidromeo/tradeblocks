@@ -26,6 +26,34 @@ import { getProfile } from "../db/profile-schemas.js";
 import type { ExitTriggerConfig, LegGroupConfig } from "../utils/exit-triggers.js";
 
 // ---------------------------------------------------------------------------
+// Concurrency limiter — hand-rolled semaphore, no external dependency (D-15)
+// ---------------------------------------------------------------------------
+
+/**
+ * Simple concurrency limiter. Runs async tasks with at most `limit` in flight.
+ * No external dependency — hand-rolled semaphore pattern per D-15.
+ */
+async function mapWithLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+
+  async function worker(): Promise<void> {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i]);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Shared trigger type enum (mirrors exit-analysis.ts)
 // ---------------------------------------------------------------------------
 
@@ -188,49 +216,73 @@ export async function handleBatchExitAnalysis(
     return emptyResult;
   }
 
-  // 2. For each trade, call handleReplayTrade and build TradeInput
+  // 2. Replay trades in parallel with concurrency limit (D-14)
+  const MAX_CONCURRENT_REPLAYS = 5;
+
+  type ReplayOutcome =
+    | { ok: true; input: TradeInput }
+    | { ok: false; tradeIndex: number; dateOpened: string; error: string };
+
+  const outcomes = await mapWithLimit(
+    rows,
+    MAX_CONCURRENT_REPLAYS,
+    async (row): Promise<ReplayOutcome> => {
+      const tradeIdx = Number(row[0] ?? 0);
+      const pl = Number(row[1] ?? 0);
+      const dateOpened = String(row[2] ?? '');
+
+      try {
+        // Always pass format:'full' to get complete pnlPath for analyzeBatch.
+        // params.format controls the batch output density, not the replay resolution.
+        const replayResult = await handleReplayTrade(
+          {
+            block_id,
+            trade_index: tradeIdx,
+            multiplier,
+            format: 'full',
+          },
+          baseDir,
+          injectedConn,
+        );
+
+        // Compute entry cost for percentage-based triggers (D-11)
+        const tradeEntryCost = replayResult.legs.reduce((sum: number, leg) => {
+          return sum + leg.entryPrice * leg.quantity * leg.multiplier;
+        }, 0);
+
+        return {
+          ok: true,
+          input: {
+            tradeIndex: tradeIdx,
+            dateOpened,
+            actualPnl: pl,
+            pnlPath: replayResult.pnlPath,
+            legs: replayResult.legs,
+            entryCost: tradeEntryCost,
+          },
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          tradeIndex: Number(row[0] ?? 0),
+          dateOpened: String(row[2] ?? ''),
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
   const tradeInputs: TradeInput[] = [];
   const skippedTrades: Array<{ tradeIndex: number; dateOpened: string; error: string }> = [];
 
-  for (const row of rows) {
-    const tradeIdx = Number(row[0] ?? 0);
-    const pl = Number(row[1] ?? 0);
-    const dateOpened = String(row[2] ?? '');
-
-    try {
-      // Always pass format:'full' to get complete pnlPath for analyzeBatch.
-      // params.format controls the batch output density, not the replay resolution.
-      const replayResult = await handleReplayTrade(
-        {
-          block_id,
-          trade_index: tradeIdx,
-          multiplier,
-          format: 'full',
-        },
-        baseDir,
-        injectedConn,
-      );
-
-      // Compute entry cost for percentage-based triggers (D-11)
-      const tradeEntryCost = replayResult.legs.reduce((sum: number, leg) => {
-        return sum + leg.entryPrice * leg.quantity * leg.multiplier;
-      }, 0);
-
-      const tradeInput: TradeInput = {
-        tradeIndex: tradeIdx,
-        dateOpened,
-        actualPnl: pl,
-        pnlPath: replayResult.pnlPath,
-        legs: replayResult.legs,
-        entryCost: tradeEntryCost,
-      };
-      tradeInputs.push(tradeInput);
-    } catch (err) {
-      // Skip trades that fail replay (e.g., no option bars available)
+  for (const outcome of outcomes) {
+    if (outcome.ok) {
+      tradeInputs.push(outcome.input);
+    } else {
       skippedTrades.push({
-        tradeIndex: tradeIdx,
-        dateOpened,
-        error: err instanceof Error ? err.message : String(err),
+        tradeIndex: outcome.tradeIndex,
+        dateOpened: outcome.dateOpened,
+        error: outcome.error,
       });
     }
   }
