@@ -1,6 +1,83 @@
 # Market Data Guide
 
-TradeBlocks supports two paths for importing market data: CSV files and the Massive.com API. Both write to the same DuckDB tables and trigger the same enrichment pipeline.
+TradeBlocks supports multiple paths for importing market data: CSV files, the Massive.com API (default), and custom data providers. All paths write to the same DuckDB tables and trigger the same enrichment pipeline.
+
+## Data Provider Architecture
+
+TradeBlocks uses a provider abstraction for external API calls. The active provider is selected via the `MARKET_DATA_PROVIDER` environment variable (default: `"massive"`).
+
+| Provider | Env Var | API Key Env Var | Status |
+|----------|---------|-----------------|--------|
+| Massive.com (Polygon) | `massive` | `MASSIVE_API_KEY` | Shipped |
+| ThetaData | `thetadata` | `THETADATA_API_KEY` | Stub — implement your own |
+
+All providers implement the same `MarketDataProvider` interface and normalize responses to the same `BarRow` and `OptionContract` types. Downstream tools (replay, exit analysis, enrichment) work identically regardless of provider.
+
+### Building a Custom Provider
+
+To add a new data provider:
+
+1. **Create the adapter** at `packages/mcp-server/src/utils/providers/<name>.ts`
+
+   Implement the `MarketDataProvider` interface from `market-provider.ts`:
+
+   ```typescript
+   import type {
+     MarketDataProvider, BarRow, FetchBarsOptions,
+     FetchSnapshotOptions, FetchSnapshotResult,
+   } from "../market-provider.js";
+
+   export class MyProvider implements MarketDataProvider {
+     readonly name = "myprovider";
+
+     async fetchBars(options: FetchBarsOptions): Promise<BarRow[]> {
+       // Fetch OHLCV bars from your API
+       // Return normalized BarRow[] with:
+       //   date: "YYYY-MM-DD" Eastern Time
+       //   open, high, low, close, volume: numbers
+       //   ticker: plain format (no provider-specific prefix)
+       //   time: "HH:MM" ET (only for intraday bars)
+     }
+
+     async fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult> {
+       // Fetch option chain snapshot from your API
+       // Return OptionContract[] with greeks, quotes, OI
+       // Use computeLegGreeks() from black-scholes.ts as BS fallback
+       //   when your API doesn't provide greeks
+     }
+   }
+   ```
+
+2. **Register in the factory** — add a `case` to `getProvider()` in `market-provider.ts`:
+
+   ```typescript
+   import { MyProvider } from "./providers/myprovider.js";
+   // ...
+   case "myprovider":
+     _cached = new MyProvider();
+     break;
+   ```
+
+3. **Configure** — set the env var in `.mcp.json`:
+
+   ```json
+   {
+     "env": {
+       "MARKET_DATA_PROVIDER": "myprovider",
+       "MY_PROVIDER_API_KEY": "your_key"
+     }
+   }
+   ```
+
+4. **Test** — write unit tests in `tests/unit/providers/<name>.test.ts`. Mock `globalThis.fetch` with `jest.spyOn(globalThis, "fetch")` per project conventions.
+
+**Key contract rules:**
+- `BarRow.date` must be `"YYYY-MM-DD"` in Eastern Time — convert at the adapter boundary
+- `BarRow.time` must be `"HH:MM"` 24-hour ET for intraday bars
+- `BarRow.ticker` must be plain storage format (no provider-specific prefixes)
+- Read your API key at call site (inside the method), not at module load time
+- Handle pagination, rate limits, and auth errors inside the adapter
+- Use Zod schemas to validate API responses before mapping to `BarRow`
 
 ## CSV Import
 
@@ -148,7 +225,7 @@ Examples:
 
 Replay historical trades using minute-level option bars for P&L analysis with greeks.
 
-**Data source:** Reads from `market.intraday` cache first. On cache miss, fetches from Massive.com (requires `MASSIVE_API_KEY`). Bars are persisted after fetch — subsequent replays are instant. You can also pre-load bars via `import_market_csv` with intraday data.
+**Data source:** Reads from `market.intraday` cache first. On cache miss, fetches from the configured data provider (default: Massive.com). Bars are persisted after fetch — subsequent replays are instant. You can also pre-load bars via `import_market_csv` with intraday data.
 
 **Two modes:**
 - **Hypothetical** — provide explicit legs with strikes, expiry, entry prices
