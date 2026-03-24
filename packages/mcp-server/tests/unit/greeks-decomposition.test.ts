@@ -346,7 +346,7 @@ describe('edge cases', () => {
     expect(result.totalPnlChange).toBe(0);
   });
 
-  test('path without legGreeks -> all P&L goes to residual', () => {
+  test('path without legGreeks and no underlying -> all P&L goes to residual/time_and_vol', () => {
     const config: GreeksDecompositionConfig = {
       pnlPath: [
         point('2025-01-10 09:31', 0),
@@ -357,18 +357,17 @@ describe('edge cases', () => {
     };
 
     const result = decomposeGreeks(config);
-    const residual = result.factors.find(f => f.factor === 'residual')!;
 
-    // All P&L should be residual since no greeks and no underlying prices
-    expect(residual.totalPnl).toBeCloseTo(3.0, 6);
+    // When residual > 80%, switches to numerical mode.
+    // No underlying prices -> underlyingChange = 0 for all steps -> time_and_vol absorbs all P&L
+    // totalPnlChange = 3.0, totalResidual = 3.0 (time_and_vol in numerical mode)
+    expect(result.totalPnlChange).toBeCloseTo(3.0, 6);
     expect(result.totalResidual).toBeCloseTo(3.0, 6);
+    expect(result.method).toBe('numerical');
 
-    // Other factors should be zero
-    for (const f of result.factors) {
-      if (f.factor !== 'residual') {
-        expect(f.totalPnl).toBe(0);
-      }
-    }
+    const timeAndVol = result.factors.find(f => f.factor === 'time_and_vol')!;
+    expect(timeAndVol).toBeDefined();
+    expect(timeAndVol.totalPnl).toBeCloseTo(3.0, 6);
   });
 
   test('path with null netDelta/netGamma -> those factors are 0', () => {
