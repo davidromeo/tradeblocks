@@ -148,15 +148,15 @@ Requirements for Massive.com market data integration milestone.
 - [x] **POL-10**: When model-based attribution produces >80% residual, numerical fallback recomputes using realized delta from price changes
 - [x] **POL-11**: Numerical fallback outputs delta, gamma (from delta changes), and time_and_vol (residual) factors
 - [x] **POL-12**: `GreeksDecompositionResult` includes `method: 'model' | 'numerical'` field
-- [ ] **POL-13**: `batch_exit_analysis` replays trades in parallel with max 5 concurrent replays using hand-rolled concurrency limiter
-- [ ] **POL-14**: Concurrency limiter is a simple semaphore pattern (~10 lines), no new dependency
+- [x] **POL-13**: `batch_exit_analysis` replays trades in parallel with max 5 concurrent replays using hand-rolled concurrency limiter
+- [x] **POL-14**: Concurrency limiter is a simple semaphore pattern (~10 lines), no new dependency
 
 ### Phase 74 Testing
 
 - [x] **TST-14**: Unit tests for stopLoss abs(threshold) normalization, lowered Bachelier threshold, and model field
 - [x] **TST-15**: Unit tests for `fetchBarsWithCache` (cache hit, cache miss + API fetch, error handling)
 - [x] **TST-16**: Unit tests for midpoint greeks formula and numerical decomposition fallback
-- [ ] **TST-17**: Existing batch_exit_analysis tests pass with parallel replay (behavioral equivalence)
+- [x] **TST-17**: Existing batch_exit_analysis tests pass with parallel replay (behavioral equivalence)
 
 ## Future Requirements
 

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 74-02-PLAN.md
-last_updated: "2026-03-24T12:38:10.806Z"
+stopped_at: Completed 74-04-PLAN.md
+last_updated: "2026-03-24T12:40:36.837Z"
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 25
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # Project State
@@ -57,6 +57,7 @@ Plan: 4 of 4
 | Phase 74 P01 | 116 | 1 tasks | 4 files |
 | Phase 74 P03 | 8 | 2 tasks | 2 files |
 | Phase 74 P02 | 234 | 2 tasks | 5 files |
+| Phase 74 P04 | 1 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,8 @@ Plan: 4 of 4
 - [Phase 74]: fetchBarsWithCache accepts optional DuckDBConnection to avoid repeated getConnection calls in hot paths
 - [Phase 74]: sortedTimestamps built from intraday keys only; date-only fallback keys excluded from binary search
 - [Phase 74]: findNearestTimestamp uses minutes-since-midnight (HH:MM); sub-minute precision not needed for 1-min bars
+- [Phase 74]: mapWithLimit uses worker-pool pattern (N workers competing for idx++) for order-stable parallel replay
+- [Phase 74]: MAX_CONCURRENT_REPLAYS = 5 caps concurrent Massive API/DuckDB calls (batch parallelism)
 
 ### Roadmap Evolution
 
@@ -154,6 +157,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:38:10.803Z
-Stopped at: Completed 74-02-PLAN.md
+Last session: 2026-03-24T12:40:36.834Z
+Stopped at: Completed 74-04-PLAN.md
 Resume file: None

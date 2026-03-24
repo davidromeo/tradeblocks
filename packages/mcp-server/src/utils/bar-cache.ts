@@ -25,7 +25,7 @@ export interface FetchBarsWithCacheOptions {
   ticker: string;
   from: string;
   to: string;
-  timespan?: string;
+  timespan?: "day" | "minute" | "hour";
   assetClass?: MassiveAssetClass;
   /** Pre-opened DuckDB connection (avoids re-opening in hot paths). */
   conn?: DuckDBConnection;
@@ -53,7 +53,7 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
 
   // 1. Cache-read from market.intraday
   try {
-    const conn = opts.conn ?? await getConnection(baseDir);
+    const conn = opts.conn ?? await getConnection(baseDir ?? '.');
     const escaped = ticker.replace(/'/g, "''");
     const cached = await conn.runAndReadAll(
       `SELECT open, high, low, close, time, date
@@ -97,7 +97,7 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
 
   // 3. Cache-write to market.intraday (best-effort, batched)
   try {
-    const conn = opts.conn ?? await getConnection(baseDir);
+    const conn = opts.conn ?? await getConnection(baseDir ?? '.');
     const escaped = ticker.replace(/'/g, "''");
     const values = bars
       .filter(b => b.time)
