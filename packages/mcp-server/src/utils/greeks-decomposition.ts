@@ -420,6 +420,11 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     ? Math.abs(totalResidual) / Math.abs(totalPnlChange)
     : 0;
 
+  // Numerical fallback when model-based residual > 80%
+  // Per-leg attribution is mathematically correct but model greeks are too inaccurate
+  // for 0DTE options (BS underestimates near-expiry sensitivity, Bachelier produces
+  // spurious vega from enormous normal vol values). Numerical method uses actual
+  // price changes which are always accurate.
   if (residualPct > 0.8 && pnlPath.length > 2) {
     return numericalDecomposition(config, totalPnlChange, stepCount);
   }
