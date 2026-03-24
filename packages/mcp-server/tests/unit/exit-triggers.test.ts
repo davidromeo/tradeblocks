@@ -388,6 +388,158 @@ describe('evaluateTrigger', () => {
     const result = evaluateTrigger(trigger, [], DEFAULT_LEGS);
     expect(result).toBeNull();
   });
+
+  // ---------------------------------------------------------------------------
+  // unit:'percent' tests
+  // ---------------------------------------------------------------------------
+
+  describe('profitTarget with unit:percent', () => {
+    it('fires when P&L >= threshold * abs(entryCost) for credit spread (entryCost negative)', () => {
+      // entryCost=-350 (received $350 credit), threshold=0.7 -> dollarThreshold=0.7*350=245
+      // pnlPath ramps: [0, 100, 200, 244, 246]
+      const pnlPath = buildTestPath([0, 100, 200, 244, 246]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitTarget',
+        threshold: 0.7,
+        unit: 'percent',
+        entryCost: -350,
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('profitTarget');
+      expect(result!.index).toBe(4); // pnl=246 >= 245
+      expect(result!.pnlAtFire).toBe(246);
+      // Detail string should mention percentage context
+      expect(result!.detail).toContain('70%');
+    });
+
+    it('fires when P&L >= threshold * abs(entryCost) for debit spread (entryCost positive)', () => {
+      // entryCost=500 (paid $500 debit), threshold=0.5 -> dollarThreshold=0.5*500=250
+      const pnlPath = buildTestPath([0, 100, 200, 250, 300]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitTarget',
+        threshold: 0.5,
+        unit: 'percent',
+        entryCost: 500,
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(3); // pnl=250 >= 250
+      expect(result!.pnlAtFire).toBe(250);
+    });
+
+    it('does not fire when P&L is just below percentage threshold', () => {
+      // entryCost=-350, threshold=0.7 -> dollarThreshold=245
+      // pnlPath peaks at 244 (below 245)
+      const pnlPath = buildTestPath([0, 100, 200, 244]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitTarget',
+        threshold: 0.7,
+        unit: 'percent',
+        entryCost: -350,
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when unit:percent but no entryCost provided', () => {
+      const pnlPath = buildTestPath([0, 100, 200, 300]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitTarget',
+        threshold: 0.7,
+        unit: 'percent',
+        // entryCost intentionally omitted
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
+    it('unit:dollar explicit behaves identically to current dollar behavior', () => {
+      const trigger: ExitTriggerConfig = {
+        type: 'profitTarget',
+        threshold: 200,
+        unit: 'dollar',
+      };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(3); // pnl=200
+      expect(result!.pnlAtFire).toBe(200);
+    });
+
+    it('unit undefined behaves identically to dollar (backwards compat)', () => {
+      const trigger: ExitTriggerConfig = {
+        type: 'profitTarget',
+        threshold: 200,
+        // unit intentionally omitted
+      };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(3);
+      expect(result!.pnlAtFire).toBe(200);
+    });
+  });
+
+  describe('stopLoss with unit:percent', () => {
+    it('fires when P&L <= -(threshold * abs(entryCost))', () => {
+      // entryCost=-350, threshold=2.0 -> dollarThreshold=2.0*350=700
+      // pnlPath: [0, -200, -500, -699, -701]
+      const pnlPath = buildTestPath([0, -200, -500, -699, -701]);
+      const trigger: ExitTriggerConfig = {
+        type: 'stopLoss',
+        threshold: 2.0,
+        unit: 'percent',
+        entryCost: -350,
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('stopLoss');
+      expect(result!.index).toBe(4); // pnl=-701 <= -700
+      expect(result!.pnlAtFire).toBe(-701);
+      // Detail string should mention percentage context
+      expect(result!.detail).toContain('200%');
+    });
+
+    it('does not fire when P&L stays above the percentage stop level', () => {
+      // entryCost=-350, threshold=2.0 -> dollarThreshold=700
+      const pnlPath = buildTestPath([0, -200, -500, -699]);
+      const trigger: ExitTriggerConfig = {
+        type: 'stopLoss',
+        threshold: 2.0,
+        unit: 'percent',
+        entryCost: -350,
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when unit:percent but no entryCost provided', () => {
+      const pnlPath = buildTestPath([0, -200, -500, -701]);
+      const trigger: ExitTriggerConfig = {
+        type: 'stopLoss',
+        threshold: 2.0,
+        unit: 'percent',
+        // entryCost intentionally omitted
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('other trigger types ignore unit field', () => {
+    it('dteExit with unit:percent ignores the unit and fires on DTE threshold', () => {
+      const trigger: ExitTriggerConfig = {
+        type: 'dteExit',
+        threshold: 3,
+        expiry: '2026-01-07',
+        unit: 'percent',
+        entryCost: -350,
+      };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('dteExit');
+      expect(result!.index).toBe(0); // DTE=2 <= 3 from the first point
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -460,6 +612,19 @@ describe('analyzeExitTriggers', () => {
     const result = analyzeExitTriggers({ pnlPath: path, legs: DEFAULT_LEGS, triggers });
     expect(result.overall.summary).toContain('profitTarget');
     expect(result.overall.summary).toContain('2 trigger(s) fired total');
+  });
+
+  it('percentage-based profitTarget fires correctly via analyzeExitTriggers', () => {
+    // entryCost on the config object is passed through to evaluateTrigger
+    // entryCost=-350, threshold=0.7 -> dollarThreshold=245
+    const pnlPath = buildTestPath([0, 100, 200, 244, 246]);
+    const triggers: ExitTriggerConfig[] = [
+      { type: 'profitTarget', threshold: 0.7, unit: 'percent', entryCost: -350 },
+    ];
+    const result = analyzeExitTriggers({ pnlPath, legs: DEFAULT_LEGS, triggers });
+    expect(result.overall.firstToFire).not.toBeNull();
+    expect(result.overall.firstToFire!.type).toBe('profitTarget');
+    expect(result.overall.firstToFire!.index).toBe(4); // pnl=246 >= 245
   });
 });
 
