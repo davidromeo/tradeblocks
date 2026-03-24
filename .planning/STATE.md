@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 75-01-PLAN.md
-last_updated: "2026-03-24T14:53:18.984Z"
+stopped_at: Completed 75-02-PLAN.md
+last_updated: "2026-03-24T14:58:08.135Z"
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 29
-  completed_plans: 26
+  completed_plans: 27
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 75 (normalized-vix-term-structure) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Plan: 2 of 4
 | Phase 74 P02 | 234 | 2 tasks | 5 files |
 | Phase 74 P04 | 1 | 1 tasks | 1 files |
 | Phase 75 P01 | 2 | 2 tasks | 2 files |
+| Phase 75 P02 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,9 @@ Plan: 2 of 4
 - [Phase 74]: MAX_CONCURRENT_REPLAYS = 5 caps concurrent Massive API/DuckDB calls (batch parallelism)
 - [Phase 75]: migrateContextToNormalized uses vixDailyCount > 0 as idempotency check — skips migration if VIX rows already exist in market.daily
 - [Phase 75]: INSERT OR IGNORE (DuckDB dialect) used for idempotent inserts in migration; market.context preserved intact for backward compatibility
+- [Phase 75]: runTier2 uses DEFAULT_MARKET_TICKER (SPX) for Return_20D join to derive Trend_Direction
+- [Phase 75]: Context import tracks metadata per-ticker as import_from_massive:daily:VIX/VIX9D/VIX3M (not bulk context)
+- [Phase 75]: Backward compat: market.context still gets Tier 2 writes in try/catch during transition — will be removed in future phase
 
 ### Roadmap Evolution
 
@@ -161,6 +165,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T14:53:18.979Z
-Stopped at: Completed 75-01-PLAN.md
+Last session: 2026-03-24T14:58:08.131Z
+Stopped at: Completed 75-02-PLAN.md
 Resume file: None
