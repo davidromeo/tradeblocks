@@ -13,6 +13,74 @@
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 
+// =============================================================================
+// Migration: Legacy context → normalized schema (Phase 75 — VTS-01)
+// =============================================================================
+
+/**
+ * Migrate VIX data from legacy market.context to normalized schema.
+ * Copies OHLCV + IVR/IVP for VIX/VIX9D/VIX3M into market.daily rows,
+ * and derived fields into market._context_derived.
+ * Uses INSERT OR IGNORE — safe to re-run.
+ */
+export async function migrateContextToNormalized(conn: DuckDBConnection): Promise<{ rowsMigrated: number }> {
+  // Check if market.context has data
+  let contextCount = 0;
+  try {
+    const r = await conn.runAndReadAll(`SELECT COUNT(*) FROM market.context`);
+    contextCount = Number(r.getRows()[0]?.[0] ?? 0);
+  } catch {
+    return { rowsMigrated: 0 }; // No context table
+  }
+  if (contextCount === 0) return { rowsMigrated: 0 };
+
+  // Check if already migrated (VIX rows exist in market.daily)
+  const checkResult = await conn.runAndReadAll(
+    `SELECT COUNT(*) FROM market.daily WHERE ticker = 'VIX'`
+  );
+  const vixDailyCount = Number(checkResult.getRows()[0]?.[0] ?? 0);
+  if (vixDailyCount > 0) return { rowsMigrated: 0 }; // Already migrated
+
+  let totalMigrated = 0;
+
+  // Migrate VIX OHLCV + IVR/IVP
+  const vixResult = await conn.run(`
+    INSERT OR IGNORE INTO market.daily (ticker, date, open, high, low, close, ivr, ivp)
+    SELECT 'VIX', date, VIX_Open, VIX_High, VIX_Low, VIX_Close, VIX_IVR, VIX_IVP
+    FROM market.context
+    WHERE VIX_Close IS NOT NULL
+  `);
+  totalMigrated += Number(vixResult.rowsChanged);
+
+  // Migrate VIX9D OHLCV + IVR/IVP (VIX9D has Open/Close only, no High/Low in context)
+  const vix9dResult = await conn.run(`
+    INSERT OR IGNORE INTO market.daily (ticker, date, open, close, ivr, ivp)
+    SELECT 'VIX9D', date, VIX9D_Open, VIX9D_Close, VIX9D_IVR, VIX9D_IVP
+    FROM market.context
+    WHERE VIX9D_Close IS NOT NULL
+  `);
+  totalMigrated += Number(vix9dResult.rowsChanged);
+
+  // Migrate VIX3M OHLCV + IVR/IVP (VIX3M has Open/Close only)
+  const vix3mResult = await conn.run(`
+    INSERT OR IGNORE INTO market.daily (ticker, date, open, close, ivr, ivp)
+    SELECT 'VIX3M', date, VIX3M_Open, VIX3M_Close, VIX3M_IVR, VIX3M_IVP
+    FROM market.context
+    WHERE VIX3M_Close IS NOT NULL
+  `);
+  totalMigrated += Number(vix3mResult.rowsChanged);
+
+  // Migrate derived fields to market._context_derived
+  await conn.run(`
+    INSERT OR IGNORE INTO market._context_derived (date, Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct)
+    SELECT date, Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct
+    FROM market.context
+    WHERE Vol_Regime IS NOT NULL OR Term_Structure_State IS NOT NULL
+  `);
+
+  return { rowsMigrated: totalMigrated };
+}
+
 /**
  * Ensure all four market tables exist in the attached market.duckdb.
  *
@@ -99,6 +167,18 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
     }
   }
 
+  // Migration: add IVR/IVP columns for VIX-family tickers (Phase 75 — VTS-01)
+  for (const col of [
+    { name: "ivr", type: "DOUBLE" },
+    { name: "ivp", type: "DOUBLE" },
+  ]) {
+    try {
+      await conn.run(`ALTER TABLE market.daily ADD COLUMN ${col.name} ${col.type}`);
+    } catch {
+      // Column already exists — ignore
+    }
+  }
+
   // VIX and volatility term structure context per trading day
   // PK: (date) — one row per trading day, shared across tickers
   await conn.run(`
@@ -132,6 +212,19 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       Trend_Direction VARCHAR,
 
       PRIMARY KEY (date)
+    )
+  `);
+
+  // Cross-ticker derived fields (Vol_Regime, Term_Structure_State, etc.)
+  // PK: (date) — one row per trading day
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS market._context_derived (
+      date VARCHAR NOT NULL PRIMARY KEY,
+      Vol_Regime INTEGER,
+      Term_Structure_State INTEGER,
+      Trend_Direction VARCHAR,
+      VIX_Spike_Pct DOUBLE,
+      VIX_Gap_Pct DOUBLE
     )
   `);
 
@@ -199,4 +292,7 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       PRIMARY KEY (source, ticker, target_table)
     )
   `);
+
+  // Phase 75: migrate legacy context data to normalized schema
+  await migrateContextToNormalized(conn);
 }
