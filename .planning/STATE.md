@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 74-04-PLAN.md
-last_updated: "2026-03-24T12:40:36.837Z"
+stopped_at: Completed 75-01-PLAN.md
+last_updated: "2026-03-24T14:53:18.984Z"
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 9
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 29
+  completed_plans: 26
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 74 — pre-ship-polish
+**Current focus:** Phase 75 — normalized-vix-term-structure
 
 ## Current Position
 
-Phase: 74 (pre-ship-polish) — EXECUTING
-Plan: 4 of 4
+Phase: 75 (normalized-vix-term-structure) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Plan: 4 of 4
 | Phase 74 P03 | 8 | 2 tasks | 2 files |
 | Phase 74 P02 | 234 | 2 tasks | 5 files |
 | Phase 74 P04 | 1 | 1 tasks | 1 files |
+| Phase 75 P01 | 2 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -133,11 +134,14 @@ Plan: 4 of 4
 - [Phase 74]: findNearestTimestamp uses minutes-since-midnight (HH:MM); sub-minute precision not needed for 1-min bars
 - [Phase 74]: mapWithLimit uses worker-pool pattern (N workers competing for idx++) for order-stable parallel replay
 - [Phase 74]: MAX_CONCURRENT_REPLAYS = 5 caps concurrent Massive API/DuckDB calls (batch parallelism)
+- [Phase 75]: migrateContextToNormalized uses vixDailyCount > 0 as idempotency check — skips migration if VIX rows already exist in market.daily
+- [Phase 75]: INSERT OR IGNORE (DuckDB dialect) used for idempotent inserts in migration; market.context preserved intact for backward compatibility
 
 ### Roadmap Evolution
 
 - Phase 73 added: 0DTE Greeks Engine + Exit Trigger Usability (DTE bug fix, Bachelier model, unit field for triggers, greeks warnings, UX fixes)
 - Phase 74 added: Pre-ship Polish — stopLoss abs, shared fetchBarsWithCache, midpoint greeks attribution, tolerant timestamp lookup, numerical greeks fallback, lower Bachelier threshold, model field in GreeksResult, parallel batch replay
+- Phase 75 added: Normalized VIX Term Structure — replace hardcoded VIX9D/VIX3M columns with market.vix_term_structure, support any tenor, context as pivoted view
 
 ### Pending Todos
 
@@ -157,6 +161,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:40:36.834Z
-Stopped at: Completed 74-04-PLAN.md
+Last session: 2026-03-24T14:53:18.979Z
+Stopped at: Completed 75-01-PLAN.md
 Resume file: None

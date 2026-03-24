@@ -133,7 +133,7 @@ Plans:
 | 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 3/3 | Complete   | 2026-03-24 |
 | 74. Pre-ship Polish | v2.2 | 4/4 | Complete   | 2026-03-24 |
-| 75. Normalized VIX Term Structure | v2.2 | 0/4 | Planned   | |
+| 75. Normalized VIX Term Structure | v2.2 | 1/4 | In Progress|  |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -211,10 +211,10 @@ Plans:
 **Goal:** VIX tenors (VIX, VIX9D, VIX3M, VIX1D, VIX6M, etc.) are stored as regular ticker rows in market.daily with ivr/ivp columns, cross-ticker derived fields live in market._context_derived, enrichment discovers VIX tickers dynamically, and all query builders and tool descriptions reference the normalized schema
 **Requirements**: VTS-01, VTS-02, VTS-03, VTS-04, VTS-05, VTS-06, VTS-07, VTS-08, VTS-09, VTS-10, VTS-11, VTS-12, VTS-13, VTS-14, VTS-15, VTS-16, TST-18, TST-19
 **Depends on:** Phase 74
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
-- [ ] 75-01-PLAN.md — Schema changes: ivr/ivp columns on market.daily, market._context_derived table, idempotent migration from market.context
+- [x] 75-01-PLAN.md — Schema changes: ivr/ivp columns on market.daily, market._context_derived table, idempotent migration from market.context
 - [ ] 75-02-PLAN.md — Enrichment rewrite + context import redirect: Tier 2 reads from market.daily, writes to market.daily + _context_derived; context convenience import stores VIX tickers in market.daily
 - [ ] 75-03-PLAN.md — Query layer migration: field-timing.ts multi-table JOINs, schema-metadata.ts update, data-availability.ts normalized checks
 - [ ] 75-04-PLAN.md — Tool descriptions + describe_database VIX tenor auto-discovery + tests
