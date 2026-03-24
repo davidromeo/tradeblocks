@@ -6,8 +6,8 @@
  * filter suggestions, and Opening Range Breakout calculations.
  *
  * Data source: DuckDB normalized schema
- * - market.daily: Per-ticker OHLCV + enrichment indicators
- * - market.context: Global VIX/regime context (joined via date)
+ * - market.daily: Per-ticker OHLCV + enrichment indicators (including VIX tickers)
+ * - market._context_derived: Global cross-ticker derived fields (Vol_Regime, Term_Structure_State, etc.)
  * - market.intraday: Raw bar data for ORB and intraday analysis
  */
 
@@ -44,11 +44,12 @@ import { getProfile } from "../db/profile-schemas.js";
 // =============================================================================
 
 /**
- * Daily market data columns sourced from market.daily + market.context (normalized schema).
- * Kept as documentation reference for the new dual-table JOIN pattern.
+ * Daily market data columns sourced from market.daily + market._context_derived (normalized schema).
+ * Kept as documentation reference for the multi-table JOIN pattern.
  *
  * market.daily: Per-ticker OHLCV + technical indicators (Gap_Pct, ATR_Pct, RSI_14, Realized_Vol_5D/20D, etc.)
- * market.context: Global VIX/regime data (VIX_Open, VIX_Close, Vol_Regime, Term_Structure_State, VIX_IVR, VIX_IVP, etc.)
+ * market.daily (VIX tickers): VIX_Open, VIX_Close, VIX9D_Close, VIX3M_Close, ivr/ivp per tenor via ticker JOINs
+ * market._context_derived: Cross-ticker derived fields (Vol_Regime, Term_Structure_State, VIX_Spike_Pct, etc.)
  *
  * Field timing:
  * - Open-known (safe for trade-entry analysis): Prior_Close, Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR
@@ -89,7 +90,7 @@ export interface DailyMarketData {
   Day_of_Week: number; // 2=Mon...6=Fri
   Month: number;
   Is_Opex: number; // 0 or 1
-  // VIX (market.context)
+  // VIX (market.daily ticker='VIX' via JOIN)
   VIX_Open: number; // open-known
   VIX_Gap_Pct: number; // open-known
   VIX_Close: number;
@@ -97,8 +98,8 @@ export interface DailyMarketData {
   VIX_Spike_Pct: number;
   VIX_IVR: number;
   VIX_IVP: number;
-  Vol_Regime: number; // 1-6
-  // VIX term structure (market.context)
+  Vol_Regime: number; // 1-6 (market._context_derived)
+  // VIX term structure (market.daily ticker='VIX9D'/'VIX3M' via JOIN)
   VIX9D_Close: number;
   VIX3M_Close: number;
   VIX9D_VIX_Ratio: number;
@@ -270,10 +271,10 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     "analyze_regime_performance",
     {
       description:
-        "Break down a block's trade performance by market regime using market.daily and market.context. " +
+        "Break down a block's trade performance by market regime using market.daily (including VIX tickers) and market._context_derived. " +
         "Identifies which market conditions favor or hurt the strategy. " +
         "Close-derived fields (volRegime, termStructure) use prior trading day values to prevent lookahead bias. " +
-        "Vol_Regime and Term_Structure_State come from market.context via the JOIN. " +
+        "Vol_Regime and Term_Structure_State come from market._context_derived via JOIN. " +
         "Returns warnings when market data is partially missing.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
@@ -462,7 +463,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         const laggedSegments = ["volRegime", "termStructure"];
         const lagNote = laggedSegments.includes(segmentBy)
-          ? `Segmentation by ${segmentBy} uses prior trading day values (close-derived field from market.context) to prevent lookahead bias.`
+          ? `Segmentation by ${segmentBy} uses prior trading day values (close-derived field from market._context_derived) to prevent lookahead bias.`
           : `Segmentation by ${segmentBy} uses same-day values (${segmentBy === "dayOfWeek" ? "static" : "open-known"} field).`;
 
         // Future: Realized_Vol quartile and IVR/IVP regime segmentation dimensions can be added here
@@ -510,7 +511,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
         "Returns actionable standalone filter suggestions plus composite filters where cross-field correlations are strong. " +
         "Close-derived fields (VIX_Close, Vol_Regime, RSI_14, Realized_Vol_5D/20D, VIX_IVR, VIX_IVP) use prior trading day values. " +
         "Open-known fields (Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR, Day_of_Week, Is_Opex) use same-day values. " +
-        "Uses market.daily and market.context via JOIN. Returns warnings when market data is partially missing.",
+        "Uses market.daily LEFT JOIN VIX tickers + market._context_derived. Returns warnings when market data is partially missing.",
       inputSchema: z.object({
         blockId: z.string().describe("Block ID to analyze"),
         strategy: z.string().optional().describe("Filter to specific strategy"),
@@ -670,7 +671,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
           { name: "Skip when prior-day 5D realized vol > 1.5%", field: "Realized_Vol_5D", operator: ">", value: 1.5, test: (m) => getNum(m, "prev_Realized_Vol_5D") > 1.5, lagged: true },
           { name: "Skip when prior-day 20D realized vol > 1.2%", field: "Realized_Vol_20D", operator: ">", value: 1.2, test: (m) => getNum(m, "prev_Realized_Vol_20D") > 1.2, lagged: true },
 
-          // IVP filters (close-derived, from market.context)
+          // IVP filters (close-derived, from market.daily ivr/ivp columns)
           { name: "Skip when prior-day VIX_IVP > 80 (top 20% historically elevated vol)", field: "VIX_IVP", operator: ">", value: 80, test: (m) => getNum(m, "prev_VIX_IVP") > 80, lagged: true },
           { name: "Skip when prior-day VIX_IVP < 20 (bottom 20% historically suppressed vol)", field: "VIX_IVP", operator: "<", value: 20, test: (m) => getNum(m, "prev_VIX_IVP") < 20, lagged: true },
 
@@ -888,7 +889,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
     "enrich_trades",
     {
       description:
-        "Enrich trades with market context from market.daily and market.context using correct temporal joins. " +
+        "Enrich trades with market context from market.daily (ticker-specific + VIX tickers) and market._context_derived using correct temporal joins. " +
         "Open-known fields (Gap_Pct, VIX_Open, Prior_Range_vs_ATR) use same-day values. " +
         "Close-derived fields (VIX_Close, RSI_14, Vol_Regime, Realized_Vol_5D/20D, VIX_IVR, VIX_IVP) use prior trading day values to prevent lookahead bias. " +
         "Enrichment fields: Realized_Vol_5D, Realized_Vol_20D, VIX_IVR, VIX_IVP, Prior_Range_vs_ATR. " +
@@ -1081,7 +1082,7 @@ export function registerMarketDataTools(server: McpServer, baseDir: string): voi
 
         // Build lagNote
         let lagNote =
-          "Entry context uses lookahead-free temporal joins on ticker+date via market.daily LEFT JOIN market.context. " +
+          "Entry context uses lookahead-free temporal joins on ticker+date via market.daily LEFT JOIN VIX tickers + market._context_derived. " +
           "Same-day (open-known) fields: Gap_Pct, VIX_Open, VIX_Gap_Pct, Prior_Range_vs_ATR, Day_of_Week, Month, Is_Opex. " +
           "Prior-day (close-derived) fields: VIX_Close, RSI_14, Vol_Regime, Realized_Vol_5D, Realized_Vol_20D, VIX_IVR, VIX_IVP, Term_Structure_State, etc. — " +
           "use the previous trading day's close-derived values to prevent lookahead bias.";
