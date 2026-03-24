@@ -22,7 +22,7 @@ import { bsPrice, bachelierPrice, BACHELIER_DTE_THRESHOLD } from './black-schole
 // Types
 // ---------------------------------------------------------------------------
 
-export type FactorName = 'delta' | 'gamma' | 'theta' | 'vega' | 'residual' | 'time_and_vol';
+export type FactorName = 'delta' | 'gamma' | 'theta' | 'vega' | 'charm' | 'vanna' | 'residual' | 'time_and_vol';
 
 export interface FactorContribution {
   factor: FactorName;
@@ -319,6 +319,8 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
   const deltaSteps: number[] = [];
   const thetaSteps: number[] = [];
   const vegaSteps: number[] = [];
+  const charmSteps: number[] = [];
+  const vannaSteps: number[] = [];
   const residualSteps: number[] = [];
 
   // Per-leg-group vega accumulators
@@ -333,6 +335,8 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     let stepDelta = 0;
     let stepTheta = 0;
     let stepVega = 0;
+    let stepCharm = 0;
+    let stepVanna = 0;
     let stepResidual = 0;
 
     const groupVegaAccum: number[] | undefined = legGroups ? legGroups.map(() => 0) : undefined;
@@ -372,15 +376,26 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
           // Vega: price at (S1, T1, IV2) — only vol changed
           const priceVega = priceOption(lpi.type, S1, lpi.strike, dte1, r, q, nextIv);
 
-          if (priceBase !== null && priceDelta !== null && priceTheta !== null && priceVega !== null) {
+          // Cross-term repricing: two inputs changed at once
+          // Charm (spot×time): P(S2, T2, σ1) - base - delta - theta
+          const priceCharm = priceOption(lpi.type, S2, lpi.strike, dte2, r, q, curIv);
+          // Vanna (spot×vol): P(S2, T1, σ2) - base - delta - vega
+          const priceVanna = priceOption(lpi.type, S2, lpi.strike, dte1, r, q, nextIv);
+
+          if (priceBase !== null && priceDelta !== null && priceTheta !== null
+              && priceVega !== null && priceCharm !== null && priceVanna !== null) {
             const legDeltaPnl = (priceDelta - priceBase) * positionSize;
             const legThetaPnl = (priceTheta - priceBase) * positionSize;
             const legVegaPnl = (priceVega - priceBase) * positionSize;
-            const legResidual = legActualChange - legDeltaPnl - legThetaPnl - legVegaPnl;
+            const legCharmPnl = ((priceCharm - priceBase) - (priceDelta - priceBase) - (priceTheta - priceBase)) * positionSize;
+            const legVannaPnl = ((priceVanna - priceBase) - (priceDelta - priceBase) - (priceVega - priceBase)) * positionSize;
+            const legResidual = legActualChange - legDeltaPnl - legThetaPnl - legVegaPnl - legCharmPnl - legVannaPnl;
 
             stepDelta += legDeltaPnl;
             stepTheta += legThetaPnl;
             stepVega += legVegaPnl;
+            stepCharm += legCharmPnl;
+            stepVanna += legVannaPnl;
             stepResidual += legResidual;
 
             // Per-leg-group vega
@@ -403,6 +418,8 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     deltaSteps.push(stepDelta);
     thetaSteps.push(stepTheta);
     vegaSteps.push(stepVega);
+    charmSteps.push(stepCharm);
+    vannaSteps.push(stepVanna);
     residualSteps.push(stepResidual);
 
     if (groupSteps && groupVegaAccum) {
@@ -414,13 +431,19 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
 
   const sumSteps = (steps: number[]): number => steps.reduce((s, v) => s + v, 0);
 
-  // Full reval doesn't separate delta from gamma — the repricing captures both.
-  // "delta" here means "all spot-driven P&L" including gamma, charm, etc.
-  // We report it as "delta" for simplicity (it's the spot sensitivity).
+  // Full reval factors:
+  // - delta: spot-only P&L (includes gamma — all spot-driven effects)
+  // - theta: time-only P&L
+  // - vega: vol-only P&L
+  // - charm: spot×time cross-effect (delta changing with time)
+  // - vanna: spot×vol cross-effect (delta changing with vol)
+  // - residual: triple cross (spot+time+vol simultaneously) + model error
   const rawFactors: Array<{ factor: FactorName; totalPnl: number; steps: number[] }> = [
     { factor: 'delta', totalPnl: sumSteps(deltaSteps), steps: deltaSteps },
     { factor: 'theta', totalPnl: sumSteps(thetaSteps), steps: thetaSteps },
     { factor: 'vega', totalPnl: sumSteps(vegaSteps), steps: vegaSteps },
+    { factor: 'charm', totalPnl: sumSteps(charmSteps), steps: charmSteps },
+    { factor: 'vanna', totalPnl: sumSteps(vannaSteps), steps: vannaSteps },
     { factor: 'residual', totalPnl: sumSteps(residualSteps), steps: residualSteps },
   ];
 
@@ -433,7 +456,7 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
 
   const totalPnlChange = pnlPath[pnlPath.length - 1].strategyPnl - pnlPath[0].strategyPnl;
   const totalResidual = sumSteps(residualSteps);
-  const totalAttributed = sumSteps(deltaSteps) + sumSteps(thetaSteps) + sumSteps(vegaSteps);
+  const totalAttributed = sumSteps(deltaSteps) + sumSteps(thetaSteps) + sumSteps(vegaSteps) + sumSteps(charmSteps) + sumSteps(vannaSteps);
 
   const residualPct = Math.abs(totalPnlChange) > 0.01
     ? Math.abs(totalResidual) / Math.abs(totalPnlChange)
