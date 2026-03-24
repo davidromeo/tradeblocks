@@ -82,6 +82,13 @@ export const replayTradeSchema = z.object({
       "'full' returns complete minute-by-minute P&L path, " +
       "'summary' returns MFE/MAE/P&L without minute-level path"
     ),
+  close_at: z
+    .enum(["trade", "expiry"])
+    .default("trade")
+    .describe(
+      "When to end the P&L path: 'trade' (default) truncates at the trade's actual close time, " +
+      "'expiry' shows full path through option expiry. Only applies to tradelog mode."
+    ),
 });
 
 // ---------------------------------------------------------------------------
@@ -140,8 +147,9 @@ export async function handleReplayTrade(
   baseDir: string,
   injectedConn?: import("@duckdb/node-api").DuckDBConnection
 ): Promise<ReplayResult> {
-  const { legs: inputLegs, block_id, trade_index, multiplier } = params;
+  const { legs: inputLegs, block_id, trade_index, multiplier, close_at } = params;
   let { open_date, close_date } = params;
+  let tradeCloseTimestamp: string | undefined; // "YYYY-MM-DD HH:MM" when trade actually closed
 
   let replayLegs: ReplayLeg[];
 
@@ -164,7 +172,7 @@ export async function handleReplayTrade(
     const conn = injectedConn ?? await getConnection(baseDir);
 
     const result = await conn.runAndReadAll(
-      `SELECT legs, premium, date_opened, date_closed, ticker, num_contracts
+      `SELECT legs, premium, date_opened, date_closed, ticker, num_contracts, time_closed
        FROM trades.trade_data
        WHERE block_id = '${block_id.replace(/'/g, "''")}'
        ORDER BY date_opened
@@ -185,6 +193,14 @@ export async function handleReplayTrade(
     const dateClosed = String(row[3] ?? "");
     const ticker = String(row[4] ?? "");
     const numContracts = Number(row[5] ?? 1);
+    const timeClosed = String(row[6] ?? "");
+
+    // Build actual trade close timestamp for path truncation
+    if (dateClosed && timeClosed) {
+      // time_closed is "HH:MM:SS" or "HH:MM" — normalize to "HH:MM"
+      const normalizedTime = timeClosed.slice(0, 5);
+      tradeCloseTimestamp = `${dateClosed} ${normalizedTime}`;
+    }
 
     // Use trade dates if not provided
     open_date = open_date || dateOpened;
@@ -398,10 +414,10 @@ export async function handleReplayTrade(
   }
 
   // ----- Compute P&L path + MFE/MAE -----
-  const fullPath = computeStrategyPnlPath(replayLegs, barsByLeg, greeksConfig);
-  const { mfe, mae, mfeTimestamp, maeTimestamp } =
+  let fullPath = computeStrategyPnlPath(replayLegs, barsByLeg, greeksConfig);
+  let { mfe, mae, mfeTimestamp, maeTimestamp } =
     computeReplayMfeMae(fullPath);
-  const totalPnl = fullPath.length > 0 ? fullPath[fullPath.length - 1].strategyPnl : 0;
+  let totalPnl = fullPath.length > 0 ? fullPath[fullPath.length - 1].strategyPnl : 0;
 
   // Compute greeks warning (D-12): warn when >50% of leg-timestamps have null greeks
   let greeksNullCount = 0;
@@ -419,6 +435,23 @@ export async function handleReplayTrade(
     : null;
 
   // Apply format filter
+  // Truncate path at trade close timestamp when close_at === "trade" (default)
+  // This ensures decompose_greeks and exit triggers only analyze the actual holding period
+  if (close_at === "trade" && tradeCloseTimestamp && fullPath.length > 0) {
+    const truncIdx = fullPath.findIndex(p => p.timestamp > tradeCloseTimestamp!);
+    if (truncIdx > 0) {
+      fullPath = fullPath.slice(0, truncIdx);
+      // Recompute MFE/MAE/totalPnl on truncated path
+      mfe = -Infinity;
+      mae = Infinity;
+      for (const p of fullPath) {
+        if (p.strategyPnl > mfe) { mfe = p.strategyPnl; mfeTimestamp = p.timestamp; }
+        if (p.strategyPnl < mae) { mae = p.strategyPnl; maeTimestamp = p.timestamp; }
+      }
+      totalPnl = fullPath[fullPath.length - 1].strategyPnl;
+    }
+  }
+
   const { format } = params;
   let pnlPath: typeof fullPath;
   if (format === "summary") {

@@ -240,6 +240,7 @@ export async function handleBatchExitAnalysis(
             trade_index: tradeIdx,
             multiplier,
             format: 'full',
+            close_at: 'trade',
           },
           baseDir,
           injectedConn,
