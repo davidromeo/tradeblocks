@@ -417,7 +417,7 @@ export function registerExitAnalysisTools(
         "-- provide block_id + trade_index or explicit legs. Evaluates 14 trigger types " +
         "(profit target, stop loss, trailing stop, DTE, DIT, clock time, underlying move, " +
         "delta, VIX moves, S/L ratio) against minute-by-minute P&L path with greeks. " +
-        "Requires MASSIVE_API_KEY.",
+        "Uses cached bars from market.intraday when available; fetches from Massive.com on cache miss (requires MASSIVE_API_KEY).",
       inputSchema: analyzeExitTriggersSchema,
     },
     async (params) => {
@@ -447,7 +447,8 @@ export function registerExitAnalysisTools(
         "Decompose a trade's P&L into greek factor contributions (delta, gamma, theta, " +
         "vega, residual). Runs replay internally. Shows which factor drove P&L movement " +
         "and by how much. For calendar/double-calendar strategies, includes per-leg-group " +
-        "vega attribution showing front vs back month IV divergence. Requires MASSIVE_API_KEY.",
+        "vega attribution showing front vs back month IV divergence. " +
+        "Uses cached bars from market.intraday when available; fetches from Massive.com on cache miss (requires MASSIVE_API_KEY).",
       inputSchema: decomposeGreeksSchema,
     },
     async (params) => {

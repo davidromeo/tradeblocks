@@ -349,8 +349,8 @@ export function registerBatchExitAnalysisTools(
         "Replays each matching trade, evaluates exit triggers against the minute-level P&L path, " +
         "and returns aggregate statistics (win rate, Sharpe, profit factor, drawdown) comparable " +
         "to get_statistics. Includes per-trigger attribution showing which triggers drive outcomes. " +
-        "First run fetches option bars from Massive (requires MASSIVE_API_KEY); subsequent runs " +
-        "use cached data from market.intraday. Use with strategy profiles to iterate on exit rules.",
+        "Uses cached bars from market.intraday when available; fetches from Massive.com on cache miss " +
+        "(requires MASSIVE_API_KEY). Use with strategy profiles to iterate on exit rules.",
       inputSchema: batchExitAnalysisSchema,
     },
     async (params) => {

@@ -499,11 +499,11 @@ export function registerReplayTools(
     "replay_trade",
     {
       description:
-        "Replay a trade using historical minute-level option bars from Massive.com. " +
+        "Replay a trade using historical minute-level option bars. " +
+        "Uses cached bars from market.intraday if available; fetches from Massive.com API on cache miss (requires MASSIVE_API_KEY). " +
         "Returns minute-by-minute P&L path with MFE (Maximum Favorable Excursion) and MAE (Maximum Adverse Excursion). " +
         "Two modes: (A) Hypothetical — provide explicit legs with strikes, expiry, entry prices. " +
-        "(B) Tradelog — provide block_id + trade_index to replay an existing trade from your data. " +
-        "Requires MASSIVE_API_KEY environment variable.",
+        "(B) Tradelog — provide block_id + trade_index to replay an existing trade from your data.",
       inputSchema: replayTradeSchema,
     },
     async (params) => {
