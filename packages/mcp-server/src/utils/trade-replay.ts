@@ -7,7 +7,7 @@
  * All functions are pure — no fetch, no DuckDB.
  */
 
-import type { MassiveBarRow } from './massive-client.js';
+import type { BarRow } from './market-provider.js';
 import { computeLegGreeks, type GreeksResult } from './black-scholes.js';
 
 // ---------------------------------------------------------------------------
@@ -313,7 +313,7 @@ export function buildOccTicker(
  */
 export function computeStrategyPnlPath(
   legs: ReplayLeg[],
-  barsByLeg: MassiveBarRow[][],
+  barsByLeg: BarRow[][],
   greeksConfig?: GreeksConfig,
 ): PnlPoint[] {
   if (legs.length === 0 || barsByLeg.length === 0) return [];
@@ -324,8 +324,8 @@ export function computeStrategyPnlPath(
   }
 
   // Build maps of timestamp -> bar for each leg
-  const legMaps: Map<string, MassiveBarRow>[] = barsByLeg.map((bars) => {
-    const map = new Map<string, MassiveBarRow>();
+  const legMaps: Map<string, BarRow>[] = barsByLeg.map((bars) => {
+    const map = new Map<string, BarRow>();
     for (const bar of bars) {
       const ts = `${bar.date} ${bar.time ?? ''}`.trim();
       map.set(ts, bar);
@@ -344,7 +344,7 @@ export function computeStrategyPnlPath(
 
   // Build P&L path with forward-fill for missing bars
   const path: PnlPoint[] = [];
-  const lastBar: (MassiveBarRow | undefined)[] = new Array(legs.length).fill(undefined);
+  const lastBar: (BarRow | undefined)[] = new Array(legs.length).fill(undefined);
 
 
   for (const ts of sortedTimestamps) {

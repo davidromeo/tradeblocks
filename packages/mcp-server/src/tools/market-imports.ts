@@ -18,7 +18,7 @@ import * as os from "os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getConnection, upgradeToReadWrite, downgradeToReadOnly } from "../db/connection.js";
 import { createToolOutput } from "../utils/output-formatter.js";
-import { importMarketCsvFile, importFromDatabase, importFromMassive } from "../utils/market-importer.js";
+import { importMarketCsvFile, importFromDatabase, importFromApi } from "../utils/market-importer.js";
 
 /**
  * Register market import MCP tools on the given server.
@@ -221,13 +221,13 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
   );
 
   // ---------------------------------------------------------------------------
-  // Tool: import_from_massive
+  // Tool: import_from_api
   // ---------------------------------------------------------------------------
   server.registerTool(
-    "import_from_massive",
+    "import_from_api",
     {
       description:
-        "Import market data from Massive.com API into market.daily or market.intraday. " +
+        "Import market data from the configured data provider (Massive.com or ThetaData) into market.daily or market.intraday. " +
         "Requires MASSIVE_API_KEY environment variable. " +
         "For daily: fetches OHLCV bars for any stock/index ticker. " +
         "For context: imports VIX + VIX9D + VIX3M as ticker rows in market.daily (convenience shorthand), then runs enrichment to populate market._context_derived. " +
@@ -281,7 +281,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
       try {
         const conn = await getConnection(baseDir);
 
-        const result = await importFromMassive(conn, {
+        const result = await importFromApi(conn, {
           ticker: ticker.toUpperCase(),
           from,
           to,
@@ -313,7 +313,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
           content: [
             {
               type: "text" as const,
-              text: `Error importing from Massive.com: ${(error as Error).message}`,
+              text: `Error importing from data provider: ${(error as Error).message}`,
             },
           ],
           isError: true,

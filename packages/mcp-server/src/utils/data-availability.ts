@@ -98,7 +98,7 @@ export async function checkDataAvailability(
   if (!hasContextData) {
     warnings.push(
       `No VIX data in market.daily. ` +
-      `Import VIX data with import_from_massive (ticker: "VIX", target_table: "daily") ` +
+      `Import VIX data with import_from_api (ticker: "VIX", target_table: "daily") ` +
       `or import_market_csv (target_table: "context") ` +
       `then run enrich_market_data for IVR/IVP enrichment.`
     );

@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createToolOutput } from "../utils/output-formatter.js";
 import { handleReplayTrade } from "./replay.js";
-import { fetchBars } from "../utils/massive-client.js";
+import { getProvider } from "../utils/market-provider.js";
 import {
   analyzeExitTriggers,
   type ExitTriggerConfig,
@@ -146,7 +146,7 @@ async function fetchPriceMap(
 ): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   try {
-    const bars = await fetchBars({
+    const bars = await getProvider().fetchBars({
       ticker,
       from,
       to,

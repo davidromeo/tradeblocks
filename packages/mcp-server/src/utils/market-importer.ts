@@ -18,7 +18,7 @@ import * as fs from "fs/promises";
 import { normalizeTicker } from "./ticker.js";
 import { upsertMarketImportMetadata } from "../sync/metadata.js";
 import { runEnrichment, runContextEnrichment } from "./market-enricher.js";
-import { fetchBars, type MassiveAssetClass } from "./massive-client.js";
+import { getProvider, type AssetClass } from "./market-provider.js";
 
 // =============================================================================
 // Constants
@@ -643,7 +643,7 @@ export async function importFromDatabase(
 }
 
 // =============================================================================
-// importFromMassive
+// importFromApi
 // =============================================================================
 
 /**
@@ -666,20 +666,20 @@ const OCC_TICKER_REGEX = /^[A-Z]+\d{6}[CP]\d{8}$/;
  * - OCC option format → "option"
  * - Otherwise → "stock"
  */
-function detectAssetClass(ticker: string): MassiveAssetClass {
+function detectAssetClass(ticker: string): AssetClass {
   if (INDEX_TICKERS.has(ticker.toUpperCase())) return "index";
   if (OCC_TICKER_REGEX.test(ticker.toUpperCase())) return "option";
   return "stock";
 }
 
-export interface ImportFromMassiveOptions {
+export interface ImportFromApiOptions {
   ticker: string;
   from: string;              // YYYY-MM-DD
   to: string;                // YYYY-MM-DD
   targetTable: "daily" | "context" | "intraday";
   timespan?: "minute" | "hour";  // only for intraday, default "minute"
   multiplier?: number;           // only for intraday, default 1
-  assetClass?: MassiveAssetClass; // default: auto-detect from ticker/targetTable
+  assetClass?: AssetClass; // default: auto-detect from ticker/targetTable
   dryRun?: boolean;
   skipEnrichment?: boolean;
 }
@@ -704,9 +704,9 @@ export interface ImportFromMassiveOptions {
  * Requires MASSIVE_API_KEY environment variable. Upserts on conflict — safe to
  * re-import overlapping date ranges.
  */
-export async function importFromMassive(
+export async function importFromApi(
   conn: DuckDBConnection,
-  options: ImportFromMassiveOptions
+  options: ImportFromApiOptions
 ): Promise<ImportResult> {
   const {
     ticker,
@@ -725,7 +725,7 @@ export async function importFromMassive(
   if (targetTable === "daily") {
     // --- Daily import: single fetchBars call, insert directly ---
     const resolvedClass = assetClass ?? detectAssetClass(normalizedTicker);
-    const rows = await fetchBars({
+    const rows = await getProvider().fetchBars({
       ticker: normalizedTicker,
       from,
       to,
@@ -764,7 +764,7 @@ export async function importFromMassive(
     const { inserted, updated, skipped } = await insertMappedRows(conn, "daily", mappedRows);
 
     await upsertMarketImportMetadata(conn, {
-      source: `import_from_massive:daily:${normalizedTicker}`,
+      source: `import_from_api:daily:${normalizedTicker}`,
       ticker: normalizedTicker,
       target_table: "daily",
       max_date: dateRange?.max ?? null,
@@ -794,7 +794,7 @@ export async function importFromMassive(
     let combinedDateRange: { min: string; max: string } | null = null;
 
     for (const ctxTicker of contextTickers) {
-      const bars = await fetchBars({ ticker: ctxTicker, from, to, timespan: "day", assetClass: "index" });
+      const bars = await getProvider().fetchBars({ ticker: ctxTicker, from, to, timespan: "day", assetClass: "index" });
       const mappedRows = bars.map(bar => ({
         ticker: ctxTicker,
         date: bar.date,
@@ -825,7 +825,7 @@ export async function importFromMassive(
         totalSkipped += skipped;
 
         await upsertMarketImportMetadata(conn, {
-          source: `import_from_massive:daily:${ctxTicker}`,
+          source: `import_from_api:daily:${ctxTicker}`,
           ticker: ctxTicker,
           target_table: "daily",
           max_date: dateRange?.max ?? null,
@@ -886,7 +886,7 @@ export async function importFromMassive(
   // targetTable === "intraday"
   // --- Intraday import: fetch minute/hour bars with time field ---
   const resolvedClass = assetClass ?? detectAssetClass(normalizedTicker);
-  const rows = await fetchBars({
+  const rows = await getProvider().fetchBars({
     ticker: normalizedTicker,
     from,
     to,
@@ -929,7 +929,7 @@ export async function importFromMassive(
   const { inserted, updated, skipped } = await insertMappedRows(conn, "intraday", mappedRows);
 
   await upsertMarketImportMetadata(conn, {
-    source: `import_from_massive:intraday:${normalizedTicker}`,
+    source: `import_from_api:intraday:${normalizedTicker}`,
     ticker: normalizedTicker,
     target_table: "intraday",
     max_date: dateRange?.max ?? null,

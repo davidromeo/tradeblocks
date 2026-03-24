@@ -24,7 +24,7 @@ import {
   type ReplayResult,
   type GreeksConfig,
 } from "../utils/trade-replay.js";
-import type { MassiveBarRow } from "../utils/massive-client.js";
+import type { BarRow } from "../utils/market-provider.js";
 
 // ---------------------------------------------------------------------------
 // Zod schema
@@ -267,7 +267,7 @@ export async function handleReplayTrade(
     RUT: 'RUTW',
   };
 
-  const fetchLegBars = async (occTicker: string): Promise<MassiveBarRow[]> => {
+  const fetchLegBars = async (occTicker: string): Promise<BarRow[]> => {
     const bars = await fetchBarsWithCache({
       ticker: occTicker,
       from: open_date!,
@@ -323,7 +323,7 @@ export async function handleReplayTrade(
   const dividendYield = DIVIDEND_YIELDS[rawRoot] ?? 0;
 
   // Fetch underlying minute bars via shared cache utility (cache-read → API → cache-write)
-  let underlyingBars: MassiveBarRow[] = await fetchBarsWithCache({
+  let underlyingBars: BarRow[] = await fetchBarsWithCache({
     ticker: underlyingTicker,
     from: open_date!,
     to: close_date!,

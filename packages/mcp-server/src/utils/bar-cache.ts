@@ -12,8 +12,8 @@
  * Historical option and underlying bars are immutable — cached bars are always valid.
  */
 
-import type { MassiveBarRow, MassiveAssetClass } from './massive-client.js';
-import { fetchBars } from './massive-client.js';
+import type { BarRow, AssetClass } from './market-provider.js';
+import { getProvider } from './market-provider.js';
 import { getConnection } from '../db/connection.js';
 import type { DuckDBConnection } from '@duckdb/node-api';
 
@@ -26,7 +26,7 @@ export interface FetchBarsWithCacheOptions {
   from: string;
   to: string;
   timespan?: "day" | "minute" | "hour";
-  assetClass?: MassiveAssetClass;
+  assetClass?: AssetClass;
   /** Pre-opened DuckDB connection (avoids re-opening in hot paths). */
   conn?: DuckDBConnection;
   /** Base directory for getConnection (used when conn is not provided). */
@@ -48,7 +48,7 @@ export interface FetchBarsWithCacheOptions {
  * DuckDB errors in steps 1 or 3 are swallowed — step 2 is always attempted on miss.
  * Returns [] when both cache and API return no bars (or API throws).
  */
-export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promise<MassiveBarRow[]> {
+export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promise<BarRow[]> {
   const { ticker, from, to, timespan, assetClass, baseDir } = opts;
 
   // 1. Cache-read from market.intraday
@@ -81,9 +81,9 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
   }
 
   // 2. API fetch on cache miss
-  let bars: MassiveBarRow[] = [];
+  let bars: BarRow[] = [];
   try {
-    bars = await fetchBars({
+    bars = await getProvider().fetchBars({
       ticker,
       from,
       to,
