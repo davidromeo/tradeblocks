@@ -465,6 +465,11 @@ export function solveNormalIV(
   let sigma_n = marketPrice / Math.sqrt(T / (2 * Math.PI));
   // Clamp initial guess to reasonable range
   sigma_n = Math.max(sigma_n, 1); // at least $1 normal vol
+
+  // Bisection bounds — normal vol is in dollar terms (typically 10-10000 for index options)
+  let lo = 0.01;
+  let hi = 50000;
+
   for (let i = 0; i < maxIter; i++) {
     const price = bachelierPrice(type, S, K, T, r, q, sigma_n);
     const diff = price - marketPrice;
@@ -473,10 +478,30 @@ export function solveNormalIV(
     const forward = S * Math.exp((r - q) * T);
     const d = (forward - K) / (sigma_n * Math.sqrt(T));
     const rawVega = Math.exp(-r * T) * Math.sqrt(T) * pdf(d);
-    if (rawVega < 1e-10) return null; // degenerate, give up
-    const newSigma = sigma_n - diff / rawVega;
-    if (newSigma <= 0) return null;
-    sigma_n = newSigma;
+
+    if (rawVega < 1e-10) {
+      // Bisection fallback when vega is near zero
+      if (diff > 0) {
+        hi = sigma_n;
+      } else {
+        lo = sigma_n;
+      }
+      sigma_n = (lo + hi) / 2;
+    } else {
+      // Newton-Raphson step
+      const newSigma = sigma_n - diff / rawVega;
+      if (newSigma <= 0 || newSigma > 100000) {
+        // Fall back to bisection
+        if (diff > 0) {
+          hi = sigma_n;
+        } else {
+          lo = sigma_n;
+        }
+        sigma_n = (lo + hi) / 2;
+      } else {
+        sigma_n = newSigma;
+      }
+    }
   }
   return null;
 }
