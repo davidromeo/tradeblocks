@@ -28,6 +28,7 @@ const REQUIRED_SCHEMA_FIELDS: Record<string, string[]> = {
   daily: ["date", "open", "high", "low", "close"],
   context: ["date"],
   intraday: ["date", "time", "open", "high", "low", "close"],
+  _context_derived: ["date"],  // Phase 75: cross-ticker derived fields
 };
 
 // PK conflict target per table
@@ -35,6 +36,7 @@ const CONFLICT_TARGETS: Record<string, string> = {
   daily: "(ticker, date)",
   context: "(date)",
   intraday: "(ticker, date, time)",
+  _context_derived: "(date)",  // Phase 75: PK is date only
 };
 
 // =============================================================================
