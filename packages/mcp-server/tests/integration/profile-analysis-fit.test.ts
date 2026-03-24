@@ -47,7 +47,8 @@ async function createBlockWithTrades(
 }
 
 /**
- * Insert market data rows into DuckDB (market.daily + market.context).
+ * Insert market data rows into DuckDB (market.daily + market._context_derived).
+ * Phase 75: VIX fields moved from market.context to market.daily (ticker rows) + market._context_derived.
  * Inserts enough fields for filter testing: Vol_Regime, VIX_Close, RSI_14, Day_of_Week.
  */
 async function insertMarketData(
@@ -65,13 +66,25 @@ async function insertMarketData(
   };
 
   for (const row of rows) {
-    // market.daily with Day_of_Week, RSI_14
+    // market.daily with Day_of_Week, RSI_14 for SPX
     await c.run(
       `INSERT OR IGNORE INTO market.daily (ticker, date, Open, High, Low, Close, Prior_Close, Gap_Pct, Day_of_Week, RSI_14)
        VALUES ('SPX', '${row.date}', 4500, 4520, 4480, 4510, 4490, 0.1, ${row.dayOfWeek}, ${row.rsi14})`
     );
 
-    // market.context with Vol_Regime, VIX_Close
+    // market.daily VIX ticker row (Phase 75: VIX_Close comes from here)
+    await c.run(
+      `INSERT OR IGNORE INTO market.daily (ticker, date, Open, High, Low, Close, Prior_Close)
+       VALUES ('VIX', '${row.date}', ${row.vixClose + 0.5}, ${row.vixClose + 1}, ${row.vixClose - 0.5}, ${row.vixClose}, ${row.vixClose - 0.3})`
+    );
+
+    // market._context_derived with Vol_Regime (Phase 75: Vol_Regime comes from here)
+    await c.run(
+      `INSERT OR IGNORE INTO market._context_derived (date, Vol_Regime)
+       VALUES ('${row.date}', ${row.volRegime})`
+    );
+
+    // Also insert into market.context for backward compat queries (legacy)
     await c.run(
       `INSERT OR IGNORE INTO market.context (date, Vol_Regime, VIX_Open, VIX_Close)
        VALUES ('${row.date}', ${row.volRegime}, ${row.vixClose + 0.5}, ${row.vixClose})`

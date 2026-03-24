@@ -315,18 +315,27 @@ describe("import_from_massive integration", () => {
 
       // Should have made exactly 3 fetch calls
       expect(fetchSpy).toHaveBeenCalledTimes(3);
-      expect(result.rowsInserted).toBe(5);
+      // Phase 75: VIX/VIX9D/VIX3M stored as separate ticker rows in market.daily (5 dates * 3 tickers = 15)
+      expect(result.rowsInserted).toBe(15);
 
-      // Verify merged row has VIX_Open, VIX9D_Open, VIX3M_Open
-      const contextRow = await conn.runAndReadAll(
-        "SELECT VIX_Open, VIX_Close, VIX9D_Open, VIX9D_Close, VIX3M_Open, VIX3M_Close FROM market.context WHERE date = '2024-01-02'"
+      // Verify each ticker has a row for 2024-01-02 with open/close values
+      const vixRow = await conn.runAndReadAll(
+        "SELECT open, close FROM market.daily WHERE ticker = 'VIX' AND date = '2024-01-02'"
       );
-      const rows = contextRow.getRows();
-      expect(rows).toHaveLength(1);
-      // All 6 VIX fields should be non-null
-      for (let col = 0; col < 6; col++) {
-        expect(rows[0][col]).not.toBeNull();
-        expect(Number(rows[0][col])).toBeGreaterThan(0);
+      const vix9dRow = await conn.runAndReadAll(
+        "SELECT open, close FROM market.daily WHERE ticker = 'VIX9D' AND date = '2024-01-02'"
+      );
+      const vix3mRow = await conn.runAndReadAll(
+        "SELECT open, close FROM market.daily WHERE ticker = 'VIX3M' AND date = '2024-01-02'"
+      );
+      expect(vixRow.getRows()).toHaveLength(1);
+      expect(vix9dRow.getRows()).toHaveLength(1);
+      expect(vix3mRow.getRows()).toHaveLength(1);
+      // All rows should have non-null, positive open/close values
+      for (const result of [vixRow, vix9dRow, vix3mRow]) {
+        const row = result.getRows()[0];
+        expect(Number(row[0])).toBeGreaterThan(0); // open
+        expect(Number(row[1])).toBeGreaterThan(0); // close
       }
     });
 
@@ -358,26 +367,33 @@ describe("import_from_massive integration", () => {
       });
 
       expect(result.enrichment.status).toBe("complete");
-      expect(result.rowsInserted).toBe(COUNT);
+      // Phase 75: VIX/VIX9D/VIX3M stored as separate ticker rows (COUNT * 3 tickers)
+      expect(result.rowsInserted).toBe(COUNT * 3);
 
-      // VIX_IVR and VIX_IVP should be populated for at least one row (the 252nd+ bar)
+      // VIX ivr/ivp should be populated for at least one row (the 252nd+ bar) in market.daily
       const ivrRows = await conn.runAndReadAll(
-        "SELECT VIX_IVR, VIX_IVP, VIX9D_IVR, VIX9D_IVP, VIX3M_IVR, VIX3M_IVP FROM market.context WHERE VIX_IVR IS NOT NULL LIMIT 5"
+        "SELECT ticker, ivr, ivp FROM market.daily WHERE ivr IS NOT NULL AND ticker IN ('VIX', 'VIX9D', 'VIX3M') LIMIT 6"
       );
       expect(ivrRows.getRows().length).toBeGreaterThan(0);
 
       const firstRow = ivrRows.getRows()[0];
       // IVR/IVP values should be between 0 and 100
-      const vixIVR = Number(firstRow[0]);
-      const vixIVP = Number(firstRow[1]);
-      expect(vixIVR).toBeGreaterThanOrEqual(0);
-      expect(vixIVR).toBeLessThanOrEqual(100);
-      expect(vixIVP).toBeGreaterThanOrEqual(0);
-      expect(vixIVP).toBeLessThanOrEqual(100);
+      const ivr = Number(firstRow[1]);
+      const ivp = Number(firstRow[2]);
+      expect(ivr).toBeGreaterThanOrEqual(0);
+      expect(ivr).toBeLessThanOrEqual(100);
+      expect(ivp).toBeGreaterThanOrEqual(0);
+      expect(ivp).toBeLessThanOrEqual(100);
 
-      // VIX9D and VIX3M IVR/IVP also populated
-      expect(firstRow[2]).not.toBeNull(); // VIX9D_IVR
-      expect(firstRow[4]).not.toBeNull(); // VIX3M_IVR
+      // VIX9D and VIX3M IVR also populated
+      const vix9dIvrRows = await conn.runAndReadAll(
+        "SELECT ivr FROM market.daily WHERE ticker = 'VIX9D' AND ivr IS NOT NULL LIMIT 1"
+      );
+      const vix3mIvrRows = await conn.runAndReadAll(
+        "SELECT ivr FROM market.daily WHERE ticker = 'VIX3M' AND ivr IS NOT NULL LIMIT 1"
+      );
+      expect(vix9dIvrRows.getRows().length).toBeGreaterThan(0);
+      expect(vix3mIvrRows.getRows().length).toBeGreaterThan(0);
     });
 
     test("context dry_run writes no rows to DuckDB", async () => {
@@ -399,10 +415,12 @@ describe("import_from_massive integration", () => {
       });
 
       expect(result.rowsInserted).toBe(0);
-      expect(result.inputRowCount).toBe(5);
+      // Phase 75: 5 dates * 3 tickers (VIX, VIX9D, VIX3M) = 15 input rows
+      expect(result.inputRowCount).toBe(15);
 
+      // No rows written to market.daily for VIX tickers
       const countResult = await conn.runAndReadAll(
-        "SELECT COUNT(*) FROM market.context"
+        "SELECT COUNT(*) FROM market.daily WHERE ticker IN ('VIX', 'VIX9D', 'VIX3M')"
       );
       expect(Number(countResult.getRows()[0][0])).toBe(0);
     });
