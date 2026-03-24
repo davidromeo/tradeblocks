@@ -785,69 +785,71 @@ export async function importFromMassive(
   }
 
   if (targetTable === "context") {
-    // --- Context import: 3 parallel fetchBars calls, merge by date ---
-    const [vixRows, vix9dRows, vix3mRows] = await Promise.all([
-      fetchBars({ ticker: "VIX", from, to, timespan: "day", assetClass: "index" }),
-      fetchBars({ ticker: "VIX9D", from, to, timespan: "day", assetClass: "index" }),
-      fetchBars({ ticker: "VIX3M", from, to, timespan: "day", assetClass: "index" }),
-    ]);
+    // --- Context convenience import: import VIX + VIX9D + VIX3M into market.daily (per D-12) ---
+    const contextTickers = ["VIX", "VIX9D", "VIX3M"];
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let totalInput = 0;
+    let combinedDateRange: { min: string; max: string } | null = null;
 
-    // Build a date-keyed map, merging fields from all three indices
-    const byDate = new Map<string, Record<string, unknown>>();
-
-    for (const bar of vixRows) {
-      byDate.set(bar.date, {
+    for (const ctxTicker of contextTickers) {
+      const bars = await fetchBars({ ticker: ctxTicker, from, to, timespan: "day", assetClass: "index" });
+      const mappedRows = bars.map(bar => ({
+        ticker: ctxTicker,
         date: bar.date,
-        VIX_Open: bar.open,
-        VIX_Close: bar.close,
-        VIX_High: bar.high,
-        VIX_Low: bar.low,
-      });
-    }
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      }));
 
-    for (const bar of vix9dRows) {
-      const existing = byDate.get(bar.date) ?? { date: bar.date };
-      existing["VIX9D_Open"] = bar.open;
-      existing["VIX9D_Close"] = bar.close;
-      byDate.set(bar.date, existing);
-    }
+      totalInput += mappedRows.length;
 
-    for (const bar of vix3mRows) {
-      const existing = byDate.get(bar.date) ?? { date: bar.date };
-      existing["VIX3M_Open"] = bar.open;
-      existing["VIX3M_Close"] = bar.close;
-      byDate.set(bar.date, existing);
-    }
+      if (mappedRows.length === 0) continue;
 
-    const mappedRows = Array.from(byDate.values());
-    const dateRange = computeDateRange(mappedRows);
+      const dateRange = computeDateRange(mappedRows);
+      if (dateRange) {
+        if (!combinedDateRange) {
+          combinedDateRange = { ...dateRange };
+        } else {
+          if (dateRange.min < combinedDateRange.min) combinedDateRange.min = dateRange.min;
+          if (dateRange.max > combinedDateRange.max) combinedDateRange.max = dateRange.max;
+        }
+      }
+
+      if (!dryRun) {
+        const { inserted, updated, skipped } = await insertMappedRows(conn, "daily", mappedRows);
+        totalInserted += inserted;
+        totalUpdated += updated;
+        totalSkipped += skipped;
+
+        await upsertMarketImportMetadata(conn, {
+          source: `import_from_massive:daily:${ctxTicker}`,
+          ticker: ctxTicker,
+          target_table: "daily",
+          max_date: dateRange?.max ?? null,
+          enriched_through: null,
+          synced_at: new Date(),
+        });
+      }
+    }
 
     if (dryRun) {
       return {
         rowsInserted: 0,
         rowsUpdated: 0,
         rowsSkipped: 0,
-        inputRowCount: mappedRows.length,
-        dateRange,
+        inputRowCount: totalInput,
+        dateRange: combinedDateRange,
         enrichment: {
           status: "skipped",
-          message: `dry_run=true; no data written. Would import ${mappedRows.length} context rows.`,
+          message: `dry_run=true; no data written. Would import ${totalInput} rows for ${contextTickers.join(", ")} into market.daily.`,
         },
       };
     }
 
-    const { inserted, updated, skipped } = await insertMappedRows(conn, "context", mappedRows);
-
-    await upsertMarketImportMetadata(conn, {
-      source: `import_from_massive:context`,
-      ticker: "VIX",
-      target_table: "context",
-      max_date: dateRange?.max ?? null,
-      enriched_through: null,
-      synced_at: new Date(),
-    });
-
-    // Tier 2 context enrichment: compute VIX-derived fields
+    // Trigger enrichment (Tier 2) to compute IVR/IVP + derived fields
     let enrichment: ImportResult["enrichment"];
     if (skipEnrichment) {
       enrichment = {
@@ -859,24 +861,24 @@ export async function importFromMassive(
         const tier2Result = await runContextEnrichment(conn);
         enrichment = {
           status: tier2Result.status === "complete" || tier2Result.status === "skipped"
-            ? tier2Result.status
-            : "error",
-          message: `Tier 2 context enrichment: ${tier2Result.status}${tier2Result.reason ? ` — ${tier2Result.reason}` : ""}${tier2Result.fieldsWritten !== undefined ? ` (${tier2Result.fieldsWritten} fields)` : ""}`,
+            ? "complete" as const
+            : "error" as const,
+          message: tier2Result.reason ?? `Tier 2 enrichment: ${tier2Result.fieldsWritten ?? 0} fields`,
         };
-      } catch (err) {
+      } catch (e) {
         enrichment = {
-          status: "error",
-          message: `Context enrichment failed: ${err instanceof Error ? err.message : String(err)}`,
+          status: "error" as const,
+          message: `Tier 2 enrichment failed: ${e instanceof Error ? e.message : String(e)}`,
         };
       }
     }
 
     return {
-      rowsInserted: inserted,
-      rowsUpdated: updated,
-      rowsSkipped: skipped,
-      inputRowCount: mappedRows.length,
-      dateRange,
+      rowsInserted: totalInserted,
+      rowsUpdated: totalUpdated,
+      rowsSkipped: totalSkipped,
+      inputRowCount: totalInput,
+      dateRange: combinedDateRange,
       enrichment,
     };
   }
