@@ -56,6 +56,12 @@ interface SchemaInfo {
   tables: Record<string, TableInfo>;
 }
 
+interface VixTenorInfo {
+  available: string[];
+  queryPattern: string;
+  ratioPattern: string;
+}
+
 interface DatabaseSchemaOutput {
   schemas: Record<string, SchemaInfo>;
   examples: typeof EXAMPLE_QUERIES;
@@ -75,6 +81,7 @@ interface DatabaseSchemaOutput {
   syncInfo: {
     blocksProcessed: number;
   };
+  vixTenors?: VixTenorInfo;
 }
 
 // ============================================================================
@@ -102,7 +109,7 @@ function generateLagTemplate(): {
   const contextOpenCols = [...CONTEXT_OPEN_FIELDS].map(f => `    c.${f}`).join(',\n');
   const staticCols = [...DAILY_STATIC_FIELDS].map(f => `    d.${f}`).join(',\n');
 
-  const sql = `-- Lookahead-free CTE template for market.daily + market.context (dual-table JOIN)
+  const sql = `-- Lookahead-free CTE template for market.daily + VIX tickers + market._context_derived
 -- Open-known fields: safe to use same-day (known at/before market open)
 -- Static fields: safe to use same-day (calendar facts)
 -- Close-derived fields: use LAG() for prior trading day values
@@ -120,20 +127,25 @@ joined AS (
   SELECT d.ticker, d.date,
     -- Open-known fields from daily (safe same-day)
 ${dailyOpenCols},
-    -- Open-known fields from context (safe same-day)
+    -- Open-known fields from VIX ticker JOIN (safe same-day)
 ${contextOpenCols},
     -- Static fields (safe same-day)
 ${staticCols},
-    -- Close-derived fields from both tables (will be LAGged below)
+    -- Close-derived fields from daily + VIX JOINs + _context_derived (will be LAGged below)
     d.high, d.low, d.close, d.RSI_14, d.ATR_Pct,
     d.Realized_Vol_5D, d.Realized_Vol_20D, d.Return_5D, d.Return_20D,
     d.Intraday_Range_Pct, d.Intraday_Return_Pct, d.Close_Position_In_Range,
     d.Gap_Filled, d.Consecutive_Days,
-    c.VIX_Close, c.VIX_High, c.VIX_Low, c.VIX_Change_Pct,
-    c.VIX9D_Close, c.VIX3M_Close, c.Vol_Regime, c.Term_Structure_State,
-    c.VIX_IVR, c.VIX_IVP, c.VIX9D_IVR, c.VIX9D_IVP, c.VIX3M_IVR, c.VIX3M_IVP, c.VIX_Spike_Pct
+    vix.close AS VIX_Close, vix.high AS VIX_High, vix.low AS VIX_Low,
+    vix.ivr AS VIX_IVR, vix.ivp AS VIX_IVP,
+    vix9d.close AS VIX9D_Close, vix9d.ivr AS VIX9D_IVR, vix9d.ivp AS VIX9D_IVP,
+    vix3m.close AS VIX3M_Close, vix3m.ivr AS VIX3M_IVR, vix3m.ivp AS VIX3M_IVP,
+    cd.Vol_Regime, cd.Term_Structure_State, cd.VIX_Spike_Pct
   FROM market.daily d
-  LEFT JOIN market.context c ON d.date = c.date
+  LEFT JOIN market.daily vix ON vix.date = d.date AND vix.ticker = 'VIX'
+  LEFT JOIN market.daily vix9d ON vix9d.date = d.date AND vix9d.ticker = 'VIX9D'
+  LEFT JOIN market.daily vix3m ON vix3m.date = d.date AND vix3m.ticker = 'VIX3M'
+  LEFT JOIN market._context_derived cd ON cd.date = d.date
   WHERE d.ticker IN (SELECT ticker FROM requested)
 ),
 lagged AS (
@@ -157,7 +169,7 @@ WHERE t.block_id = 'my-block'`;
 
   return {
     description:
-      'Reusable LAG() CTE for lookahead-free queries joining trades to market.daily + market.context. ' +
+      'Reusable LAG() CTE for lookahead-free queries joining trades to market.daily + VIX tickers + market._context_derived. ' +
       'Close-derived fields (VIX_Close, Vol_Regime, RSI_14, etc.) use LAG() to get the prior trading day value, ' +
       'preventing lookahead bias. Open-known and static fields are safe to use same-day.',
     sql,
@@ -282,6 +294,17 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
         schemas[schemaName].tables[tableName] = tableInfo;
       }
 
+      // Discover available VIX tenors from market.daily
+      let vixTenors: string[] = [];
+      try {
+        const tenorResult = await conn.runAndReadAll(
+          `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%' ORDER BY ticker`
+        );
+        vixTenors = tenorResult.getRows().map(r => r[0] as string);
+      } catch {
+        // No market.daily or no VIX rows — skip
+      }
+
       // Build output
       const result: DatabaseSchemaOutput = {
         schemas,
@@ -290,13 +313,18 @@ export function registerSchemaTools(server: McpServer, baseDir: string): void {
         importWorkflow: {
           description: "Two-step pipeline to populate market tables from CSV exports.",
           steps: [
-            "1. import_market_csv — ingest raw CSV (daily OHLCV, context, or intraday bars) into market.daily / market.context / market.intraday",
-            "2. enrich_market_data — compute ~40 derived indicators (RSI, ATR, Vol_Regime, VIX_IVR, VIX_IVP, etc.) from raw OHLCV and write back to market.daily and market.context",
+            "1. import_market_csv — ingest raw CSV (daily OHLCV, VIX tenors, or intraday bars) into market.daily / market.intraday",
+            "2. enrich_market_data — compute ~40 derived indicators (RSI, ATR, IVR, IVP, Vol_Regime, etc.) and write back to market.daily and market._context_derived",
           ],
         },
         syncInfo: {
           blocksProcessed: blockSyncResult.blocksProcessed,
         },
+        vixTenors: vixTenors.length > 0 ? {
+          available: vixTenors,
+          queryPattern: "SELECT date, close, ivr, ivp FROM market.daily WHERE ticker = '{TENOR}'",
+          ratioPattern: "SELECT a.date, a.close / b.close AS ratio FROM market.daily a JOIN market.daily b ON a.date = b.date AND b.ticker = 'VIX' WHERE a.ticker = '{TENOR}'",
+        } : undefined,
       };
 
       const tableCount = tables.length;

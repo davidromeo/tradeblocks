@@ -14,8 +14,9 @@
  * Available tables:
  *   - trades.trade_data: Trade records from all blocks (includes inferred ticker)
  *   - trades.reporting_data: Reporting/actual trade records from strategy logs
- *   - market.daily: Daily OHLCV + enriched indicators keyed by (ticker, date)
- *   - market.context: Global market conditions (VIX, regime) keyed by (date)
+ *   - market.daily: Daily OHLCV + enriched indicators keyed by (ticker, date); VIX tickers stored here too
+ *   - market.context: Global market conditions (VIX, regime) keyed by (date) — LEGACY, prefer market._context_derived
+ *   - market._context_derived: Cross-ticker derived fields (Vol_Regime, Term_Structure_State, etc.) keyed by (date)
  *   - market.intraday: Intraday bars at any resolution keyed by (ticker, date, time)
  *   - market._sync_metadata: Import/enrichment tracking metadata
  */
@@ -34,7 +35,8 @@ const AVAILABLE_TABLES = [
   "trades.trade_data",
   "trades.reporting_data",
   "market.daily",
-  "market.context",
+  "market.context",         // Legacy — kept for backward compat
+  "market._context_derived", // Phase 75: cross-ticker derived fields (Vol_Regime, Term_Structure_State, etc.)
   "market.intraday",
   "market._sync_metadata",
 ];
@@ -238,7 +240,7 @@ export function registerSQLTools(server: McpServer, baseDir: string): void {
       description:
         "Execute a SQL SELECT query against the DuckDB analytics database. " +
         "Query trades (trades.trade_data, trades.reporting_data) and market data " +
-        "(market.daily, market.context, market.intraday, market._sync_metadata). " +
+        "(market.daily, market.context, market._context_derived, market.intraday, market._sync_metadata). " +
         "Trade queries should filter by block_id (e.g. WHERE block_id = 'my-strategy'). " +
         "Call describe_database first to discover available block_ids and column names. " +
         "Returns up to 1000 rows.",

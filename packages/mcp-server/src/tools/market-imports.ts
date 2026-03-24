@@ -1,8 +1,8 @@
 /**
  * Market Import Tools
  *
- * MCP tools for importing OHLCV market data into market.daily, market.context,
- * or market.intraday. Delegates all core logic to market-importer.ts.
+ * MCP tools for importing OHLCV market data into market.daily or market.intraday.
+ * Delegates all core logic to market-importer.ts.
  *
  * Tools registered:
  *   - import_market_csv    — Import from a local CSV file
@@ -34,7 +34,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
     "import_market_csv",
     {
       description:
-        "Import OHLCV market data from a CSV file into market.daily, market.context, or market.intraday. " +
+        "Import OHLCV market data from a CSV file into market.daily or market.intraday (target_table: 'context' imports VIX/VIX9D/VIX3M into market.daily). " +
         "Requires an explicit column_mapping object mapping CSV header names to schema column names. " +
         "Required schema fields: daily=[date,open,high,low,close], context=[date], intraday=[date,time,open,high,low,close]. " +
         "ticker is injected automatically (not required in mapping). " +
@@ -127,7 +127,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
     "import_from_database",
     {
       description:
-        "Import market data from an external DuckDB database into market.daily, market.context, or market.intraday. " +
+        "Import market data from an external DuckDB database into market.daily or market.intraday (target_table: 'context' imports VIX/VIX9D/VIX3M into market.daily). " +
         "The external database is ATTACHed read-only with alias 'ext_import_source'. " +
         "Your query must reference tables using this alias, e.g.: SELECT date, open, high, low, close FROM ext_import_source.my_table. " +
         "Supports JOINs and CTEs. " +
@@ -227,10 +227,10 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
     "import_from_massive",
     {
       description:
-        "Import market data from Massive.com API into market.daily, market.context, or market.intraday. " +
+        "Import market data from Massive.com API into market.daily or market.intraday. " +
         "Requires MASSIVE_API_KEY environment variable. " +
         "For daily: fetches OHLCV bars for any stock/index ticker. " +
-        "For context: ignores ticker param, auto-fetches VIX + VIX9D + VIX3M and merges into one row per date. " +
+        "For context: imports VIX + VIX9D + VIX3M as ticker rows in market.daily (convenience shorthand), then runs enrichment to populate market._context_derived. " +
         "For intraday: fetches minute or hour bars (use timespan param). " +
         "Supports OCC option tickers (e.g., SPX251219C05000000). " +
         "Upserts on conflict — safe to re-import overlapping date ranges.",
