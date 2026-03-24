@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
-status: complete
-stopped_at: Phase 72 complete — all 7 phases done
-last_updated: "2026-03-23T13:05:38.674Z"
+status: unknown
+stopped_at: Completed 73-02-PLAN.md
+last_updated: "2026-03-24T11:19:49.662Z"
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 7
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 21
+  completed_plans: 19
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 72 — exit-policy-comparison
+**Current focus:** Phase 73 — 0dte-greeks-engine
 
 ## Current Position
 
-Phase: 72 (exit-policy-comparison) — COMPLETE
-Plan: 3 of 3 — all plans executed and verified
+Phase: 73 (0dte-greeks-engine) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: 3 of 3 — all plans executed and verified
 | Phase 72 P01 | 232 | 2 tasks | 4 files |
 | Phase 72 P02 | 64 | 1 tasks | 1 files |
 | Phase 72-exit-policy-comparison P03 | 8 | 2 tasks | 3 files |
+| Phase 73 P02 | 86 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,11 @@ Plan: 3 of 3 — all plans executed and verified
 - [Phase 72-exit-policy-comparison]: Always pass format:'full' to handleReplayTrade regardless of params.format — params.format controls batch output density, not replay resolution needed by analyzeBatch
 - [Phase 72-exit-policy-comparison]: ROW_NUMBER CTE uses ORDER BY date_opened, rowid for deterministic trade_idx when multiple trades share the same date_opened
 - [Phase 72-exit-policy-comparison]: Profile context lookup in batch_exit_analysis swallows errors — non-critical informational enrichment
+- [Phase 73]: unit=percent returns null when entryCost not provided; dollarThreshold=threshold*abs(entryCost) handles both credit/debit
+
+### Roadmap Evolution
+
+- Phase 73 added: 0DTE Greeks Engine + Exit Trigger Usability (DTE bug fix, Bachelier model, unit field for triggers, greeks warnings, UX fixes)
 
 ### Pending Todos
 
@@ -127,6 +133,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T13:05:38.671Z
-Stopped at: Completed 72-03-PLAN.md
+Last session: 2026-03-24T11:19:49.659Z
+Stopped at: Completed 73-02-PLAN.md
 Resume file: None
