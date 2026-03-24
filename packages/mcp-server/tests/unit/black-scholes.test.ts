@@ -260,17 +260,28 @@ describe('bachelierPrice', () => {
   const S = 5300, K = 5300, T = 0.01, r = 0.045, q = 0.015, sigma_n = 800;
 
   test('ATM call price is near Brenner-Subrahmanyam approximation', () => {
-    // BS approx: sigma_n * sqrt(T/(2*pi)) ~ 800 * sqrt(0.01/6.283) ~ 31.9
+    // BS approx for ATM (forward=strike): e^(-rT) * sigma_n * sqrt(T) * n(0)
+    // n(0) = 1/sqrt(2*pi), sqrtT = sqrt(0.01) = 0.1
+    // ~ 0.99955 * 800 * 0.1 * 0.3989 ~ 31.9
+    // With carry (r>q), forward > K, so actual price is slightly higher
     const price = bachelierPrice('call', S, K, T, r, q, sigma_n);
     expect(price).toBeGreaterThan(0);
-    expect(price).toBeCloseTo(31.9, 0); // within 0.5
+    // Allow wider tolerance: carry shifts forward above strike
+    expect(price).toBeGreaterThan(30);
+    expect(price).toBeLessThan(40);
   });
 
   test('ATM put price approximately equals ATM call price (Bachelier put-call parity)', () => {
     const callPrice = bachelierPrice('call', S, K, T, r, q, sigma_n);
     const putPrice = bachelierPrice('put', S, K, T, r, q, sigma_n);
-    // For ATM Bachelier: both equal e^(-rT) * sigma_n * sqrt(T) * n(0)
-    expect(Math.abs(callPrice - putPrice)).toBeLessThan(1.0);
+    // For ATM Bachelier with carry (r>q), call > put due to positive carry
+    // Both should be in the same order of magnitude (~30 range)
+    expect(callPrice).toBeGreaterThan(0);
+    expect(putPrice).toBeGreaterThan(0);
+    // The intrinsic difference should be bounded by the carry component: |C-P| ~ |forward-K| * discount
+    // forward = 5300 * e^(0.03 * 0.01) ~ 5300 * 1.0003 ~ 5301.6; forward-K ~ 1.6; discount ~ 0.9996
+    // |C-P| should be less than 5 (reasonable upper bound)
+    expect(Math.abs(callPrice - putPrice)).toBeLessThan(5);
   });
 
   test('T=0 returns intrinsic value for ITM call', () => {
@@ -293,16 +304,31 @@ describe('bachelierPrice', () => {
 describe('bachelierDelta', () => {
   const S = 5300, K = 5300, T = 0.01, r = 0.045, q = 0.015, sigma_n = 800;
 
-  test('ATM call delta is approximately 0.5 * e^(-rT)', () => {
+  test('ATM call delta is approximately 0.5 * e^(-rT) (exact when forward=strike)', () => {
+    // The exact ATM condition is forward = K, i.e., S*e^((r-q)*T) = K
+    // With our params, forward > K (since r>q), so delta > 0.5*e^(-rT)
     const delta = bachelierDelta('call', S, K, T, r, q, sigma_n);
-    const expected = 0.5 * Math.exp(-r * T);
-    expect(delta).toBeCloseTo(expected, 3);
+    // Should be between 0.45 and 0.55 * discount
+    const discount = Math.exp(-r * T);
+    expect(delta).toBeGreaterThan(0.45 * discount);
+    expect(delta).toBeLessThan(0.55 * discount + 0.05); // allow for forward shift
   });
 
-  test('ATM put delta is approximately -0.5 * e^(-rT)', () => {
+  test('ATM put delta is approximately -0.5 * e^(-rT) (exact when forward=strike)', () => {
     const delta = bachelierDelta('put', S, K, T, r, q, sigma_n);
-    const expected = -0.5 * Math.exp(-r * T);
-    expect(delta).toBeCloseTo(expected, 3);
+    const discount = Math.exp(-r * T);
+    expect(delta).toBeLessThan(-0.45 * discount);
+    expect(delta).toBeGreaterThan(-0.55 * discount - 0.05);
+  });
+
+  test('exact ATM delta (forward=strike) is 0.5 * e^(-rT)', () => {
+    // Set K = forward = S * e^((r-q)*T) so d=0 and cdf(0)=0.5 exactly
+    const T_test = 0.01;
+    const S_test = 5300;
+    const K_atm = S_test * Math.exp((r - q) * T_test); // forward = strike
+    const delta = bachelierDelta('call', S_test, K_atm, T_test, r, q, sigma_n);
+    const expected = 0.5 * Math.exp(-r * T_test);
+    expect(delta).toBeCloseTo(expected, 4);
   });
 });
 

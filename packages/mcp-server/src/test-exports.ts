@@ -210,14 +210,23 @@ export {
   resolveOODateRange,
 } from './tools/replay.js';
 
-// Export Black-Scholes greeks computation for unit testing (Phase 69)
+// Export Black-Scholes and Bachelier greeks computation for unit testing (Phase 69 / Phase 73-01)
 export {
+  pdf,
+  cdf,
   bsPrice,
   bsDelta,
   bsGamma,
   bsTheta,
   bsVega,
   solveIV,
+  bachelierPrice,
+  bachelierDelta,
+  bachelierGamma,
+  bachelierTheta,
+  bachelierVega,
+  solveNormalIV,
+  BACHELIER_DTE_THRESHOLD,
   computeLegGreeks,
   type GreeksResult,
 } from './utils/black-scholes.js';

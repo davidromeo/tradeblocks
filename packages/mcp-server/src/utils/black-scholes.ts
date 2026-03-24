@@ -1,5 +1,6 @@
 /**
  * Black-Scholes option pricing, greeks computation, and IV solver.
+ * Includes Bachelier (normal) model as fallback for short-dated options.
  *
  * Pure math module — no I/O, no DuckDB, no fetch.
  * European-style BS formula with continuous dividend yield.
@@ -7,7 +8,15 @@
  * References:
  * - CDF approximation: Abramowitz & Stegun 26.2.17 (rational approximation)
  * - IV solver: Newton-Raphson with bisection fallback (D-11: maxIter=100, tolerance=1e-6)
+ * - Bachelier model: Brenner-Subrahmanyam (1988) normal model for near-zero DTE
  */
+
+/**
+ * DTE threshold below which Bachelier normal model is used instead of Black-Scholes.
+ * At very short DTE (<0.5 days), BS gamma explodes and the lognormal assumption breaks down.
+ * Bachelier (normal) model handles near-zero DTE gracefully.
+ */
+export const BACHELIER_DTE_THRESHOLD = 0.5; // days
 
 /**
  * Result of computing greeks for a single option leg.
@@ -20,10 +29,10 @@ export interface GreeksResult {
   iv: number | null; // annualized implied volatility (0-N, not percentage)
 }
 
-// --- Internal helpers ---
+// --- Internal helpers (exported for Bachelier model and testing) ---
 
 /** Standard normal probability density function */
-function pdf(x: number): number {
+export function pdf(x: number): number {
   return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
 }
 
@@ -32,7 +41,7 @@ function pdf(x: number): number {
  * Uses Abramowitz & Stegun 26.2.17 rational approximation.
  * Accuracy: |error| < 7.5e-8
  */
-function cdf(x: number): number {
+export function cdf(x: number): number {
   if (x < -10) return 0;
   if (x > 10) return 1;
 
@@ -294,6 +303,184 @@ export function solveIV(
   return null;
 }
 
+// --- Bachelier (Normal) Model ---
+
+/**
+ * Bachelier (normal) European option price with continuous dividend yield.
+ * Uses forward price F = S * e^((r-q)*T) as the underlying.
+ *
+ * For near-zero DTE, the lognormal assumption in Black-Scholes breaks down.
+ * Bachelier's model (normal distribution of returns) handles this gracefully.
+ *
+ * @param type - "call" or "put"
+ * @param S - Underlying price
+ * @param K - Strike price
+ * @param T - Time to expiry in years
+ * @param r - Risk-free rate (e.g., 0.045)
+ * @param q - Continuous dividend yield (e.g., 0.015 for SPX)
+ * @param sigma_n - Normal (dollar) volatility (e.g., 800 for SPX ~$800/year normal vol)
+ * @returns Option price
+ */
+export function bachelierPrice(
+  type: 'call' | 'put',
+  S: number,
+  K: number,
+  T: number,
+  r: number,
+  q: number,
+  sigma_n: number,
+): number {
+  if (T <= 0) return type === 'call' ? Math.max(S - K, 0) : Math.max(K - S, 0);
+  if (sigma_n <= 0) {
+    const forward = S * Math.exp((r - q) * T);
+    return Math.exp(-r * T) * (type === 'call' ? Math.max(forward - K, 0) : Math.max(K - forward, 0));
+  }
+  const forward = S * Math.exp((r - q) * T);
+  const sqrtT = Math.sqrt(T);
+  const d = (forward - K) / (sigma_n * sqrtT);
+  const discount = Math.exp(-r * T);
+  if (type === 'call') {
+    return discount * ((forward - K) * cdf(d) + sigma_n * sqrtT * pdf(d));
+  } else {
+    return discount * ((K - forward) * cdf(-d) + sigma_n * sqrtT * pdf(d));
+  }
+}
+
+/**
+ * Bachelier delta.
+ * Call: e^(-rT) * N(d)
+ * Put: -e^(-rT) * N(-d)
+ */
+export function bachelierDelta(
+  type: 'call' | 'put',
+  S: number,
+  K: number,
+  T: number,
+  r: number,
+  q: number,
+  sigma_n: number,
+): number {
+  if (T <= 0 || sigma_n <= 0) {
+    if (type === 'call') return S > K ? 1 : 0;
+    return S < K ? -1 : 0;
+  }
+  const forward = S * Math.exp((r - q) * T);
+  const d = (forward - K) / (sigma_n * Math.sqrt(T));
+  const discount = Math.exp(-r * T);
+  return type === 'call' ? discount * cdf(d) : -discount * cdf(-d);
+}
+
+/**
+ * Bachelier gamma (same for calls and puts).
+ * Gamma = e^(-rT) * n(d) / (sigma_n * sqrt(T))
+ */
+export function bachelierGamma(
+  S: number,
+  K: number,
+  T: number,
+  r: number,
+  q: number,
+  sigma_n: number,
+): number {
+  if (T <= 0 || sigma_n <= 0) return 0;
+  const forward = S * Math.exp((r - q) * T);
+  const sqrtT = Math.sqrt(T);
+  const d = (forward - K) / (sigma_n * sqrtT);
+  return Math.exp(-r * T) * pdf(d) / (sigma_n * sqrtT);
+}
+
+/**
+ * Bachelier theta (per calendar day).
+ * Returns the daily time decay (negative for long options).
+ * Formula: -(e^(-rT) * sigma_n * n(d) / (2 * sqrt(T)) - r * price) / 365
+ */
+export function bachelierTheta(
+  type: 'call' | 'put',
+  S: number,
+  K: number,
+  T: number,
+  r: number,
+  q: number,
+  sigma_n: number,
+): number {
+  if (T <= 0 || sigma_n <= 0) return 0;
+  const forward = S * Math.exp((r - q) * T);
+  const sqrtT = Math.sqrt(T);
+  const d = (forward - K) / (sigma_n * sqrtT);
+  const discount = Math.exp(-r * T);
+  const price = bachelierPrice(type, S, K, T, r, q, sigma_n);
+  // dV/dT = -e^(-rT) * sigma_n * n(d) / (2*sqrt(T)) + r * price  (positive = more time = more value)
+  // theta = -dV/dT per year, then / 365 for per-calendar-day
+  // annualTheta is negative for long options (time decay)
+  const annualTheta = -discount * sigma_n * pdf(d) / (2 * sqrtT) + r * price;
+  return annualTheta / 365;
+}
+
+/**
+ * Bachelier vega (per 1% normal vol move).
+ * Raw vega = e^(-rT) * sqrt(T) * n(d). Per 1% = raw / 100.
+ */
+export function bachelierVega(
+  S: number,
+  K: number,
+  T: number,
+  r: number,
+  q: number,
+  sigma_n: number,
+): number {
+  if (T <= 0 || sigma_n <= 0) return 0;
+  const forward = S * Math.exp((r - q) * T);
+  const d = (forward - K) / (sigma_n * Math.sqrt(T));
+  return Math.exp(-r * T) * Math.sqrt(T) * pdf(d) / 100;
+}
+
+/**
+ * Solve for normal (Bachelier) implied volatility using Newton-Raphson.
+ *
+ * @param type - "call" or "put"
+ * @param marketPrice - Observed market price of the option
+ * @param S - Underlying price
+ * @param K - Strike price
+ * @param T - Time to expiry in years
+ * @param r - Risk-free rate
+ * @param q - Dividend yield
+ * @param maxIter - Maximum iterations (default 100)
+ * @param tolerance - Convergence tolerance (default 1e-6)
+ * @returns Normal implied volatility (dollar vol, e.g., ~800 for SPX) or null
+ */
+export function solveNormalIV(
+  type: 'call' | 'put',
+  marketPrice: number,
+  S: number,
+  K: number,
+  T: number,
+  r: number,
+  q: number,
+  maxIter: number = 100,
+  tolerance: number = 1e-6,
+): number | null {
+  if (marketPrice <= 0 || T <= 0) return null;
+  // Initial guess: Brenner-Subrahmanyam for normal model
+  // sigma_n ~ marketPrice / sqrt(T/(2*pi))
+  let sigma_n = marketPrice / Math.sqrt(T / (2 * Math.PI));
+  // Clamp initial guess to reasonable range
+  sigma_n = Math.max(sigma_n, 1); // at least $1 normal vol
+  for (let i = 0; i < maxIter; i++) {
+    const price = bachelierPrice(type, S, K, T, r, q, sigma_n);
+    const diff = price - marketPrice;
+    if (Math.abs(diff) < tolerance) return sigma_n;
+    // Raw vega for Newton step (without /100 per-1% scaling)
+    const forward = S * Math.exp((r - q) * T);
+    const d = (forward - K) / (sigma_n * Math.sqrt(T));
+    const rawVega = Math.exp(-r * T) * Math.sqrt(T) * pdf(d);
+    if (rawVega < 1e-10) return null; // degenerate, give up
+    const newSigma = sigma_n - diff / rawVega;
+    if (newSigma <= 0) return null;
+    sigma_n = newSigma;
+  }
+  return null;
+}
+
 /**
  * Compute all greeks for a single option leg.
  *
@@ -320,13 +507,26 @@ export function computeLegGreeks(
 ): GreeksResult {
   const T = dte / 365;
   const bsType = type === 'C' ? 'call' : 'put';
+  const nullResult: GreeksResult = { delta: null, gamma: null, theta: null, vega: null, iv: null };
 
-  const iv = solveIV(bsType, optionPrice, underlyingPrice, strike, T, riskFreeRate, dividendYield);
-
-  if (iv === null) {
-    return { delta: null, gamma: null, theta: null, vega: null, iv: null };
+  if (dte < BACHELIER_DTE_THRESHOLD) {
+    // Bachelier normal model for short-dated options (dte < 0.5 days).
+    // iv field stores normal (dollar) volatility, not log-normal vol.
+    const iv = solveNormalIV(bsType, optionPrice, underlyingPrice, strike, T, riskFreeRate, dividendYield);
+    if (iv === null) return nullResult;
+    return {
+      delta: bachelierDelta(bsType, underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
+      gamma: bachelierGamma(underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
+      theta: bachelierTheta(bsType, underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
+      vega: bachelierVega(underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
+      iv,
+    };
   }
 
+  // Black-Scholes for longer-dated options (dte >= 0.5 days).
+  // iv field stores annualized log-normal volatility (0-N, not percentage).
+  const iv = solveIV(bsType, optionPrice, underlyingPrice, strike, T, riskFreeRate, dividendYield);
+  if (iv === null) return nullResult;
   return {
     delta: bsDelta(bsType, underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
     gamma: bsGamma(underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
