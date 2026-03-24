@@ -131,7 +131,7 @@ Plans:
 | 71. Exit Trigger Analysis | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 3/3 | Complete   | 2026-03-24 |
-| 74. Pre-ship Polish | v2.2 | 1/4 | In Progress|  |
+| 74. Pre-ship Polish | v2.2 | 2/4 | In Progress|  |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -196,10 +196,10 @@ Plans:
 **Goal:** Eight targeted fixes to the greeks pipeline, exit triggers, and batch tool: stopLoss abs(threshold), shared fetchBarsWithCache utility, midpoint greeks attribution, tolerant underlying timestamp lookup, numerical greeks fallback, lower Bachelier threshold, model field in GreeksResult, parallel batch replay
 **Requirements**: POL-01, POL-02, POL-03, POL-04, POL-05, POL-06, POL-07, POL-08, POL-09, POL-10, POL-11, POL-12, POL-13, POL-14, TST-14, TST-15, TST-16, TST-17
 **Depends on:** Phase 73
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 - [x] 74-01-PLAN.md — stopLoss abs fix, lower Bachelier threshold, model field in GreeksResult
 - [ ] 74-02-PLAN.md — Shared fetchBarsWithCache utility, replay.ts refactor, tolerant timestamp lookup
-- [ ] 74-03-PLAN.md — Midpoint greeks attribution, numerical decomposition fallback
+- [x] 74-03-PLAN.md — Midpoint greeks attribution, numerical decomposition fallback
 - [ ] 74-04-PLAN.md — Parallel batch replay with concurrency limiter

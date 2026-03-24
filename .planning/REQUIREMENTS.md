@@ -143,11 +143,11 @@ Requirements for Massive.com market data integration milestone.
 - [ ] **POL-05**: Underlying price lookup in `trade-replay.ts` uses nearest-timestamp binary search (+/- 60s tolerance) before falling to date-only
 - [x] **POL-06**: `BACHELIER_DTE_THRESHOLD` lowered from 0.5 to 0.1 days (~2.4 hours) since BS+bisection works reliably down to ~2 hours
 - [x] **POL-07**: `GreeksResult` interface includes `model?: 'bs' | 'bachelier'` field, set by `computeLegGreeks`
-- [ ] **POL-08**: Greeks decomposition uses midpoint greeks between consecutive bars: `(greek_start + greek_end) / 2` for delta, gamma, theta, vega
-- [ ] **POL-09**: When next-point greeks are null, midpoint formula falls back to start-of-interval (current behavior)
-- [ ] **POL-10**: When model-based attribution produces >80% residual, numerical fallback recomputes using realized delta from price changes
-- [ ] **POL-11**: Numerical fallback outputs delta, gamma (from delta changes), and time_and_vol (residual) factors
-- [ ] **POL-12**: `GreeksDecompositionResult` includes `method: 'model' | 'numerical'` field
+- [x] **POL-08**: Greeks decomposition uses midpoint greeks between consecutive bars: `(greek_start + greek_end) / 2` for delta, gamma, theta, vega
+- [x] **POL-09**: When next-point greeks are null, midpoint formula falls back to start-of-interval (current behavior)
+- [x] **POL-10**: When model-based attribution produces >80% residual, numerical fallback recomputes using realized delta from price changes
+- [x] **POL-11**: Numerical fallback outputs delta, gamma (from delta changes), and time_and_vol (residual) factors
+- [x] **POL-12**: `GreeksDecompositionResult` includes `method: 'model' | 'numerical'` field
 - [ ] **POL-13**: `batch_exit_analysis` replays trades in parallel with max 5 concurrent replays using hand-rolled concurrency limiter
 - [ ] **POL-14**: Concurrency limiter is a simple semaphore pattern (~10 lines), no new dependency
 
@@ -155,7 +155,7 @@ Requirements for Massive.com market data integration milestone.
 
 - [x] **TST-14**: Unit tests for stopLoss abs(threshold) normalization, lowered Bachelier threshold, and model field
 - [ ] **TST-15**: Unit tests for `fetchBarsWithCache` (cache hit, cache miss + API fetch, error handling)
-- [ ] **TST-16**: Unit tests for midpoint greeks formula and numerical decomposition fallback
+- [x] **TST-16**: Unit tests for midpoint greeks formula and numerical decomposition fallback
 - [ ] **TST-17**: Existing batch_exit_analysis tests pass with parallel replay (behavioral equivalence)
 
 ## Future Requirements

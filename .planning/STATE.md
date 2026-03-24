@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 74-01-PLAN.md
-last_updated: "2026-03-24T12:35:51.193Z"
+stopped_at: Completed 74-03-PLAN.md
+last_updated: "2026-03-24T12:37:57.066Z"
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 25
-  completed_plans: 22
+  completed_plans: 24
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 74 (pre-ship-polish) — EXECUTING
-Plan: 2 of 4
+Plan: 4 of 4
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Plan: 2 of 4
 | Phase 73 P01 | 222 | 2 tasks | 3 files |
 | Phase 73 P03 | 360 | 2 tasks | 6 files |
 | Phase 74 P01 | 116 | 1 tasks | 4 files |
+| Phase 74 P03 | 8 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,9 @@ Plan: 2 of 4
 - [Phase 74]: Math.abs(threshold) in stopLoss normalizes negative user-supplied thresholds before comparison
 - [Phase 74]: BACHELIER_DTE_THRESHOLD lowered from 0.5 to 0.1 — BS+bisection now works reliably to ~2.4 hours
 - [Phase 74]: GreeksResult.model field added ('bs' | 'bachelier'); undefined only when IV solve fails
+- [Phase 74]: Midpoint greeks use (cur+next)/2 average; fall back to cur when next is null (D-05/D-06)
+- [Phase 74]: Numerical fallback activates when pnlPath.length > 2 AND model residual > 80% of totalPnlChange (D-09)
+- [Phase 74]: time_and_vol factor in numerical mode absorbs theta+vega+unexplained; method field distinguishes model vs numerical (D-10/D-11)
 
 ### Roadmap Evolution
 
@@ -146,6 +150,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:35:51.189Z
-Stopped at: Completed 74-01-PLAN.md
+Last session: 2026-03-24T12:37:44.011Z
+Stopped at: Completed 74-03-PLAN.md
 Resume file: None
