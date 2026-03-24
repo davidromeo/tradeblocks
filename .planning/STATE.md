@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 74-03-PLAN.md
-last_updated: "2026-03-24T12:37:57.066Z"
+stopped_at: Completed 74-02-PLAN.md
+last_updated: "2026-03-24T12:38:10.806Z"
 progress:
   total_phases: 9
   completed_phases: 8
@@ -56,6 +56,7 @@ Plan: 4 of 4
 | Phase 73 P03 | 360 | 2 tasks | 6 files |
 | Phase 74 P01 | 116 | 1 tasks | 4 files |
 | Phase 74 P03 | 8 | 2 tasks | 2 files |
+| Phase 74 P02 | 234 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,9 @@ Plan: 4 of 4
 - [Phase 74]: Midpoint greeks use (cur+next)/2 average; fall back to cur when next is null (D-05/D-06)
 - [Phase 74]: Numerical fallback activates when pnlPath.length > 2 AND model residual > 80% of totalPnlChange (D-09)
 - [Phase 74]: time_and_vol factor in numerical mode absorbs theta+vega+unexplained; method field distinguishes model vs numerical (D-10/D-11)
+- [Phase 74]: fetchBarsWithCache accepts optional DuckDBConnection to avoid repeated getConnection calls in hot paths
+- [Phase 74]: sortedTimestamps built from intraday keys only; date-only fallback keys excluded from binary search
+- [Phase 74]: findNearestTimestamp uses minutes-since-midnight (HH:MM); sub-minute precision not needed for 1-min bars
 
 ### Roadmap Evolution
 
@@ -150,6 +154,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:37:44.011Z
-Stopped at: Completed 74-03-PLAN.md
+Last session: 2026-03-24T12:38:10.803Z
+Stopped at: Completed 74-02-PLAN.md
 Resume file: None
