@@ -11,7 +11,11 @@ import type { PnlPoint, ReplayLeg } from '../../src/test-exports.js';
 // Test fixture helpers
 // ---------------------------------------------------------------------------
 
-/** Build a minimal PnlPoint with optional greeks fields. */
+/** Build a minimal PnlPoint with optional greeks fields.
+ *  When net greeks are provided without explicit legGreeks, auto-generates
+ *  a single-leg legGreeks array so per-leg attribution works in tests.
+ *  legPrices defaults to [strategyPnl / 100] for a single leg with qty=1, mult=100.
+ */
 function point(
   timestamp: string,
   strategyPnl: number,
@@ -21,17 +25,32 @@ function point(
     netTheta?: number | null;
     netVega?: number | null;
     legGreeks?: Array<{ delta: number | null; gamma: number | null; theta: number | null; vega: number | null; iv: number | null }>;
+    legPrices?: number[];
+    iv?: number | null;
   },
 ): PnlPoint {
+  // Auto-generate single-leg legGreeks from net greeks when not explicitly provided
+  const hasNetGreeks = opts?.netDelta !== undefined || opts?.netGamma !== undefined ||
+                       opts?.netTheta !== undefined || opts?.netVega !== undefined;
+  const autoLegGreeks = hasNetGreeks && !opts?.legGreeks
+    ? [{
+        delta: opts?.netDelta ?? null,
+        gamma: opts?.netGamma ?? null,
+        theta: opts?.netTheta ?? null,
+        vega: opts?.netVega ?? null,
+        iv: opts?.iv ?? 0.20,
+      }]
+    : opts?.legGreeks;
+
   return {
     timestamp,
     strategyPnl,
-    legPrices: [],
+    legPrices: opts?.legPrices ?? [strategyPnl / 100 + 1.0], // entry price is 1.0, so option price = entry + pnl/multiplier
     netDelta: opts?.netDelta ?? null,
     netGamma: opts?.netGamma ?? null,
     netTheta: opts?.netTheta ?? null,
     netVega: opts?.netVega ?? null,
-    legGreeks: opts?.legGreeks,
+    legGreeks: autoLegGreeks,
   };
 }
 
@@ -263,12 +282,14 @@ describe('leg group vega', () => {
             { delta: 0, gamma: 0, theta: 0, vega: 15, iv: 0.30 },  // front month: short
             { delta: 0, gamma: 0, theta: 0, vega: 20, iv: 0.25 },  // back month: long
           ],
+          legPrices: [5.0, 8.0],  // entry prices for per-leg P&L calc
         }),
         point(ts2, 0, {
           legGreeks: [
             { delta: 0, gamma: 0, theta: 0, vega: 15, iv: 0.28 },  // IV dropped 2%
             { delta: 0, gamma: 0, theta: 0, vega: 20, iv: 0.27 },  // IV rose 2%
           ],
+          legPrices: [5.0, 8.0],  // same prices (no actual P&L, only attribution)
         }),
       ],
       legs: [

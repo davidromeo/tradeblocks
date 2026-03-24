@@ -282,8 +282,6 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     const cur = pnlPath[i];
     const next = pnlPath[i + 1];
 
-    const actualChange = next.strategyPnl - cur.strategyPnl;
-
     // Underlying price change
     let underlyingChange = 0;
     if (underlyingPrices) {
@@ -297,89 +295,97 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     // Time delta in days
     const dt = computeTimeDeltaDays(cur.timestamp, next.timestamp);
 
-    // IV change: average across legs, converted to percentage points
-    let ivChange = 0;
-    if (cur.legGreeks && next.legGreeks) {
-      let ivSum = 0;
-      let ivCount = 0;
-      const legCount = Math.min(cur.legGreeks.length, next.legGreeks.length);
-      for (let j = 0; j < legCount; j++) {
-        const iv1 = cur.legGreeks[j]?.iv;
-        const iv2 = next.legGreeks[j]?.iv;
-        if (iv1 !== null && iv1 !== undefined && iv2 !== null && iv2 !== undefined) {
-          ivSum += (iv2 - iv1);
-          ivCount++;
+    // Per-leg attribution: compute each leg's contribution to each greek factor.
+    // This is strictly more accurate than net-position attribution because it
+    // preserves per-leg magnitudes that cancel at the net level (critical for
+    // spreads and calendars where opposing legs have large individual greeks).
+    let stepDelta = 0;
+    let stepGamma = 0;
+    let stepTheta = 0;
+    let stepVega = 0;
+    let stepResidual = 0;
+
+    // Per-leg-group vega accumulator for this step
+    const groupVegaAccum: number[] | undefined = legGroups ? legGroups.map(() => 0) : undefined;
+
+    const legCount = Math.min(legs.length, cur.legPrices?.length ?? 0, next.legPrices?.length ?? 0);
+
+    for (let j = 0; j < legCount; j++) {
+      const weight = legs[j].quantity * legs[j].multiplier / 100;
+      const legActualChange = ((next.legPrices?.[j] ?? 0) - (cur.legPrices?.[j] ?? 0)) * legs[j].quantity * legs[j].multiplier;
+
+      const curLeg = cur.legGreeks?.[j];
+      const nextLeg = next.legGreeks?.[j];
+
+      const hasAnyGreek = curLeg && (curLeg.delta !== null || curLeg.gamma !== null || curLeg.theta !== null || curLeg.vega !== null);
+      if (!hasAnyGreek) {
+        // No greeks for this leg — entire leg P&L goes to residual
+        stepResidual += legActualChange;
+        if (groupSteps) {
+          // Attribute to the group this leg belongs to (as zero)
+          // Group steps are accumulated after the leg loop below
         }
+        continue;
       }
-      if (ivCount > 0) {
-        // Convert from decimal to percentage points (vega is per 1% IV move)
-        ivChange = (ivSum / ivCount) * 100;
+
+      // Midpoint greeks for this leg (D-05/D-06)
+      const curDelta = curLeg.delta ?? 0;
+      const nextDelta = nextLeg?.delta ?? curDelta;
+      const midDelta = (curDelta + nextDelta) / 2;
+
+      const curGamma = curLeg.gamma ?? 0;
+      const nextGamma = nextLeg?.gamma ?? curGamma;
+      const midGamma = (curGamma + nextGamma) / 2;
+
+      const curTheta = curLeg.theta ?? 0;
+      const nextTheta = nextLeg?.theta ?? curTheta;
+      const midTheta = (curTheta + nextTheta) / 2;
+
+      const curVega = curLeg.vega ?? 0;
+      const nextVega = nextLeg?.vega ?? curVega;
+      const midVega = (curVega + nextVega) / 2;
+
+      // Per-leg IV change in percentage points
+      const iv1 = curLeg.iv;
+      const iv2 = nextLeg?.iv ?? iv1;
+      let legIvChange = 0;
+      if (iv1 !== null && iv1 !== undefined && iv2 !== null && iv2 !== undefined) {
+        legIvChange = (iv2 - iv1) * 100;
+      }
+
+      // Per-leg factor contributions (weighted by position)
+      const legDeltaPnl = midDelta * weight * underlyingChange;
+      const legGammaPnl = 0.5 * midGamma * weight * underlyingChange * underlyingChange;
+      const legThetaPnl = midTheta * weight * dt;
+      const legVegaPnl = midVega * weight * legIvChange;
+      const legResidual = legActualChange - legDeltaPnl - legGammaPnl - legThetaPnl - legVegaPnl;
+
+      stepDelta += legDeltaPnl;
+      stepGamma += legGammaPnl;
+      stepTheta += legThetaPnl;
+      stepVega += legVegaPnl;
+      stepResidual += legResidual;
+
+      // Per-leg-group vega attribution — accumulate per-leg vega into group for this step
+      if (legGroups && groupVegaAccum) {
+        for (let g = 0; g < legGroups.length; g++) {
+          if (legGroups[g].legIndices.includes(j)) {
+            groupVegaAccum[g] += legVegaPnl;
+          }
+        }
       }
     }
 
-    // D-05: Midpoint greeks for more accurate attribution when gamma is high
-    // D-06: Fall back to start-of-interval when next point greeks are null
-    const curDelta = cur.netDelta ?? 0;
-    const nextDelta = next.netDelta !== null && next.netDelta !== undefined ? next.netDelta : curDelta;
-    const midDelta = (curDelta + nextDelta) / 2;
+    deltaSteps.push(stepDelta);
+    gammaSteps.push(stepGamma);
+    thetaSteps.push(stepTheta);
+    vegaSteps.push(stepVega);
+    residualSteps.push(stepResidual);
 
-    const curGamma = cur.netGamma ?? 0;
-    const nextGamma = next.netGamma !== null && next.netGamma !== undefined ? next.netGamma : curGamma;
-    const midGamma = (curGamma + nextGamma) / 2;
-
-    const curTheta = cur.netTheta ?? 0;
-    const nextTheta = next.netTheta !== null && next.netTheta !== undefined ? next.netTheta : curTheta;
-    const midTheta = (curTheta + nextTheta) / 2;
-
-    const curVega = cur.netVega ?? 0;
-    const nextVega = next.netVega !== null && next.netVega !== undefined ? next.netVega : curVega;
-    const midVega = (curVega + nextVega) / 2;
-
-    // Factor contributions using midpoint greeks
-    const deltaPnl = midDelta * underlyingChange;
-    const gammaPnl = 0.5 * midGamma * underlyingChange * underlyingChange;
-    const thetaPnl = midTheta * dt;
-    const vegaPnl = midVega * ivChange;
-    const residual = actualChange - deltaPnl - gammaPnl - thetaPnl - vegaPnl;
-
-    deltaSteps.push(deltaPnl);
-    gammaSteps.push(gammaPnl);
-    thetaSteps.push(thetaPnl);
-    vegaSteps.push(vegaPnl);
-    residualSteps.push(residual);
-
-    // Per-leg-group vega attribution
-    if (legGroups && groupSteps && cur.legGreeks && next.legGreeks) {
-      for (let g = 0; g < legGroups.length; g++) {
-        const group = legGroups[g];
-        let groupVegaPnl = 0;
-
-        for (const j of group.legIndices) {
-          if (j >= legs.length) continue;
-          const curGreek = cur.legGreeks[j];
-          const nextGreek = next.legGreeks[j];
-          if (!curGreek || !nextGreek) continue;
-
-          // Per-leg vega (position-weighted)
-          const legVega = (curGreek.vega ?? 0) * legs[j].quantity * legs[j].multiplier / 100;
-
-          // Per-leg IV change in percentage points
-          const legIv1 = curGreek.iv;
-          const legIv2 = nextGreek.iv;
-          let legIvChange = 0;
-          if (legIv1 !== null && legIv1 !== undefined && legIv2 !== null && legIv2 !== undefined) {
-            legIvChange = (legIv2 - legIv1) * 100;
-          }
-
-          groupVegaPnl += legVega * legIvChange;
-        }
-
-        groupSteps[g].push(groupVegaPnl);
-      }
-    } else if (groupSteps) {
-      // No greeks at this step — zero contribution for all groups
+    // Finalize per-leg-group vega for this step
+    if (groupSteps && groupVegaAccum) {
       for (let g = 0; g < legGroups!.length; g++) {
-        groupSteps[g].push(0);
+        groupSteps[g].push(groupVegaAccum[g]);
       }
     }
   }
