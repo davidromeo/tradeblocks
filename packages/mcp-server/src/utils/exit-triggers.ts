@@ -179,15 +179,17 @@ export function evaluateTrigger(
       }
 
       case 'stopLoss': {
+        // Normalize negative threshold — users may pass -2 meaning "stop at $2 loss"
+        const absThreshold = Math.abs(threshold);
         // unit='percent' requires entryCost; if missing, cannot compute — no fire
         if (trigger.unit === 'percent' && trigger.entryCost == null) break;
         const dollarThresholdSL = trigger.unit === 'percent'
-          ? threshold * Math.abs(trigger.entryCost!)
-          : threshold;
+          ? absThreshold * Math.abs(trigger.entryCost!)
+          : absThreshold;
         if (pnl <= -dollarThresholdSL) {
           fired = true;
           detail = trigger.unit === 'percent'
-            ? `P&L $${pnl.toFixed(2)} <= -${(threshold * 100).toFixed(0)}% of $${Math.abs(trigger.entryCost!).toFixed(2)} (-$${dollarThresholdSL.toFixed(2)})`
+            ? `P&L $${pnl.toFixed(2)} <= -${(absThreshold * 100).toFixed(0)}% of $${Math.abs(trigger.entryCost!).toFixed(2)} (-$${dollarThresholdSL.toFixed(2)})`
             : `P&L $${pnl.toFixed(2)} <= stop -$${dollarThresholdSL.toFixed(2)}`;
         }
         break;

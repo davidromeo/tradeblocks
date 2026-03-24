@@ -13,10 +13,10 @@
 
 /**
  * DTE threshold below which Bachelier normal model is used instead of Black-Scholes.
- * At very short DTE (<0.5 days), BS gamma explodes and the lognormal assumption breaks down.
+ * At very short DTE (<0.1 days / ~2.4 hours), BS gamma explodes and the lognormal assumption breaks down.
  * Bachelier (normal) model handles near-zero DTE gracefully.
  */
-export const BACHELIER_DTE_THRESHOLD = 0.5; // days
+export const BACHELIER_DTE_THRESHOLD = 0.1; // days (~2.4 hours)
 
 /**
  * Result of computing greeks for a single option leg.
@@ -27,6 +27,7 @@ export interface GreeksResult {
   theta: number | null; // per day
   vega: number | null; // per 1% IV move
   iv: number | null; // annualized implied volatility (0-N, not percentage)
+  model?: 'bs' | 'bachelier'; // which pricing model was used; undefined if IV solve failed
 }
 
 // --- Internal helpers (exported for Bachelier model and testing) ---
@@ -535,7 +536,7 @@ export function computeLegGreeks(
   const nullResult: GreeksResult = { delta: null, gamma: null, theta: null, vega: null, iv: null };
 
   if (dte < BACHELIER_DTE_THRESHOLD) {
-    // Bachelier normal model for short-dated options (dte < 0.5 days).
+    // Bachelier normal model for short-dated options (dte < 0.1 days / ~2.4 hours).
     // iv field stores normal (dollar) volatility, not log-normal vol.
     const iv = solveNormalIV(bsType, optionPrice, underlyingPrice, strike, T, riskFreeRate, dividendYield);
     if (iv === null) return nullResult;
@@ -545,10 +546,11 @@ export function computeLegGreeks(
       theta: bachelierTheta(bsType, underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
       vega: bachelierVega(underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
       iv,
+      model: 'bachelier',
     };
   }
 
-  // Black-Scholes for longer-dated options (dte >= 0.5 days).
+  // Black-Scholes for longer-dated options (dte >= 0.1 days).
   // iv field stores annualized log-normal volatility (0-N, not percentage).
   const iv = solveIV(bsType, optionPrice, underlyingPrice, strike, T, riskFreeRate, dividendYield);
   if (iv === null) return nullResult;
@@ -558,5 +560,6 @@ export function computeLegGreeks(
     theta: bsTheta(bsType, underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
     vega: bsVega(underlyingPrice, strike, T, riskFreeRate, dividendYield, iv),
     iv,
+    model: 'bs',
   };
 }
