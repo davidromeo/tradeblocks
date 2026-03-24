@@ -370,14 +370,15 @@ export async function handleReplayTrade(
     .filter(k => k.includes(' '))  // Only intraday timestamps, not date-only keys
     .sort();
 
-  // IVP lookup from market.context
+  // IVP lookup from market.daily VIX ticker (normalized schema)
   let ivpByDate: Map<string, number> | undefined;
   try {
     const conn = injectedConn ?? await getConnection(baseDir);
     const ivpResult = await conn.runAndReadAll(
-      `SELECT date, VIX_IVP FROM market.context
-       WHERE date >= '${open_date}' AND date <= '${close_date}'
-       AND VIX_IVP IS NOT NULL
+      `SELECT date, ivp FROM market.daily
+       WHERE ticker = 'VIX'
+       AND date >= '${open_date}' AND date <= '${close_date}'
+       AND ivp IS NOT NULL
        ORDER BY date`
     );
     const ivpRows = ivpResult.getRows();
