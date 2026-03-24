@@ -32,6 +32,7 @@ export type TriggerType =
 export interface ExitTriggerConfig {
   type: TriggerType;
   threshold: number;
+  unit?: 'percent' | 'dollar';                  // D-07: default 'dollar', backwards compatible
   // Context-specific optional fields:
   expiry?: string;                              // YYYY-MM-DD for dteExit
   openDate?: string;                            // YYYY-MM-DD for ditExit
@@ -45,6 +46,8 @@ export interface ExitTriggerConfig {
   spreadWidth?: number;                          // Width of spread in dollars
   contracts?: number;                            // Number of contracts
   multiplier?: number;                           // Default 100
+  // Internal: set by handler when unit='percent' to compute dollar threshold
+  entryCost?: number;                            // D-11: cost/credit of entry (negative = credit received)
 }
 
 export interface TriggerFireEvent {
@@ -160,19 +163,35 @@ export function evaluateTrigger(
     let detail: string | undefined;
 
     switch (type) {
-      case 'profitTarget':
-        if (pnl >= threshold) {
+      case 'profitTarget': {
+        // unit='percent' requires entryCost; if missing, cannot compute — no fire
+        if (trigger.unit === 'percent' && trigger.entryCost == null) break;
+        const dollarThresholdPT = trigger.unit === 'percent'
+          ? threshold * Math.abs(trigger.entryCost!)
+          : threshold;
+        if (pnl >= dollarThresholdPT) {
           fired = true;
-          detail = `P&L $${pnl.toFixed(2)} >= target $${threshold.toFixed(2)}`;
+          detail = trigger.unit === 'percent'
+            ? `P&L $${pnl.toFixed(2)} >= ${(threshold * 100).toFixed(0)}% of $${Math.abs(trigger.entryCost!).toFixed(2)} ($${dollarThresholdPT.toFixed(2)})`
+            : `P&L $${pnl.toFixed(2)} >= target $${dollarThresholdPT.toFixed(2)}`;
         }
         break;
+      }
 
-      case 'stopLoss':
-        if (pnl <= -threshold) {
+      case 'stopLoss': {
+        // unit='percent' requires entryCost; if missing, cannot compute — no fire
+        if (trigger.unit === 'percent' && trigger.entryCost == null) break;
+        const dollarThresholdSL = trigger.unit === 'percent'
+          ? threshold * Math.abs(trigger.entryCost!)
+          : threshold;
+        if (pnl <= -dollarThresholdSL) {
           fired = true;
-          detail = `P&L $${pnl.toFixed(2)} <= stop -$${threshold.toFixed(2)}`;
+          detail = trigger.unit === 'percent'
+            ? `P&L $${pnl.toFixed(2)} <= -${(threshold * 100).toFixed(0)}% of $${Math.abs(trigger.entryCost!).toFixed(2)} (-$${dollarThresholdSL.toFixed(2)})`
+            : `P&L $${pnl.toFixed(2)} <= stop -$${dollarThresholdSL.toFixed(2)}`;
         }
         break;
+      }
 
       case 'trailingStop': {
         const trailAmt = trigger.trailAmount ?? threshold;
