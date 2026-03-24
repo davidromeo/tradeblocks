@@ -24,7 +24,17 @@ import type { DuckDBConnection } from "@duckdb/node-api";
  * Uses INSERT OR IGNORE — safe to re-run.
  */
 export async function migrateContextToNormalized(conn: DuckDBConnection): Promise<{ rowsMigrated: number }> {
-  // Check if market.context has data
+  // Check if migration already ran (tracked in _sync_metadata)
+  try {
+    const migrationCheck = await conn.runAndReadAll(
+      `SELECT 1 FROM market._sync_metadata WHERE source = 'migration:context_to_normalized'`
+    );
+    if (migrationCheck.getRows().length > 0) return { rowsMigrated: 0 }; // Already migrated
+  } catch {
+    // _sync_metadata may not exist yet — continue with migration
+  }
+
+  // Check if market.context has data to migrate
   let contextCount = 0;
   try {
     const r = await conn.runAndReadAll(`SELECT COUNT(*) FROM market.context`);
@@ -33,13 +43,6 @@ export async function migrateContextToNormalized(conn: DuckDBConnection): Promis
     return { rowsMigrated: 0 }; // No context table
   }
   if (contextCount === 0) return { rowsMigrated: 0 };
-
-  // Check if already migrated (VIX rows exist in market.daily)
-  const checkResult = await conn.runAndReadAll(
-    `SELECT COUNT(*) FROM market.daily WHERE ticker = 'VIX'`
-  );
-  const vixDailyCount = Number(checkResult.getRows()[0]?.[0] ?? 0);
-  if (vixDailyCount > 0) return { rowsMigrated: 0 }; // Already migrated
 
   let totalMigrated = 0;
 
@@ -77,6 +80,16 @@ export async function migrateContextToNormalized(conn: DuckDBConnection): Promis
     FROM market.context
     WHERE Vol_Regime IS NOT NULL OR Term_Structure_State IS NOT NULL
   `);
+
+  // Mark migration as complete so it doesn't re-run
+  try {
+    await conn.run(`
+      INSERT OR REPLACE INTO market._sync_metadata (source, ticker, target_table, max_date, enriched_through, synced_at)
+      VALUES ('migration:context_to_normalized', '_system', '_system', NULL, NULL, CURRENT_TIMESTAMP)
+    `);
+  } catch {
+    // _sync_metadata may not exist yet on first run — non-fatal
+  }
 
   return { rowsMigrated: totalMigrated };
 }

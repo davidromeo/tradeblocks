@@ -133,7 +133,7 @@ Plans:
 | 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 3/3 | Complete   | 2026-03-24 |
 | 74. Pre-ship Polish | v2.2 | 4/4 | Complete   | 2026-03-24 |
-| 75. Normalized VIX Term Structure | v2.2 | 4/4 | Complete   | 2026-03-24 |
+| 75. Normalized VIX Term Structure | v2.2 | 4/4 | Complete    | 2026-03-24 |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 

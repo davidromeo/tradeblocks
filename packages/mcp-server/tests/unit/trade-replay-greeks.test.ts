@@ -112,20 +112,40 @@ describe('computeStrategyPnlPath with greeksConfig', () => {
     expect(result[1].netDelta).toBeUndefined();
   });
 
-  it('returns null greeks values when DTE <= 0 (at/past expiry)', () => {
-    // Set expiry to the same day as the bars — DTE will be very small or negative
+  it('computes greeks for same-day expiry (DTE > 0 until 4 PM close)', () => {
+    // Expiry same day as bars — but bars are at 09:31, expiry is 4 PM, so DTE ≈ 0.27
+    const sameDayConfig: GreeksConfig = {
+      ...greeksConfig,
+      legs: [
+        { strike: 5800, type: 'C', expiryDate: '2025-03-19' },
+        { strike: 5700, type: 'P', expiryDate: '2025-03-19' },
+      ],
+    };
+
+    const result = computeStrategyPnlPath(legs, barsByLeg, sameDayConfig);
+    expect(result).toHaveLength(2);
+    expect(result[0].legGreeks).toBeDefined();
+    // With DTE ≈ 0.27 (same day, hours until close), greeks should be computed
+    for (const g of result[0].legGreeks!) {
+      expect(g.delta).not.toBeNull();
+    }
+    expect(result[0].netDelta).not.toBeNull();
+  });
+
+  it('returns null greeks values when DTE <= 0 (past expiry)', () => {
+    // Set expiry to day BEFORE the bars — truly past expiry
     const pastExpiryConfig: GreeksConfig = {
       ...greeksConfig,
       legs: [
-        { strike: 5800, type: 'C', expiryDate: '2025-03-19' },  // same day = past expiry
-        { strike: 5700, type: 'P', expiryDate: '2025-03-19' },
+        { strike: 5800, type: 'C', expiryDate: '2025-03-18' },
+        { strike: 5700, type: 'P', expiryDate: '2025-03-18' },
       ],
     };
 
     const result = computeStrategyPnlPath(legs, barsByLeg, pastExpiryConfig);
     expect(result).toHaveLength(2);
     expect(result[0].legGreeks).toBeDefined();
-    // With DTE <= 0, individual greeks should be null
+    // With DTE <= 0 (expired yesterday), individual greeks should be null
     for (const g of result[0].legGreeks!) {
       expect(g.delta).toBeNull();
       expect(g.gamma).toBeNull();
