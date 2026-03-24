@@ -364,16 +364,50 @@ export async function handleReplayTrade(
   const dividendYield = DIVIDEND_YIELDS[rawRoot] ?? 0;
 
   let underlyingBars: MassiveBarRow[] = [];
+
+  // Cache-read: check market.intraday for previously stored underlying bars.
+  // This allows replay to compute greeks without MASSIVE_API_KEY when
+  // underlying data was imported in a prior session.
   try {
-    underlyingBars = await fetchBars({
-      ticker: underlyingTicker,
-      from: open_date!,
-      to: close_date!,
-      timespan: "minute",
-      assetClass: underlyingTicker === "SPX" || underlyingTicker === "NDX" || underlyingTicker === "RUT" ? "index" : "stock",
-    });
+    const conn = injectedConn ?? await getConnection(baseDir);
+    const cached = await conn.runAndReadAll(
+      `SELECT open, high, low, close, time, date
+       FROM market.intraday
+       WHERE ticker = '${underlyingTicker}'
+         AND date >= '${open_date}'
+         AND date <= '${close_date}'
+       ORDER BY date, time`
+    );
+    const cachedRows = cached.getRows();
+    if (cachedRows.length > 0) {
+      underlyingBars = cachedRows.map((row: unknown[]) => ({
+        open: Number(row[0]),
+        high: Number(row[1]),
+        low: Number(row[2]),
+        close: Number(row[3]),
+        time: String(row[4]),
+        date: String(row[5]),
+        ticker: underlyingTicker,
+        volume: 0,
+      }));
+    }
   } catch {
-    // Fall through to daily fallback
+    // Cache miss or table not available — fall through to Massive fetch
+  }
+
+  // If no cached bars, try Massive API
+  if (underlyingBars.length === 0) {
+    try {
+      underlyingBars = await fetchBars({
+        ticker: underlyingTicker,
+        from: open_date!,
+        to: close_date!,
+        timespan: "minute",
+        assetClass: underlyingTicker === "SPX" || underlyingTicker === "NDX" || underlyingTicker === "RUT" ? "index" : "stock",
+      });
+    } catch {
+      // Fall through to daily fallback
+    }
   }
 
   // Cache underlying bars in market.intraday (best-effort)
