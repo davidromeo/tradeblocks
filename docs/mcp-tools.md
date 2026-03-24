@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-TradeBlocks provides 50+ MCP tools for AI-assisted options trading analysis, organized by category.
+TradeBlocks provides 60+ MCP tools for AI-assisted options trading analysis, organized by category.
 
 ## Block Management
 

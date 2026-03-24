@@ -1,44 +1,14 @@
 # Getting Started
 
-## Prerequisites
+TradeBlocks has two components: an **MCP server** for AI-assisted portfolio analysis, and a **web dashboard** for visual exploration. Most users only need the MCP server.
 
-- **Node.js 22+** (required for native fetch support)
-- **npm** (included with Node.js)
+---
 
-## Installation
+## MCP Server
 
-```bash
-git clone https://github.com/davidromeo/tradeblocks.git
-cd tradeblocks
-npm install
-npm run dev
-```
+The MCP server provides 60+ tools for portfolio analysis, trade replay, exit trigger testing, and market data management. Connect it to Claude, ChatGPT, Gemini, or any MCP-compatible AI client.
 
-Open [http://localhost:3000](http://localhost:3000) to access the web dashboard.
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `MASSIVE_API_KEY` | No | Massive.com API key for automated market data import. CSV import works without it. |
-| `TRADEBLOCKS_DATA_DIR` | No | Override default data directory (default: `~/Trading/backtests`) |
-| `MARKET_DB_PATH` | No | Override market database file path |
-| `DUCKDB_THREADS` | No | Limit DuckDB thread count for resource-constrained environments |
-| `DUCKDB_MEMORY_LIMIT` | No | Limit DuckDB memory usage (e.g., `512MB`) |
-
-## Your First Data Import
-
-1. Open the web dashboard at `http://localhost:3000`
-2. Navigate to **Blocks** and create a new block
-3. Upload a `tradelog.csv` file (from [Option Omega](https://optionomega.com/) or compatible format)
-4. Optionally upload a `dailylog.csv` for enhanced drawdown calculations
-5. View your portfolio statistics, equity curve, and performance metrics
-
-Files are auto-detected by column headers, not filenames. Any CSV with the expected columns will work.
-
-## MCP Server Setup
-
-The MCP server provides 50+ tools for AI-assisted portfolio analysis. Install and connect it to your AI client:
+### Quick Start
 
 ```bash
 # Run directly with npx
@@ -48,26 +18,93 @@ npx tradeblocks-mcp ~/Trading/backtests
 claude mcp add tradeblocks -- npx tradeblocks-mcp ~/Trading/backtests
 ```
 
+Point it at a folder containing your Option Omega backtest exports (tradelog.csv, dailylog.csv, etc.). Files are auto-detected by column headers, not filenames.
+
 See [packages/mcp-server/README.md](../packages/mcp-server/README.md) for platform-specific configuration (Claude Desktop, Codex CLI, Gemini CLI, ChatGPT, Google AI Studio).
 
-## Massive.com API (Optional)
+### Docker
 
-For automated market data import without manual CSV exports:
+```bash
+docker pull ghcr.io/davidromeo/tradeblocks-mcp:latest
+docker run -v ~/Trading/backtests:/data ghcr.io/davidromeo/tradeblocks-mcp /data
+```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MASSIVE_API_KEY` | No | Massive.com API key for automated market data import and trade replay bar fetching. All tools work without it using locally cached data or CSV imports. |
+| `MARKET_DB_PATH` | No | Override market database file path (default: `<backtests-folder>/market.duckdb`) |
+| `DUCKDB_THREADS` | No | Limit DuckDB thread count for resource-constrained environments |
+| `DUCKDB_MEMORY_LIMIT` | No | Limit DuckDB memory usage (e.g., `512MB`) |
+
+### Massive.com API (Optional)
+
+Massive.com adds automated market data import and on-demand option bar fetching for trade replay. It is not required — CSV import and locally cached bar data work without it.
 
 1. Get an API key from [massive.com](https://massive.com)
 2. Set the environment variable:
    ```bash
    export MASSIVE_API_KEY=your_key_here
    ```
-   Or add it to your `.env` file or Claude Desktop configuration.
-3. Use the `import_from_massive` MCP tool for daily OHLCV, VIX context, or intraday bars
-4. Enrichment runs automatically after daily imports
+   Or add to your Claude Desktop MCP server config:
+   ```json
+   {
+     "mcpServers": {
+       "tradeblocks": {
+         "command": "npx",
+         "args": ["tradeblocks-mcp", "~/Trading/backtests"],
+         "env": {
+           "MASSIVE_API_KEY": "your_key_here"
+         }
+       }
+     }
+   }
+   ```
+3. Use `import_from_massive` for daily OHLCV, VIX context, or intraday bars
+4. Replay tools fetch option bars on cache miss automatically
 
 See [Market Data Guide](market-data.md) for full details on import paths, ticker formats, and enrichment.
 
+---
+
+## Web Dashboard
+
+The web dashboard is a Next.js app for visual portfolio exploration — equity curves, drawdown charts, monthly returns, and 16+ chart types. It uses IndexedDB for client-side storage and does not require the MCP server.
+
+### Prerequisites
+
+- **Node.js 22+**
+- **npm**
+
+### Setup
+
+```bash
+git clone https://github.com/davidromeo/tradeblocks.git
+cd tradeblocks
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to access the dashboard.
+
+### Your First Data Import
+
+1. Navigate to **Blocks** and create a new block
+2. Upload a `tradelog.csv` file (from [Option Omega](https://optionomega.com/) or compatible format)
+3. Optionally upload a `dailylog.csv` for enhanced drawdown calculations
+4. View your portfolio statistics, equity curve, and performance metrics
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TRADEBLOCKS_DATA_DIR` | No | Override default data directory (default: `~/Trading/backtests`) |
+
+---
+
 ## Next Steps
 
-- [Market Data Guide](market-data.md) -- importing and enriching market data
-- [MCP Tools Reference](mcp-tools.md) -- complete tool listing by category
-- [Architecture](architecture.md) -- how TradeBlocks works under the hood
-- [Development Guide](development.md) -- contributing and local dev setup
+- [Market Data Guide](market-data.md) — importing and enriching market data
+- [MCP Tools Reference](mcp-tools.md) — complete tool listing by category
+- [Architecture](architecture.md) — how TradeBlocks works under the hood
