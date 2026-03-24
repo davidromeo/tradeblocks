@@ -158,6 +158,30 @@ Requirements for Massive.com market data integration milestone.
 - [x] **TST-16**: Unit tests for midpoint greeks formula and numerical decomposition fallback
 - [x] **TST-17**: Existing batch_exit_analysis tests pass with parallel replay (behavioral equivalence)
 
+### Normalized VIX Term Structure
+
+- [ ] **VTS-01**: `market.daily` table has `ivr DOUBLE` and `ivp DOUBLE` columns for per-ticker IVR/IVP values
+- [ ] **VTS-02**: `market._context_derived` table created with `date VARCHAR PRIMARY KEY, Vol_Regime INTEGER, Term_Structure_State INTEGER, Trend_Direction VARCHAR, VIX_Spike_Pct DOUBLE, VIX_Gap_Pct DOUBLE`
+- [ ] **VTS-03**: Migration copies VIX/VIX9D/VIX3M OHLCV data from `market.context` to `market.daily` rows (ticker='VIX', etc.)
+- [ ] **VTS-04**: Migration copies Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct from `market.context` to `market._context_derived`
+- [ ] **VTS-05**: Migration is idempotent — uses INSERT OR IGNORE so re-running is safe
+- [ ] **VTS-06**: `market.context` table kept intact (not dropped) for backward compatibility
+- [ ] **VTS-07**: IVR/IVP enrichment discovers VIX tickers dynamically: `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%'`
+- [ ] **VTS-08**: Enrichment writes ivr/ivp to `market.daily.ivr` and `market.daily.ivp` columns (not `market.context`)
+- [ ] **VTS-09**: Enrichment writes Vol_Regime, Term_Structure_State, Trend_Direction, VIX_Spike_Pct, VIX_Gap_Pct to `market._context_derived`
+- [ ] **VTS-10**: Enrichment is tolerant of missing tenors — compute what exists, NULLs for missing data, never fail
+- [ ] **VTS-11**: `target_table: "context"` convenience import stores VIX+VIX9D+VIX3M into `market.daily` (not `market.context`)
+- [ ] **VTS-12**: `buildLookaheadFreeQuery` generates JOINs on `market.daily` VIX ticker rows + `market._context_derived` instead of `market.context`
+- [ ] **VTS-13**: `schema-metadata.ts` describes normalized schema (`_context_derived` table, `ivr`/`ivp` on daily, legacy note on context)
+- [ ] **VTS-14**: `data-availability.ts` checks `market.daily` for VIX ticker data instead of `market.context`
+- [ ] **VTS-15**: `describe_database` auto-discovers available VIX tenors via `SELECT DISTINCT ticker FROM market.daily WHERE ticker LIKE 'VIX%'`
+- [ ] **VTS-16**: All tool descriptions reference normalized schema (market.daily for VIX data, market._context_derived for derived fields)
+
+### Phase 75 Testing
+
+- [ ] **TST-18**: Enrichment correctly computes IVR/IVP for dynamically discovered VIX tickers and writes to market.daily
+- [ ] **TST-19**: All existing tests pass after schema migration and query layer rewrite
+
 ## Future Requirements
 
 Deferred to future releases. Tracked but not in current roadmap.
@@ -191,6 +215,8 @@ Deferred to future releases. Tracked but not in current roadmap.
 | Profile exit rule auto-translation to trigger configs | Would require parsing human-readable exit rule text |
 | SVJD (stochastic volatility jump-diffusion) model | Research paper shows 1.7x better accuracy but requires neural network training |
 | Blended BS/Bachelier crossover zone | Hard cutover is simpler and both models agree well at DTE=0.5 |
+| VIX futures term structure (VX1, VX2) | Different data source and semantics |
+| Automated VIX tenor discovery from CBOE | Would need external source for available tenors |
 
 ## Traceability
 
@@ -296,12 +322,30 @@ Deferred to future releases. Tracked but not in current roadmap.
 | TST-15 | Phase 74 | Planned |
 | TST-16 | Phase 74 | Planned |
 | TST-17 | Phase 74 | Planned |
+| VTS-01 | Phase 75 | Planned |
+| VTS-02 | Phase 75 | Planned |
+| VTS-03 | Phase 75 | Planned |
+| VTS-04 | Phase 75 | Planned |
+| VTS-05 | Phase 75 | Planned |
+| VTS-06 | Phase 75 | Planned |
+| VTS-07 | Phase 75 | Planned |
+| VTS-08 | Phase 75 | Planned |
+| VTS-09 | Phase 75 | Planned |
+| VTS-10 | Phase 75 | Planned |
+| VTS-11 | Phase 75 | Planned |
+| VTS-12 | Phase 75 | Planned |
+| VTS-13 | Phase 75 | Planned |
+| VTS-14 | Phase 75 | Planned |
+| VTS-15 | Phase 75 | Planned |
+| VTS-16 | Phase 75 | Planned |
+| TST-18 | Phase 75 | Planned |
+| TST-19 | Phase 75 | Planned |
 
 **Coverage:**
-- v2.2 requirements: 100 total
-- Mapped to phases: 100
+- v2.2 requirements: 118 total
+- Mapped to phases: 118
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-24 after Phase 74 planning*
+*Last updated: 2026-03-24 after Phase 75 planning*

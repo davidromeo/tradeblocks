@@ -11,51 +11,13 @@ import { jest } from "@jest/globals";
  */
 
 import type { DuckDBConnection } from "@duckdb/node-api";
-import type { MassiveBarRow } from "../../src/test-exports.js";
 import { fetchBarsWithCache } from "../../src/test-exports.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Build a minimal MassiveBarRow for test data. */
-function makeBar(date: string, time: string, close: number, ticker: string): MassiveBarRow {
-  return { ticker, date, time, open: close, high: close + 1, low: close - 1, close, volume: 100 };
-}
-
-/** Build a mock fetch Response returning bars from the Massive API shape. */
-function mockMassiveResponse(bars: MassiveBarRow[]): Response {
-  // Massive API uses Unix ms timestamps; for these tests we supply pre-mapped bars
-  // via the mock, but fetchBars internally maps them. We bypass by mocking at
-  // fetchBars level via getConnection (DuckDB mock) — see below.
-  return new Response(
-    JSON.stringify({
-      ticker: bars[0]?.ticker ?? "SPY",
-      queryCount: bars.length,
-      resultsCount: bars.length,
-      adjusted: false,
-      results: bars.map((b) => ({
-        o: b.open,
-        h: b.high,
-        l: b.low,
-        c: b.close,
-        // timestamp 2025-01-07 09:31 ET → Unix ms
-        t: 1736253060000,
-        v: b.volume,
-      })),
-      status: "OK",
-      request_id: "test-req",
-    }),
-    { status: 200, headers: { "Content-Type": "application/json" } }
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Mock DuckDB connection factory
 // ---------------------------------------------------------------------------
 
 type RunFn = (sql: string) => Promise<void>;
-type QueryFn = (sql: string) => Promise<{ getRows(): unknown[][] }>;
 
 function makeMockConn(opts: {
   cacheRows?: unknown[][];
