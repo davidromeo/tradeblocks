@@ -2,6 +2,7 @@ import {
   decomposeGreeks,
   computeTimeDeltaDays,
   type GreeksDecompositionConfig,
+  type GreeksDecompositionResult,
 } from '../../src/test-exports.js';
 
 import type { PnlPoint, ReplayLeg } from '../../src/test-exports.js';
@@ -411,7 +412,7 @@ describe('edge cases', () => {
     expect(result.summary).toContain('delta');
   });
 
-  test('multi-step path accumulates correctly', () => {
+  test('multi-step path accumulates correctly (midpoint greeks)', () => {
     const ts1 = '2025-01-10 09:31';
     const ts2 = '2025-01-10 09:32';
     const ts3 = '2025-01-10 09:33';
@@ -420,8 +421,8 @@ describe('edge cases', () => {
     const config: GreeksDecompositionConfig = {
       pnlPath: [
         point(ts1, 0, { netDelta: 0.5 }),
-        point(ts2, 0.5, { netDelta: 0.6 }), // delta changed at step 2
-        point(ts3, 1.7),
+        point(ts2, 0.55, { netDelta: 0.6 }), // delta changed at step 2
+        point(ts3, 1.75),
       ],
       legs: [leg(1)],
       underlyingPrices: prices,
@@ -430,13 +431,252 @@ describe('edge cases', () => {
     const result = decomposeGreeks(config);
     const delta = result.factors.find(f => f.factor === 'delta')!;
 
-    // Step 1: 0.5 * 1 = 0.5
-    // Step 2: 0.6 * 2 = 1.2
+    // Step 1: midpoint = (0.5 + 0.6)/2 = 0.55, underlying change = 1 -> 0.55
+    // Step 2: midpoint = (0.6 + 0.6)/2 = 0.6 (next has no netDelta, falls back to cur), underlying change = 2 -> 1.2
     expect(delta.steps).toHaveLength(2);
-    expect(delta.steps[0]).toBeCloseTo(0.5, 4);
+    expect(delta.steps[0]).toBeCloseTo(0.55, 4);
     expect(delta.steps[1]).toBeCloseTo(1.2, 4);
-    expect(delta.totalPnl).toBeCloseTo(1.7, 4);
+    expect(delta.totalPnl).toBeCloseTo(1.75, 4);
 
     expect(result.stepCount).toBe(2);
+  });
+});
+
+describe('midpoint greeks attribution', () => {
+  test('delta uses midpoint when next point has valid netDelta', () => {
+    const ts1 = '2025-01-10 09:31';
+    const ts2 = '2025-01-10 09:32';
+    const prices = new Map<string, number>([
+      [ts1, 100],
+      [ts2, 101],
+    ]);
+
+    const config: GreeksDecompositionConfig = {
+      pnlPath: [
+        point(ts1, 0, { netDelta: 0.5 }),
+        point(ts2, 0.60, { netDelta: 0.7 }), // rapidly changing delta
+      ],
+      legs: [leg(1)],
+      underlyingPrices: prices,
+    };
+
+    const result = decomposeGreeks(config);
+    const delta = result.factors.find(f => f.factor === 'delta')!;
+
+    // midpoint = (0.5 + 0.7) / 2 = 0.6; underlying change = 1
+    // delta_pnl = 0.6 * 1 = 0.60 (NOT 0.5 * 1 = 0.50 from start-of-interval)
+    expect(delta.totalPnl).toBeCloseTo(0.60, 4);
+    expect(delta.steps[0]).toBeCloseTo(0.60, 4);
+  });
+
+  test('delta falls back to start-of-interval when next point netDelta is null', () => {
+    const ts1 = '2025-01-10 09:31';
+    const ts2 = '2025-01-10 09:32';
+    const prices = new Map<string, number>([
+      [ts1, 100],
+      [ts2, 101],
+    ]);
+
+    const config: GreeksDecompositionConfig = {
+      pnlPath: [
+        point(ts1, 0, { netDelta: 0.5 }),
+        point(ts2, 0.50, { netDelta: null }), // next has null netDelta
+      ],
+      legs: [leg(1)],
+      underlyingPrices: prices,
+    };
+
+    const result = decomposeGreeks(config);
+    const delta = result.factors.find(f => f.factor === 'delta')!;
+
+    // Falls back to start-of-interval: midpoint = (0.5 + 0.5) / 2 = 0.5
+    expect(delta.totalPnl).toBeCloseTo(0.50, 4);
+  });
+
+  test('midpoint formula applies to gamma', () => {
+    const ts1 = '2025-01-10 09:31';
+    const ts2 = '2025-01-10 09:32';
+    const prices = new Map<string, number>([[ts1, 100], [ts2, 101]]);
+
+    const config: GreeksDecompositionConfig = {
+      pnlPath: [
+        point(ts1, 0, { netGamma: 0.01 }),
+        point(ts2, 0, { netGamma: 0.03 }), // gamma changes
+      ],
+      legs: [leg(1)],
+      underlyingPrices: prices,
+    };
+
+    const result = decomposeGreeks(config);
+    const gamma = result.factors.find(f => f.factor === 'gamma')!;
+
+    // midGamma = (0.01 + 0.03) / 2 = 0.02; underlyingChange = 1
+    // gammaPnl = 0.5 * 0.02 * 1^2 = 0.01
+    expect(gamma.totalPnl).toBeCloseTo(0.01, 6);
+  });
+
+  test('midpoint formula applies to theta', () => {
+    const ts1 = '2025-01-10 09:31';
+    const ts2 = '2025-01-10 09:32';
+
+    const config: GreeksDecompositionConfig = {
+      pnlPath: [
+        point(ts1, 0, { netTheta: -4.0 }),
+        point(ts2, 0, { netTheta: -6.0 }), // theta changes
+      ],
+      legs: [leg(1)],
+    };
+
+    const result = decomposeGreeks(config);
+    const theta = result.factors.find(f => f.factor === 'theta')!;
+
+    // midTheta = (-4 + -6) / 2 = -5.0; dt = 1/390
+    expect(theta.totalPnl).toBeCloseTo(-5.0 / 390, 6);
+  });
+
+  test('midpoint formula applies to vega', () => {
+    const ts1 = '2025-01-10 09:31';
+    const ts2 = '2025-01-10 09:32';
+
+    const config: GreeksDecompositionConfig = {
+      pnlPath: [
+        point(ts1, 0, {
+          netVega: 8,
+          legGreeks: [{ delta: 0, gamma: 0, theta: 0, vega: 8, iv: 0.20 }],
+        }),
+        point(ts2, 10.0, {
+          netVega: 12,
+          legGreeks: [{ delta: 0, gamma: 0, theta: 0, vega: 12, iv: 0.21 }],
+        }),
+      ],
+      legs: [leg(1)],
+    };
+
+    const result = decomposeGreeks(config);
+    const vega = result.factors.find(f => f.factor === 'vega')!;
+
+    // midVega = (8 + 12) / 2 = 10; ivChange = (0.21 - 0.20) * 100 = 1.0
+    // vegaPnl = 10 * 1.0 = 10.0
+    expect(vega.totalPnl).toBeCloseTo(10.0, 4);
+  });
+});
+
+describe('numerical greeks fallback', () => {
+  /**
+   * Build a scenario where model-based residual > 80%.
+   * No underlying prices and no greeks means all P&L goes to residual.
+   * Total residual = 10, totalPnlChange = 10 -> residualPct = 100% > 80%
+   * -> numerical fallback activates.
+   */
+  function highResidualConfig(): GreeksDecompositionConfig {
+    const underlyingPrices = new Map<string, number>([
+      ['2025-01-10 09:31', 100],
+      ['2025-01-10 09:32', 101],
+      ['2025-01-10 09:33', 102],
+    ]);
+    return {
+      pnlPath: [
+        // No greeks set -> all P&L goes to residual in model mode
+        point('2025-01-10 09:31', 0),
+        point('2025-01-10 09:32', 6),
+        point('2025-01-10 09:33', 10),
+      ],
+      legs: [leg(1)],
+      underlyingPrices,
+    };
+  }
+
+  test('method is "numerical" when model residual > 80%', () => {
+    const result = decomposeGreeks(highResidualConfig());
+    expect(result.method).toBe('numerical');
+  });
+
+  test('method is "model" when model residual <= 80%', () => {
+    const ts1 = '2025-01-10 09:31';
+    const ts2 = '2025-01-10 09:32';
+    const prices = new Map<string, number>([[ts1, 100], [ts2, 101]]);
+
+    // delta explains nearly all P&L -> low residual
+    const config: GreeksDecompositionConfig = {
+      pnlPath: [
+        point(ts1, 0, { netDelta: 0.5 }),
+        point(ts2, 0.50), // actual = 0.50, attributed delta = 0.5 * 1 = 0.50, residual = 0
+      ],
+      legs: [leg(1)],
+      underlyingPrices: prices,
+    };
+
+    const result = decomposeGreeks(config);
+    expect(result.method).toBe('model');
+  });
+
+  test('numerical fallback includes delta, gamma, time_and_vol factors', () => {
+    const result = decomposeGreeks(highResidualConfig());
+    const factorNames = result.factors.map(f => f.factor);
+    expect(factorNames).toContain('delta');
+    expect(factorNames).toContain('gamma');
+    expect(factorNames).toContain('time_and_vol');
+  });
+
+  test('numerical fallback: realized delta from option price / underlying change', () => {
+    // Underlying goes from 100 to 101 (+1), strategy P&L goes from 0 to 6
+    // realizedDelta = 6 / 1 = 6 (large realized delta — big P&L move relative to underlying)
+    // At step 1: prevRealizedDelta = null -> gammaPnl = 0
+    // pureDeltaPnl = actualChange - gammaPnl = 6 - 0 = 6
+    // Then underlying goes 101 to 102 (+1), P&L 6 -> 10 (+4)
+    // realizedDelta2 = 4 / 1 = 4
+    // deltaChange = 4 - 6 = -2, gammaPnl = 0.5 * (-2) * 1 = -1
+    // pureDeltaPnl = 4 - (-1) = 5
+    const result = decomposeGreeks(highResidualConfig());
+
+    const delta = result.factors.find(f => f.factor === 'delta')!;
+    const gamma = result.factors.find(f => f.factor === 'gamma')!;
+
+    expect(delta).toBeDefined();
+    expect(gamma).toBeDefined();
+    // Delta step 1: pureDeltaPnl = 6, step 2: pureDeltaPnl = 5
+    expect(delta.totalPnl).toBeCloseTo(6 + 5, 4);
+    // Gamma step 2: -1 (only step 2 has prev delta)
+    expect(gamma.totalPnl).toBeCloseTo(-1, 4);
+  });
+
+  test('numerical fallback skips intervals where underlying barely moves', () => {
+    // Same underlying price -> underlyingChange < 0.01 -> skip delta/gamma, put all in residual
+    const prices = new Map<string, number>([
+      ['2025-01-10 09:31', 100],
+      ['2025-01-10 09:32', 100.001], // < 0.01 change
+      ['2025-01-10 09:33', 101],
+      ['2025-01-10 09:34', 102],
+    ]);
+
+    const config: GreeksDecompositionConfig = {
+      pnlPath: [
+        point('2025-01-10 09:31', 0),
+        point('2025-01-10 09:32', 3),  // theta/vol P&L during flat underlying
+        point('2025-01-10 09:33', 5),
+        point('2025-01-10 09:34', 10),
+      ],
+      legs: [leg(1)],
+      underlyingPrices: prices,
+    };
+
+    const result = decomposeGreeks(config);
+    // When underlying barely moves, the change goes to time_and_vol (residual)
+    // Step 1 (barely moves): residual += 3
+    const timeAndVol = result.factors.find(f => f.factor === 'time_and_vol')!;
+    expect(timeAndVol).toBeDefined();
+    // Step 1 contributes 3 to time_and_vol because underlying change < 0.01
+    expect(timeAndVol.steps[0]).toBeCloseTo(3, 4);
+  });
+
+  test('numerical result has warning about >80% residual', () => {
+    const result = decomposeGreeks(highResidualConfig());
+    expect(result.warning).toBeTruthy();
+    expect(result.warning).toContain('numerical');
+  });
+
+  test('model result method is "model" when returning empty path', () => {
+    const result = decomposeGreeks({ pnlPath: [], legs: [] });
+    expect(result.method).toBe('model');
   });
 });
