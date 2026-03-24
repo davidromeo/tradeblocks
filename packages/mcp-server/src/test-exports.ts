@@ -297,3 +297,9 @@ export {
   handleBatchExitAnalysis,
   batchExitAnalysisSchema,
 } from './tools/batch-exit-analysis.js';
+
+// Export shared bar fetch+cache utility for unit testing (Phase 74-02)
+export {
+  fetchBarsWithCache,
+  type FetchBarsWithCacheOptions,
+} from './utils/bar-cache.js';
