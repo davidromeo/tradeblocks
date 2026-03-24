@@ -12,7 +12,7 @@ import { jest } from "@jest/globals";
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
 import { handleReplayTrade } from "../../src/tools/replay.js";
-import type { MassiveAggregateResponse } from "../../src/utils/massive-client.js";
+import type { MassiveAggregateResponse } from "../../src/utils/providers/massive.js";
 
 // =============================================================================
 // Test helpers

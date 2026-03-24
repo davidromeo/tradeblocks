@@ -1,7 +1,7 @@
 import {
   computeStrategyPnlPath,
   type ReplayLeg,
-  type MassiveBarRow,
+  type BarRow,
   type GreeksConfig,
 } from '../../src/test-exports.js';
 
@@ -12,7 +12,7 @@ import {
  */
 
 // Helper: build a single bar
-function bar(date: string, time: string, high: number, low: number, ticker: string): MassiveBarRow {
+function bar(date: string, time: string, high: number, low: number, ticker: string): BarRow {
   return { date, time, open: low, high, low, close: high, volume: 100, ticker };
 }
 
@@ -22,7 +22,7 @@ describe('computeStrategyPnlPath with greeksConfig', () => {
     { occTicker: 'SPXW250321P05700000', quantity: -1, entryPrice: 15.0, multiplier: 100 },
   ];
 
-  const barsByLeg: MassiveBarRow[][] = [
+  const barsByLeg: BarRow[][] = [
     [
       bar('2025-03-19', '09:31', 22.0, 20.0, 'SPXW250321C05800000'),
       bar('2025-03-19', '09:32', 23.0, 21.0, 'SPXW250321C05800000'),

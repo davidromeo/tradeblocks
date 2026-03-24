@@ -1,10 +1,10 @@
 import { jest } from "@jest/globals";
 
 /**
- * Integration tests for importFromMassive()
+ * Integration tests for importFromApi()
  *
  * Tests the full import pipeline:
- *   Mocked fetch → fetchBars() → importFromMassive() → real DuckDB → enrichment
+ *   Mocked fetch → fetchBars() → importFromApi() → real DuckDB → enrichment
  *
  * Uses real DuckDB (in-memory) with jest.spyOn(globalThis, 'fetch') to intercept
  * HTTP calls. Tests three import paths: daily, context, intraday.
@@ -13,9 +13,9 @@ import { jest } from "@jest/globals";
  */
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
-import { importFromMassive } from "../../src/utils/market-importer.js";
+import { importFromApi } from "../../src/utils/market-importer.js";
 import { ensureMarketTables } from "../../src/db/market-schemas.js";
-import type { MassiveAggregateResponse } from "../../src/utils/massive-client.js";
+import type { MassiveAggregateResponse } from "../../src/utils/providers/massive.js";
 
 // =============================================================================
 // Test helpers
@@ -120,7 +120,7 @@ const INTRADAY_BARS = [
 // Test suite
 // =============================================================================
 
-describe("import_from_massive integration", () => {
+describe("import_from_api integration", () => {
   let db: DuckDBInstance;
   let conn: DuckDBConnection;
 
@@ -149,7 +149,7 @@ describe("import_from_massive integration", () => {
       const spxResponse = buildMassiveResponse("I:SPX", SPX_BARS_5);
       mockFetch(new Map([["I%3ASPX", spxResponse]]));
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-08",
@@ -183,7 +183,7 @@ describe("import_from_massive integration", () => {
       mockFetch(new Map([["I%3ASPX", spxResponse]]));
 
       // First import
-      const result1 = await importFromMassive(conn, {
+      const result1 = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-08",
@@ -196,7 +196,7 @@ describe("import_from_massive integration", () => {
       jest.restoreAllMocks();
       mockFetch(new Map([["I%3ASPX", spxResponse]]));
 
-      const result2 = await importFromMassive(conn, {
+      const result2 = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-08",
@@ -221,7 +221,7 @@ describe("import_from_massive integration", () => {
       const spxResponse = buildMassiveResponse("I:SPX", bars20);
       mockFetch(new Map([["I%3ASPX", spxResponse]]));
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-31",
@@ -246,7 +246,7 @@ describe("import_from_massive integration", () => {
       const spxResponse = buildMassiveResponse("I:SPX", SPX_BARS_5);
       mockFetch(new Map([["I%3ASPX", spxResponse]]));
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-08",
@@ -261,7 +261,7 @@ describe("import_from_massive integration", () => {
       const spxResponse = buildMassiveResponse("I:SPX", SPX_BARS_5);
       mockFetch(new Map([["I%3ASPX", spxResponse]]));
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-08",
@@ -305,7 +305,7 @@ describe("import_from_massive integration", () => {
         ])
       );
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "VIX",
         from: "2024-01-02",
         to: "2024-01-08",
@@ -358,7 +358,7 @@ describe("import_from_massive integration", () => {
         ])
       );
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "VIX",
         from: "2023-01-03",
         to: "2023-12-29",
@@ -406,7 +406,7 @@ describe("import_from_massive integration", () => {
         ])
       );
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "VIX",
         from: "2024-01-02",
         to: "2024-01-08",
@@ -435,7 +435,7 @@ describe("import_from_massive integration", () => {
       const spxIntradayResponse = buildMassiveResponse("I:SPX", INTRADAY_BARS);
       mockFetch(new Map([["I%3ASPX", spxIntradayResponse]]));
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-02",
@@ -465,7 +465,7 @@ describe("import_from_massive integration", () => {
       const spxIntradayResponse = buildMassiveResponse("I:SPX", INTRADAY_BARS);
       mockFetch(new Map([["I%3ASPX", spxIntradayResponse]]));
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-02",
@@ -481,7 +481,7 @@ describe("import_from_massive integration", () => {
       const spxIntradayResponse = buildMassiveResponse("I:SPX", INTRADAY_BARS);
       mockFetch(new Map([["I%3ASPX", spxIntradayResponse]]));
 
-      const result = await importFromMassive(conn, {
+      const result = await importFromApi(conn, {
         ticker: "SPX",
         from: "2024-01-02",
         to: "2024-01-02",
@@ -508,7 +508,7 @@ describe("import_from_massive integration", () => {
       delete process.env.MASSIVE_API_KEY;
 
       await expect(
-        importFromMassive(conn, {
+        importFromApi(conn, {
           ticker: "SPX",
           from: "2024-01-02",
           to: "2024-01-08",

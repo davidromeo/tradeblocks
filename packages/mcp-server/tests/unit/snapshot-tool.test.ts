@@ -1,9 +1,10 @@
 import { jest } from "@jest/globals";
 import { handleGetOptionSnapshot } from "../../src/tools/snapshot.js";
+import { getProvider, _resetProvider } from "../../src/utils/market-provider.js";
 
 /**
  * Unit tests for handleGetOptionSnapshot handler.
- * Uses injected fetcher to isolate from HTTP layer.
+ * Mocks the provider's fetchOptionSnapshot via getProvider().
  */
 
 function makeMockContract(overrides: Record<string, unknown> = {}) {
@@ -38,25 +39,35 @@ function makeContracts(count: number) {
   );
 }
 
-function makeMockFetcher(contracts: ReturnType<typeof makeMockContract>[]) {
-  return jest.fn<() => Promise<{ contracts: typeof contracts; underlying_price: number; underlying_ticker: string }>>()
-    .mockResolvedValue({
-      contracts,
-      underlying_price: 5234.56,
-      underlying_ticker: "SPX",
-    });
+function mockProviderSnapshot(contracts: ReturnType<typeof makeMockContract>[]) {
+  const provider = getProvider();
+  jest.spyOn(provider, "fetchOptionSnapshot").mockResolvedValue({
+    contracts,
+    underlying_price: 5234.56,
+    underlying_ticker: "SPX",
+  });
 }
+
+function mockProviderSnapshotError(message: string) {
+  const provider = getProvider();
+  jest.spyOn(provider, "fetchOptionSnapshot").mockRejectedValue(new Error(message));
+}
+
+beforeEach(() => {
+  _resetProvider();
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  _resetProvider();
+});
 
 describe("handleGetOptionSnapshot", () => {
   it("returns JSON with underlying_ticker, underlying_price, contracts_returned, contracts_total, and contracts array", async () => {
     const contracts = makeContracts(10);
-    const fetcher = makeMockFetcher(contracts);
+    mockProviderSnapshot(contracts);
 
-    const output = await handleGetOptionSnapshot(
-      { underlying: "SPX", limit: 50 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetcher as any
-    );
+    const output = await handleGetOptionSnapshot({ underlying: "SPX", limit: 50 });
     const parsed = JSON.parse(output);
 
     expect(parsed.underlying_ticker).toBe("SPX");
@@ -69,13 +80,9 @@ describe("handleGetOptionSnapshot", () => {
 
   it("truncates contracts to limit when fetchOptionSnapshot returns more", async () => {
     const contracts = makeContracts(100);
-    const fetcher = makeMockFetcher(contracts);
+    mockProviderSnapshot(contracts);
 
-    const output = await handleGetOptionSnapshot(
-      { underlying: "SPX", limit: 50 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetcher as any
-    );
+    const output = await handleGetOptionSnapshot({ underlying: "SPX", limit: 50 });
     const parsed = JSON.parse(output);
 
     expect(parsed.contracts_returned).toBe(50);
@@ -85,13 +92,9 @@ describe("handleGetOptionSnapshot", () => {
 
   it("applies limit truncation when explicit limit is provided", async () => {
     const contracts = makeContracts(80);
-    const fetcher = makeMockFetcher(contracts);
+    mockProviderSnapshot(contracts);
 
-    const output = await handleGetOptionSnapshot(
-      { underlying: "SPX", limit: 25 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetcher as any
-    );
+    const output = await handleGetOptionSnapshot({ underlying: "SPX", limit: 25 });
     const parsed = JSON.parse(output);
 
     expect(parsed.contracts_returned).toBe(25);
@@ -100,15 +103,9 @@ describe("handleGetOptionSnapshot", () => {
   });
 
   it("returns error JSON when fetchOptionSnapshot throws", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fetcher = jest.fn<() => Promise<any>>()
-      .mockRejectedValue(new Error("MASSIVE_API_KEY environment variable is not set"));
+    mockProviderSnapshotError("MASSIVE_API_KEY environment variable is not set");
 
-    const output = await handleGetOptionSnapshot(
-      { underlying: "SPX", limit: 50 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetcher as any
-    );
+    const output = await handleGetOptionSnapshot({ underlying: "SPX", limit: 50 });
     const parsed = JSON.parse(output);
 
     expect(parsed.error).toBe("MASSIVE_API_KEY environment variable is not set");
@@ -117,13 +114,9 @@ describe("handleGetOptionSnapshot", () => {
 
   it("preserves all OptionContract fields in output contracts", async () => {
     const contract = makeMockContract();
-    const fetcher = makeMockFetcher([contract]);
+    mockProviderSnapshot([contract]);
 
-    const output = await handleGetOptionSnapshot(
-      { underlying: "SPX", limit: 50 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetcher as any
-    );
+    const output = await handleGetOptionSnapshot({ underlying: "SPX", limit: 50 });
     const parsed = JSON.parse(output);
     const c = parsed.contracts[0];
 

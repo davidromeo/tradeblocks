@@ -6,7 +6,7 @@ import {
   resolveOODateRange,
   type ReplayLeg,
   type PnlPoint,
-  type MassiveBarRow,
+  type BarRow,
 } from '../../src/test-exports.js';
 
 describe('parseLegsString', () => {
@@ -137,7 +137,7 @@ describe('computeStrategyPnlPath', () => {
     const legs: ReplayLeg[] = [
       { occTicker: 'SPY250117C00470000', quantity: 1, entryPrice: 5.00, multiplier: 100 },
     ];
-    const bars: MassiveBarRow[][] = [[
+    const bars: BarRow[][] = [[
       { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 100, ticker: 'SPY250117C00470000' },
       { date: '2025-01-17', time: '09:32', open: 4.70, high: 4.90, low: 4.70, close: 4.85, volume: 100, ticker: 'SPY250117C00470000' },
       { date: '2025-01-17', time: '09:33', open: 5.10, high: 5.30, low: 5.10, close: 5.25, volume: 100, ticker: 'SPY250117C00470000' },
@@ -157,7 +157,7 @@ describe('computeStrategyPnlPath', () => {
       { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
       { occTicker: 'LEG2', quantity: -1, entryPrice: 3.00, multiplier: 100 },
     ];
-    const bars: MassiveBarRow[][] = [
+    const bars: BarRow[][] = [
       [{ date: '2025-01-17', time: '09:31', open: 5.40, high: 6.00, low: 5.40, close: 5.80, volume: 10, ticker: 'LEG1' }],
       [{ date: '2025-01-17', time: '09:31', open: 3.40, high: 4.00, low: 3.40, close: 3.80, volume: 10, ticker: 'LEG2' }],
     ];
@@ -182,7 +182,7 @@ describe('computeStrategyPnlPath', () => {
     const legs: ReplayLeg[] = [
       { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
     ];
-    const bars: MassiveBarRow[][] = [[
+    const bars: BarRow[][] = [[
       { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 100, ticker: 'LEG1' },
     ]];
 
@@ -196,7 +196,7 @@ describe('computeStrategyPnlPath', () => {
       { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
       { occTicker: 'LEG2', quantity: -1, entryPrice: 3.00, multiplier: 100 },
     ];
-    const bars: MassiveBarRow[][] = [
+    const bars: BarRow[][] = [
       // Leg 1 has bars at 09:31, 09:32, 09:33
       [
         { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 10, ticker: 'LEG1' },
@@ -226,7 +226,7 @@ describe('computeStrategyPnlPath', () => {
       { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
       { occTicker: 'LEG2', quantity: -1, entryPrice: 3.00, multiplier: 100 },
     ];
-    const bars: MassiveBarRow[][] = [
+    const bars: BarRow[][] = [
       // Leg 1 has bars at 09:31, 09:32, 09:33
       [
         { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 10, ticker: 'LEG1' },
@@ -251,7 +251,7 @@ describe('computeStrategyPnlPath', () => {
       { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
       { occTicker: 'LEG2', quantity: -1, entryPrice: 3.00, multiplier: 100 },
     ];
-    const bars: MassiveBarRow[][] = [
+    const bars: BarRow[][] = [
       [
         { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 10, ticker: 'LEG1' },
       ],
@@ -266,7 +266,7 @@ describe('computeStrategyPnlPath', () => {
     const legs: ReplayLeg[] = [
       { occTicker: 'LEG1', quantity: 1, entryPrice: 5.00, multiplier: 100 },
     ];
-    const bars: MassiveBarRow[][] = [[
+    const bars: BarRow[][] = [[
       { date: '2025-01-17', time: '09:31', open: 5.40, high: 5.60, low: 5.40, close: 5.55, volume: 100, ticker: 'LEG1' },
       { date: '2025-01-17', time: '09:32', open: 4.70, high: 4.90, low: 4.70, close: 4.85, volume: 100, ticker: 'LEG1' },
     ]];
