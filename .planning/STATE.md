@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 73-03-PLAN.md
-last_updated: "2026-03-24T11:29:24.874Z"
+stopped_at: Completed 74-01-PLAN.md
+last_updated: "2026-03-24T12:35:51.193Z"
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 8
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 25
+  completed_plans: 22
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Accurate, trustworthy portfolio analytics
-**Current focus:** Phase 73 — 0dte-greeks-engine
+**Current focus:** Phase 74 — pre-ship-polish
 
 ## Current Position
 
-Phase: 73 (0dte-greeks-engine) — EXECUTING
-Plan: 3 of 3
+Phase: 74 (pre-ship-polish) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Plan: 3 of 3
 | Phase 73 P02 | 86 | 2 tasks | 2 files |
 | Phase 73 P01 | 222 | 2 tasks | 3 files |
 | Phase 73 P03 | 360 | 2 tasks | 6 files |
+| Phase 74 P01 | 116 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -118,10 +119,14 @@ Plan: 3 of 3
 - [Phase 73]: iv field in GreeksResult: stores log-normal vol for BS path, normal dollar vol (~hundreds for SPX) for Bachelier path
 - [Phase 73]: greeksWarning computed in handleReplayTrade from fullPath (not in computeStrategyPnlPath) to avoid changing pure function signature
 - [Phase 73]: skippedTrades array replaces opaque skippedCount in batch_exit_analysis for detailed error reporting per D-15
+- [Phase 74]: Math.abs(threshold) in stopLoss normalizes negative user-supplied thresholds before comparison
+- [Phase 74]: BACHELIER_DTE_THRESHOLD lowered from 0.5 to 0.1 — BS+bisection now works reliably to ~2.4 hours
+- [Phase 74]: GreeksResult.model field added ('bs' | 'bachelier'); undefined only when IV solve fails
 
 ### Roadmap Evolution
 
 - Phase 73 added: 0DTE Greeks Engine + Exit Trigger Usability (DTE bug fix, Bachelier model, unit field for triggers, greeks warnings, UX fixes)
+- Phase 74 added: Pre-ship Polish — stopLoss abs, shared fetchBarsWithCache, midpoint greeks attribution, tolerant timestamp lookup, numerical greeks fallback, lower Bachelier threshold, model field in GreeksResult, parallel batch replay
 
 ### Pending Todos
 
@@ -137,9 +142,10 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260322-ubp | Forward-fill sparse bars, OO date range derivation, index root fallback map | 2026-03-22 | f23f8fe | [260322-ubp](./quick/260322-ubp-fix-3-trade-replay-improvements-oo-date-/) |
+| 260324-gd1 | Add cache-read for underlying intraday bars in replay.ts | 2026-03-24 | 9f259f2 | [260324-gd1](./quick/260324-gd1-add-cache-read-for-underlying-intraday-b/) |
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:29:24.870Z
-Stopped at: Completed 73-03-PLAN.md
+Last session: 2026-03-24T12:35:51.189Z
+Stopped at: Completed 74-01-PLAN.md
 Resume file: None

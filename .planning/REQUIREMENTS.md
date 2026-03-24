@@ -136,13 +136,13 @@ Requirements for Massive.com market data integration milestone.
 
 ### Pre-ship Polish
 
-- [ ] **POL-01**: `stopLoss` evaluator normalizes threshold via `Math.abs(threshold)` — negative thresholds no longer fire on positive P&L
+- [x] **POL-01**: `stopLoss` evaluator normalizes threshold via `Math.abs(threshold)` — negative thresholds no longer fire on positive P&L
 - [ ] **POL-02**: Shared `fetchBarsWithCache` utility extracts duplicated cache-read/write logic from replay.ts into `utils/bar-cache.ts`
 - [ ] **POL-03**: `replay.ts` uses `fetchBarsWithCache` for option bar fetching (replaces inline cache-read + fetchBars + cache-write)
 - [ ] **POL-04**: `replay.ts` uses `fetchBarsWithCache` for underlying bar fetching (replaces inline cache-read + fetchBars + cache-write)
 - [ ] **POL-05**: Underlying price lookup in `trade-replay.ts` uses nearest-timestamp binary search (+/- 60s tolerance) before falling to date-only
-- [ ] **POL-06**: `BACHELIER_DTE_THRESHOLD` lowered from 0.5 to 0.1 days (~2.4 hours) since BS+bisection works reliably down to ~2 hours
-- [ ] **POL-07**: `GreeksResult` interface includes `model?: 'bs' | 'bachelier'` field, set by `computeLegGreeks`
+- [x] **POL-06**: `BACHELIER_DTE_THRESHOLD` lowered from 0.5 to 0.1 days (~2.4 hours) since BS+bisection works reliably down to ~2 hours
+- [x] **POL-07**: `GreeksResult` interface includes `model?: 'bs' | 'bachelier'` field, set by `computeLegGreeks`
 - [ ] **POL-08**: Greeks decomposition uses midpoint greeks between consecutive bars: `(greek_start + greek_end) / 2` for delta, gamma, theta, vega
 - [ ] **POL-09**: When next-point greeks are null, midpoint formula falls back to start-of-interval (current behavior)
 - [ ] **POL-10**: When model-based attribution produces >80% residual, numerical fallback recomputes using realized delta from price changes
@@ -153,7 +153,7 @@ Requirements for Massive.com market data integration milestone.
 
 ### Phase 74 Testing
 
-- [ ] **TST-14**: Unit tests for stopLoss abs(threshold) normalization, lowered Bachelier threshold, and model field
+- [x] **TST-14**: Unit tests for stopLoss abs(threshold) normalization, lowered Bachelier threshold, and model field
 - [ ] **TST-15**: Unit tests for `fetchBarsWithCache` (cache hit, cache miss + API fetch, error handling)
 - [ ] **TST-16**: Unit tests for midpoint greeks formula and numerical decomposition fallback
 - [ ] **TST-17**: Existing batch_exit_analysis tests pass with parallel replay (behavioral equivalence)
