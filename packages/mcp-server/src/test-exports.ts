@@ -76,11 +76,11 @@ export {
   validateColumnMapping,
   importMarketCsvFile,
   importFromDatabase,
-  importFromMassive,
+  importFromApi,
   triggerEnrichment,
   type ImportMarketCsvOptions,
   type ImportFromDatabaseOptions,
-  type ImportFromMassiveOptions,
+  type ImportFromApiOptions,
   type ImportResult,
 } from './utils/market-importer.js';
 
@@ -170,9 +170,22 @@ export {
   regimeAllocationAdvisorSchema,
 } from './tools/regime-advisor.js';
 
-// Export Massive.com API client utilities for unit testing (Phase 66)
+// Export market data provider interface and types
 export {
-  fetchBars,
+  getProvider,
+  _resetProvider,
+  type BarRow,
+  type AssetClass,
+  type OptionContract,
+  type FetchBarsOptions,
+  type FetchSnapshotOptions,
+  type FetchSnapshotResult,
+  type MarketDataProvider,
+} from './utils/market-provider.js';
+
+// Export Massive provider internals for provider-specific tests
+export {
+  MassiveProvider,
   toMassiveTicker,
   fromMassiveTicker,
   massiveTimestampToETDate,
@@ -184,10 +197,7 @@ export {
   MASSIVE_MAX_PAGES,
   type MassiveBar,
   type MassiveAggregateResponse,
-  type MassiveBarRow,
-  type MassiveAssetClass,
-  type FetchBarsOptions,
-} from './utils/massive-client.js';
+} from './utils/providers/massive.js';
 
 // Export trade replay utilities for unit testing (Phase 68)
 export {
@@ -232,14 +242,11 @@ export {
   type GreeksResult,
 } from './utils/black-scholes.js';
 
-// Export Massive snapshot client for unit testing (Phase 70)
+// Export Massive snapshot schemas for unit testing (Phase 70)
 export {
-  fetchOptionSnapshot,
   MassiveSnapshotResponseSchema,
   MassiveSnapshotContractSchema,
-  type OptionContract,
-  type FetchOptionSnapshotOptions,
-} from './utils/massive-snapshot.js';
+} from './utils/providers/massive.js';
 
 // Export snapshot tool handler and schema for integration testing (Phase 70)
 export {
