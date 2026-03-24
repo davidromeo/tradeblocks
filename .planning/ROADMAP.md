@@ -8,7 +8,7 @@
 - ✅ **v2.9 Lookahead-Free Market Analytics** — Phases 55-59 (shipped 2026-02-09)
 - ✅ **v2.1 Strategy Profiles (beta 1)** — Phases 60-63 (shipped 2026-03-06)
 - ✅ **v2.1 Profile Schema V2 & Portfolio Analysis (beta 2)** — Phases 64-65 (shipped 2026-03-08)
-- 🚧 **v2.2 Massive.com Market Data Integration** — Phases 66-73 (in progress)
+- 🚧 **v2.2 Massive.com Market Data Integration** — Phases 66-74 (in progress)
 
 See [MILESTONES.md](MILESTONES.md) for full history.
 
@@ -55,6 +55,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 - [x] **Phase 71: Exit Trigger Analysis** — Port analyze_exit_triggers and decompose_greeks from TastyTrade MCP to TradeBlocks using replay + greeks data (completed 2026-03-23)
 - [x] **Phase 72: Exit Policy Comparison** — Batch exit analysis tool for multi-trade policy testing across entire blocks (completed 2026-03-23)
 - [x] **Phase 73: 0DTE Greeks Engine + Exit Trigger Usability** — Fix DTE bug, Bachelier normal model fallback, percentage-based exit triggers, greeks warnings, UX fixes (completed 2026-03-24)
+- [ ] **Phase 74: Pre-ship Polish** — stopLoss abs fix, shared fetchBarsWithCache, midpoint greeks attribution, tolerant timestamp lookup, numerical fallback, lower Bachelier threshold, model field, parallel batch replay
 
 ## Phase Details
 
@@ -130,6 +131,7 @@ Plans:
 | 71. Exit Trigger Analysis | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 3/3 | Complete   | 2026-03-24 |
+| 74. Pre-ship Polish | v2.2 | 0/4 | Planning | — |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -188,3 +190,16 @@ Plans:
 - [x] 73-01-PLAN.md — Bachelier normal model: pricing, greeks, IV solver, model selection in computeLegGreeks + TDD tests
 - [x] 73-02-PLAN.md — Exit trigger unit field: percentage-based profitTarget/stopLoss + TDD tests
 - [x] 73-03-PLAN.md — Wire into tools: DTE fix, greeks warnings, Zod schemas, UX fixes, test exports
+
+### Phase 74: Pre-ship Polish — Greeks pipeline robustness, decompose_greeks numerical fallback, shared fetch cache, batch parallelism
+
+**Goal:** Eight targeted fixes to the greeks pipeline, exit triggers, and batch tool: stopLoss abs(threshold), shared fetchBarsWithCache utility, midpoint greeks attribution, tolerant underlying timestamp lookup, numerical greeks fallback, lower Bachelier threshold, model field in GreeksResult, parallel batch replay
+**Requirements**: POL-01, POL-02, POL-03, POL-04, POL-05, POL-06, POL-07, POL-08, POL-09, POL-10, POL-11, POL-12, POL-13, POL-14, TST-14, TST-15, TST-16, TST-17
+**Depends on:** Phase 73
+**Plans:** 4 plans
+
+Plans:
+- [ ] 74-01-PLAN.md — stopLoss abs fix, lower Bachelier threshold, model field in GreeksResult
+- [ ] 74-02-PLAN.md — Shared fetchBarsWithCache utility, replay.ts refactor, tolerant timestamp lookup
+- [ ] 74-03-PLAN.md — Midpoint greeks attribution, numerical decomposition fallback
+- [ ] 74-04-PLAN.md — Parallel batch replay with concurrency limiter

@@ -101,38 +101,62 @@ Requirements for Massive.com market data integration milestone.
 
 ### 0DTE Greeks Engine
 
-- [ ] **DTE-01**: DTE calculation in trade-replay.ts uses 4:00 PM ET expiry time instead of midnight, making DTE positive for all bars on expiry day (e.g., 9:30 AM bar = 6.5h/24h = 0.27 days)
-- [ ] **DTE-02**: The `dte <= 0` guard remains for post-close bars; the fix is to the expiry time, not the guard
+- [x] **DTE-01**: DTE calculation in trade-replay.ts uses 4:00 PM ET expiry time instead of midnight, making DTE positive for all bars on expiry day (e.g., 9:30 AM bar = 6.5h/24h = 0.27 days)
+- [x] **DTE-02**: The `dte <= 0` guard remains for post-close bars; the fix is to the expiry time, not the guard
 
 ### Bachelier Normal Model
 
-- [ ] **BACH-01**: Bachelier pricing model (`bachelierPrice`) implemented for short-dated options where Black-Scholes gamma explodes
-- [ ] **BACH-02**: Bachelier greeks (delta, gamma, theta, vega) and normal IV solver (`solveNormalIV`) implemented with same `GreeksResult` interface
-- [ ] **BACH-03**: `computeLegGreeks` selects model based on `BACHELIER_DTE_THRESHOLD = 0.5` days: BS for dte >= 0.5, Bachelier for dte < 0.5
+- [x] **BACH-01**: Bachelier pricing model (`bachelierPrice`) implemented for short-dated options where Black-Scholes gamma explodes
+- [x] **BACH-02**: Bachelier greeks (delta, gamma, theta, vega) and normal IV solver (`solveNormalIV`) implemented with same `GreeksResult` interface
+- [x] **BACH-03**: `computeLegGreeks` selects model based on `BACHELIER_DTE_THRESHOLD = 0.5` days: BS for dte >= 0.5, Bachelier for dte < 0.5
 
 ### Exit Trigger Unit Field
 
-- [ ] **UNIT-01**: `ExitTriggerConfig` includes optional `unit` field (`'percent'` | `'dollar'`), defaulting to `'dollar'` for backwards compatibility
-- [ ] **UNIT-02**: `profitTarget` trigger with `unit: 'percent'` fires when P&L >= threshold * abs(entryCost)
-- [ ] **UNIT-03**: `stopLoss` trigger with `unit: 'percent'` fires when P&L <= -(threshold * abs(entryCost))
-- [ ] **UNIT-04**: Other trigger types ignore the `unit` field (only profitTarget and stopLoss are percentage-aware)
-- [ ] **UNIT-05**: Both `exit-analysis` and `batch-exit-analysis` Zod schemas include `unit` field with `'dollar'` default; handlers compute `entryCost` from replay legs
+- [x] **UNIT-01**: `ExitTriggerConfig` includes optional `unit` field (`'percent'` | `'dollar'`), defaulting to `'dollar'` for backwards compatibility
+- [x] **UNIT-02**: `profitTarget` trigger with `unit: 'percent'` fires when P&L >= threshold * abs(entryCost)
+- [x] **UNIT-03**: `stopLoss` trigger with `unit: 'percent'` fires when P&L <= -(threshold * abs(entryCost))
+- [x] **UNIT-04**: Other trigger types ignore the `unit` field (only profitTarget and stopLoss are percentage-aware)
+- [x] **UNIT-05**: Both `exit-analysis` and `batch-exit-analysis` Zod schemas include `unit` field with `'dollar'` default; handlers compute `entryCost` from replay legs
 
 ### Greeks Warnings
 
-- [ ] **WARN-01**: `replay_trade` response includes `greeksWarning` field when >50% of leg-timestamp greeks are null
-- [ ] **WARN-02**: `decompose_greeks` result includes `warning` field when total residual exceeds 80% of total P&L change
+- [x] **WARN-01**: `replay_trade` response includes `greeksWarning` field when >50% of leg-timestamp greeks are null
+- [x] **WARN-02**: `decompose_greeks` result includes `warning` field when total residual exceeds 80% of total P&L change
 
 ### UX Improvements
 
-- [ ] **UX-01**: `replay_trade` default format changed from `'summary'` to `'sampled'` (25-30 data points vs 4)
-- [ ] **UX-02**: `batch_exit_analysis` reports skipped trades as `skippedTrades` array with `{ tradeIndex, dateOpened, error }` objects instead of opaque count
+- [x] **UX-01**: `replay_trade` default format changed from `'summary'` to `'sampled'` (25-30 data points vs 4)
+- [x] **UX-02**: `batch_exit_analysis` reports skipped trades as `skippedTrades` array with `{ tradeIndex, dateOpened, error }` objects instead of opaque count
 
 ### Phase 73 Testing
 
-- [ ] **TST-11**: Unit tests for Bachelier pricing, greeks, IV solver, and model selection in computeLegGreeks
-- [ ] **TST-12**: Unit tests for percentage-based profitTarget and stopLoss triggers with various entryCost values
-- [ ] **TST-13**: New Bachelier functions and pdf/cdf exported via test-exports.ts
+- [x] **TST-11**: Unit tests for Bachelier pricing, greeks, IV solver, and model selection in computeLegGreeks
+- [x] **TST-12**: Unit tests for percentage-based profitTarget and stopLoss triggers with various entryCost values
+- [x] **TST-13**: New Bachelier functions and pdf/cdf exported via test-exports.ts
+
+### Pre-ship Polish
+
+- [ ] **POL-01**: `stopLoss` evaluator normalizes threshold via `Math.abs(threshold)` — negative thresholds no longer fire on positive P&L
+- [ ] **POL-02**: Shared `fetchBarsWithCache` utility extracts duplicated cache-read/write logic from replay.ts into `utils/bar-cache.ts`
+- [ ] **POL-03**: `replay.ts` uses `fetchBarsWithCache` for option bar fetching (replaces inline cache-read + fetchBars + cache-write)
+- [ ] **POL-04**: `replay.ts` uses `fetchBarsWithCache` for underlying bar fetching (replaces inline cache-read + fetchBars + cache-write)
+- [ ] **POL-05**: Underlying price lookup in `trade-replay.ts` uses nearest-timestamp binary search (+/- 60s tolerance) before falling to date-only
+- [ ] **POL-06**: `BACHELIER_DTE_THRESHOLD` lowered from 0.5 to 0.1 days (~2.4 hours) since BS+bisection works reliably down to ~2 hours
+- [ ] **POL-07**: `GreeksResult` interface includes `model?: 'bs' | 'bachelier'` field, set by `computeLegGreeks`
+- [ ] **POL-08**: Greeks decomposition uses midpoint greeks between consecutive bars: `(greek_start + greek_end) / 2` for delta, gamma, theta, vega
+- [ ] **POL-09**: When next-point greeks are null, midpoint formula falls back to start-of-interval (current behavior)
+- [ ] **POL-10**: When model-based attribution produces >80% residual, numerical fallback recomputes using realized delta from price changes
+- [ ] **POL-11**: Numerical fallback outputs delta, gamma (from delta changes), and time_and_vol (residual) factors
+- [ ] **POL-12**: `GreeksDecompositionResult` includes `method: 'model' | 'numerical'` field
+- [ ] **POL-13**: `batch_exit_analysis` replays trades in parallel with max 5 concurrent replays using hand-rolled concurrency limiter
+- [ ] **POL-14**: Concurrency limiter is a simple semaphore pattern (~10 lines), no new dependency
+
+### Phase 74 Testing
+
+- [ ] **TST-14**: Unit tests for stopLoss abs(threshold) normalization, lowered Bachelier threshold, and model field
+- [ ] **TST-15**: Unit tests for `fetchBarsWithCache` (cache hit, cache miss + API fetch, error handling)
+- [ ] **TST-16**: Unit tests for midpoint greeks formula and numerical decomposition fallback
+- [ ] **TST-17**: Existing batch_exit_analysis tests pass with parallel replay (behavioral equivalence)
 
 ## Future Requirements
 
@@ -166,7 +190,6 @@ Deferred to future releases. Tracked but not in current roadmap.
 | TastyTrade integration or dependency | Trade replay must be broker-independent |
 | Profile exit rule auto-translation to trigger configs | Would require parsing human-readable exit rule text |
 | SVJD (stochastic volatility jump-diffusion) model | Research paper shows 1.7x better accuracy but requires neural network training |
-| Numerical finite-difference greeks | Noisy for minute-bar data, better suited as validation tool |
 | Blended BS/Bachelier crossover zone | Hard cutover is simpler and both models agree well at DTE=0.5 |
 
 ## Traceability
@@ -238,29 +261,47 @@ Deferred to future releases. Tracked but not in current roadmap.
 | TST-08 | Phase 72 | Complete |
 | TST-09 | Phase 72 | Complete |
 | TST-10 | Phase 72 | Complete |
-| DTE-01 | Phase 73 | Planned |
-| DTE-02 | Phase 73 | Planned |
-| BACH-01 | Phase 73 | Planned |
-| BACH-02 | Phase 73 | Planned |
-| BACH-03 | Phase 73 | Planned |
-| UNIT-01 | Phase 73 | Planned |
-| UNIT-02 | Phase 73 | Planned |
-| UNIT-03 | Phase 73 | Planned |
-| UNIT-04 | Phase 73 | Planned |
-| UNIT-05 | Phase 73 | Planned |
-| WARN-01 | Phase 73 | Planned |
-| WARN-02 | Phase 73 | Planned |
-| UX-01 | Phase 73 | Planned |
-| UX-02 | Phase 73 | Planned |
-| TST-11 | Phase 73 | Planned |
-| TST-12 | Phase 73 | Planned |
-| TST-13 | Phase 73 | Planned |
+| DTE-01 | Phase 73 | Complete |
+| DTE-02 | Phase 73 | Complete |
+| BACH-01 | Phase 73 | Complete |
+| BACH-02 | Phase 73 | Complete |
+| BACH-03 | Phase 73 | Complete |
+| UNIT-01 | Phase 73 | Complete |
+| UNIT-02 | Phase 73 | Complete |
+| UNIT-03 | Phase 73 | Complete |
+| UNIT-04 | Phase 73 | Complete |
+| UNIT-05 | Phase 73 | Complete |
+| WARN-01 | Phase 73 | Complete |
+| WARN-02 | Phase 73 | Complete |
+| UX-01 | Phase 73 | Complete |
+| UX-02 | Phase 73 | Complete |
+| TST-11 | Phase 73 | Complete |
+| TST-12 | Phase 73 | Complete |
+| TST-13 | Phase 73 | Complete |
+| POL-01 | Phase 74 | Planned |
+| POL-02 | Phase 74 | Planned |
+| POL-03 | Phase 74 | Planned |
+| POL-04 | Phase 74 | Planned |
+| POL-05 | Phase 74 | Planned |
+| POL-06 | Phase 74 | Planned |
+| POL-07 | Phase 74 | Planned |
+| POL-08 | Phase 74 | Planned |
+| POL-09 | Phase 74 | Planned |
+| POL-10 | Phase 74 | Planned |
+| POL-11 | Phase 74 | Planned |
+| POL-12 | Phase 74 | Planned |
+| POL-13 | Phase 74 | Planned |
+| POL-14 | Phase 74 | Planned |
+| TST-14 | Phase 74 | Planned |
+| TST-15 | Phase 74 | Planned |
+| TST-16 | Phase 74 | Planned |
+| TST-17 | Phase 74 | Planned |
 
 **Coverage:**
-- v2.2 requirements: 82 total
-- Mapped to phases: 82
+- v2.2 requirements: 100 total
+- Mapped to phases: 100
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-23 after Phase 73 planning*
+*Last updated: 2026-03-24 after Phase 74 planning*
