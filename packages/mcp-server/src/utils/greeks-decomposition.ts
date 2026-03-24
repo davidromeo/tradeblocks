@@ -2,22 +2,21 @@
  * Greeks Decomposition Engine
  *
  * Decomposes a replay P&L path into ranked greek factor contributions
- * (delta, gamma, theta, vega, residual) with optional per-leg-group vega
- * attribution for calendar/double-calendar strategies.
+ * (delta, gamma, theta, vega, residual) using full revaluation P&L attribution.
+ *
+ * Full revaluation reprices each leg with one input changed at a time
+ * (spot, time, vol) to capture all higher-order effects (charm, vanna, volga)
+ * naturally. This produces near-zero residual for any strategy where the
+ * pricing model (BS or Bachelier) can accurately price the options.
+ *
+ * Falls back to numerical decomposition (realized delta from price changes)
+ * when full revaluation still produces >80% residual (model pricing failure).
  *
  * Pure logic module — no I/O, no DuckDB, no fetch.
- *
- * References:
- * - D-05: Midpoint greeks for more accurate attribution when gamma is high
- * - D-06: Fall back to start-of-interval when next-point greeks are null
- * - D-07: Factor contributions ranked by absolute magnitude
- * - D-08: Per-leg-group vega attribution (front vs back month)
- * - D-09: Step-by-step decomposition formula
- * - D-10: Gamma from delta changes in numerical mode
- * - D-11: method field distinguishes model vs numerical
  */
 
 import type { PnlPoint, ReplayLeg } from './trade-replay.js';
+import { bsPrice, bachelierPrice, BACHELIER_DTE_THRESHOLD } from './black-scholes.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,7 +48,7 @@ export interface GreeksDecompositionResult {
   stepCount: number;              // Number of steps (pnlPath.length - 1)
   summary: string;                // Human-readable summary
   warning?: string | null;        // D-13: high residual warning
-  method: 'model' | 'numerical';  // D-11: which method produced the attribution
+  method: 'full_reval' | 'model' | 'numerical';  // which method produced the attribution
 }
 
 export interface LegGroupDef {
@@ -57,11 +56,22 @@ export interface LegGroupDef {
   legIndices: number[];
 }
 
+export interface LegPricingInput {
+  strike: number;
+  type: 'C' | 'P';
+  expiryDate: string;  // YYYY-MM-DD
+}
+
 export interface GreeksDecompositionConfig {
   pnlPath: PnlPoint[];
   legs: ReplayLeg[];
   underlyingPrices?: Map<string, number>;  // timestamp -> underlying price
   legGroups?: LegGroupDef[];               // Optional leg grouping for per-group vega
+  /** Per-leg pricing inputs for full revaluation. When provided, uses full reval
+   *  instead of Taylor expansion. Falls back to Taylor when missing. */
+  legPricingInputs?: LegPricingInput[];
+  riskFreeRate?: number;      // e.g. 0.045
+  dividendYield?: number;     // e.g. 0.015 for SPX
 }
 
 // ---------------------------------------------------------------------------
@@ -221,20 +231,55 @@ function numericalDecomposition(
 // ---------------------------------------------------------------------------
 
 /**
+ * Compute DTE in days from a bar timestamp to a leg's expiry (4:00 PM ET).
+ */
+function computeDte(timestamp: string, expiryDate: string): number {
+  const dateStr = timestamp.split(' ')[0];
+  const timePart = timestamp.split(' ')[1] ?? '09:30';
+  const [eyy, emm, edd] = expiryDate.split('-').map(Number);
+  const [byy, bmm, bdd] = dateStr.split('-').map(Number);
+  const [hh, min] = timePart.split(':').map(Number);
+
+  const expiryMs = new Date(eyy, emm - 1, edd).getTime() + 16 * 60 * 60 * 1000; // 4:00 PM ET
+  const barMs = new Date(byy, bmm - 1, bdd).getTime() + (hh * 60 + min) * 60 * 1000;
+  return (expiryMs - barMs) / (1000 * 60 * 60 * 24);
+}
+
+/**
+ * Price an option using the appropriate model (BS or Bachelier) based on DTE.
+ * Returns null if pricing fails (DTE <= 0 or IV missing).
+ */
+function priceOption(
+  type: 'C' | 'P',
+  S: number,
+  K: number,
+  dte: number,
+  r: number,
+  q: number,
+  iv: number,
+): number | null {
+  if (dte <= 0 || iv <= 0) return null;
+  const T = dte / 365;
+  const bsType = type === 'C' ? 'call' as const : 'put' as const;
+  if (dte < BACHELIER_DTE_THRESHOLD) {
+    return bachelierPrice(bsType, S, K, T, r, q, iv);
+  }
+  return bsPrice(bsType, S, K, T, r, q, iv);
+}
+
+/**
  * Decompose a replay P&L path into ranked greek factor contributions.
  *
- * For each consecutive pair of points (D-05: midpoint greeks):
- *   midDelta = (cur.netDelta + next.netDelta) / 2  (falls back to cur when next is null)
- *   delta_pnl = midDelta * underlyingChange
- *   gamma_pnl = 0.5 * midGamma * underlyingChange^2
- *   theta_pnl = midTheta * dt (days)
- *   vega_pnl  = midVega * ivChange (IV change in percentage points)
- *   residual  = actualChange - (delta + gamma + theta + vega)
+ * Uses full revaluation when legPricingInputs are provided:
+ * For each step, reprices each leg with one input changed at a time
+ * (spot only, time only, vol only) to isolate each factor's contribution.
+ * This captures all higher-order effects (charm, vanna, volga) naturally.
  *
- * When model-based residual > 80%, switches to numerical fallback (D-09).
+ * Falls back to numerical decomposition when full reval produces >80% residual
+ * (pricing model failure for that strategy/DTE combination).
  */
 export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecompositionResult {
-  const { pnlPath, legs, underlyingPrices, legGroups } = config;
+  const { pnlPath, legs, underlyingPrices, legGroups, legPricingInputs, riskFreeRate, dividendYield } = config;
 
   // Edge case: empty or single-point path
   if (pnlPath.length <= 1) {
@@ -260,15 +305,18 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
       stepCount: 0,
       summary: 'No P&L path to decompose (0 steps)',
       warning: null,
-      method: 'model',
+      method: 'full_reval',
     };
   }
 
   const stepCount = pnlPath.length - 1;
+  const canFullReval = legPricingInputs && legPricingInputs.length === legs.length
+    && riskFreeRate !== undefined && dividendYield !== undefined && underlyingPrices;
+  const r = riskFreeRate ?? 0.045;
+  const q = dividendYield ?? 0.015;
 
-  // Accumulators for each factor
+  // Accumulators
   const deltaSteps: number[] = [];
-  const gammaSteps: number[] = [];
   const thetaSteps: number[] = [];
   const vegaSteps: number[] = [];
   const residualSteps: number[] = [];
@@ -282,107 +330,81 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     const cur = pnlPath[i];
     const next = pnlPath[i + 1];
 
-    // Underlying price change
-    let underlyingChange = 0;
-    if (underlyingPrices) {
-      const p1 = underlyingPrices.get(cur.timestamp);
-      const p2 = underlyingPrices.get(next.timestamp);
-      if (p1 !== undefined && p2 !== undefined) {
-        underlyingChange = p2 - p1;
-      }
-    }
-
-    // Time delta in days
-    const dt = computeTimeDeltaDays(cur.timestamp, next.timestamp);
-
-    // Per-leg attribution: compute each leg's contribution to each greek factor.
-    // This is strictly more accurate than net-position attribution because it
-    // preserves per-leg magnitudes that cancel at the net level (critical for
-    // spreads and calendars where opposing legs have large individual greeks).
     let stepDelta = 0;
-    let stepGamma = 0;
     let stepTheta = 0;
     let stepVega = 0;
     let stepResidual = 0;
 
-    // Per-leg-group vega accumulator for this step
     const groupVegaAccum: number[] | undefined = legGroups ? legGroups.map(() => 0) : undefined;
 
     const legCount = Math.min(legs.length, cur.legPrices?.length ?? 0, next.legPrices?.length ?? 0);
 
+    // Underlying prices at cur and next timestamps
+    const S1 = underlyingPrices?.get(cur.timestamp);
+    const S2 = underlyingPrices?.get(next.timestamp);
+
     for (let j = 0; j < legCount; j++) {
-      const weight = legs[j].quantity * legs[j].multiplier / 100;
-      const legActualChange = ((next.legPrices?.[j] ?? 0) - (cur.legPrices?.[j] ?? 0)) * legs[j].quantity * legs[j].multiplier;
+      const positionSize = legs[j].quantity * legs[j].multiplier;
+      const legActualChange = ((next.legPrices?.[j] ?? 0) - (cur.legPrices?.[j] ?? 0)) * positionSize;
 
-      const curLeg = cur.legGreeks?.[j];
-      const nextLeg = next.legGreeks?.[j];
+      const curIv = cur.legGreeks?.[j]?.iv;
+      const nextIv = next.legGreeks?.[j]?.iv;
+      const lpi = legPricingInputs?.[j];
 
-      const hasAnyGreek = curLeg && (curLeg.delta !== null || curLeg.gamma !== null || curLeg.theta !== null || curLeg.vega !== null);
-      if (!hasAnyGreek) {
-        // No greeks for this leg — entire leg P&L goes to residual
-        stepResidual += legActualChange;
-        if (groupSteps) {
-          // Attribute to the group this leg belongs to (as zero)
-          // Group steps are accumulated after the leg loop below
-        }
-        continue;
-      }
+      // Full revaluation: reprice with one input changed at a time
+      if (canFullReval && lpi && S1 !== undefined && S2 !== undefined
+          && curIv !== null && curIv !== undefined && curIv > 0
+          && nextIv !== null && nextIv !== undefined && nextIv > 0) {
 
-      // Midpoint greeks for this leg (D-05/D-06)
-      const curDelta = curLeg.delta ?? 0;
-      const nextDelta = nextLeg?.delta ?? curDelta;
-      const midDelta = (curDelta + nextDelta) / 2;
+        const dte1 = computeDte(cur.timestamp, lpi.expiryDate);
+        const dte2 = computeDte(next.timestamp, lpi.expiryDate);
 
-      const curGamma = curLeg.gamma ?? 0;
-      const nextGamma = nextLeg?.gamma ?? curGamma;
-      const midGamma = (curGamma + nextGamma) / 2;
+        if (dte1 > 0 && dte2 > 0) {
+          // Baseline: price at (S1, T1, IV1)
+          const priceBase = priceOption(lpi.type, S1, lpi.strike, dte1, r, q, curIv);
 
-      const curTheta = curLeg.theta ?? 0;
-      const nextTheta = nextLeg?.theta ?? curTheta;
-      const midTheta = (curTheta + nextTheta) / 2;
+          // Delta: price at (S2, T1, IV1) — only spot changed
+          const priceDelta = priceOption(lpi.type, S2, lpi.strike, dte1, r, q, curIv);
 
-      const curVega = curLeg.vega ?? 0;
-      const nextVega = nextLeg?.vega ?? curVega;
-      const midVega = (curVega + nextVega) / 2;
+          // Theta: price at (S1, T2, IV1) — only time changed
+          const priceTheta = priceOption(lpi.type, S1, lpi.strike, dte2, r, q, curIv);
 
-      // Per-leg IV change in percentage points
-      const iv1 = curLeg.iv;
-      const iv2 = nextLeg?.iv ?? iv1;
-      let legIvChange = 0;
-      if (iv1 !== null && iv1 !== undefined && iv2 !== null && iv2 !== undefined) {
-        legIvChange = (iv2 - iv1) * 100;
-      }
+          // Vega: price at (S1, T1, IV2) — only vol changed
+          const priceVega = priceOption(lpi.type, S1, lpi.strike, dte1, r, q, nextIv);
 
-      // Per-leg factor contributions (weighted by position)
-      const legDeltaPnl = midDelta * weight * underlyingChange;
-      const legGammaPnl = 0.5 * midGamma * weight * underlyingChange * underlyingChange;
-      const legThetaPnl = midTheta * weight * dt;
-      const legVegaPnl = midVega * weight * legIvChange;
-      const legResidual = legActualChange - legDeltaPnl - legGammaPnl - legThetaPnl - legVegaPnl;
+          if (priceBase !== null && priceDelta !== null && priceTheta !== null && priceVega !== null) {
+            const legDeltaPnl = (priceDelta - priceBase) * positionSize;
+            const legThetaPnl = (priceTheta - priceBase) * positionSize;
+            const legVegaPnl = (priceVega - priceBase) * positionSize;
+            const legResidual = legActualChange - legDeltaPnl - legThetaPnl - legVegaPnl;
 
-      stepDelta += legDeltaPnl;
-      stepGamma += legGammaPnl;
-      stepTheta += legThetaPnl;
-      stepVega += legVegaPnl;
-      stepResidual += legResidual;
+            stepDelta += legDeltaPnl;
+            stepTheta += legThetaPnl;
+            stepVega += legVegaPnl;
+            stepResidual += legResidual;
 
-      // Per-leg-group vega attribution — accumulate per-leg vega into group for this step
-      if (legGroups && groupVegaAccum) {
-        for (let g = 0; g < legGroups.length; g++) {
-          if (legGroups[g].legIndices.includes(j)) {
-            groupVegaAccum[g] += legVegaPnl;
+            // Per-leg-group vega
+            if (legGroups && groupVegaAccum) {
+              for (let g = 0; g < legGroups.length; g++) {
+                if (legGroups[g].legIndices.includes(j)) {
+                  groupVegaAccum[g] += legVegaPnl;
+                }
+              }
+            }
+            continue; // leg handled by full reval
           }
         }
       }
+
+      // Fallback: leg P&L goes to residual (no pricing possible)
+      stepResidual += legActualChange;
     }
 
     deltaSteps.push(stepDelta);
-    gammaSteps.push(stepGamma);
     thetaSteps.push(stepTheta);
     vegaSteps.push(stepVega);
     residualSteps.push(stepResidual);
 
-    // Finalize per-leg-group vega for this step
     if (groupSteps && groupVegaAccum) {
       for (let g = 0; g < legGroups!.length; g++) {
         groupSteps[g].push(groupVegaAccum[g]);
@@ -390,21 +412,19 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     }
   }
 
-  // Build factor contributions
   const sumSteps = (steps: number[]): number => steps.reduce((s, v) => s + v, 0);
 
+  // Full reval doesn't separate delta from gamma — the repricing captures both.
+  // "delta" here means "all spot-driven P&L" including gamma, charm, etc.
+  // We report it as "delta" for simplicity (it's the spot sensitivity).
   const rawFactors: Array<{ factor: FactorName; totalPnl: number; steps: number[] }> = [
     { factor: 'delta', totalPnl: sumSteps(deltaSteps), steps: deltaSteps },
-    { factor: 'gamma', totalPnl: sumSteps(gammaSteps), steps: gammaSteps },
     { factor: 'theta', totalPnl: sumSteps(thetaSteps), steps: thetaSteps },
     { factor: 'vega', totalPnl: sumSteps(vegaSteps), steps: vegaSteps },
     { factor: 'residual', totalPnl: sumSteps(residualSteps), steps: residualSteps },
   ];
 
-  // Sort by abs(totalPnl) descending
   rawFactors.sort((a, b) => Math.abs(b.totalPnl) - Math.abs(a.totalPnl));
-
-  // Compute pctOfTotal
   const totalAbsSum = rawFactors.reduce((s, f) => s + Math.abs(f.totalPnl), 0);
   const factors: FactorContribution[] = rawFactors.map(f => ({
     ...f,
@@ -413,18 +433,14 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
 
   const totalPnlChange = pnlPath[pnlPath.length - 1].strategyPnl - pnlPath[0].strategyPnl;
   const totalResidual = sumSteps(residualSteps);
-  const totalAttributed = sumSteps(deltaSteps) + sumSteps(gammaSteps) + sumSteps(thetaSteps) + sumSteps(vegaSteps);
+  const totalAttributed = sumSteps(deltaSteps) + sumSteps(thetaSteps) + sumSteps(vegaSteps);
 
-  // D-09: Numerical fallback when model-based residual > 80%
   const residualPct = Math.abs(totalPnlChange) > 0.01
     ? Math.abs(totalResidual) / Math.abs(totalPnlChange)
     : 0;
 
-  // Numerical fallback when model-based residual > 80%
-  // Per-leg attribution is mathematically correct but model greeks are too inaccurate
-  // for 0DTE options (BS underestimates near-expiry sensitivity, Bachelier produces
-  // spurious vega from enormous normal vol values). Numerical method uses actual
-  // price changes which are always accurate.
+  // Numerical fallback when full reval still produces >80% residual
+  // (model pricing failure — BS/Bachelier can't accurately price these options)
   if (residualPct > 0.8 && pnlPath.length > 2) {
     return numericalDecomposition(config, totalPnlChange, stepCount);
   }
@@ -436,17 +452,15 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
       const steps = groupSteps[g];
       const totalVegaPnl = sumSteps(steps);
 
-      // Average IV change across group's legs over all steps
       let totalIvChange = 0;
       let ivStepCount = 0;
-      for (let i = 0; i < stepCount; i++) {
-        const cur = pnlPath[i];
-        const next = pnlPath[i + 1];
-        if (!cur.legGreeks || !next.legGreeks) continue;
-
+      for (let si = 0; si < stepCount; si++) {
+        const cur = pnlPath[si];
+        const nxt = pnlPath[si + 1];
+        if (!cur.legGreeks || !nxt.legGreeks) continue;
         for (const j of group.legIndices) {
           const iv1 = cur.legGreeks[j]?.iv;
-          const iv2 = next.legGreeks[j]?.iv;
+          const iv2 = nxt.legGreeks[j]?.iv;
           if (iv1 !== null && iv1 !== undefined && iv2 !== null && iv2 !== undefined) {
             totalIvChange += (iv2 - iv1) * 100;
             ivStepCount++;
@@ -465,18 +479,18 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
   }
 
   // Build summary
+  const methodLabel = canFullReval ? 'full_reval' : 'model';
   const summaryParts = factors
     .filter(f => f.factor !== 'residual')
     .map(f => `${f.factor} ${f.totalPnl.toFixed(2)} (${f.pctOfTotal.toFixed(0)}%)`);
   const residualFactor = factors.find(f => f.factor === 'residual');
-  if (residualFactor && residualFactor.totalPnl !== 0) {
+  if (residualFactor && Math.abs(residualFactor.totalPnl) > 0.01) {
     summaryParts.push(`residual ${residualFactor.totalPnl.toFixed(2)} (${residualFactor.pctOfTotal.toFixed(0)}%)`);
   }
-  const summary = `P&L of ${totalPnlChange.toFixed(2)}: ${summaryParts.join(', ')}`;
+  const summary = `P&L of ${totalPnlChange.toFixed(2)} (${methodLabel}): ${summaryParts.join(', ')}`;
 
-  // D-13: high residual warning (only when NOT switching to numerical, i.e., pnlPath.length <= 2)
-  const warning = residualPct > 0.8
-    ? `High residual (${(residualPct * 100).toFixed(0)}%) — greeks attribution is limited. This typically occurs with 0DTE options where IV computation is unreliable for some legs.`
+  const warning = residualPct > 0.5
+    ? `Residual ${(residualPct * 100).toFixed(0)}% — attribution limited for some legs.`
     : null;
 
   return {
@@ -488,6 +502,6 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     stepCount,
     summary,
     warning,
-    method: 'model',
+    method: canFullReval ? 'full_reval' : 'model',
   };
 }

@@ -357,15 +357,36 @@ export async function handleDecomposeGreeks(
     legIndices: g.leg_indices,
   }));
 
-  // 5. Run decomposition
+  // 5. Build leg pricing inputs from OCC tickers for full revaluation
+  const DIVIDEND_YIELDS: Record<string, number> = {
+    SPX: 0.015, SPXW: 0.015, NDX: 0.015, NDXP: 0.015,
+  };
+  const rootMatch = replayLegs[0]?.occTicker.match(/^([A-Z]+)/);
+  const rawRoot = rootMatch ? rootMatch[1] : '';
+  const divYield = DIVIDEND_YIELDS[rawRoot] ?? 0;
+
+  const legPricingInputs = replayLegs.map(leg => {
+    const m = leg.occTicker.match(/^[A-Z]+(\d{6})([CP])(\d{8})$/);
+    if (!m) return { strike: 0, type: 'C' as const, expiryDate: '' };
+    return {
+      strike: parseInt(m[3], 10) / 1000,
+      type: m[2] as 'C' | 'P',
+      expiryDate: `20${m[1].slice(0, 2)}-${m[1].slice(2, 4)}-${m[1].slice(4, 6)}`,
+    };
+  });
+
+  // 6. Run decomposition with full revaluation
   const result = decomposeGreeks({
     pnlPath,
     legs: replayLegs,
     underlyingPrices,
     legGroups: legGroupDefs,
+    legPricingInputs,
+    riskFreeRate: 0.045,
+    dividendYield: divYield,
   });
 
-  // 6. Strip steps if format="summary"
+  // 7. Strip steps if format="summary"
   if (format === "summary") {
     for (const factor of result.factors) {
       factor.steps = [];
