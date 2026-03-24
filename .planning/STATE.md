@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 73-01-PLAN.md
-last_updated: "2026-03-24T11:22:33.030Z"
+stopped_at: Completed 73-03-PLAN.md
+last_updated: "2026-03-24T11:29:24.874Z"
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
 ---
 
 # Project State
@@ -53,6 +53,7 @@ Plan: 3 of 3
 | Phase 72-exit-policy-comparison P03 | 8 | 2 tasks | 3 files |
 | Phase 73 P02 | 86 | 2 tasks | 2 files |
 | Phase 73 P01 | 222 | 2 tasks | 3 files |
+| Phase 73 P03 | 360 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Plan: 3 of 3
 - [Phase 73]: bachelierTheta sign: annualTheta = -e^(-rT)*sigma_n*n(d)/(2*sqrtT) + r*price (negative for long). Divide by 365 directly without negation.
 - [Phase 73]: BACHELIER_DTE_THRESHOLD = 0.5 days: dte < 0.5 uses Bachelier, dte >= 0.5 uses Black-Scholes
 - [Phase 73]: iv field in GreeksResult: stores log-normal vol for BS path, normal dollar vol (~hundreds for SPX) for Bachelier path
+- [Phase 73]: greeksWarning computed in handleReplayTrade from fullPath (not in computeStrategyPnlPath) to avoid changing pure function signature
+- [Phase 73]: skippedTrades array replaces opaque skippedCount in batch_exit_analysis for detailed error reporting per D-15
 
 ### Roadmap Evolution
 
@@ -137,6 +140,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:22:33.026Z
-Stopped at: Completed 73-01-PLAN.md
+Last session: 2026-03-24T11:29:24.870Z
+Stopped at: Completed 73-03-PLAN.md
 Resume file: None

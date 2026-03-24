@@ -54,7 +54,7 @@ See [MILESTONES.md](MILESTONES.md) for full history.
 - [x] **Phase 70: Live Options Snapshot** — Integrate Massive /v3/snapshot/options endpoint for current greeks, IV, and open interest on active positions (completed 2026-03-22)
 - [x] **Phase 71: Exit Trigger Analysis** — Port analyze_exit_triggers and decompose_greeks from TastyTrade MCP to TradeBlocks using replay + greeks data (completed 2026-03-23)
 - [x] **Phase 72: Exit Policy Comparison** — Batch exit analysis tool for multi-trade policy testing across entire blocks (completed 2026-03-23)
-- [ ] **Phase 73: 0DTE Greeks Engine + Exit Trigger Usability** — Fix DTE bug, Bachelier normal model fallback, percentage-based exit triggers, greeks warnings, UX fixes
+- [x] **Phase 73: 0DTE Greeks Engine + Exit Trigger Usability** — Fix DTE bug, Bachelier normal model fallback, percentage-based exit triggers, greeks warnings, UX fixes (completed 2026-03-24)
 
 ## Phase Details
 
@@ -129,7 +129,7 @@ Plans:
 | 70. Live Options Snapshot | v2.2 | 2/2 | Complete    | 2026-03-22 |
 | 71. Exit Trigger Analysis | v2.2 | 3/3 | Complete   | 2026-03-23 |
 | 72. Exit Policy Comparison | v2.2 | 3/3 | Complete   | 2026-03-23 |
-| 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 2/3 | In Progress|  |
+| 73. 0DTE Greeks Engine + Exit Trigger Usability | v2.2 | 3/3 | Complete   | 2026-03-24 |
 
 ### Phase 69: Black-Scholes Greeks Engine — Add BS greeks computation to replay_trade output using option OHLC bars + underlying price + DTE
 
@@ -182,9 +182,9 @@ Plans:
 **Goal:** 0DTE options get correct greeks via Bachelier normal model (replacing null greeks from BS gamma explosion), exit triggers support percentage-based thresholds, and tool UX is improved with better defaults and error reporting
 **Requirements**: DTE-01, DTE-02, BACH-01, BACH-02, BACH-03, UNIT-01, UNIT-02, UNIT-03, UNIT-04, UNIT-05, WARN-01, WARN-02, UX-01, UX-02, TST-11, TST-12, TST-13
 **Depends on:** Phase 72
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 73-01-PLAN.md — Bachelier normal model: pricing, greeks, IV solver, model selection in computeLegGreeks + TDD tests
 - [x] 73-02-PLAN.md — Exit trigger unit field: percentage-based profitTarget/stopLoss + TDD tests
-- [ ] 73-03-PLAN.md — Wire into tools: DTE fix, greeks warnings, Zod schemas, UX fixes, test exports
+- [x] 73-03-PLAN.md — Wire into tools: DTE fix, greeks warnings, Zod schemas, UX fixes, test exports
