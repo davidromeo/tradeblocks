@@ -50,7 +50,7 @@ All exit tools use cached bars from `market.intraday` — no Massive.com subscri
 |------|-------------|
 | `import_market_csv` | Import OHLCV data from a local CSV file with column mapping |
 | `import_from_database` | Import from an external DuckDB database via SQL query |
-| `import_from_massive` | Import from Massive.com API (daily, context, intraday, options). Requires `MASSIVE_API_KEY`. |
+| `import_from_api` | Import from configured data provider (daily, context, intraday, options). Default: Massive.com (`MASSIVE_API_KEY`). Set `MARKET_DATA_PROVIDER` env var for alternatives. |
 | `enrich_market_data` | Run enrichment pipeline to compute derived indicators |
 | `purge_market_table` | Delete all data from a market table for re-import |
 

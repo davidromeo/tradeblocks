@@ -87,12 +87,12 @@ Import data from an external DuckDB file via SQL query. Reference tables using t
 
 See [Getting Started](getting-started.md#massivecom-api-optional) for API key configuration.
 
-### import_from_massive
+### import_from_api
 
-Import market data directly from the Massive.com REST API.
+Import market data from the configured data provider (default: Massive.com). Set `MARKET_DATA_PROVIDER` env var to switch providers (e.g., `thetadata`). Each provider reads its own API key (`MASSIVE_API_KEY`, `THETADATA_API_KEY`, etc.).
 
 **Parameters:**
-- `ticker` — plain ticker symbol (e.g., `SPX`, `VIX`, `SPY`). API prefixes added automatically.
+- `ticker` — plain ticker symbol (e.g., `SPX`, `VIX`, `SPY`). Provider-specific prefixes added automatically.
 - `from` — start date (`YYYY-MM-DD`)
 - `to` — end date (`YYYY-MM-DD`)
 - `target_table` — destination: `"daily"`, `"context"`, or `"intraday"`
@@ -103,24 +103,24 @@ Import market data directly from the Massive.com REST API.
 
 **Daily OHLCV import:**
 ```
-import_from_massive ticker=SPX from=2024-01-01 to=2024-12-31 target_table=daily
+import_from_api ticker=SPX from=2024-01-01 to=2024-12-31 target_table=daily
 ```
 
 **VIX context import (convenience shorthand):**
 ```
-import_from_massive ticker=VIX target_table=context from=2024-01-01 to=2024-12-31
+import_from_api ticker=VIX target_table=context from=2024-01-01 to=2024-12-31
 ```
 
 When `target_table="context"`, the tool automatically fetches VIX, VIX9D, and VIX3M and stores them as ticker rows in `market.daily`, then triggers enrichment.
 
 **Intraday minute bars:**
 ```
-import_from_massive ticker=SPX from=2024-06-01 to=2024-06-30 target_table=intraday timespan=5m
+import_from_api ticker=SPX from=2024-06-01 to=2024-06-30 target_table=intraday timespan=5m
 ```
 
 **Option minute bars:**
 ```
-import_from_massive ticker=SPX250117C05000000 from=2025-01-13 to=2025-01-17 target_table=intraday asset_class=option
+import_from_api ticker=SPX250117C05000000 from=2025-01-13 to=2025-01-17 target_table=intraday asset_class=option
 ```
 
 ### Ticker Formats
