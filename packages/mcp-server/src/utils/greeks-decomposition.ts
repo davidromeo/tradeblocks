@@ -44,6 +44,7 @@ export interface GreeksDecompositionResult {
   totalResidual: number;          // Total residual
   stepCount: number;              // Number of steps (pnlPath.length - 1)
   summary: string;                // Human-readable summary
+  warning?: string | null;        // D-13: high residual warning
 }
 
 export interface LegGroupDef {
@@ -148,6 +149,7 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
       totalResidual: 0,
       stepCount: 0,
       summary: 'No P&L path to decompose (0 steps)',
+      warning: null,
     };
   }
 
@@ -323,6 +325,14 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
   }
   const summary = `P&L of ${totalPnlChange.toFixed(2)}: ${summaryParts.join(', ')}`;
 
+  // D-13: high residual warning
+  const residualPct = Math.abs(totalPnlChange) > 0.01
+    ? Math.abs(totalResidual) / Math.abs(totalPnlChange)
+    : 0;
+  const warning = residualPct > 0.8
+    ? `High residual (${(residualPct * 100).toFixed(0)}%) — greeks attribution is limited. This typically occurs with 0DTE options where IV computation is unreliable for some legs.`
+    : null;
+
   return {
     factors,
     legGroupVega,
@@ -331,5 +341,6 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     totalResidual,
     stepCount,
     summary,
+    warning,
   };
 }

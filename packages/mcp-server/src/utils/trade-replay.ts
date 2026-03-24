@@ -65,6 +65,7 @@ export interface ReplayResult {
   totalPnl: number;        // Final P&L at last bar
   totalBars?: number;      // Total minute bars before format filtering
   legs: ReplayLeg[];       // The legs that were replayed
+  greeksWarning?: string | null;  // D-12: warning when >50% of leg-timestamps have null greeks
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +293,7 @@ export function computeStrategyPnlPath(
   const path: PnlPoint[] = [];
   const lastBar: (MassiveBarRow | undefined)[] = new Array(legs.length).fill(undefined);
 
+
   for (const ts of sortedTimestamps) {
     let complete = true;
     const legPrices: number[] = [];
@@ -343,7 +345,7 @@ export function computeStrategyPnlPath(
             const [byy, bmm, bdd] = dateStr.split('-').map(Number);
             const [hh, min] = timePart.split(':').map(Number);
 
-            const expiryMs = new Date(eyy, emm - 1, edd).getTime();
+            const expiryMs = new Date(eyy, emm - 1, edd).getTime() + 16 * 60 * 60 * 1000; // 4:00 PM ET
             const barMs = new Date(byy, bmm - 1, bdd).getTime() + (hh * 60 + min) * 60 * 1000;
             const dte = (expiryMs - barMs) / (1000 * 60 * 60 * 24);
 
@@ -378,6 +380,7 @@ export function computeStrategyPnlPath(
           point.netGamma = allNull ? null : netGamma;
           point.netTheta = allNull ? null : netTheta;
           point.netVega = allNull ? null : netVega;
+
 
           // IVP lookup by date
           const ivpDate = ts.split(' ')[0];

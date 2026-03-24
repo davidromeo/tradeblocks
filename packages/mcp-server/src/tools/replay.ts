@@ -76,11 +76,11 @@ export const replayTradeSchema = z.object({
     .describe("Contract multiplier (default 100 for standard options)"),
   format: z
     .enum(["full", "summary", "sampled"])
-    .default("summary")
+    .default("sampled")
     .describe(
-      "Output format: 'summary' returns MFE/MAE/P&L without minute-level path (default), " +
+      "Output format: 'sampled' returns path sampled at ~15min intervals (default), " +
       "'full' returns complete minute-by-minute P&L path, " +
-      "'sampled' returns path sampled at ~15min intervals"
+      "'summary' returns MFE/MAE/P&L without minute-level path"
     ),
 });
 
@@ -479,6 +479,21 @@ export async function handleReplayTrade(
     computeReplayMfeMae(fullPath);
   const totalPnl = fullPath.length > 0 ? fullPath[fullPath.length - 1].strategyPnl : 0;
 
+  // Compute greeks warning (D-12): warn when >50% of leg-timestamps have null greeks
+  let greeksNullCount = 0;
+  let greeksTotalCount = 0;
+  for (const point of fullPath) {
+    if (point.legGreeks) {
+      for (const lg of point.legGreeks) {
+        greeksTotalCount++;
+        if (lg.delta === null) greeksNullCount++;
+      }
+    }
+  }
+  const greeksWarning = greeksTotalCount > 0 && greeksNullCount / greeksTotalCount > 0.5
+    ? `Greeks unavailable for ${greeksNullCount} of ${greeksTotalCount} leg-timestamps (0DTE options use Bachelier model; some legs may have insufficient time value for IV computation)`
+    : null;
+
   // Apply format filter
   const { format } = params;
   let pnlPath: typeof fullPath;
@@ -510,6 +525,7 @@ export async function handleReplayTrade(
     totalPnl,
     totalBars: fullPath.length,
     legs: replayLegs,
+    greeksWarning,
   };
 }
 

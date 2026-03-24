@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
-stopped_at: Completed 73-02-PLAN.md
-last_updated: "2026-03-24T11:19:49.662Z"
+stopped_at: Completed 73-01-PLAN.md
+last_updated: "2026-03-24T11:22:33.030Z"
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 73 (0dte-greeks-engine) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: 2 of 3
 | Phase 72 P02 | 64 | 1 tasks | 1 files |
 | Phase 72-exit-policy-comparison P03 | 8 | 2 tasks | 3 files |
 | Phase 73 P02 | 86 | 2 tasks | 2 files |
+| Phase 73 P01 | 222 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Plan: 2 of 3
 - [Phase 72-exit-policy-comparison]: ROW_NUMBER CTE uses ORDER BY date_opened, rowid for deterministic trade_idx when multiple trades share the same date_opened
 - [Phase 72-exit-policy-comparison]: Profile context lookup in batch_exit_analysis swallows errors — non-critical informational enrichment
 - [Phase 73]: unit=percent returns null when entryCost not provided; dollarThreshold=threshold*abs(entryCost) handles both credit/debit
+- [Phase 73]: bachelierTheta sign: annualTheta = -e^(-rT)*sigma_n*n(d)/(2*sqrtT) + r*price (negative for long). Divide by 365 directly without negation.
+- [Phase 73]: BACHELIER_DTE_THRESHOLD = 0.5 days: dte < 0.5 uses Bachelier, dte >= 0.5 uses Black-Scholes
+- [Phase 73]: iv field in GreeksResult: stores log-normal vol for BS path, normal dollar vol (~hundreds for SPX) for Bachelier path
 
 ### Roadmap Evolution
 
@@ -133,6 +137,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:19:49.659Z
-Stopped at: Completed 73-02-PLAN.md
+Last session: 2026-03-24T11:22:33.026Z
+Stopped at: Completed 73-01-PLAN.md
 Resume file: None
