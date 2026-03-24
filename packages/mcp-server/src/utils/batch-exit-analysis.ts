@@ -43,6 +43,8 @@ export interface TradeInput {
   pnlPath: PnlPoint[];
   /** Replay legs parallel to pnlPath.legPrices. */
   legs: ReplayLeg[];
+  /** Entry cost for percentage-based triggers (D-11). */
+  entryCost?: number;
 }
 
 export interface TradeExitResult {
@@ -118,6 +120,8 @@ export interface BatchExitResult {
     structureType: string;
     exitRules: string[];
   };
+  /** Trades skipped due to replay errors (D-15). */
+  skippedTrades?: Array<{ tradeIndex: number; dateOpened: string; error: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -322,18 +326,24 @@ export function analyzeBatch(
   const { candidatePolicy, legGroups, baselineMode, format } = config;
 
   const perTradeResults: TradeExitResult[] = trades.map(trade => {
-    const { pnlPath, legs, actualPnl, tradeIndex, dateOpened } = trade;
+    const { pnlPath, legs, actualPnl, tradeIndex, dateOpened, entryCost } = trade;
 
     // Last path point P&L — used as holdToEnd value
     const lastPnl = pnlPath.length > 0
       ? pnlPath[pnlPath.length - 1].strategyPnl
       : 0;
 
+    // Copy entryCost onto each trigger config for percentage-based triggers (D-11)
+    const triggersWithCost = candidatePolicy.map(t => ({
+      ...t,
+      entryCost,
+    }));
+
     // Run exit trigger analysis with candidate policy
     const analysisResult = analyzeExitTriggers({
       pnlPath,
       legs,
-      triggers: candidatePolicy,
+      triggers: triggersWithCost,
       legGroups,
     });
 

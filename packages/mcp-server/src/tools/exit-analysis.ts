@@ -40,6 +40,7 @@ const triggerTypeEnum = z.enum([
 const triggerConfigSchema = z.object({
   type: triggerTypeEnum,
   threshold: z.number(),
+  unit: z.enum(['percent', 'dollar']).default('dollar').optional(),
   expiry: z.string().optional(),
   openDate: z.string().optional(),
   clockTime: z.string().optional(),
@@ -195,6 +196,11 @@ export async function handleAnalyzeExitTriggers(
   const pnlPath = replayResult.pnlPath;
   const replayLegs = replayResult.legs;
 
+  // Compute entry cost for percentage-based triggers (D-11)
+  const entryCost = replayLegs.reduce((sum, leg) => {
+    return sum + leg.entryPrice * leg.quantity * leg.multiplier;
+  }, 0);
+
   if (pnlPath.length === 0) {
     return {
       overall: {
@@ -244,6 +250,8 @@ export async function handleAnalyzeExitTriggers(
   const exitTriggers: ExitTriggerConfig[] = triggers.map(t => ({
     type: t.type,
     threshold: t.threshold,
+    unit: t.unit,
+    entryCost,
     expiry: t.expiry,
     openDate: t.openDate,
     clockTime: t.clockTime,
@@ -263,6 +271,8 @@ export async function handleAnalyzeExitTriggers(
     triggers: g.triggers.map(t => ({
       type: t.type,
       threshold: t.threshold,
+      unit: t.unit,
+      entryCost,
       expiry: t.expiry,
       openDate: t.openDate,
       clockTime: t.clockTime,

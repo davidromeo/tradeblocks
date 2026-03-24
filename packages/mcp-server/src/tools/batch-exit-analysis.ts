@@ -40,6 +40,7 @@ const triggerTypeEnum = z.enum([
 const triggerConfigSchema = z.object({
   type: triggerTypeEnum,
   threshold: z.number(),
+  unit: z.enum(['percent', 'dollar']).default('dollar').optional(),
   expiry: z.string().optional(),
   openDate: z.string().optional(),
   clockTime: z.string().optional(),
@@ -189,7 +190,7 @@ export async function handleBatchExitAnalysis(
 
   // 2. For each trade, call handleReplayTrade and build TradeInput
   const tradeInputs: TradeInput[] = [];
-  let skippedCount = 0;
+  const skippedTrades: Array<{ tradeIndex: number; dateOpened: string; error: string }> = [];
 
   for (const row of rows) {
     const tradeIdx = Number(row[0] ?? 0);
@@ -210,17 +211,27 @@ export async function handleBatchExitAnalysis(
         injectedConn,
       );
 
+      // Compute entry cost for percentage-based triggers (D-11)
+      const tradeEntryCost = replayResult.legs.reduce((sum: number, leg) => {
+        return sum + leg.entryPrice * leg.quantity * leg.multiplier;
+      }, 0);
+
       const tradeInput: TradeInput = {
         tradeIndex: tradeIdx,
         dateOpened,
         actualPnl: pl,
         pnlPath: replayResult.pnlPath,
         legs: replayResult.legs,
+        entryCost: tradeEntryCost,
       };
       tradeInputs.push(tradeInput);
-    } catch {
+    } catch (err) {
       // Skip trades that fail replay (e.g., no option bars available)
-      skippedCount++;
+      skippedTrades.push({
+        tradeIndex: tradeIdx,
+        dateOpened,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -240,11 +251,12 @@ export async function handleBatchExitAnalysis(
   const result = analyzeBatch(tradeInputs, config);
 
   // 5. Augment summary with skip info if any trades were skipped
-  if (skippedCount > 0) {
+  if (skippedTrades.length > 0) {
     result.summary = result.summary.replace(
       /^Analyzed (\d+) trades/,
-      `Analyzed ${tradeInputs.length} trades (${skippedCount} skipped due to replay errors)`,
+      `Analyzed ${tradeInputs.length} trades (${skippedTrades.length} skipped due to replay errors)`,
     );
+    result.skippedTrades = skippedTrades;
   }
 
   // 6. Load profile context if strategy is specified (per D-16)
