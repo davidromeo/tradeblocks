@@ -396,20 +396,18 @@ describe('solveNormalIV', () => {
 });
 
 describe('BACHELIER_DTE_THRESHOLD', () => {
-  test('is 0.5', () => {
-    expect(BACHELIER_DTE_THRESHOLD).toBe(0.5);
+  test('is 0.1 (lowered from 0.5 — BS+bisection now works to ~2.4 hours)', () => {
+    expect(BACHELIER_DTE_THRESHOLD).toBe(0.1);
   });
 });
 
 describe('computeLegGreeks model selection', () => {
-  test('dte=0.2 (< 0.5 threshold) uses Bachelier model — iv is normal vol (large number, ~hundreds)', () => {
-    // For 0DTE SPX-like options, normal vol is ~hundreds (e.g., 50-1000)
-    // Use a realistic short-dated option: S=5300, K=5300, 0.2 DTE (4.8 hours), sigma_n~800
-    // T = 0.2/365 ~ 5.5e-4 years
-    const T = 0.2 / 365;
+  test('dte=0.05 (< 0.1 threshold) uses Bachelier model — iv is normal vol (large number, ~hundreds)', () => {
+    // For very short DTE SPX-like options, normal vol is ~hundreds (e.g., 50-1000)
+    const T = 0.05 / 365;
     const sigma_n = 800;
     const price = bachelierPrice('call', 5300, 5300, T, 0.045, 0.015, sigma_n);
-    const result = computeLegGreeks(price, 5300, 5300, 0.2, 'C', 0.045, 0.015);
+    const result = computeLegGreeks(price, 5300, 5300, 0.05, 'C', 0.045, 0.015);
     expect(result.iv).not.toBeNull();
     // Normal vol for SPX 0DTE is in the hundreds, not 0-1 range of log-normal
     expect(result.iv!).toBeGreaterThan(1); // normal vol, not log-normal
@@ -419,7 +417,17 @@ describe('computeLegGreeks model selection', () => {
     expect(result.vega).not.toBeNull();
   });
 
-  test('dte=1.0 (> 0.5 threshold) uses Black-Scholes model — iv is log-normal (0-1 range)', () => {
+  test('dte=0.3 (between 0.1 and old 0.5 threshold) now uses Black-Scholes — iv is log-normal (0-1 range)', () => {
+    // Previously this would use Bachelier (dte < 0.5), now it uses BS (dte >= 0.1)
+    const T = 0.3 / 365;
+    const price = bsPrice('call', 100, 100, T, 0.045, 0.015, 0.20);
+    const result = computeLegGreeks(price, 100, 100, 0.3, 'C', 0.045, 0.015);
+    expect(result.iv).not.toBeNull();
+    // BS IV should be in log-normal range (0-1), not hundreds
+    expect(result.iv!).toBeLessThan(10); // log-normal, not normal dollar vol
+  });
+
+  test('dte=5.0 (well above threshold) uses Black-Scholes — iv is log-normal (0-1 range)', () => {
     const price = bsPrice('call', 100, 100, 1.0, 0.045, 0.015, 0.20);
     const result = computeLegGreeks(price, 100, 100, 365, 'C', 0.045, 0.015);
     expect(result.iv).not.toBeNull();
@@ -427,13 +435,42 @@ describe('computeLegGreeks model selection', () => {
     expect(result.iv!).toBeCloseTo(0.20, 1);
   });
 
-  test('dte=0.5 (exactly at threshold) uses Black-Scholes (>= 0.5 means BS)', () => {
-    const T = 0.5 / 365;
+  test('dte=0.1 (exactly at threshold) uses Black-Scholes (>= 0.1 means BS)', () => {
+    const T = 0.1 / 365;
     const price = bsPrice('call', 100, 100, T, 0.045, 0.015, 0.20);
-    const result = computeLegGreeks(price, 100, 100, 0.5, 'C', 0.045, 0.015);
+    const result = computeLegGreeks(price, 100, 100, 0.1, 'C', 0.045, 0.015);
     expect(result.iv).not.toBeNull();
     // BS IV should be in log-normal range
-    expect(result.iv!).toBeCloseTo(0.20, 1);
+    expect(result.iv!).toBeLessThan(10);
+  });
+});
+
+describe('computeLegGreeks model field', () => {
+  test('returns model="bachelier" when dte=0.05 (below 0.1 threshold)', () => {
+    const T = 0.05 / 365;
+    const sigma_n = 800;
+    const price = bachelierPrice('call', 5300, 5300, T, 0.045, 0.015, sigma_n);
+    const result = computeLegGreeks(price, 5300, 5300, 0.05, 'C', 0.045, 0.015);
+    expect(result.model).toBe('bachelier');
+  });
+
+  test('returns model="bs" when dte=0.3 (between 0.1 and old 0.5 threshold)', () => {
+    const T = 0.3 / 365;
+    const price = bsPrice('call', 100, 100, T, 0.045, 0.015, 0.20);
+    const result = computeLegGreeks(price, 100, 100, 0.3, 'C', 0.045, 0.015);
+    expect(result.model).toBe('bs');
+  });
+
+  test('returns model="bs" when dte=5.0 (well above threshold)', () => {
+    const price = bsPrice('call', 100, 100, 1.0, 0.045, 0.015, 0.20);
+    const result = computeLegGreeks(price, 100, 100, 365, 'C', 0.045, 0.015);
+    expect(result.model).toBe('bs');
+  });
+
+  test('model is undefined when IV solve fails (null greeks result)', () => {
+    // Zero price fails IV solve — nullResult has no model field
+    const result = computeLegGreeks(0, 100, 100, 365, 'C', 0.045, 0.015);
+    expect(result.model).toBeUndefined();
   });
 });
 

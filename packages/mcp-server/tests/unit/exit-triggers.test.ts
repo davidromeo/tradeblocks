@@ -479,6 +479,36 @@ describe('evaluateTrigger', () => {
     });
   });
 
+  describe('stopLoss negative threshold normalization (abs fix)', () => {
+    it('does NOT fire on positive P&L when threshold is negative (e.g., -2)', () => {
+      // Bug: without abs(), pnl <= -(-2) => pnl <= 2, fires on pnl=1.50
+      // After fix: abs(-2)=2, pnl <= -2 — does NOT fire on positive P&L
+      const pnlPath = buildTestPath([0, 0.5, 1.0, 1.5]);
+      const trigger: ExitTriggerConfig = { type: 'stopLoss', threshold: -2 };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
+    it('fires on pnl=-2 when threshold=-2 (abs normalization)', () => {
+      // abs(-2)=2, threshold becomes 2, fires when pnl <= -2
+      const pnlPath = buildTestPath([0, -1, -2, -3]);
+      const trigger: ExitTriggerConfig = { type: 'stopLoss', threshold: -2 };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(2); // pnl=-2 <= -2
+      expect(result!.pnlAtFire).toBe(-2);
+    });
+
+    it('fires on pnl=-3 when threshold=3 (positive threshold unchanged)', () => {
+      const pnlPath = buildTestPath([0, -1, -2, -3]);
+      const trigger: ExitTriggerConfig = { type: 'stopLoss', threshold: 3 };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(3); // pnl=-3 <= -3
+      expect(result!.pnlAtFire).toBe(-3);
+    });
+  });
+
   describe('stopLoss with unit:percent', () => {
     it('fires when P&L <= -(threshold * abs(entryCost))', () => {
       // entryCost=-350, threshold=2.0 -> dollarThreshold=2.0*350=700
