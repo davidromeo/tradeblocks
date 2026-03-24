@@ -52,7 +52,7 @@ node packages/mcp-server/server/index.js ~/Trading/backtests
 2. **Connect your AI platform** - See [Configuration by Platform](#configuration-by-platform) below
 3. **Start analyzing** - Ask your AI to "list my backtests" or "run a health check on iron-condor"
 
-For detailed usage examples, see [docs/USAGE.md](docs/USAGE.md).
+For detailed usage examples, see [../../docs/usage.md](../../docs/usage.md).
 
 ## Configuration by Platform
 
@@ -131,7 +131,7 @@ tradeblocks-mcp --http ~/Trading/backtests
 
 Then expose port 3100 however you prefer (ngrok, Cloudflare Tunnel, reverse proxy, Docker on a server, etc.) and add the URL (`https://your-host/mcp`) to your platform's MCP settings.
 
-See [Web Platforms Guide](docs/WEB-PLATFORMS.md) for platform-specific setup, or [Docker Deployment](#docker-deployment) for running on a remote server.
+See [Web Platforms Guide](../../docs/web-platforms.md) for platform-specific setup, or [Docker Deployment](#docker-deployment) for running on a remote server.
 
 ## Transport Modes
 
@@ -365,8 +365,8 @@ See the [Market Data Guide](../../docs/market-data.md) for import examples, tick
 
 ## Related
 
-- [Usage Guide](docs/USAGE.md) - Detailed usage examples and workflows
-- [Web Platforms Guide](docs/WEB-PLATFORMS.md) - Connect to ChatGPT, Google AI Studio, Julius
+- [Usage Guide](../../docs/usage.md) - Detailed usage examples and workflows
+- [Web Platforms Guide](../../docs/web-platforms.md) - Connect to ChatGPT, Google AI Studio, Julius
 - [Agent Skills](../agent-skills/README.md) - Conversational workflows for guided analysis
 - [Market Data Guide](../../docs/market-data.md) - Import workflow, Massive API, and column mapping reference
 - [Main Application](../../README.md) - Web-based UI for TradeBlocks

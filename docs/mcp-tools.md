@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-TradeBlocks provides 60+ MCP tools for AI-assisted options trading analysis, organized by category.
+TradeBlocks MCP server tools organized by category.
 
 ## Block Management
 
@@ -22,14 +22,37 @@ TradeBlocks provides 60+ MCP tools for AI-assisted options trading analysis, org
 | `get_period_returns` | Returns aggregated by period (daily, weekly, monthly) |
 | `compare_backtest_to_actual` | Backtest vs live trade comparison with slippage analysis |
 
+## Trade Replay
+
+| Tool | Description |
+|------|-------------|
+| `replay_trade` | Replay trades with minute-level P&L path, MFE/MAE, and per-leg greeks. Uses cached bars from `market.intraday`; fetches from Massive.com on cache miss. Three output formats: `full`, `sampled` (default), `summary`. |
+
+## Exit Trigger Analysis
+
+| Tool | Description |
+|------|-------------|
+| `analyze_exit_triggers` | Evaluate 14 trigger types against a trade's replay path. Shows first-to-fire trigger with P&L comparison against actual exit. |
+| `decompose_greeks` | Decompose P&L into delta, gamma, theta, vega, charm, vanna, and residual. Automatic numerical fallback when model-based residual exceeds 80%. Per-leg-group vega attribution for calendar strategies. |
+| `batch_exit_analysis` | Test exit policies across entire blocks. Returns aggregate stats (win rate, Sharpe, Sortino, profit factor, drawdown, streaks) with per-trigger attribution. |
+
+All exit tools use cached bars from `market.intraday` — no Massive.com subscription required if bars are pre-loaded.
+
+## Live Options
+
+| Tool | Description |
+|------|-------------|
+| `get_option_snapshot` | Live option chain with greeks, IV, and open interest from Massive.com. BS greeks fallback for contracts with empty greeks. Requires `MASSIVE_API_KEY`. |
+
 ## Market Data Import
 
 | Tool | Description |
 |------|-------------|
-| `import_market_csv` | Import OHLCV data from a local CSV file |
-| `import_from_database` | Import from an external DuckDB database |
-| `import_from_massive` | Import from Massive.com API (daily, context, intraday) |
-| `enrich_market_data` | Run enrichment pipeline to compute ~40 derived indicators |
+| `import_market_csv` | Import OHLCV data from a local CSV file with column mapping |
+| `import_from_database` | Import from an external DuckDB database via SQL query |
+| `import_from_massive` | Import from Massive.com API (daily, context, intraday, options). Requires `MASSIVE_API_KEY`. |
+| `enrich_market_data` | Run enrichment pipeline to compute derived indicators |
+| `purge_market_table` | Delete all data from a market table for re-import |
 
 See [Market Data Guide](market-data.md) for import examples, ticker formats, and enrichment details.
 
@@ -37,18 +60,13 @@ See [Market Data Guide](market-data.md) for import examples, ticker formats, and
 
 | Tool | Description |
 |------|-------------|
-| `analyze_regime_performance` | Analyze P&L by market regime (VIX levels, trend, volatility) |
-| `suggest_filters` | AI-suggested entry filters based on market conditions |
+| `analyze_regime_performance` | Analyze P&L by market regime (VIX levels, term structure, trend) |
+| `suggest_filters` | Suggest entry filters based on losing trade analysis |
 | `calculate_orb` | Opening range breakout analysis from intraday bars |
-| `enrich_trades` | Add market context to trades (lookahead-free) |
-
-## Trade Replay
-
-| Tool | Description |
-|------|-------------|
-| `replay_trade` | Replay trades with minute-level option bars for MFE/MAE analysis |
-
-Supports hypothetical mode (explicit legs) and tradelog mode (replay from existing trade data). Requires `MASSIVE_API_KEY`. See [Market Data Guide](market-data.md#trade-replay) for details.
+| `enrich_trades` | Add market context to trades (lookahead-free temporal joins) |
+| `find_predictive_fields` | Identify which market fields predict trade outcomes |
+| `filter_curve` | Equity curve with/without a candidate market filter applied |
+| `get_field_statistics` | Distribution statistics for any market or trade field |
 
 ## Strategy Profiles
 
@@ -66,40 +84,58 @@ Supports hypothetical mode (explicit legs) and tradelog mode (replay from existi
 | `analyze_structure_fit` | Analyze strategy performance by regime/condition dimensions |
 | `validate_entry_filters` | Test each entry filter's contribution to edge |
 | `portfolio_structure_map` | Regime x structure coverage matrix across all strategies |
+| `suggest_strategy_matches` | Find strategies that match specific market conditions |
 
 ## Advanced Analysis
 
 | Tool | Description |
 |------|-------------|
-| `run_monte_carlo` | Monte Carlo simulation with confidence intervals and worst-case scenarios |
+| `run_monte_carlo` | Monte Carlo simulation with confidence intervals |
 | `run_walk_forward` | Walk-forward analysis to detect overfitting |
 | `get_correlation_matrix` | Strategy correlation matrix (Kendall, Spearman, Pearson) |
 | `get_tail_risk` | Tail dependence and copula-based risk analysis |
 | `get_position_sizing` | Kelly criterion position sizing guidance |
 | `regime_allocation_advisor` | Regime-based allocation recommendations |
+| `stress_test` | Stress test portfolio against historical scenarios |
+| `marginal_contribution` | Marginal contribution of a strategy to portfolio risk/return |
+| `what_if_scaling` | What-if analysis for position sizing changes |
 
 ## Edge Decay
 
 | Tool | Description |
 |------|-------------|
 | `analyze_edge_decay` | Detect strategy performance decay over time |
+| `analyze_period_metrics` | Performance by time period (quarterly, yearly) |
+| `analyze_rolling_metrics` | Rolling window performance metrics |
+| `analyze_regime_comparison` | Compare performance across market regime transitions |
+| `analyze_walk_forward_degradation` | Walk-forward degradation analysis |
 
-## SQL and Schema Discovery
-
-| Tool | Description |
-|------|-------------|
-| `run_sql` | Execute arbitrary SQL against DuckDB (trades + market data) |
-| `describe_database` | Show database schema with table info and example queries |
-| `get_field_statistics` | Field-level statistics for any column |
-
-## Import Tools
+## Portfolio Health
 
 | Tool | Description |
 |------|-------------|
-| `import_csv` | Import a CSV file as a new block *(CLI only -- not available in Claude Desktop)* |
+| `portfolio_health_check` | Comprehensive health check across multiple dimensions |
+| `drawdown_attribution` | Attribute drawdowns to specific strategies or market conditions |
+| `strategy_similarity` | Find similar strategies based on return patterns |
+| `analyze_discrepancies` | Analyze discrepancies between backtest and live results |
+| `analyze_slippage_trends` | Track execution slippage over time |
+| `analyze_live_alignment` | Compare live execution against backtest expectations |
+| `get_reporting_log_stats` | Statistics on reported/live trade logs |
+
+## SQL and Schema
+
+| Tool | Description |
+|------|-------------|
+| `run_sql` | Execute SQL against DuckDB. SELECT runs freely. DELETE/UPDATE require `confirm: true` with affected row preview. |
+| `describe_database` | Schema discovery with table info, VIX tenor auto-discovery, and example queries |
+
+## Block Import
+
+| Tool | Description |
+|------|-------------|
+| `import_csv` | Import a CSV file as a new block *(CLI only — not available in Claude Desktop)* |
+| `get_backtest_help` | Help with backtest data formats and troubleshooting |
 
 ---
 
-For detailed parameter schemas, use your AI client's tool discovery feature or see the tool definitions in the MCP server source code under `packages/mcp-server/src/tools/`.
-
-For usage examples and common workflows, see the [MCP Usage Guide](../packages/mcp-server/docs/USAGE.md).
+For usage examples and common workflows, see the [Usage Guide](usage.md).
