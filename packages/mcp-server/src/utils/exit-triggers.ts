@@ -1,7 +1,7 @@
 /**
  * Exit Trigger Evaluation Engine
  *
- * Pure logic module (no I/O, no DuckDB, no fetch) that evaluates 14 exit
+ * Pure logic module (no I/O, no DuckDB, no fetch) that evaluates 15 exit
  * trigger types against a greeks-enriched P&L path from trade replay.
  *
  * Provides the computational heart of the `analyze_exit_triggers` tool.
@@ -17,6 +17,7 @@ export type TriggerType =
   | 'profitTarget'
   | 'stopLoss'
   | 'trailingStop'
+  | 'mfeLadderStop'
   | 'dteExit'
   | 'ditExit'
   | 'clockTimeExit'
@@ -33,6 +34,7 @@ export interface ExitTriggerConfig {
   type: TriggerType;
   threshold: number;
   unit?: 'percent' | 'dollar';                  // D-07: default 'dollar', backwards compatible
+  steps?: Array<{ armAt: number; stopAt: number }>;
   // Context-specific optional fields:
   expiry?: string;                              // YYYY-MM-DD for dteExit
   openDate?: string;                            // YYYY-MM-DD for ditExit
@@ -201,6 +203,36 @@ export function evaluateTrigger(
         if (dropdown >= trailAmt && runningMaxPnl > -Infinity) {
           fired = true;
           detail = `Dropdown $${dropdown.toFixed(2)} from max $${runningMaxPnl.toFixed(2)} >= trail $${trailAmt.toFixed(2)}`;
+        }
+        break;
+      }
+
+      case 'mfeLadderStop': {
+        if (!trigger.steps?.length) break;
+        if (trigger.unit === 'percent' && trigger.entryCost == null) break;
+
+        const scale = trigger.unit === 'percent'
+          ? Math.abs(trigger.entryCost!)
+          : 1;
+        const normalizedSteps = [...trigger.steps]
+          .sort((a, b) => a.armAt - b.armAt)
+          .map((step) => ({
+            armAt: step.armAt * scale,
+            stopAt: step.stopAt * scale,
+          }));
+
+        let activeFloor = -Infinity;
+        for (const step of normalizedSteps) {
+          if (runningMaxPnl >= step.armAt) {
+            activeFloor = Math.max(activeFloor, step.stopAt);
+          }
+        }
+
+        if (activeFloor > -Infinity && pnl <= activeFloor) {
+          fired = true;
+          detail = trigger.unit === 'percent'
+            ? `MFE ladder armed at max $${runningMaxPnl.toFixed(2)}; active floor ${(activeFloor / scale * 100).toFixed(0)}% of $${Math.abs(trigger.entryCost!).toFixed(2)} ($${activeFloor.toFixed(2)}), current P&L $${pnl.toFixed(2)}`
+            : `MFE ladder armed at max $${runningMaxPnl.toFixed(2)}; active floor $${activeFloor.toFixed(2)}, current P&L $${pnl.toFixed(2)}`;
         }
         break;
       }

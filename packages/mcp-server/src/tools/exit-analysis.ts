@@ -6,7 +6,7 @@
  * fetches data, replays the trade, and analyzes the results.
  *
  * Tools registered:
- *   - analyze_exit_triggers -- Evaluate 14 trigger types against a replay P&L path
+ *   - analyze_exit_triggers -- Evaluate 15 trigger types against a replay P&L path
  *   - decompose_greeks -- Decompose P&L into delta/gamma/theta/vega/residual factors
  */
 
@@ -30,7 +30,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const triggerTypeEnum = z.enum([
-  'profitTarget', 'stopLoss', 'trailingStop',
+  'profitTarget', 'stopLoss', 'trailingStop', 'mfeLadderStop',
   'dteExit', 'ditExit', 'clockTimeExit',
   'underlyingPriceMove', 'positionDelta', 'perLegDelta',
   'vixMove', 'vix9dMove', 'vix9dVixRatio',
@@ -45,6 +45,10 @@ const triggerConfigSchema = z.object({
   openDate: z.string().optional(),
   clockTime: z.string().optional(),
   trailAmount: z.number().optional(),
+  steps: z.array(z.object({
+    armAt: z.number(),
+    stopAt: z.number(),
+  })).optional(),
   spreadWidth: z.number().optional(),
   contracts: z.number().optional(),
 });
@@ -257,6 +261,7 @@ export async function handleAnalyzeExitTriggers(
     openDate: t.openDate,
     clockTime: t.clockTime,
     trailAmount: t.trailAmount,
+    steps: t.steps,
     spreadWidth: t.spreadWidth,
     contracts: t.contracts,
     multiplier,
@@ -278,6 +283,7 @@ export async function handleAnalyzeExitTriggers(
       openDate: t.openDate,
       clockTime: t.clockTime,
       trailAmount: t.trailAmount,
+      steps: t.steps,
       spreadWidth: t.spreadWidth,
       contracts: t.contracts,
       multiplier,

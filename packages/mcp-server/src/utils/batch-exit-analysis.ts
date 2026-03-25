@@ -339,12 +339,20 @@ export function analyzeBatch(
       entryCost,
     }));
 
+    const legGroupsWithCost = legGroups?.map(group => ({
+      ...group,
+      triggers: group.triggers.map(trigger => ({
+        ...trigger,
+        entryCost,
+      })),
+    }));
+
     // Run exit trigger analysis with candidate policy
     const analysisResult = analyzeExitTriggers({
       pnlPath,
       legs,
       triggers: triggersWithCost,
-      legGroups,
+      legGroups: legGroupsWithCost,
     });
 
     const { firstToFire } = analysisResult.overall;
