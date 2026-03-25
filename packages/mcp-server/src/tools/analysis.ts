@@ -355,7 +355,7 @@ export function registerAnalysisTools(
             outOfSampleDays,
             stepSizeDays,
             optimizationTarget,
-            parameterRanges: parameterRanges ?? {},
+            parameterRanges: (parameterRanges ?? {}) as Record<string, [number, number, number]>,
             minInSampleTrades,
             minOutOfSampleTrades,
             normalizeTo1Lot,
