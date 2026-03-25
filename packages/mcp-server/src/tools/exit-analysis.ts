@@ -48,6 +48,8 @@ const triggerConfigSchema = z.object({
   steps: z.array(z.object({
     armAt: z.number(),
     stopAt: z.number(),
+    closeAllocationPct: z.number().min(0).max(1).optional()
+      .describe("Fraction of REMAINING position to close at this milestone (0-1)"),
   })).optional(),
   spreadWidth: z.number().optional(),
   contracts: z.number().optional(),

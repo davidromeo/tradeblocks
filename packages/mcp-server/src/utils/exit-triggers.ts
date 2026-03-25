@@ -30,11 +30,18 @@ export type TriggerType =
   | 'slRatioThreshold'
   | 'slRatioMove';
 
+export interface PartialClose {
+  index: number;
+  pnlAtFire: number;
+  allocation: number;
+  trigger: string;
+}
+
 export interface ExitTriggerConfig {
   type: TriggerType;
   threshold: number;
   unit?: 'percent' | 'dollar';                  // D-07: default 'dollar', backwards compatible
-  steps?: Array<{ armAt: number; stopAt: number }>;
+  steps?: Array<{ armAt: number; stopAt: number; closeAllocationPct?: number }>;
   // Context-specific optional fields:
   expiry?: string;                              // YYYY-MM-DD for dteExit
   openDate?: string;                            // YYYY-MM-DD for ditExit
@@ -68,6 +75,7 @@ export interface ExitTriggerResult {
     pnl: number;
     pnlDifference: number;             // firstToFire.pnl - actualExit.pnl
   };
+  partialCloses?: PartialClose[];       // Partial position closes from profitAction steps
   summary: string;
 }
 
@@ -128,6 +136,103 @@ function computeSLRatio(
   const maxLoss = spreadWidth * contracts * multiplier;
   if (maxLoss === 0) return 0;
   return spreadValue / maxLoss;
+}
+
+// ---------------------------------------------------------------------------
+// evaluateProfitAction — partial close aware evaluator
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluate a profitAction trigger with partial close support.
+ * Steps with closeAllocationPct will close a fraction of the REMAINING position
+ * when their armAt is first reached. The remaining position's P&L is scaled down.
+ *
+ * Returns both the fire event (stop hit on remaining) and any partial closes.
+ */
+export function evaluateProfitAction(
+  trigger: ExitTriggerConfig,
+  pnlPath: PnlPoint[],
+  _legs: ReplayLeg[], // eslint-disable-line @typescript-eslint/no-unused-vars
+): { fireEvent: TriggerFireEvent | null; partialCloses: PartialClose[] } {
+  const partialCloses: PartialClose[] = [];
+
+  if (pnlPath.length === 0 || !trigger.steps?.length) {
+    return { fireEvent: null, partialCloses };
+  }
+  if (trigger.unit === 'percent' && trigger.entryCost == null) {
+    return { fireEvent: null, partialCloses };
+  }
+
+  const scale = trigger.unit === 'percent'
+    ? Math.abs(trigger.entryCost!)
+    : 1;
+
+  const normalizedSteps = [...trigger.steps]
+    .sort((a, b) => a.armAt - b.armAt)
+    .map((step) => ({
+      armAt: step.armAt * scale,
+      stopAt: step.stopAt * scale,
+      closeAllocationPct: step.closeAllocationPct,
+    }));
+
+  let remainingAllocation = 1.0;
+  let runningMaxPnl = -Infinity;
+  // Track which steps have already triggered their partial close
+  const stepPartialFired = new Array(normalizedSteps.length).fill(false);
+
+  for (let i = 0; i < pnlPath.length; i++) {
+    const point = pnlPath[i];
+    const pnl = point.strategyPnl;
+
+    if (pnl > runningMaxPnl) runningMaxPnl = pnl;
+
+    // Check each step for partial close (only when armAt first reached)
+    for (let s = 0; s < normalizedSteps.length; s++) {
+      const step = normalizedSteps[s];
+      if (!stepPartialFired[s] && step.closeAllocationPct && runningMaxPnl >= step.armAt) {
+        stepPartialFired[s] = true;
+        const closeAmt = remainingAllocation * step.closeAllocationPct;
+        partialCloses.push({
+          index: i,
+          pnlAtFire: pnl * remainingAllocation * step.closeAllocationPct,
+          allocation: closeAmt,
+          trigger: 'profitAction',
+        });
+        remainingAllocation -= closeAmt;
+      }
+    }
+
+    // Compute active stop floor (same logic as original)
+    let activeFloor = -Infinity;
+    for (const step of normalizedSteps) {
+      if (runningMaxPnl >= step.armAt) {
+        activeFloor = Math.max(activeFloor, step.stopAt);
+      }
+    }
+
+    // Check if stop hit on remaining allocation
+    // Scaled comparison: pnl * remainingAllocation <= activeFloor * remainingAllocation
+    // Simplifies to: pnl <= activeFloor (when remainingAllocation > 0)
+    if (activeFloor > -Infinity && remainingAllocation > 0 && pnl <= activeFloor) {
+      const effectivePnl = pnl * remainingAllocation;
+      const detail = trigger.unit === 'percent'
+        ? `Profit action: stop adjusted to ${(activeFloor / scale * 100).toFixed(0)}% ($${activeFloor.toFixed(2)}) at max P&L $${runningMaxPnl.toFixed(2)}, hit at $${pnl.toFixed(2)} (remaining ${(remainingAllocation * 100).toFixed(0)}%)`
+        : `Profit action: stop adjusted to $${activeFloor.toFixed(2)} at max P&L $${runningMaxPnl.toFixed(2)}, hit at $${pnl.toFixed(2)} (remaining ${(remainingAllocation * 100).toFixed(0)}%)`;
+
+      return {
+        fireEvent: {
+          type: 'profitAction',
+          firedAt: point.timestamp,
+          pnlAtFire: effectivePnl,
+          index: i,
+          detail,
+        },
+        partialCloses,
+      };
+    }
+  }
+
+  return { fireEvent: null, partialCloses };
 }
 
 // ---------------------------------------------------------------------------
@@ -208,33 +313,12 @@ export function evaluateTrigger(
       }
 
       case 'profitAction': {
-        if (!trigger.steps?.length) break;
-        if (trigger.unit === 'percent' && trigger.entryCost == null) break;
-
-        const scale = trigger.unit === 'percent'
-          ? Math.abs(trigger.entryCost!)
-          : 1;
-        const normalizedSteps = [...trigger.steps]
-          .sort((a, b) => a.armAt - b.armAt)
-          .map((step) => ({
-            armAt: step.armAt * scale,
-            stopAt: step.stopAt * scale,
-          }));
-
-        let activeFloor = -Infinity;
-        for (const step of normalizedSteps) {
-          if (runningMaxPnl >= step.armAt) {
-            activeFloor = Math.max(activeFloor, step.stopAt);
-          }
-        }
-
-        if (activeFloor > -Infinity && pnl <= activeFloor) {
-          fired = true;
-          detail = trigger.unit === 'percent'
-            ? `Profit action: stop adjusted to ${(activeFloor / scale * 100).toFixed(0)}% ($${activeFloor.toFixed(2)}) at max P&L $${runningMaxPnl.toFixed(2)}, hit at $${pnl.toFixed(2)}`
-            : `Profit action: stop adjusted to $${activeFloor.toFixed(2)} at max P&L $${runningMaxPnl.toFixed(2)}, hit at $${pnl.toFixed(2)}`;
-        }
-        break;
+        // Delegate to evaluateProfitAction for the full path evaluation
+        // (evaluateTrigger is called point-by-point in the loop, but profitAction
+        //  needs full-path context for partial close tracking, so we handle it
+        //  by breaking out of the loop and evaluating the full path at once.)
+        const paResult = evaluateProfitAction(trigger, pnlPath, legs);
+        return paResult.fireEvent;
       }
 
       case 'dteExit': {
@@ -452,10 +536,22 @@ export function analyzeExitTriggers(config: {
 
   // Evaluate all triggers
   const fireEvents: TriggerFireEvent[] = [];
+  let allPartialCloses: PartialClose[] = [];
   for (const trigger of triggers) {
-    const event = evaluateTrigger(trigger, pnlPath, legs);
-    if (event) {
-      fireEvents.push(event);
+    if (trigger.type === 'profitAction') {
+      // Use the partial-close-aware helper for profitAction
+      const paResult = evaluateProfitAction(trigger, pnlPath, legs);
+      if (paResult.fireEvent) {
+        fireEvents.push(paResult.fireEvent);
+      }
+      if (paResult.partialCloses.length > 0) {
+        allPartialCloses = allPartialCloses.concat(paResult.partialCloses);
+      }
+    } else {
+      const event = evaluateTrigger(trigger, pnlPath, legs);
+      if (event) {
+        fireEvents.push(event);
+      }
     }
   }
 
@@ -512,6 +608,7 @@ export function analyzeExitTriggers(config: {
     triggers: fireEvents,
     firstToFire,
     actualExit,
+    partialCloses: allPartialCloses.length > 0 ? allPartialCloses : undefined,
     summary,
   };
 
