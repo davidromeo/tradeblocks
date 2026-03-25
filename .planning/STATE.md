@@ -4,7 +4,7 @@ milestone: v2.2
 milestone_name: Massive.com Market Data Integration
 status: unknown
 stopped_at: Completed 75-04-PLAN.md
-last_updated: "2026-03-24T15:24:23.177Z"
+last_updated: "2026-03-24T17:02:00.142Z"
 progress:
   total_phases: 10
   completed_phases: 10
@@ -168,9 +168,10 @@ None.
 |---|-------------|------|--------|-----------|
 | 260322-ubp | Forward-fill sparse bars, OO date range derivation, index root fallback map | 2026-03-22 | f23f8fe | [260322-ubp](./quick/260322-ubp-fix-3-trade-replay-improvements-oo-date-/) |
 | 260324-gd1 | Add cache-read for underlying intraday bars in replay.ts | 2026-03-24 | 9f259f2 | [260324-gd1](./quick/260324-gd1-add-cache-read-for-underlying-intraday-b/) |
+| 260325-qr5 | Add closeAllocationPct to profitAction trigger steps for partial position closing | 2026-03-25 | 2adba4d | [260325-qr5](./quick/260325-qr5-add-closeallocationpct-to-profitaction-t/) |
 
 ## Session Continuity
 
-Last session: 2026-03-24T15:19:34.833Z
-Stopped at: Completed 75-04-PLAN.md
+Last session: 2026-03-25T19:25:13.000Z
+Stopped at: Completed 260325-qr5 quick task
 Resume file: None
