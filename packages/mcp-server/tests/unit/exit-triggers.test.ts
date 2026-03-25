@@ -344,15 +344,45 @@ describe('evaluateTrigger', () => {
       const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
       expect(result).toBeNull();
     });
+
+    it('fires with exitAbove when netDelta > exitAbove', () => {
+      const trigger: ExitTriggerConfig = { type: 'positionDelta', threshold: 0, exitAbove: 0.85 };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(4); // delta=0.9 > 0.85
+      expect(result!.detail).toContain('exitAbove');
+    });
+
+    it('fires with exitBelow when netDelta < exitBelow', () => {
+      // STANDARD_DELTAS: [0.5, 0.6, 0.7, 0.8, 0.9, 0.85, 0.75, 0.6, 0.4, 0.3]
+      // exitBelow=0.55 fires at index 0 (delta=0.5 < 0.55)
+      const trigger: ExitTriggerConfig = { type: 'positionDelta', threshold: 0, exitBelow: 0.55 };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(0); // delta=0.5 < 0.55
+      expect(result!.detail).toContain('exitBelow');
+    });
+
+    it('without exitAbove/exitBelow uses abs() (backward compat)', () => {
+      const trigger: ExitTriggerConfig = { type: 'positionDelta', threshold: 0.85 };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(4);
+      expect(result!.detail).toContain('threshold');
+    });
   });
 
   describe('perLegDelta', () => {
-    it('fires when any single leg delta exceeds threshold', () => {
-      const legGreeks: GreeksResult[][] = STANDARD_PNLS.map((_, i) => [
-        { delta: 0.3 + i * 0.05, gamma: 0.01, theta: -0.5, vega: 0.1, iv: 0.2 },
-        { delta: -(0.2 + i * 0.03), gamma: 0.01, theta: -0.5, vega: 0.1, iv: 0.2 },
-      ]);
-      const pathWithGreeks = buildTestPath(STANDARD_PNLS, { deltas: STANDARD_DELTAS, legGreeks });
+    // Shared legGreeks for directional tests:
+    // Leg 0 delta ramps: 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75
+    // Leg 1 delta ramps: -0.20, -0.25, -0.30, -0.35, -0.40, -0.45, -0.50, -0.55, -0.60, -0.65
+    const directionalLegGreeks: GreeksResult[][] = STANDARD_PNLS.map((_, i) => [
+      { delta: 0.3 + i * 0.05, gamma: 0.01, theta: -0.5, vega: 0.1, iv: 0.2 },
+      { delta: -(0.2 + i * 0.05), gamma: 0.01, theta: -0.5, vega: 0.1, iv: 0.2 },
+    ]);
+    const pathWithGreeks = buildTestPath(STANDARD_PNLS, { deltas: STANDARD_DELTAS, legGreeks: directionalLegGreeks });
+
+    it('fires when any single leg delta exceeds threshold (backward compat)', () => {
       const trigger: ExitTriggerConfig = { type: 'perLegDelta', threshold: 0.6 };
       const result = evaluateTrigger(trigger, pathWithGreeks, DEFAULT_LEGS);
       expect(result).not.toBeNull();
@@ -365,6 +395,52 @@ describe('evaluateTrigger', () => {
       const trigger: ExitTriggerConfig = { type: 'perLegDelta', threshold: 0.5 };
       const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
       expect(result).toBeNull();
+    });
+
+    it('legIndex=0 + exitAbove=0.64 fires when leg 0 delta exceeds bound', () => {
+      // Leg 0 delta at i=7 is 0.65 > 0.64
+      const trigger: ExitTriggerConfig = { type: 'perLegDelta', threshold: 0, legIndex: 0, exitAbove: 0.64 };
+      const result = evaluateTrigger(trigger, pathWithGreeks, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(7); // leg 0 delta=0.65 > 0.64
+      expect(result!.detail).toContain('Leg 0');
+      expect(result!.detail).toContain('exitAbove');
+    });
+
+    it('legIndex=1 + exitBelow=-0.47 fires when leg 1 delta drops below', () => {
+      // Leg 1 deltas: -0.20, -0.25, -0.30, -0.35, -0.40, -0.45, -0.50
+      // At i=6: leg 1 delta = -0.50 < -0.47
+      const trigger: ExitTriggerConfig = { type: 'perLegDelta', threshold: 0, legIndex: 1, exitBelow: -0.47 };
+      const result = evaluateTrigger(trigger, pathWithGreeks, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(6); // leg 1 delta=-0.50 < -0.47
+      expect(result!.detail).toContain('Leg 1');
+      expect(result!.detail).toContain('exitBelow');
+    });
+
+    it('legIndex=1 + exitAbove=0.6 does NOT fire (leg 1 is negative)', () => {
+      // Leg 1 delta is always negative, never > 0.6
+      const trigger: ExitTriggerConfig = { type: 'perLegDelta', threshold: 0, legIndex: 1, exitAbove: 0.6 };
+      const result = evaluateTrigger(trigger, pathWithGreeks, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
+    it('legIndex + no exitAbove/exitBelow uses abs() on that single leg', () => {
+      // legIndex=0, threshold=0.6: abs(leg 0 delta) >= 0.6 fires at i=6 (delta=0.60)
+      const trigger: ExitTriggerConfig = { type: 'perLegDelta', threshold: 0.6, legIndex: 0 };
+      const result = evaluateTrigger(trigger, pathWithGreeks, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(6); // abs(0.60) >= 0.6
+    });
+
+    it('no legIndex iterates all legs with abs() (full backward compat)', () => {
+      // Without legIndex, fires on whichever leg first hits abs >= threshold
+      const trigger: ExitTriggerConfig = { type: 'perLegDelta', threshold: 0.6 };
+      const result = evaluateTrigger(trigger, pathWithGreeks, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      // Leg 0 at i=6: abs(0.60) >= 0.6, Leg 1 at i=8: abs(-0.60) >= 0.6
+      // Leg 0 fires first at i=6
+      expect(result!.index).toBe(6);
     });
   });
 
@@ -764,6 +840,27 @@ describe('analyzeExitTriggers', () => {
     expect(result.overall.firstToFire).not.toBeNull();
     expect(result.overall.firstToFire!.type).toBe('profitTarget');
     expect(result.overall.firstToFire!.index).toBe(4); // pnl=246 >= 245
+  });
+
+  it('two directional perLegDelta triggers targeting different legs fire independently', () => {
+    // Leg 0 delta ramps: 0.30..0.75, Leg 1 delta ramps: -0.20..-0.65
+    const legGreeks: GreeksResult[][] = STANDARD_PNLS.map((_, i) => [
+      { delta: 0.3 + i * 0.05, gamma: 0.01, theta: -0.5, vega: 0.1, iv: 0.2 },
+      { delta: -(0.2 + i * 0.05), gamma: 0.01, theta: -0.5, vega: 0.1, iv: 0.2 },
+    ]);
+    const pathWithGreeks = buildTestPath(STANDARD_PNLS, { deltas: STANDARD_DELTAS, legGreeks });
+
+    const triggers: ExitTriggerConfig[] = [
+      { type: 'perLegDelta', threshold: 0, legIndex: 0, exitAbove: 0.64 },  // fires at i=7 (delta=0.65)
+      { type: 'perLegDelta', threshold: 0, legIndex: 1, exitBelow: -0.47 }, // fires at i=6 (delta=-0.50)
+    ];
+    const result = analyzeExitTriggers({ pnlPath: pathWithGreeks, legs: DEFAULT_LEGS, triggers });
+    expect(result.overall.triggers).toHaveLength(2);
+    // Both fired — leg 1 exitBelow fires first (i=6), leg 0 exitAbove fires second (i=7)
+    expect(result.overall.firstToFire).not.toBeNull();
+    expect(result.overall.firstToFire!.index).toBe(6);
+    expect(result.overall.triggers[0].detail).toContain('Leg 1');
+    expect(result.overall.triggers[1].detail).toContain('Leg 0');
   });
 });
 
