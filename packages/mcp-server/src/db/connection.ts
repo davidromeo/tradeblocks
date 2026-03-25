@@ -336,7 +336,13 @@ async function openReadOnlyConnection(
 }
 
 function resetConnectionState(): void {
+  if (connection) {
+    try { connection.closeSync(); } catch { /* non-fatal */ }
+  }
   connection = null;
+  if (instance) {
+    try { instance.closeSync(); } catch { /* non-fatal */ }
+  }
   instance = null;
   connectionMode = null;
 }
@@ -447,8 +453,11 @@ export async function closeConnection(): Promise<void> {
     connection = null;
   }
 
-  // Clear instance reference
-  // DuckDB instance doesn't have explicit close - releasing reference is sufficient
+  // Close the DuckDB instance to release the file lock.
+  // Without this, the native handle leaks until GC and blocks subsequent RW opens.
+  if (instance) {
+    try { instance.closeSync(); } catch { /* non-fatal */ }
+  }
   instance = null;
   connectionMode = null;
 }
