@@ -1,5 +1,6 @@
 import {
   evaluateTrigger,
+  evaluateProfitAction,
   analyzeExitTriggers,
   type ExitTriggerConfig,
   type LegGroupConfig,
@@ -872,5 +873,168 @@ describe('leg groups', () => {
     const longCall = result.legGroups![1];
     expect(longCall.result.firstToFire).not.toBeNull();
     expect(longCall.result.firstToFire!.index).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// profitAction with closeAllocationPct — partial close tests
+// ---------------------------------------------------------------------------
+
+describe('profitAction with closeAllocationPct', () => {
+  describe('evaluateProfitAction helper', () => {
+    it('single step with closeAllocationPct=0.5 closes 50% at milestone', () => {
+      // Path: 0, 50, 100, 120, 80, 40, 0, -20
+      // Step: armAt=100, stopAt=0, closeAllocationPct=0.5
+      // At index 2 (pnl=100): milestone reached, close 50%
+      //   partialClose: pnlAtFire = 100 * 1.0 * 0.5 = 50, allocation = 0.5
+      // Remaining allocation = 0.5
+      // Effective P&L for stop: pnl * 0.5
+      // At index 6 (pnl=0): effective = 0 * 0.5 = 0, stop floor = 0 * 0.5 = 0 => fires
+      const pnlPath = buildTestPath([0, 50, 100, 120, 80, 40, 0, -20]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitAction',
+        threshold: 0,
+        steps: [{ armAt: 100, stopAt: 0, closeAllocationPct: 0.5 }],
+      };
+      const result = evaluateProfitAction(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result.partialCloses).toHaveLength(1);
+      expect(result.partialCloses[0].allocation).toBe(0.5);
+      expect(result.partialCloses[0].pnlAtFire).toBe(50); // 100 * 0.5
+      expect(result.partialCloses[0].index).toBe(2);
+      expect(result.partialCloses[0].trigger).toBe('profitAction');
+    });
+
+    it('two cascading steps: second closes 50% of REMAINING (25% of original)', () => {
+      // Path: 0, 50, 100, 130, 150, 120, 60, 20
+      // Step 1: armAt=100, stopAt=0, closeAllocationPct=0.5
+      // Step 2: armAt=150, stopAt=50, closeAllocationPct=0.5
+      // At index 2 (pnl=100): step 1 arms, close 50%
+      //   partialClose #1: pnlAtFire = 100 * 1.0 * 0.5 = 50, allocation = 0.5
+      //   remaining = 0.5
+      // At index 4 (pnl=150): step 2 arms, close 50% of remaining (= 25% original)
+      //   partialClose #2: pnlAtFire = 150 * 0.5 * 0.5 = 37.5, allocation = 0.25
+      //   remaining = 0.25
+      const pnlPath = buildTestPath([0, 50, 100, 130, 150, 120, 60, 20]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitAction',
+        threshold: 0,
+        steps: [
+          { armAt: 100, stopAt: 0, closeAllocationPct: 0.5 },
+          { armAt: 150, stopAt: 50, closeAllocationPct: 0.5 },
+        ],
+      };
+      const result = evaluateProfitAction(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result.partialCloses).toHaveLength(2);
+      expect(result.partialCloses[0].allocation).toBe(0.5);
+      expect(result.partialCloses[0].pnlAtFire).toBe(50);
+      expect(result.partialCloses[1].allocation).toBe(0.25);
+      expect(result.partialCloses[1].pnlAtFire).toBeCloseTo(37.5);
+    });
+
+    it('partial close + stop retrace: fire event reflects remaining allocation P&L', () => {
+      // Path: 0, 50, 100, 120, 80, 40, 0, -20
+      // Step: armAt=100, stopAt=0, closeAllocationPct=0.5
+      // At index 2: close 50%, remaining=0.5, stop floor=0*0.5=0
+      // At index 6 (pnl=0): effective stop = 0, effective pnl = 0*0.5 = 0, fires
+      const pnlPath = buildTestPath([0, 50, 100, 120, 80, 40, 0, -20]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitAction',
+        threshold: 0,
+        steps: [{ armAt: 100, stopAt: 0, closeAllocationPct: 0.5 }],
+      };
+      const result = evaluateProfitAction(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result.fireEvent).not.toBeNull();
+      expect(result.fireEvent!.index).toBe(6);
+      // Fire event pnlAtFire = pnl * remainingAllocation = 0 * 0.5 = 0
+      expect(result.fireEvent!.pnlAtFire).toBe(0);
+    });
+
+    it('steps WITHOUT closeAllocationPct behave identically to current (backward compat)', () => {
+      // Same path and steps as existing test
+      const pnlPath = buildTestPath([0, 90, 100, 70, 0, -10]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitAction',
+        threshold: 0,
+        unit: 'dollar',
+        steps: [{ armAt: 100, stopAt: 0 }],
+      };
+      const result = evaluateProfitAction(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result.partialCloses).toHaveLength(0);
+      expect(result.fireEvent).not.toBeNull();
+      expect(result.fireEvent!.index).toBe(4); // P&L retraces to 0
+      expect(result.fireEvent!.pnlAtFire).toBe(0);
+    });
+
+    it('mixed steps: only steps with closeAllocationPct generate partial closes', () => {
+      // Path: 0, 50, 100, 130, 150, 120, 60, 50, 40
+      // Step 1: armAt=100, stopAt=0 (no closeAllocationPct - stop adjustment only)
+      // Step 2: armAt=150, stopAt=50, closeAllocationPct=0.5
+      // At index 2: step 1 arms (no partial close), stop floor = 0
+      // At index 4: step 2 arms, close 50% of remaining (remaining is still 1.0)
+      //   partialClose: pnlAtFire = 150 * 1.0 * 0.5 = 75, allocation = 0.5
+      //   remaining = 0.5, stop floor = max(0, 50) = 50
+      // At index 7 (pnl=50): effective stop = 50*0.5 = 25, effective pnl = 50*0.5 = 25; 25 <= 25 => fires
+      const pnlPath = buildTestPath([0, 50, 100, 130, 150, 120, 60, 50, 40]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitAction',
+        threshold: 0,
+        steps: [
+          { armAt: 100, stopAt: 0 },
+          { armAt: 150, stopAt: 50, closeAllocationPct: 0.5 },
+        ],
+      };
+      const result = evaluateProfitAction(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result.partialCloses).toHaveLength(1);
+      expect(result.partialCloses[0].allocation).toBe(0.5);
+      expect(result.partialCloses[0].pnlAtFire).toBe(75);
+      expect(result.fireEvent).not.toBeNull();
+      expect(result.fireEvent!.pnlAtFire).toBe(25); // 50 * 0.5
+    });
+
+    it('percent mode with closeAllocationPct scales armAt by entryCost', () => {
+      // entryCost=-100, step: armAt=1.0 (=100% = $100), stopAt=0, closeAllocationPct=0.5
+      // Path: 0, 50, 100, 80, 40, 0
+      // At index 2 (pnl=100 >= $100): close 50%
+      const pnlPath = buildTestPath([0, 50, 100, 80, 40, 0]);
+      const trigger: ExitTriggerConfig = {
+        type: 'profitAction',
+        threshold: 0,
+        unit: 'percent',
+        entryCost: -100,
+        steps: [{ armAt: 1.0, stopAt: 0, closeAllocationPct: 0.5 }],
+      };
+      const result = evaluateProfitAction(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result.partialCloses).toHaveLength(1);
+      expect(result.partialCloses[0].pnlAtFire).toBe(50); // 100 * 1.0 * 0.5
+      expect(result.partialCloses[0].allocation).toBe(0.5);
+    });
+  });
+
+  describe('analyzeExitTriggers with partialCloses', () => {
+    it('attaches partialCloses to ExitTriggerResult for profitAction', () => {
+      const pnlPath = buildTestPath([0, 50, 100, 120, 80, 40, 0, -20]);
+      const triggers: ExitTriggerConfig[] = [
+        {
+          type: 'profitAction',
+          threshold: 0,
+          steps: [{ armAt: 100, stopAt: 0, closeAllocationPct: 0.5 }],
+        },
+      ];
+      const result = analyzeExitTriggers({ pnlPath, legs: DEFAULT_LEGS, triggers });
+      expect(result.overall.partialCloses).toBeDefined();
+      expect(result.overall.partialCloses).toHaveLength(1);
+      expect(result.overall.partialCloses![0].allocation).toBe(0.5);
+    });
+
+    it('non-profitAction triggers have no partialCloses', () => {
+      const path = buildTestPath(STANDARD_PNLS, { deltas: STANDARD_DELTAS });
+      const triggers: ExitTriggerConfig[] = [
+        { type: 'profitTarget', threshold: 200 },
+        { type: 'stopLoss', threshold: 100 },
+      ];
+      const result = analyzeExitTriggers({ pnlPath: path, legs: DEFAULT_LEGS, triggers });
+      // partialCloses should be undefined or empty for non-profitAction
+      expect(result.overall.partialCloses ?? []).toHaveLength(0);
+    });
   });
 });
