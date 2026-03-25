@@ -173,18 +173,19 @@ export async function handleBatchExitAnalysis(
     whereClauses.push(`pl <= ${max_pl}`);
   }
 
-  const whereStr = whereClauses.join(' AND ');
-
-  // ROW_NUMBER uses rowid as tiebreaker for deterministic ordering when
-  // multiple trades share the same date_opened.
+  // ROW_NUMBER must be computed over the FULL block (no strategy/date filters)
+  // because handleReplayTrade resolves trade_index as OFFSET against the full block.
+  // Filters are applied AFTER numbering to preserve the global index.
+  const filterClauses = whereClauses.slice(1); // drop block_id clause (already in CTE)
   const query = `
     WITH numbered AS (
       SELECT *, ROW_NUMBER() OVER (ORDER BY date_opened, rowid) - 1 AS trade_idx
       FROM trades.trade_data
-      WHERE ${whereStr}
+      WHERE block_id = '${escapedBlockId}'
     )
     SELECT trade_idx, pl, date_opened
     FROM numbered
+    ${filterClauses.length > 0 ? 'WHERE ' + filterClauses.join(' AND ') : ''}
     ORDER BY date_opened DESC
     LIMIT ${limit}
   `;
