@@ -169,9 +169,10 @@ None.
 | 260322-ubp | Forward-fill sparse bars, OO date range derivation, index root fallback map | 2026-03-22 | f23f8fe | [260322-ubp](./quick/260322-ubp-fix-3-trade-replay-improvements-oo-date-/) |
 | 260324-gd1 | Add cache-read for underlying intraday bars in replay.ts | 2026-03-24 | 9f259f2 | [260324-gd1](./quick/260324-gd1-add-cache-read-for-underlying-intraday-b/) |
 | 260325-qr5 | Add closeAllocationPct to profitAction trigger steps for partial position closing | 2026-03-25 | 2adba4d | [260325-qr5](./quick/260325-qr5-add-closeallocationpct-to-profitaction-t/) |
+| 260325-u0y | Add directional legIndex/exitAbove/exitBelow to perLegDelta and positionDelta triggers | 2026-03-25 | f9e02dd | [260325-u0y](./quick/260325-u0y-fix-perlegdelta-trigger-for-oo-style-dir/) |
 
 ## Session Continuity
 
-Last session: 2026-03-25T19:25:13.000Z
-Stopped at: Completed 260325-qr5 quick task
+Last session: 2026-03-25T21:43:14.000Z
+Stopped at: Completed 260325-u0y quick task
 Resume file: None
