@@ -355,7 +355,7 @@ export function registerSQLTools(server: McpServer, baseDir: string): void {
               { operation, rowsAffected: changed },
             );
           } finally {
-            await downgradeToReadOnly();
+            await downgradeToReadOnly(baseDir);
           }
         }
 
