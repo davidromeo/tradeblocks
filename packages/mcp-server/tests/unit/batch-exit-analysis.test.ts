@@ -304,3 +304,126 @@ function buildTradeExitResults(candidatePnls: number[]): TradeExitResult[] {
     fireTimestamp: pnl > 0 ? '2026-01-01 10:00' : null,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Partial close P&L aggregation in analyzeBatch
+// ---------------------------------------------------------------------------
+
+describe('analyzeBatch with profitAction partial closes', () => {
+  /** Build a custom PnlPoint[] with explicit values. */
+  function buildCustomPath(pnls: number[]): PnlPoint[] {
+    return pnls.map((pnl, i) => {
+      const minute = 30 + i;
+      const hour = 9 + Math.floor(minute / 60);
+      const m = minute % 60;
+      return {
+        timestamp: `2026-01-05 ${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+        strategyPnl: pnl,
+        legPrices: [5.0, 3.0],
+      };
+    });
+  }
+
+  test('candidatePnl sums partial close contributions + remaining position', () => {
+    // Path: 0, 50, 100, 130, 150, 120, 60, 50, 40
+    // Step 1: armAt=100, stopAt=0, closeAllocationPct=0.5 (close 50% at index 2)
+    // Step 2: armAt=150, stopAt=50, closeAllocationPct=0.5 (close 50% of remaining = 25% at index 4)
+    // Remaining = 0.25
+    // Partial close 1: 100 * 1.0 * 0.5 = 50
+    // Partial close 2: 150 * 0.5 * 0.5 = 37.5
+    // At index 7 (pnl=50): stop floor = 50, pnl <= 50 => fires
+    //   fireEvent.pnlAtFire = 50 * 0.25 = 12.5
+    // candidatePnl = 50 + 37.5 + 12.5 = 100
+    const path = buildCustomPath([0, 50, 100, 130, 150, 120, 60, 50, 40]);
+    const trade: TradeInput = {
+      tradeIndex: 0,
+      dateOpened: '2026-01-05',
+      actualPnl: 40,
+      pnlPath: path,
+      legs: DEFAULT_LEGS,
+    };
+
+    const config: BatchExitConfig = {
+      candidatePolicy: [{
+        type: 'profitAction',
+        threshold: 0,
+        steps: [
+          { armAt: 100, stopAt: 0, closeAllocationPct: 0.5 },
+          { armAt: 150, stopAt: 50, closeAllocationPct: 0.5 },
+        ],
+      }],
+      baselineMode: 'actual',
+      format: 'full',
+    };
+
+    const result = analyzeBatch([trade], config);
+    expect(result.perTrade).toHaveLength(1);
+    const tradeResult = result.perTrade[0];
+    // candidatePnl = 50 + 37.5 + 12.5 = 100
+    expect(tradeResult.candidatePnl).toBeCloseTo(100, 1);
+    expect(tradeResult.partialCloses).toBeDefined();
+    expect(tradeResult.partialCloses).toHaveLength(2);
+    expect(tradeResult.triggerFired).toBe('profitAction');
+  });
+
+  test('trades without closeAllocationPct steps produce identical results to before', () => {
+    // Standard profitAction with no partial closes
+    const path = buildCustomPath([0, 50, 100, 120, 80, 40, 0, -10]);
+    const trade: TradeInput = {
+      tradeIndex: 0,
+      dateOpened: '2026-01-05',
+      actualPnl: -10,
+      pnlPath: path,
+      legs: DEFAULT_LEGS,
+    };
+
+    const config: BatchExitConfig = {
+      candidatePolicy: [{
+        type: 'profitAction',
+        threshold: 0,
+        steps: [{ armAt: 100, stopAt: 0 }],
+      }],
+      baselineMode: 'actual',
+      format: 'full',
+    };
+
+    const result = analyzeBatch([trade], config);
+    const tradeResult = result.perTrade[0];
+    // No partial closes; trigger fires at pnl=0
+    expect(tradeResult.candidatePnl).toBe(0);
+    expect(tradeResult.partialCloses).toBeUndefined();
+  });
+
+  test('partial closes but no stop fire: remaining position held to end', () => {
+    // Path: 0, 50, 100, 120, 130, 140
+    // Step: armAt=100, stopAt=0, closeAllocationPct=0.5
+    // Close 50% at index 2 (pnl=100): partialPnl = 50
+    // remaining = 0.5, stop floor = 0
+    // Path never hits 0, so no stop fire
+    // remainingPnl = lastPnl * 0.5 = 140 * 0.5 = 70
+    // candidatePnl = 50 + 70 = 120
+    const path = buildCustomPath([0, 50, 100, 120, 130, 140]);
+    const trade: TradeInput = {
+      tradeIndex: 0,
+      dateOpened: '2026-01-05',
+      actualPnl: 140,
+      pnlPath: path,
+      legs: DEFAULT_LEGS,
+    };
+
+    const config: BatchExitConfig = {
+      candidatePolicy: [{
+        type: 'profitAction',
+        threshold: 0,
+        steps: [{ armAt: 100, stopAt: 0, closeAllocationPct: 0.5 }],
+      }],
+      baselineMode: 'actual',
+      format: 'full',
+    };
+
+    const result = analyzeBatch([trade], config);
+    const tradeResult = result.perTrade[0];
+    expect(tradeResult.candidatePnl).toBeCloseTo(120, 1);
+    expect(tradeResult.triggerFired).toBe('noTrigger');
+  });
+});

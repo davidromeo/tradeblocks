@@ -13,6 +13,7 @@ import {
   type ExitTriggerConfig,
   type TriggerType,
   type LegGroupConfig,
+  type PartialClose,
 } from './exit-triggers.js';
 import type { PnlPoint, ReplayLeg } from './trade-replay.js';
 
@@ -62,6 +63,8 @@ export interface TradeExitResult {
   triggerFired: TriggerType | 'noTrigger';
   /** Timestamp when trigger fired, or null. */
   fireTimestamp: string | null;
+  /** Partial position closes from profitAction steps (if any). */
+  partialCloses?: PartialClose[];
 }
 
 export interface TriggerAttribution {
@@ -355,10 +358,25 @@ export function analyzeBatch(
       legGroups: legGroupsWithCost,
     });
 
-    const { firstToFire } = analysisResult.overall;
+    const { firstToFire, partialCloses } = analysisResult.overall;
 
-    // Candidate P&L: if trigger fired, use fire P&L; else hold to end of replay
-    const candidatePnl = firstToFire !== null ? firstToFire.pnlAtFire : lastPnl;
+    // Candidate P&L: account for partial closes from profitAction steps
+    let candidatePnl: number;
+    if (partialCloses && partialCloses.length > 0) {
+      // Sum of partial close P&Ls
+      const partialPnl = partialCloses.reduce((sum, pc) => sum + pc.pnlAtFire, 0);
+      const closedAllocation = partialCloses.reduce((sum, pc) => sum + pc.allocation, 0);
+      const remainingAllocation = 1 - closedAllocation;
+      // Remaining position: firstToFire.pnlAtFire already reflects remaining allocation,
+      // or if no trigger fired, scale last P&L by remaining allocation
+      const remainingPnl = firstToFire !== null
+        ? firstToFire.pnlAtFire
+        : lastPnl * remainingAllocation;
+      candidatePnl = partialPnl + remainingPnl;
+    } else {
+      // No partial closes: original behavior
+      candidatePnl = firstToFire !== null ? firstToFire.pnlAtFire : lastPnl;
+    }
 
     // Baseline P&L depends on mode
     const baselinePnl = baselineMode === 'actual' ? actualPnl : lastPnl;
@@ -378,6 +396,7 @@ export function analyzeBatch(
       pnlDelta,
       triggerFired,
       fireTimestamp,
+      partialCloses: partialCloses && partialCloses.length > 0 ? partialCloses : undefined,
     };
   });
 
