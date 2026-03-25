@@ -17,7 +17,7 @@ export type TriggerType =
   | 'profitTarget'
   | 'stopLoss'
   | 'trailingStop'
-  | 'mfeLadderStop'
+  | 'profitAction'
   | 'dteExit'
   | 'ditExit'
   | 'clockTimeExit'
@@ -207,7 +207,7 @@ export function evaluateTrigger(
         break;
       }
 
-      case 'mfeLadderStop': {
+      case 'profitAction': {
         if (!trigger.steps?.length) break;
         if (trigger.unit === 'percent' && trigger.entryCost == null) break;
 
@@ -231,8 +231,8 @@ export function evaluateTrigger(
         if (activeFloor > -Infinity && pnl <= activeFloor) {
           fired = true;
           detail = trigger.unit === 'percent'
-            ? `MFE ladder armed at max $${runningMaxPnl.toFixed(2)}; active floor ${(activeFloor / scale * 100).toFixed(0)}% of $${Math.abs(trigger.entryCost!).toFixed(2)} ($${activeFloor.toFixed(2)}), current P&L $${pnl.toFixed(2)}`
-            : `MFE ladder armed at max $${runningMaxPnl.toFixed(2)}; active floor $${activeFloor.toFixed(2)}, current P&L $${pnl.toFixed(2)}`;
+            ? `Profit action: stop adjusted to ${(activeFloor / scale * 100).toFixed(0)}% ($${activeFloor.toFixed(2)}) at max P&L $${runningMaxPnl.toFixed(2)}, hit at $${pnl.toFixed(2)}`
+            : `Profit action: stop adjusted to $${activeFloor.toFixed(2)} at max P&L $${runningMaxPnl.toFixed(2)}, hit at $${pnl.toFixed(2)}`;
         }
         break;
       }

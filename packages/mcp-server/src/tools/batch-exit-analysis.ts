@@ -58,7 +58,7 @@ async function mapWithLimit<T, R>(
 // ---------------------------------------------------------------------------
 
 const triggerTypeEnum = z.enum([
-  'profitTarget', 'stopLoss', 'trailingStop', 'mfeLadderStop',
+  'profitTarget', 'stopLoss', 'trailingStop', 'profitAction',
   'dteExit', 'ditExit', 'clockTimeExit',
   'underlyingPriceMove', 'positionDelta', 'perLegDelta',
   'vixMove', 'vix9dMove', 'vix9dVixRatio',

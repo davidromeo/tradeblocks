@@ -116,16 +116,16 @@ describe('evaluateTrigger', () => {
     });
   });
 
-  describe('mfeLadderStop', () => {
+  describe('profitAction', () => {
     it('returns null when no steps are provided', () => {
-      const trigger: ExitTriggerConfig = { type: 'mfeLadderStop', threshold: 0 };
+      const trigger: ExitTriggerConfig = { type: 'profitAction', threshold: 0 };
       const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
       expect(result).toBeNull();
     });
 
     it('returns null in percent mode when entryCost is missing', () => {
       const trigger: ExitTriggerConfig = {
-        type: 'mfeLadderStop',
+        type: 'profitAction',
         threshold: 0,
         unit: 'percent',
         steps: [
@@ -140,7 +140,7 @@ describe('evaluateTrigger', () => {
     it('arms breakeven after first MFE milestone and fires on retrace', () => {
       const pnlPath = buildTestPath([0, 90, 100, 70, 0, -10]);
       const trigger: ExitTriggerConfig = {
-        type: 'mfeLadderStop',
+        type: 'profitAction',
         threshold: 0,
         unit: 'dollar',
         steps: [
@@ -149,16 +149,16 @@ describe('evaluateTrigger', () => {
       };
       const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
       expect(result).not.toBeNull();
-      expect(result!.type).toBe('mfeLadderStop');
+      expect(result!.type).toBe('profitAction');
       expect(result!.index).toBe(4); // P&L retraces to breakeven after arming at 100
       expect(result!.pnlAtFire).toBe(0);
-      expect(result!.detail).toContain('active floor $0.00');
+      expect(result!.detail).toContain('stop adjusted to $0.00');
     });
 
     it('ratchets to a higher floor after later MFE milestones', () => {
       const pnlPath = buildTestPath([0, 90, 100, 140, 150, 120, 60, 50, 40]);
       const trigger: ExitTriggerConfig = {
-        type: 'mfeLadderStop',
+        type: 'profitAction',
         threshold: 0,
         unit: 'percent',
         entryCost: -100,
@@ -177,7 +177,7 @@ describe('evaluateTrigger', () => {
     it('sorts steps before evaluating the active floor', () => {
       const pnlPath = buildTestPath([0, 90, 100, 140, 150, 60, 50]);
       const trigger: ExitTriggerConfig = {
-        type: 'mfeLadderStop',
+        type: 'profitAction',
         threshold: 0,
         unit: 'percent',
         entryCost: -100,
@@ -195,7 +195,7 @@ describe('evaluateTrigger', () => {
     it('returns null when MFE never reaches any armAt threshold', () => {
       const pnlPath = buildTestPath([0, 30, 50, 40, 20, -10]);
       const trigger: ExitTriggerConfig = {
-        type: 'mfeLadderStop',
+        type: 'profitAction',
         threshold: 0,
         unit: 'dollar',
         steps: [
@@ -210,7 +210,7 @@ describe('evaluateTrigger', () => {
     it('supports dollar-mode ladders without entryCost scaling', () => {
       const pnlPath = buildTestPath([0, 80, 120, 170, 130, 60, 50]);
       const trigger: ExitTriggerConfig = {
-        type: 'mfeLadderStop',
+        type: 'profitAction',
         threshold: 0,
         steps: [
           { armAt: 100, stopAt: 0 },
