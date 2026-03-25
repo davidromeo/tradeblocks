@@ -192,6 +192,21 @@ describe('evaluateTrigger', () => {
       expect(result!.pnlAtFire).toBe(50);
     });
 
+    it('returns null when MFE never reaches any armAt threshold', () => {
+      const pnlPath = buildTestPath([0, 30, 50, 40, 20, -10]);
+      const trigger: ExitTriggerConfig = {
+        type: 'mfeLadderStop',
+        threshold: 0,
+        unit: 'dollar',
+        steps: [
+          { armAt: 100, stopAt: 0 },
+          { armAt: 150, stopAt: 50 },
+        ],
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
     it('supports dollar-mode ladders without entryCost scaling', () => {
       const pnlPath = buildTestPath([0, 80, 120, 170, 130, 60, 50]);
       const trigger: ExitTriggerConfig = {
