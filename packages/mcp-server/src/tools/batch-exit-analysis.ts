@@ -58,7 +58,7 @@ async function mapWithLimit<T, R>(
 // ---------------------------------------------------------------------------
 
 const triggerTypeEnum = z.enum([
-  'profitTarget', 'stopLoss', 'trailingStop',
+  'profitTarget', 'stopLoss', 'trailingStop', 'mfeLadderStop',
   'dteExit', 'ditExit', 'clockTimeExit',
   'underlyingPriceMove', 'positionDelta', 'perLegDelta',
   'vixMove', 'vix9dMove', 'vix9dVixRatio',
@@ -73,6 +73,10 @@ const triggerConfigSchema = z.object({
   openDate: z.string().optional(),
   clockTime: z.string().optional(),
   trailAmount: z.number().optional(),
+  steps: z.array(z.object({
+    armAt: z.number(),
+    stopAt: z.number(),
+  })).optional(),
   spreadWidth: z.number().optional(),
   contracts: z.number().optional(),
 });

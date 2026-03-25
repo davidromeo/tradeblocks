@@ -116,6 +116,99 @@ describe('evaluateTrigger', () => {
     });
   });
 
+  describe('mfeLadderStop', () => {
+    it('returns null when no steps are provided', () => {
+      const trigger: ExitTriggerConfig = { type: 'mfeLadderStop', threshold: 0 };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
+    it('returns null in percent mode when entryCost is missing', () => {
+      const trigger: ExitTriggerConfig = {
+        type: 'mfeLadderStop',
+        threshold: 0,
+        unit: 'percent',
+        steps: [
+          { armAt: 1.0, stopAt: 0.0 },
+          { armAt: 1.5, stopAt: 0.5 },
+        ],
+      };
+      const result = evaluateTrigger(trigger, path, DEFAULT_LEGS);
+      expect(result).toBeNull();
+    });
+
+    it('arms breakeven after first MFE milestone and fires on retrace', () => {
+      const pnlPath = buildTestPath([0, 90, 100, 70, 0, -10]);
+      const trigger: ExitTriggerConfig = {
+        type: 'mfeLadderStop',
+        threshold: 0,
+        unit: 'dollar',
+        steps: [
+          { armAt: 100, stopAt: 0 },
+        ],
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('mfeLadderStop');
+      expect(result!.index).toBe(4); // P&L retraces to breakeven after arming at 100
+      expect(result!.pnlAtFire).toBe(0);
+      expect(result!.detail).toContain('active floor $0.00');
+    });
+
+    it('ratchets to a higher floor after later MFE milestones', () => {
+      const pnlPath = buildTestPath([0, 90, 100, 140, 150, 120, 60, 50, 40]);
+      const trigger: ExitTriggerConfig = {
+        type: 'mfeLadderStop',
+        threshold: 0,
+        unit: 'percent',
+        entryCost: -100,
+        steps: [
+          { armAt: 1.0, stopAt: 0.0 },
+          { armAt: 1.5, stopAt: 0.5 },
+        ],
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(7); // Hits +50 floor after second ratchet arms
+      expect(result!.pnlAtFire).toBe(50);
+      expect(result!.detail).toContain('50%');
+    });
+
+    it('sorts steps before evaluating the active floor', () => {
+      const pnlPath = buildTestPath([0, 90, 100, 140, 150, 60, 50]);
+      const trigger: ExitTriggerConfig = {
+        type: 'mfeLadderStop',
+        threshold: 0,
+        unit: 'percent',
+        entryCost: -100,
+        steps: [
+          { armAt: 1.5, stopAt: 0.5 },
+          { armAt: 1.0, stopAt: 0.0 },
+        ],
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(6);
+      expect(result!.pnlAtFire).toBe(50);
+    });
+
+    it('supports dollar-mode ladders without entryCost scaling', () => {
+      const pnlPath = buildTestPath([0, 80, 120, 170, 130, 60, 50]);
+      const trigger: ExitTriggerConfig = {
+        type: 'mfeLadderStop',
+        threshold: 0,
+        steps: [
+          { armAt: 100, stopAt: 0 },
+          { armAt: 150, stopAt: 50 },
+        ],
+      };
+      const result = evaluateTrigger(trigger, pnlPath, DEFAULT_LEGS);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(6);
+      expect(result!.pnlAtFire).toBe(50);
+    });
+  });
+
   describe('dteExit', () => {
     it('fires when DTE drops to threshold', () => {
       // Path timestamps are on 2026-01-05, expiry 2026-01-07 -> DTE=2
