@@ -47,6 +47,10 @@ export interface ExitTriggerConfig {
   openDate?: string;                            // YYYY-MM-DD for ditExit
   clockTime?: string;                           // "HH:MM" for clockTimeExit (threshold ignored)
   trailAmount?: number;                         // Dollar trail for trailingStop
+  // Directional delta fields (OO-style per-leg exits):
+  legIndex?: number;                            // 0-based leg index for perLegDelta — targets specific leg
+  exitAbove?: number;                           // Fire when value > exitAbove (directional, no abs)
+  exitBelow?: number;                           // Fire when value < exitBelow (directional, no abs)
   // Data maps for triggers needing external prices:
   underlyingPrices?: Map<string, number>;        // timestamp -> price
   vixPrices?: Map<string, number>;               // timestamp -> VIX price
@@ -374,7 +378,17 @@ export function evaluateTrigger(
 
       case 'positionDelta': {
         const netDelta = point.netDelta ?? 0;
-        if (Math.abs(netDelta) >= threshold) {
+        if (trigger.exitAbove != null) {
+          if (netDelta > trigger.exitAbove) {
+            fired = true;
+            detail = `Net delta ${netDelta.toFixed(4)} > exitAbove ${trigger.exitAbove}`;
+          }
+        } else if (trigger.exitBelow != null) {
+          if (netDelta < trigger.exitBelow) {
+            fired = true;
+            detail = `Net delta ${netDelta.toFixed(4)} < exitBelow ${trigger.exitBelow}`;
+          }
+        } else if (Math.abs(netDelta) >= threshold) {
           fired = true;
           detail = `Net delta ${netDelta.toFixed(4)} >= threshold ${threshold}`;
         }
@@ -383,12 +397,36 @@ export function evaluateTrigger(
 
       case 'perLegDelta': {
         if (!point.legGreeks) break;
-        for (let li = 0; li < point.legGreeks.length; li++) {
-          const legDelta = point.legGreeks[li].delta ?? 0;
-          if (Math.abs(legDelta) >= threshold) {
-            fired = true;
-            detail = `Leg ${li} delta ${legDelta.toFixed(4)} >= threshold ${threshold}`;
-            break;
+        if (trigger.legIndex != null) {
+          // Target a specific leg
+          if (trigger.legIndex >= point.legGreeks.length) break;
+          const legDelta = point.legGreeks[trigger.legIndex].delta ?? 0;
+          if (trigger.exitAbove != null) {
+            if (legDelta > trigger.exitAbove) {
+              fired = true;
+              detail = `Leg ${trigger.legIndex} delta ${legDelta.toFixed(4)} > exitAbove ${trigger.exitAbove}`;
+            }
+          } else if (trigger.exitBelow != null) {
+            if (legDelta < trigger.exitBelow) {
+              fired = true;
+              detail = `Leg ${trigger.legIndex} delta ${legDelta.toFixed(4)} < exitBelow ${trigger.exitBelow}`;
+            }
+          } else {
+            // legIndex set but no directional fields — use abs() on that single leg
+            if (Math.abs(legDelta) >= threshold) {
+              fired = true;
+              detail = `Leg ${trigger.legIndex} delta ${legDelta.toFixed(4)} >= threshold ${threshold}`;
+            }
+          }
+        } else {
+          // No legIndex — iterate all legs with abs() (backward compat)
+          for (let li = 0; li < point.legGreeks.length; li++) {
+            const legDelta = point.legGreeks[li].delta ?? 0;
+            if (Math.abs(legDelta) >= threshold) {
+              fired = true;
+              detail = `Leg ${li} delta ${legDelta.toFixed(4)} >= threshold ${threshold}`;
+              break;
+            }
           }
         }
         break;

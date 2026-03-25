@@ -81,6 +81,12 @@ const triggerConfigSchema = z.object({
   })).optional(),
   spreadWidth: z.number().optional(),
   contracts: z.number().optional(),
+  legIndex: z.number().optional()
+    .describe("0-based leg index for perLegDelta — targets specific leg"),
+  exitAbove: z.number().optional()
+    .describe("Fire when value exceeds this (directional, no abs)"),
+  exitBelow: z.number().optional()
+    .describe("Fire when value drops below this (directional, no abs)"),
 });
 
 // ---------------------------------------------------------------------------
