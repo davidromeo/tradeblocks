@@ -26,6 +26,8 @@ export interface BarRow {
   volume: number;
   ticker: string;    // Plain storage format (no prefix)
   time?: string;     // "HH:MM" ET — only set for intraday (minute/hour) bars
+  bid?: number;      // Best bid — only set when provider supplies quote data
+  ask?: number;      // Best ask — only set when provider supplies quote data
 }
 
 /** Asset classes supported by market data providers. */

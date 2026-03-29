@@ -206,6 +206,7 @@ export {
   computeStrategyPnlPath,
   computeReplayMfeMae,
   findNearestTimestamp,
+  markPrice,
   type ReplayLeg,
   type ReplayResult,
   type PnlPoint,

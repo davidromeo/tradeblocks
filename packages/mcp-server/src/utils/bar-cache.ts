@@ -56,7 +56,7 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
     const conn = opts.conn ?? await getConnection(baseDir ?? '.');
     const escaped = ticker.replace(/'/g, "''");
     const cached = await conn.runAndReadAll(
-      `SELECT open, high, low, close, time, date
+      `SELECT open, high, low, close, bid, ask, time, date
        FROM market.intraday
        WHERE ticker = '${escaped}'
          AND date >= '${from}'
@@ -70,8 +70,10 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
         high:   Number(row[1]),
         low:    Number(row[2]),
         close:  Number(row[3]),
-        time:   String(row[4]),
-        date:   String(row[5]),
+        bid:    row[4] != null ? Number(row[4]) : undefined,
+        ask:    row[5] != null ? Number(row[5]) : undefined,
+        time:   String(row[6]),
+        date:   String(row[7]),
         ticker,
         volume: 0,  // market.intraday has no volume column
       }));
@@ -102,12 +104,12 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
     const values = bars
       .filter(b => b.time)
       .map(b =>
-        `('${escaped}', '${b.date}', '${b.time}', ${b.open}, ${b.high}, ${b.low}, ${b.close})`
+        `('${escaped}', '${b.date}', '${b.time}', ${b.open}, ${b.high}, ${b.low}, ${b.close}, ${b.bid ?? 'NULL'}, ${b.ask ?? 'NULL'})`
       );
     for (let i = 0; i < values.length; i += 500) {
       const chunk = values.slice(i, i + 500);
       await conn.run(
-        `INSERT OR REPLACE INTO market.intraday (ticker, date, time, open, high, low, close) VALUES ${chunk.join(', ')}`
+        `INSERT OR REPLACE INTO market.intraday (ticker, date, time, open, high, low, close, bid, ask) VALUES ${chunk.join(', ')}`
       );
     }
   } catch {

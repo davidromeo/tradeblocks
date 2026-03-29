@@ -71,6 +71,24 @@ export interface ReplayResult {
 }
 
 // ---------------------------------------------------------------------------
+// markPrice
+// ---------------------------------------------------------------------------
+
+/**
+ * Prefer (bid+ask)/2 when both are present and non-zero; fall back to HL2.
+ *
+ * When providers supply bid/ask data (e.g., option chains), the midpoint is a
+ * more accurate mark price than HL2. This is opt-in — existing data without
+ * bid/ask continues to use HL2 identically.
+ */
+export function markPrice(bar: Pick<BarRow, 'high' | 'low' | 'bid' | 'ask'>): number {
+  if (bar.bid != null && bar.ask != null && (bar.bid > 0 || bar.ask > 0)) {
+    return (bar.bid + bar.ask) / 2;
+  }
+  return (bar.high + bar.low) / 2;
+}
+
+// ---------------------------------------------------------------------------
 // findNearestTimestamp
 // ---------------------------------------------------------------------------
 

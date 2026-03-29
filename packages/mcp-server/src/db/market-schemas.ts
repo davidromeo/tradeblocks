@@ -283,10 +283,21 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       high DOUBLE,
       low DOUBLE,
       close DOUBLE,
+      bid DOUBLE,
+      ask DOUBLE,
 
       PRIMARY KEY (ticker, date, time)
     )
   `);
+
+  // Migration: add bid/ask columns to existing market.intraday (Phase 75 / 260329-nqf)
+  for (const col of ["bid", "ask"]) {
+    try {
+      await conn.run(`ALTER TABLE market.intraday ADD COLUMN ${col} DOUBLE`);
+    } catch {
+      // Column already exists — ignore
+    }
+  }
 
   // Sync state tracking for market data imports
   // PK: (source, ticker, target_table) — tracks per-source, per-ticker, per-table sync state
