@@ -14,9 +14,12 @@ import {
   toMassiveTicker,
   fromMassiveTicker,
   massiveTimestampToETDate,
+  nanosToETMinuteKey,
   MassiveBarSchema,
   MassiveAggregateResponseSchema,
   MassiveSnapshotResponseSchema,
+  MassiveQuoteSchema,
+  MassiveQuotesResponseSchema,
 } from "../../../src/utils/providers/massive.js";
 
 // ---------------------------------------------------------------------------
@@ -536,5 +539,288 @@ describe("MassiveProvider.fetchOptionSnapshot", () => {
       await provider.fetchOptionSnapshot({ underlying: "SPX" });
       expect((fetchSpy.mock.calls[0][0] as string)).toContain("limit=250");
     });
+  });
+});
+
+// ===========================================================================
+// Zod Schemas — Quotes (MassiveQuoteSchema, MassiveQuotesResponseSchema)
+// ===========================================================================
+
+describe("MassiveQuoteSchema", () => {
+  const VALID_QUOTE = {
+    bid_price: 12.5,
+    ask_price: 13.5,
+    sip_timestamp: 1736253000000 * 1_000_000,
+    bid_size: 10,
+    ask_size: 15,
+    sequence_number: 99001234,
+  };
+
+  it("validates a well-formed quote with all required fields", () => {
+    expect(MassiveQuoteSchema.safeParse(VALID_QUOTE).success).toBe(true);
+  });
+
+  it("rejects a quote missing bid_price", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { bid_price: _bid, ...rest } = VALID_QUOTE;
+    expect(MassiveQuoteSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("rejects a quote with string sip_timestamp", () => {
+    expect(MassiveQuoteSchema.safeParse({ ...VALID_QUOTE, sip_timestamp: "not-a-number" }).success).toBe(false);
+  });
+
+  it("rejects a quote missing sequence_number", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { sequence_number: _seq, ...rest } = VALID_QUOTE;
+    expect(MassiveQuoteSchema.safeParse(rest).success).toBe(false);
+  });
+});
+
+describe("MassiveQuotesResponseSchema", () => {
+  const VALID_QUOTE = {
+    bid_price: 12.5,
+    ask_price: 13.5,
+    sip_timestamp: 1736253000000 * 1_000_000,
+    bid_size: 10,
+    ask_size: 15,
+    sequence_number: 99001234,
+  };
+
+  it("validates a well-formed response with results array", () => {
+    const resp = { status: "OK", request_id: "req-quotes-001", results: [VALID_QUOTE] };
+    expect(MassiveQuotesResponseSchema.safeParse(resp).success).toBe(true);
+  });
+
+  it("accepts a response with next_url", () => {
+    const resp = { status: "OK", request_id: "req-quotes-002", results: [VALID_QUOTE], next_url: "https://api.massive.com/v3/quotes/next?cursor=abc" };
+    expect(MassiveQuotesResponseSchema.safeParse(resp).success).toBe(true);
+  });
+
+  it("defaults results to empty array when field is missing", () => {
+    const resp = { status: "OK", request_id: "req-quotes-003" };
+    const parsed = MassiveQuotesResponseSchema.safeParse(resp);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.results).toEqual([]);
+  });
+
+  it("rejects response missing required status field", () => {
+    const resp = { request_id: "req-quotes-004", results: [] };
+    expect(MassiveQuotesResponseSchema.safeParse(resp).success).toBe(false);
+  });
+});
+
+// ===========================================================================
+// nanosToETMinuteKey
+// ===========================================================================
+
+describe("nanosToETMinuteKey", () => {
+  it("converts nanoseconds to 'YYYY-MM-DD HH:MM' ET key for 9:30 AM ET bar (EST)", () => {
+    // 2025-01-07 9:30 AM ET (EST, UTC-5) = UTC 14:30:00 = 1736260200000 ms
+    const nanos = 1736260200000 * 1_000_000;
+    expect(nanosToETMinuteKey(nanos)).toBe("2025-01-07 09:30");
+  });
+
+  it("converts nanoseconds to correct ET key for EDT (summer) time", () => {
+    // 2024-07-10 9:30 AM ET (EDT, UTC-4) = UTC 13:30:00 = 1720618200000 ms
+    const nanos = 1720618200000 * 1_000_000;
+    expect(nanosToETMinuteKey(nanos)).toBe("2024-07-10 09:30");
+  });
+});
+
+// ===========================================================================
+// Quotes enrichment — MassiveProvider.fetchBars with bid/ask
+// ===========================================================================
+
+// Bar timestamp: 2025-01-07 9:30 AM ET = 1736253000000 ms
+const OPTION_BAR_TS = 1736253000000;
+// Quote sip_timestamp in nanoseconds for the same minute
+const OPTION_QUOTE_NANOS = OPTION_BAR_TS * 1_000_000;
+
+function makeOptionBarsResponse(nextUrl?: string) {
+  return {
+    ticker: "O:SPX250107C05000000",
+    queryCount: 1,
+    resultsCount: 1,
+    adjusted: false,
+    results: [
+      { v: 50, vw: 13.0, o: 12.8, c: 13.2, h: 13.5, l: 12.5, t: OPTION_BAR_TS, n: 10 },
+    ],
+    status: "OK",
+    request_id: "req-bars-001",
+    ...(nextUrl ? { next_url: nextUrl } : {}),
+  };
+}
+
+function makeQuotesResponse(quotes: Array<{ bid: number; ask: number; nanos: number }>, nextUrl?: string) {
+  return {
+    status: "OK",
+    request_id: "req-quotes-001",
+    results: quotes.map(({ bid, ask, nanos }) => ({
+      bid_price: bid,
+      ask_price: ask,
+      sip_timestamp: nanos,
+      bid_size: 10,
+      ask_size: 15,
+      sequence_number: 1001,
+    })),
+    ...(nextUrl ? { next_url: nextUrl } : {}),
+  };
+}
+
+describe("Quotes enrichment", () => {
+  it("merges bid/ask into option intraday bars when quotes endpoint returns matching data", async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
+      .mockResolvedValueOnce(mockResponse(makeQuotesResponse([{ bid: 12.4, ask: 13.6, nanos: OPTION_QUOTE_NANOS }])));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX250107C05000000",
+      from: "2025-01-07",
+      to: "2025-01-07",
+      timespan: "minute",
+      assetClass: "option",
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].bid).toBe(12.4);
+    expect(rows[0].ask).toBe(13.6);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    // Second call must be to the quotes endpoint
+    expect((fetchSpy.mock.calls[1][0] as string)).toContain("/v3/quotes/");
+  });
+
+  it("last quote for the same minute wins (last quote overwrites earlier)", async () => {
+    // Two quotes at the same minute — second one (later sip_timestamp) should win
+    const earlyNanos = OPTION_QUOTE_NANOS;
+    const lateNanos = OPTION_QUOTE_NANOS + 30_000_000_000; // +30 seconds in nanos
+
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
+      .mockResolvedValueOnce(mockResponse(makeQuotesResponse([
+        { bid: 11.0, ask: 14.0, nanos: earlyNanos },
+        { bid: 12.5, ask: 13.5, nanos: lateNanos },
+      ])));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX250107C05000000",
+      from: "2025-01-07",
+      to: "2025-01-07",
+      timespan: "minute",
+      assetClass: "option",
+    });
+
+    expect(rows[0].bid).toBe(12.5);
+    expect(rows[0].ask).toBe(13.5);
+  });
+
+  it("bars without matching quotes retain undefined bid/ask", async () => {
+    // Bar at 9:30 AM, quote at 9:31 AM — no match
+    const differentNanos = (OPTION_BAR_TS + 60_000) * 1_000_000; // +1 minute
+
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
+      .mockResolvedValueOnce(mockResponse(makeQuotesResponse([{ bid: 12.4, ask: 13.6, nanos: differentNanos }])));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX250107C05000000",
+      from: "2025-01-07",
+      to: "2025-01-07",
+      timespan: "minute",
+      assetClass: "option",
+    });
+
+    expect(rows[0].bid).toBeUndefined();
+    expect(rows[0].ask).toBeUndefined();
+  });
+
+  it("does NOT call quotes endpoint for option daily bars (timespan=day)", async () => {
+    fetchSpy.mockResolvedValueOnce(mockResponse({
+      ...makeOptionBarsResponse(),
+      results: [{ v: 50, vw: 13.0, o: 12.8, c: 13.2, h: 13.5, l: 12.5, t: OPTION_BAR_TS, n: 10 }],
+    }));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX250107C05000000",
+      from: "2025-01-07",
+      to: "2025-01-07",
+      timespan: "day",
+      assetClass: "option",
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // bars only, no quotes call
+    expect(rows[0].bid).toBeUndefined();
+    expect(rows[0].ask).toBeUndefined();
+  });
+
+  it("does NOT call quotes endpoint for non-option assets (assetClass=index)", async () => {
+    fetchSpy.mockResolvedValueOnce(mockResponse(VALID_RESPONSE));
+
+    const rows = await provider.fetchBars({
+      ticker: "VIX",
+      from: "2025-01-01",
+      to: "2025-01-31",
+      timespan: "minute",
+      assetClass: "index",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // bars only, no quotes call
+    expect(rows[0]?.bid).toBeUndefined();
+    expect(rows[0]?.ask).toBeUndefined();
+  });
+
+  it("returns bars without bid/ask when quotes endpoint returns 403 (tier restriction)", async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, statusText: "Forbidden", headers: { "Content-Type": "application/json" } }));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX250107C05000000",
+      from: "2025-01-07",
+      to: "2025-01-07",
+      timespan: "minute",
+      assetClass: "option",
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].bid).toBeUndefined();
+    expect(rows[0].ask).toBeUndefined();
+  });
+
+  it("returns bars without bid/ask when quotes endpoint returns 429", async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "Rate limited" }), { status: 429, statusText: "Too Many Requests", headers: { "Content-Type": "application/json" } }));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX250107C05000000",
+      from: "2025-01-07",
+      to: "2025-01-07",
+      timespan: "minute",
+      assetClass: "option",
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].bid).toBeUndefined();
+    expect(rows[0].ask).toBeUndefined();
+  });
+
+  it("returns bars without bid/ask when quotes fetch throws a network error", async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
+      .mockRejectedValueOnce(new Error("Network error"));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX250107C05000000",
+      from: "2025-01-07",
+      to: "2025-01-07",
+      timespan: "minute",
+      assetClass: "option",
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].bid).toBeUndefined();
+    expect(rows[0].ask).toBeUndefined();
   });
 });

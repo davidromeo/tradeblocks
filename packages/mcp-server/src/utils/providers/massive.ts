@@ -57,6 +57,30 @@ export const MassiveAggregateResponseSchema = z.object({
 export type MassiveAggregateResponse = z.infer<typeof MassiveAggregateResponseSchema>;
 
 // ===========================================================================
+// Zod Schemas — Quotes (Historical Bid/Ask)
+// ===========================================================================
+
+export const MassiveQuoteSchema = z.object({
+  bid_price: z.number(),
+  ask_price: z.number(),
+  sip_timestamp: z.number(), // nanoseconds
+  bid_size: z.number(),
+  ask_size: z.number(),
+  sequence_number: z.number(),
+});
+
+export type MassiveQuote = z.infer<typeof MassiveQuoteSchema>;
+
+export const MassiveQuotesResponseSchema = z.object({
+  status: z.string(),
+  request_id: z.string(),
+  results: z.array(MassiveQuoteSchema).default([]),
+  next_url: z.string().optional(),
+});
+
+export type MassiveQuotesResponse = z.infer<typeof MassiveQuotesResponseSchema>;
+
+// ===========================================================================
 // Zod Schemas — Snapshot (Option Chain)
 // ===========================================================================
 
@@ -173,6 +197,17 @@ export function massiveTimestampToETTime(unixMs: number): string {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+/**
+ * Converts a nanosecond sip_timestamp to "YYYY-MM-DD HH:MM" ET minute key.
+ * Used for matching quotes to intraday bars by minute bucket.
+ */
+export function nanosToETMinuteKey(nanosTimestamp: number): string {
+  const ms = Math.floor(nanosTimestamp / 1_000_000);
+  const date = massiveTimestampToETDate(ms);
+  const time = massiveTimestampToETTime(ms);
+  return `${date} ${time}`;
 }
 
 // ===========================================================================
@@ -425,7 +460,100 @@ export class MassiveProvider implements MarketDataProvider {
       }
     }
 
+    // Enrich option intraday bars with bid/ask from quotes endpoint (best-effort)
+    if (assetClass === "option" && timespan !== "day" && allRows.length > 0) {
+      const quotesMap = await this.fetchQuotesForBars(apiTicker, headers, from, to);
+      if (quotesMap.size > 0) {
+        for (const row of allRows) {
+          if (row.time != null) {
+            const key = `${row.date} ${row.time}`;
+            const quote = quotesMap.get(key);
+            if (quote != null) {
+              row.bid = quote.bid;
+              row.ask = quote.ask;
+            }
+          }
+        }
+      }
+    }
+
     return allRows;
+  }
+
+  /**
+   * Fetches historical quotes (bid/ask) for an option ticker over a date range.
+   * Returns a Map keyed by "YYYY-MM-DD HH:MM" ET minute key.
+   * Any error (network, HTTP error, parse failure) silently returns an empty Map.
+   */
+  private async fetchQuotesForBars(
+    apiTicker: string,
+    headers: Record<string, string>,
+    from: string,
+    to: string,
+  ): Promise<Map<string, { bid: number; ask: number }>> {
+    const result = new Map<string, { bid: number; ask: number }>();
+    try {
+      let url: string | null =
+        `${MASSIVE_BASE_URL}/v3/quotes/${encodeURIComponent(apiTicker)}?timestamp.gte=${from}&timestamp.lte=${to}&order=asc&limit=${MASSIVE_MAX_LIMIT}`;
+
+      const seenCursors = new Set<string>();
+      const QUOTES_MAX_PAGES = 100;
+      let pageCount = 0;
+
+      while (url) {
+        pageCount++;
+        if (pageCount > QUOTES_MAX_PAGES) {
+          break;
+        }
+
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            headers,
+            signal: AbortSignal.timeout(30_000),
+          });
+        } catch {
+          // Network error — return what we have so far (best-effort)
+          return result;
+        }
+
+        if (!response.ok) {
+          // 403 (tier restriction), 429 (rate limit), or any other HTTP error — swallow
+          return result;
+        }
+
+        const json = await response.json();
+        const parsed = MassiveQuotesResponseSchema.safeParse(json);
+        if (!parsed.success) {
+          // Schema mismatch — return what we have so far
+          return result;
+        }
+
+        const data = parsed.data;
+        // Since order=asc, later quotes for the same minute overwrite earlier (last quote wins)
+        for (const quote of data.results) {
+          const key = nanosToETMinuteKey(quote.sip_timestamp);
+          result.set(key, { bid: quote.bid_price, ask: quote.ask_price });
+        }
+
+        if (data.next_url) {
+          const nextUrlObj = new URL(data.next_url);
+          const cursor = nextUrlObj.searchParams.get("cursor") ?? data.next_url;
+          if (seenCursors.has(cursor)) {
+            break; // Pagination loop — stop gracefully
+          }
+          seenCursors.add(cursor);
+          url = data.next_url;
+        } else {
+          url = null;
+        }
+      }
+    } catch {
+      // Any unexpected error — return empty map (best-effort)
+      return new Map();
+    }
+
+    return result;
   }
 
   async fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult> {

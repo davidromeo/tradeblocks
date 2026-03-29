@@ -190,13 +190,18 @@ export {
   fromMassiveTicker,
   massiveTimestampToETDate,
   massiveTimestampToETTime,
+  nanosToETMinuteKey,
   MassiveBarSchema,
   MassiveAggregateResponseSchema,
+  MassiveQuoteSchema,
+  MassiveQuotesResponseSchema,
   MASSIVE_BASE_URL,
   MASSIVE_MAX_LIMIT,
   MASSIVE_MAX_PAGES,
   type MassiveBar,
   type MassiveAggregateResponse,
+  type MassiveQuote,
+  type MassiveQuotesResponse,
 } from './utils/providers/massive.js';
 
 // Export trade replay utilities for unit testing (Phase 68)
