@@ -20,6 +20,7 @@ import {
   buildOccTicker,
   computeStrategyPnlPath,
   computeReplayMfeMae,
+  markPrice,
   type ReplayLeg,
   type ReplayResult,
   type GreeksConfig,
@@ -362,7 +363,7 @@ export async function handleReplayTrade(
   const underlyingPrices = new Map<string, number>();
   for (const b of underlyingBars) {
     const ts = `${b.date} ${b.time ?? ''}`.trim();
-    underlyingPrices.set(ts, (b.high + b.low) / 2);
+    underlyingPrices.set(ts, markPrice(b));
   }
 
   // Build sorted timestamps array for tolerant nearest-timestamp lookup (D-07/D-08)

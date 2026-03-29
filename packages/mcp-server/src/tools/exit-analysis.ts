@@ -24,6 +24,7 @@ import {
   decomposeGreeks,
   type LegGroupDef,
 } from "../utils/greeks-decomposition.js";
+import { markPrice } from "../utils/trade-replay.js";
 
 // ---------------------------------------------------------------------------
 // Shared trigger type enum
@@ -167,7 +168,7 @@ async function fetchPriceMap(
     });
     for (const b of bars) {
       const ts = `${b.date} ${b.time ?? ''}`.trim();
-      map.set(ts, (b.high + b.low) / 2);
+      map.set(ts, markPrice(b));
     }
   } catch {
     // VIX/VIX9D data is best-effort

@@ -34,7 +34,7 @@ export interface ReplayLeg {
 export interface PnlPoint {
   timestamp: string;       // "YYYY-MM-DD HH:MM" ET
   strategyPnl: number;     // Combined P&L across all legs at this minute
-  legPrices: number[];     // HL2 mark price for each leg at this minute
+  legPrices: number[];     // Mark price for each leg at this minute (bid/ask mid or HL2 fallback)
   // Per-leg greeks (Phase 69) — array parallel to legPrices
   legGreeks?: GreeksResult[];
   // Net position greeks — quantity-weighted aggregation across legs
@@ -323,8 +323,8 @@ export function buildOccTicker(
 /**
  * Combine per-leg minute bars into a single strategy P&L path.
  *
- * Mark price at each minute = HL2 = (high + low) / 2.
- * Combined P&L = sum across legs of (currentHL2 - entryPrice) * quantity * multiplier.
+ * Mark price at each minute = (bid+ask)/2 when available, else HL2 = (high + low) / 2.
+ * Combined P&L = sum across legs of (currentMark - entryPrice) * quantity * multiplier.
  *
  * Only includes timestamps where ALL legs have a bar.
  * Returns empty array if any leg has no bars.
@@ -380,7 +380,7 @@ export function computeStrategyPnlPath(
         complete = false;
         break;
       }
-      const hl2 = (effective.high + effective.low) / 2;
+      const hl2 = markPrice(effective);
       legPrices.push(hl2);
       strategyPnl += (hl2 - legs[i].entryPrice) * legs[i].quantity * legs[i].multiplier;
     }
