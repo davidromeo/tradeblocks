@@ -171,9 +171,10 @@ None.
 | 260325-qr5 | Add closeAllocationPct to profitAction trigger steps for partial position closing | 2026-03-25 | 2adba4d | [260325-qr5](./quick/260325-qr5-add-closeallocationpct-to-profitaction-t/) |
 | 260325-u0y | Add directional legIndex/exitAbove/exitBelow to perLegDelta and positionDelta triggers | 2026-03-25 | f9e02dd | [260325-u0y](./quick/260325-u0y-fix-perlegdelta-trigger-for-oo-style-dir/) |
 | 260329-nqf | Add optional bid/ask fields to BarRow, schema migration, markPrice helper replacing all HL2 sites | 2026-03-29 | f0ead0c | [260329-nqf](./quick/260329-nqf-add-optional-bid-ask-fields-to-barrow-an/) |
+| 260329-osg | Best-effort /v3/quotes fetch merges bid/ask into option intraday bars by ET minute key | 2026-03-29 | ede1151 | [260329-osg](./quick/260329-osg-add-best-effort-massive-quotes-fetch-to-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-29T17:11:00.000Z
-Stopped at: Completed 260329-nqf quick task
+Last session: 2026-03-29T17:30:00.000Z
+Stopped at: Completed 260329-osg quick task
 Resume file: None
