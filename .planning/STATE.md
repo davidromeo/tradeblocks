@@ -170,9 +170,10 @@ None.
 | 260324-gd1 | Add cache-read for underlying intraday bars in replay.ts | 2026-03-24 | 9f259f2 | [260324-gd1](./quick/260324-gd1-add-cache-read-for-underlying-intraday-b/) |
 | 260325-qr5 | Add closeAllocationPct to profitAction trigger steps for partial position closing | 2026-03-25 | 2adba4d | [260325-qr5](./quick/260325-qr5-add-closeallocationpct-to-profitaction-t/) |
 | 260325-u0y | Add directional legIndex/exitAbove/exitBelow to perLegDelta and positionDelta triggers | 2026-03-25 | f9e02dd | [260325-u0y](./quick/260325-u0y-fix-perlegdelta-trigger-for-oo-style-dir/) |
+| 260329-nqf | Add optional bid/ask fields to BarRow, schema migration, markPrice helper replacing all HL2 sites | 2026-03-29 | f0ead0c | [260329-nqf](./quick/260329-nqf-add-optional-bid-ask-fields-to-barrow-an/) |
 
 ## Session Continuity
 
-Last session: 2026-03-25T21:43:14.000Z
-Stopped at: Completed 260325-u0y quick task
+Last session: 2026-03-29T17:11:00.000Z
+Stopped at: Completed 260329-nqf quick task
 Resume file: None
