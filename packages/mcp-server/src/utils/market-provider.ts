@@ -95,6 +95,8 @@ export interface MarketDataProvider {
   readonly name: string;
   fetchBars(options: FetchBarsOptions): Promise<BarRow[]>;
   fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult>;
+  /** Best-effort bid/ask quotes keyed by "YYYY-MM-DD HH:MM" ET. Optional — not all providers support this. */
+  fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>>;
 }
 
 // ---------------------------------------------------------------------------

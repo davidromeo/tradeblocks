@@ -461,7 +461,9 @@ export class MassiveProvider implements MarketDataProvider {
     }
 
     // Enrich option intraday bars with bid/ask from quotes endpoint (best-effort)
-    if (assetClass === "option" && timespan !== "day" && allRows.length > 0) {
+    // Gated by MASSIVE_QUOTES_ENABLED env var — quotes endpoint requires higher Massive tier
+    const quotesEnabled = process.env.MASSIVE_QUOTES_ENABLED === 'true' || process.env.MASSIVE_QUOTES_ENABLED === '1';
+    if (quotesEnabled && assetClass === "option" && timespan !== "day" && allRows.length > 0) {
       const quotesMap = await this.fetchQuotesForBars(apiTicker, headers, from, to);
       if (quotesMap.size > 0) {
         for (const row of allRows) {
@@ -554,6 +556,13 @@ export class MassiveProvider implements MarketDataProvider {
     }
 
     return result;
+  }
+
+  async fetchQuotes(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>> {
+    const apiKey = getApiKey();
+    const apiTicker = toMassiveTicker(ticker, "option");
+    const headers = { Authorization: `Bearer ${apiKey}` };
+    return this.fetchQuotesForBars(apiTicker, headers, from, to);
   }
 
   async fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult> {

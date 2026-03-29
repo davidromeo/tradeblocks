@@ -17,6 +17,11 @@ import { getProvider } from './market-provider.js';
 import { getConnection } from '../db/connection.js';
 import type { DuckDBConnection } from '@duckdb/node-api';
 
+/** Check if quotes enrichment is enabled via MASSIVE_QUOTES_ENABLED env var. */
+function quotesEnabled(): boolean {
+  return process.env.MASSIVE_QUOTES_ENABLED === 'true' || process.env.MASSIVE_QUOTES_ENABLED === '1';
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -65,7 +70,7 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
     );
     const rows = cached.getRows() as unknown[][];
     if (rows.length > 0) {
-      return rows.map((row) => ({
+      const bars = rows.map((row) => ({
         open:   Number(row[0]),
         high:   Number(row[1]),
         low:    Number(row[2]),
@@ -77,6 +82,50 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
         ticker,
         volume: 0,  // market.intraday has no volume column
       }));
+
+      // Backfill bid/ask from quotes endpoint if cached bars are missing them
+      const missingQuotes = assetClass === "option" && quotesEnabled()
+        && bars.some(b => b.bid == null && b.ask == null);
+      if (missingQuotes) {
+        try {
+          const provider = getProvider();
+          if (provider.fetchQuotes) {
+            const quotesMap = await provider.fetchQuotes(ticker, from, to);
+            if (quotesMap.size > 0) {
+              const updates: string[] = [];
+              for (const bar of bars) {
+                if (bar.time != null) {
+                  const key = `${bar.date} ${bar.time}`;
+                  const quote = quotesMap.get(key);
+                  if (quote != null) {
+                    bar.bid = quote.bid;
+                    bar.ask = quote.ask;
+                    updates.push(
+                      `('${escaped}', '${bar.date}', '${bar.time}', ${quote.bid}, ${quote.ask})`
+                    );
+                  }
+                }
+              }
+              // Persist enriched bid/ask back to cache (batched INSERT OR REPLACE)
+              if (updates.length > 0) {
+                const updateConn = opts.conn ?? await getConnection(baseDir ?? '.');
+                for (let i = 0; i < updates.length; i += 500) {
+                  const chunk = updates.slice(i, i + 500);
+                  await updateConn.run(
+                    `UPDATE market.intraday AS m SET bid = v.bid, ask = v.ask
+                     FROM (VALUES ${chunk.join(', ')}) AS v(ticker, date, time, bid, ask)
+                     WHERE m.ticker = v.ticker AND m.date = v.date AND m.time = v.time`
+                  );
+                }
+              }
+            }
+          }
+        } catch {
+          // Best-effort — return cached bars without bid/ask
+        }
+      }
+
+      return bars;
     }
   } catch {
     // Cache miss or table not available — fall through to API fetch

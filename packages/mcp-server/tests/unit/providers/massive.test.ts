@@ -669,6 +669,9 @@ function makeQuotesResponse(quotes: Array<{ bid: number; ask: number; nanos: num
 }
 
 describe("Quotes enrichment", () => {
+  beforeEach(() => { process.env.MASSIVE_QUOTES_ENABLED = "true"; });
+  afterEach(() => { delete process.env.MASSIVE_QUOTES_ENABLED; });
+
   it("merges bid/ask into option intraday bars when quotes endpoint returns matching data", async () => {
     fetchSpy
       .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
