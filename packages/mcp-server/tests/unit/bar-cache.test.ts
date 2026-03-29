@@ -59,7 +59,7 @@ afterEach(() => {
 
 describe("fetchBarsWithCache", () => {
   it("returns cached rows from market.intraday without calling fetchBars", async () => {
-    const cachedRow = [1.0, 2.0, 0.5, 1.5, "09:31", "2025-01-07"];
+    const cachedRow = [1.0, 2.0, 0.5, 1.5, null, null, "09:31", "2025-01-07"];
     const conn = makeMockConn({ cacheRows: [cachedRow] });
 
     const result = await fetchBarsWithCache({
