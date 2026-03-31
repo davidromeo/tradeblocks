@@ -6,7 +6,6 @@
  * - computeATR: SMA-seeded first value, Wilder smoothing subsequent values
  * - computeEMA: SMA-seeded, correct k=2/(period+1)
  * - computeSMA: rolling average, NaN for insufficient data
- * - computeBollingerBands: population stddev, position, width
  * - computeRealizedVol: log returns, population stddev, annualized
  * - computeConsecutiveDays: streak counting with sign and reset
  * - isGapFilled: gap detection logic
@@ -14,7 +13,8 @@
  * - computeVIXDerivedFields: pct changes, ratios, lookback-safe
  * - classifyVolRegime: 1-6 classification by VIX level
  * - classifyTermStructure: contango/backwardation/flat
- * - computeVIXPercentile: rolling rank as percentile
+ * - computeIVR: Implied Volatility Rank (252-day range-based)
+ * - computeIVP: Implied Volatility Percentile (252-day prior-days comparison)
  */
 
 // @ts-expect-error - importing from bundled output
@@ -23,7 +23,6 @@ import {
   computeATR,
   computeEMA,
   computeSMA,
-  computeBollingerBands,
   computeRealizedVol,
   computeConsecutiveDays,
   isGapFilled,
@@ -31,7 +30,8 @@ import {
   computeVIXDerivedFields,
   classifyVolRegime,
   classifyTermStructure,
-  computeVIXPercentile,
+  computeIVR,
+  computeIVP,
 } from '../../src/test-exports.js';
 
 // =============================================================================
@@ -259,67 +259,6 @@ describe('computeSMA', () => {
   });
 });
 
-// =============================================================================
-// computeBollingerBands
-// =============================================================================
-
-describe('computeBollingerBands', () => {
-  test('returns array of same length as input', () => {
-    const closes = Array.from({ length: 25 }, () => 100);
-    expect(computeBollingerBands(closes, 20, 2)).toHaveLength(25);
-  });
-
-  test('first period-1 entries are null', () => {
-    const closes = Array.from({ length: 25 }, (_, i) => 100 + i);
-    const bb = computeBollingerBands(closes, 20, 2);
-    for (let i = 0; i < 19; i++) {
-      expect(bb[i]).toBeNull();
-    }
-    expect(bb[19]).not.toBeNull();
-  });
-
-  test('flat prices produce BB_Width of 0 (no stddev)', () => {
-    // All prices = 100 → stddev = 0 → upper = lower = 100 → width = 0
-    const closes = Array.from({ length: 25 }, () => 100);
-    const bb = computeBollingerBands(closes, 20, 2);
-    expect(bb[19]).not.toBeNull();
-    expect(bb[19]!.width).toBeCloseTo(0, 10);
-    expect(bb[19]!.upper).toBeCloseTo(100, 10);
-    expect(bb[19]!.lower).toBeCloseTo(100, 10);
-  });
-
-  test('uses population stddev (N denominator)', () => {
-    // 3-period BB on [1,2,3,4,5]: test at index 4 (window=[3,4,5])
-    // mean = 4, deviations = [-1,0,1], sum sq = 2
-    // pop stddev = sqrt(2/3), sample stddev = sqrt(2/2) = 1
-    const closes = [1, 2, 3, 4, 5];
-    const bb = computeBollingerBands(closes, 3, 1);
-    expect(bb[2]).not.toBeNull();
-    // width = (upper - lower) / middle = 2*stddev/mean
-    // pop stddev of [1,2,3] = sqrt(((1-2)^2 + (2-2)^2 + (3-2)^2)/3) = sqrt(2/3) ≈ 0.8165
-    const expectedStddev = Math.sqrt(2 / 3);
-    expect(bb[2]!.upper).toBeCloseTo(2 + expectedStddev, 5);
-    expect(bb[2]!.lower).toBeCloseTo(2 - expectedStddev, 5);
-  });
-
-  test('BB_Position is between 0 and 1 for price within bands', () => {
-    const closes = Array.from({ length: 25 }, (_, i) => 95 + i * 0.5);
-    const bb = computeBollingerBands(closes, 20, 2);
-    const lastRow = bb[24];
-    expect(lastRow).not.toBeNull();
-    expect(lastRow!.position).toBeGreaterThanOrEqual(0);
-    expect(lastRow!.position).toBeLessThanOrEqual(1);
-  });
-
-  test('BB_Width is (upper - lower) / middle', () => {
-    const closes = Array.from({ length: 25 }, (_, i) => 100 + i);
-    const bb = computeBollingerBands(closes, 20, 2);
-    const row = bb[24];
-    expect(row).not.toBeNull();
-    const expected = (row!.upper - row!.lower) / row!.middle;
-    expect(row!.width).toBeCloseTo(expected, 10);
-  });
-});
 
 // =============================================================================
 // computeRealizedVol
@@ -724,55 +663,132 @@ describe('classifyTermStructure', () => {
 });
 
 // =============================================================================
-// computeVIXPercentile
+// computeIVR
 // =============================================================================
 
-describe('computeVIXPercentile', () => {
+describe('computeIVR', () => {
   test('returns array of same length as input', () => {
-    const closes = Array.from({ length: 20 }, () => 15);
-    expect(computeVIXPercentile(closes, 10)).toHaveLength(20);
+    const values = Array.from({ length: 20 }, (_, i) => 10 + i);
+    expect(computeIVR(values, 5)).toHaveLength(20);
   });
 
   test('first period-1 values are NaN', () => {
-    const closes = Array.from({ length: 15 }, (_, i) => 10 + i);
-    const pct = computeVIXPercentile(closes, 10);
-    for (let i = 0; i < 9; i++) {
-      expect(isNaN(pct[i])).toBe(true);
+    const values = Array.from({ length: 10 }, (_, i) => 10 + i);
+    const ivr = computeIVR(values, 5);
+    for (let i = 0; i < 4; i++) {
+      expect(isNaN(ivr[i])).toBe(true);
     }
-    expect(isNaN(pct[9])).toBe(false);
+    expect(isNaN(ivr[4])).toBe(false);
   });
 
-  test('constant VIX values produce 0 percentile (value not strictly less than itself)', () => {
-    // All same: count(v < 15 in window) = 0 → percentile = 0/period * 100 = 0
-    const closes = Array.from({ length: 15 }, () => 15);
-    const pct = computeVIXPercentile(closes, 10);
-    for (let i = 9; i < 15; i++) {
-      expect(pct[i]).toBeCloseTo(0, 10);
+  test('fewer than period values returns all NaN', () => {
+    const values = [10, 20, 30];
+    const ivr = computeIVR(values, 5);
+    ivr.forEach((v) => expect(isNaN(v)).toBe(true));
+  });
+
+  test('current equals max in window → IVR = 100', () => {
+    // [10, 20, 30, 40, 50], current=50, min=10, max=50 → (50-10)/(50-10)*100 = 100
+    const values = [10, 20, 30, 40, 50];
+    const ivr = computeIVR(values, 5);
+    expect(ivr[4]).toBeCloseTo(100, 5);
+  });
+
+  test('current equals min in window → IVR = 0', () => {
+    // [50, 40, 30, 20, 10], current=10, min=10, max=50 → (10-10)/(50-10)*100 = 0
+    const values = [50, 40, 30, 20, 10];
+    const ivr = computeIVR(values, 5);
+    expect(ivr[4]).toBeCloseTo(0, 5);
+  });
+
+  test('all values identical (range = 0) → IVR = 50', () => {
+    const values = Array.from({ length: 10 }, () => 15);
+    const ivr = computeIVR(values, 5);
+    expect(ivr[4]).toBeCloseTo(50, 5);
+    expect(ivr[9]).toBeCloseTo(50, 5);
+  });
+
+  test('hand-verified small window: [10,20,30,40,25] period=5 → IVR[4] = 50', () => {
+    // min=10, max=40, current=25 → (25-10)/(40-10)*100 = 15/30*100 = 50
+    const values = [10, 20, 30, 40, 25];
+    const ivr = computeIVR(values, 5);
+    expect(ivr[4]).toBeCloseTo(50, 5);
+  });
+
+  test('monotonically increasing values → last IVR = 100', () => {
+    const values = Array.from({ length: 10 }, (_, i) => i + 1);
+    const ivr = computeIVR(values, 5);
+    // At index 9: window=[5,6,7,8,9,10] wait period=5 → window=[6,7,8,9,10], current=10, min=6, max=10
+    // (10-6)/(10-6)*100 = 100
+    expect(ivr[9]).toBeCloseTo(100, 5);
+  });
+});
+
+// =============================================================================
+// computeIVP
+// =============================================================================
+
+describe('computeIVP', () => {
+  test('returns array of same length as input', () => {
+    const values = Array.from({ length: 20 }, (_, i) => 10 + i);
+    expect(computeIVP(values, 5)).toHaveLength(20);
+  });
+
+  test('first period-1 values are NaN', () => {
+    const values = Array.from({ length: 10 }, (_, i) => 10 + i);
+    const ivp = computeIVP(values, 5);
+    for (let i = 0; i < 4; i++) {
+      expect(isNaN(ivp[i])).toBe(true);
     }
+    expect(isNaN(ivp[4])).toBe(false);
   });
 
-  test('highest value in window has high percentile', () => {
-    // Ascending: last value is highest, percentile should be close to 100
-    const closes = Array.from({ length: 15 }, (_, i) => i + 1); // [1,2,...,15]
-    const pct = computeVIXPercentile(closes, 10);
-    // At index 14 (value=15), window=[6,7,...,15], count(v < 15) = 9 → 9/10*100 = 90%
-    expect(pct[14]).toBeCloseTo(90, 5);
+  test('fewer than period values returns all NaN', () => {
+    const values = [10, 20, 30];
+    const ivp = computeIVP(values, 5);
+    ivp.forEach((v) => expect(isNaN(v)).toBe(true));
   });
 
-  test('lowest value in window has 0 percentile', () => {
-    // Descending then stable: at some point value is lowest in window
-    const closes = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 5]; // value 1 at index 9
-    const pct = computeVIXPercentile(closes, 10);
-    // At index 9 (value=1), window=[10,9,8,7,6,5,4,3,2,1], count(v<1) = 0 → 0%
-    expect(pct[9]).toBeCloseTo(0, 5);
+  test('constant values → IVP = 100 (all prior days have value <= current)', () => {
+    // All 15 = current, 4 prior days all <= 15 → count=4/4*100 = 100
+    const values = Array.from({ length: 10 }, () => 15);
+    const ivp = computeIVP(values, 5);
+    expect(ivp[4]).toBeCloseTo(100, 5);
   });
 
-  test('percentile rank is count of strictly less than (not less-or-equal)', () => {
-    // Window of 5 values: [10, 20, 30, 40, 50], query for 30
-    // count(v < 30) = 2 → 2/5*100 = 40%
-    const closes = [10, 20, 30, 40, 50];
-    const pct = computeVIXPercentile(closes, 5);
-    // At index 4 (value=50), window=[10,20,30,40,50], count(v < 50) = 4 → 80%
-    expect(pct[4]).toBeCloseTo(80, 5);
+  test('current is highest in window → IVP = 100', () => {
+    // [10, 20, 30, 40, 50], current=50, prior=[10,20,30,40], count(<=50)=4, 4/4*100=100
+    const values = [10, 20, 30, 40, 50];
+    const ivp = computeIVP(values, 5);
+    expect(ivp[4]).toBeCloseTo(100, 5);
+  });
+
+  test('current is lowest in window → IVP = 0', () => {
+    // [50, 40, 30, 20, 10], current=10, prior=[50,40,30,20], count(<=10)=0, 0/4*100=0
+    const values = [50, 40, 30, 20, 10];
+    const ivp = computeIVP(values, 5);
+    expect(ivp[4]).toBeCloseTo(0, 5);
+  });
+
+  test('hand-verified small window: [10,20,30,40,15] period=5 → IVP[4] = 25', () => {
+    // prior=[10,20,30,40], count(<=15) = 1 (only 10), 1/4*100 = 25
+    const values = [10, 20, 30, 40, 15];
+    const ivp = computeIVP(values, 5);
+    expect(ivp[4]).toBeCloseTo(25, 5);
+  });
+
+  test('uses <= comparison (not strictly <)', () => {
+    // [10, 20, 30, 10, 10], current=10, prior=[10,20,30,10], count(<=10)=2, 2/4*100=50
+    const values = [10, 20, 30, 10, 10];
+    const ivp = computeIVP(values, 5);
+    expect(ivp[4]).toBeCloseTo(50, 5);
+  });
+
+  test('divides by period-1 (not period)', () => {
+    // period=5, so denominator = 4 (prior days count)
+    // [1, 2, 3, 4, 5], prior=[1,2,3,4], count(<=5)=4, 4/4*100=100
+    const values = [1, 2, 3, 4, 5];
+    const ivp = computeIVP(values, 5);
+    expect(ivp[4]).toBeCloseTo(100, 5);
   });
 });

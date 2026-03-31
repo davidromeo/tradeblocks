@@ -51,9 +51,13 @@ npm run test:coverage    # Coverage report
 
 | Guide | Description |
 |-------|-------------|
-| [Development Guide](docs/development.md) | Architecture, local setup, testing |
-| [MCP Server README](packages/mcp-server/README.md) | Installation, platform configuration |
-| [MCP Usage Guide](packages/mcp-server/docs/USAGE.md) | Tool reference, example workflows |
+| [Getting Started](docs/getting-started.md) | Installation, env vars, first import |
+| [Market Data](docs/market-data.md) | CSV import, Massive API, enrichment |
+| [MCP Tools](docs/mcp-tools.md) | Complete tool reference by category |
+| [Architecture](docs/architecture.md) | Data flow, schemas, key patterns |
+| [Development Guide](docs/development.md) | Contributing, local dev setup |
+| [MCP Server](packages/mcp-server/README.md) | Installation, platform configuration |
+| [Usage Guide](docs/usage.md) | Tool reference, example workflows |
 | [Agent Skills](packages/agent-skills/README.md) | Guided conversational analysis |
 
 ## Data Format
@@ -64,7 +68,7 @@ Both the web dashboard and MCP server accept CSV exports from platforms like [Op
 - `dailylog.csv` (optional) - Daily portfolio values for enhanced drawdown calculations
 - `reportinglog.csv` (optional) - Actual/reported trades for backtest vs live comparison
 
-Files are auto-detected by column headers, not filenames. See [USAGE.md](packages/mcp-server/docs/USAGE.md) for format details.
+Files are auto-detected by column headers, not filenames. See [Usage Guide](docs/usage.md) for format details.
 
 ## Features Overview
 
@@ -77,7 +81,9 @@ Files are auto-detected by column headers, not filenames. See [USAGE.md](package
 ### MCP Server
 - Tools for statistics, simulations, walk-forward analysis, and SQL queries
 - SQL analytics layer (`run_sql` + `describe_database`) for flexible data exploration
+- Massive.com API integration for automated market data import
 - Market data import and enrichment (`import_market_csv` + `enrich_market_data`)
+- Trade replay with MFE/MAE analysis using historical option minute bars
 - Lookahead-free trade enrichment with market context (VIX regimes, intraday timing)
 - Works with Claude Desktop, Claude Code, Codex CLI, Gemini CLI, ChatGPT, Google AI Studio
 - Agent skills for guided strategy health checks and portfolio recommendations

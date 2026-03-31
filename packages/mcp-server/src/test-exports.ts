@@ -76,9 +76,11 @@ export {
   validateColumnMapping,
   importMarketCsvFile,
   importFromDatabase,
+  importFromApi,
   triggerEnrichment,
   type ImportMarketCsvOptions,
   type ImportFromDatabaseOptions,
+  type ImportFromApiOptions,
   type ImportResult,
 } from './utils/market-importer.js';
 
@@ -95,7 +97,6 @@ export {
   computeATR,
   computeEMA,
   computeSMA,
-  computeBollingerBands,
   computeRealizedVol,
   computeConsecutiveDays,
   isGapFilled,
@@ -104,8 +105,8 @@ export {
   classifyVolRegime,
   classifyTrendDirection,
   classifyTermStructure,
-  computeVIXPercentile,
-  type BollingerBandRow,
+  computeIVR,
+  computeIVP,
   type ContextRow,
   type EnrichedContextRow,
 } from './utils/market-enricher.js';
@@ -113,6 +114,7 @@ export {
 // Export market enrichment utilities for integration testing
 export {
   runEnrichment,
+  runContextEnrichment,
   type EnrichmentResult,
   type EnrichmentOptions,
   type TierStatus,
@@ -167,3 +169,151 @@ export {
   handleRegimeAllocationAdvisor,
   regimeAllocationAdvisorSchema,
 } from './tools/regime-advisor.js';
+
+// Export market data provider interface and types
+export {
+  getProvider,
+  _resetProvider,
+  type BarRow,
+  type AssetClass,
+  type OptionContract,
+  type FetchBarsOptions,
+  type FetchSnapshotOptions,
+  type FetchSnapshotResult,
+  type MarketDataProvider,
+} from './utils/market-provider.js';
+
+// Export Massive provider internals for provider-specific tests
+export {
+  MassiveProvider,
+  toMassiveTicker,
+  fromMassiveTicker,
+  massiveTimestampToETDate,
+  massiveTimestampToETTime,
+  nanosToETMinuteKey,
+  MassiveBarSchema,
+  MassiveAggregateResponseSchema,
+  MassiveQuoteSchema,
+  MassiveQuotesResponseSchema,
+  MASSIVE_BASE_URL,
+  MASSIVE_MAX_LIMIT,
+  MASSIVE_MAX_PAGES,
+  type MassiveBar,
+  type MassiveAggregateResponse,
+  type MassiveQuote,
+  type MassiveQuotesResponse,
+} from './utils/providers/massive.js';
+
+// Export trade replay utilities for unit testing (Phase 68)
+export {
+  parseLegsString,
+  buildOccTicker,
+  computeStrategyPnlPath,
+  computeReplayMfeMae,
+  findNearestTimestamp,
+  markPrice,
+  type ReplayLeg,
+  type ReplayResult,
+  type PnlPoint,
+  type ParsedLeg,
+  type ParsedLegOO,
+  type GreeksConfig,
+} from './utils/trade-replay.js';
+
+// Export trade replay tool handler and schema for integration testing (Phase 68)
+export {
+  handleReplayTrade,
+  replayTradeSchema,
+  resolveOODateRange,
+} from './tools/replay.js';
+
+// Export Black-Scholes and Bachelier greeks computation for unit testing (Phase 69 / Phase 73-01)
+export {
+  pdf,
+  cdf,
+  bsPrice,
+  bsDelta,
+  bsGamma,
+  bsTheta,
+  bsVega,
+  solveIV,
+  bachelierPrice,
+  bachelierDelta,
+  bachelierGamma,
+  bachelierTheta,
+  bachelierVega,
+  solveNormalIV,
+  BACHELIER_DTE_THRESHOLD,
+  computeLegGreeks,
+  type GreeksResult,
+} from './utils/black-scholes.js';
+
+// Export Massive snapshot schemas for unit testing (Phase 70)
+export {
+  MassiveSnapshotResponseSchema,
+  MassiveSnapshotContractSchema,
+} from './utils/providers/massive.js';
+
+// Export snapshot tool handler and schema for integration testing (Phase 70)
+export {
+  handleGetOptionSnapshot,
+  getOptionSnapshotSchema,
+} from './tools/snapshot.js';
+
+// Export greeks decomposition utilities for unit testing (Phase 71)
+export {
+  decomposeGreeks,
+  computeTimeDeltaDays,
+  type GreeksDecompositionConfig,
+  type GreeksDecompositionResult,
+  type FactorContribution,
+  type LegGroupVega,
+  type LegGroupDef,
+  type FactorName,
+} from './utils/greeks-decomposition.js';
+
+// Export exit trigger analysis utilities for unit testing (Phase 71)
+export {
+  evaluateTrigger,
+  analyzeExitTriggers,
+  type ExitTriggerConfig,
+  type ExitTriggerResult,
+  type TriggerFireEvent,
+  type TriggerType,
+  type LegGroupConfig,
+  type LegGroupResult,
+} from './utils/exit-triggers.js';
+
+// Export exit analysis tool handlers and schemas for integration testing (Phase 71)
+export {
+  handleAnalyzeExitTriggers,
+  handleDecomposeGreeks,
+  analyzeExitTriggersSchema,
+  decomposeGreeksSchema,
+} from './tools/exit-analysis.js';
+
+// Export batch exit analysis engine for unit testing (Phase 72)
+export {
+  analyzeBatch,
+  computeAggregateStats,
+  computeTriggerAttribution,
+  type BatchExitConfig,
+  type BatchExitResult,
+  type TradeExitResult,
+  type TradeInput,
+  type AggregateStats,
+  type TriggerAttribution,
+  type BaselineMode,
+} from './utils/batch-exit-analysis.js';
+
+// Export batch exit analysis tool handler and schema for integration testing (Phase 72)
+export {
+  handleBatchExitAnalysis,
+  batchExitAnalysisSchema,
+} from './tools/batch-exit-analysis.js';
+
+// Export shared bar fetch+cache utility for unit testing (Phase 74-02)
+export {
+  fetchBarsWithCache,
+  type FetchBarsWithCacheOptions,
+} from './utils/bar-cache.js';

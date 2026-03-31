@@ -1,8 +1,14 @@
 # Planning docs (kept local)
 .planning/
 
+# MCP server config (contains local paths and API keys)
+.mcp.json
+
 # Local MCP test data
 .testdata/
+
+# MCP server user data (block CSVs, DuckDB databases, screenshots)
+packages/mcp-server/data/
 
 # Git worktrees
 .worktrees/

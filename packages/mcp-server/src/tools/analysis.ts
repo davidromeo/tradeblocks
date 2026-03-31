@@ -199,7 +199,7 @@ export function registerAnalysisTools(
         parameterRanges: z
           .record(
             z.string(),
-            z.tuple([z.number(), z.number(), z.number()])
+            z.array(z.number()).min(3).max(3)
           )
           .optional()
           .describe(
@@ -355,7 +355,7 @@ export function registerAnalysisTools(
             outOfSampleDays,
             stepSizeDays,
             optimizationTarget,
-            parameterRanges: parameterRanges ?? {},
+            parameterRanges: (parameterRanges ?? {}) as Record<string, [number, number, number]>,
             minInSampleTrades,
             minOutOfSampleTrades,
             normalizeTo1Lot,

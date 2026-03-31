@@ -2,12 +2,12 @@
  * Unit tests for field classification and LAG CTE builder.
  *
  * Validates:
- * - Every market.daily and market.context column (except key columns) has a timing annotation
+ * - Every market.daily and market._context_derived column (except key columns) has a timing annotation
  * - Derived sets cover all classified columns with correct counts
  * - Sets are mutually exclusive
  * - Known pitfall classifications are correct (Return_5D, Prev_Return_Pct, etc.)
- * - buildLookaheadFreeQuery() produces valid lookahead-free SQL with dual-table JOIN
- * - buildOutcomeQuery() produces valid same-day outcome SQL from both tables
+ * - buildLookaheadFreeQuery() produces valid lookahead-free SQL with multi-table VIX JOIN
+ * - buildOutcomeQuery() produces valid same-day outcome SQL from normalized VIX schema
  */
 
 // @ts-expect-error - importing from bundled output
@@ -61,7 +61,7 @@ describe('Field Classification', () => {
 });
 
 describe('Derived Sets', () => {
-  test('derived sets cover all 48 classified columns across both tables', () => {
+  test('derived sets cover all classified columns across both tables', () => {
     const allClassified = new Set([
       ...OPEN_KNOWN_FIELDS,
       ...CLOSE_KNOWN_FIELDS,
@@ -72,18 +72,22 @@ describe('Derived Sets', () => {
     const dailyClassified = Object.keys(dailyColumns).filter(
       name => name !== 'date' && name !== 'ticker'
     );
-    // Get all classified columns from context (exclude date key)
+    // context is now a LEGACY stub with only a date key column — no classified columns
     const contextClassified = Object.keys(contextColumns).filter(
       name => name !== 'date'
     );
 
-    const totalClassified = dailyClassified.length + contextClassified.length;
+    // Phase 75: VIX fields moved from market.context to market.daily (ticker rows) + market._context_derived.
+    // allClassified = 51 total (9 open + 39 close + 3 static).
+    // dailyClassified = 27 (only schema-named daily columns).
+    // The additional 24 fields in allClassified are VIX ticker aliases (VIX_Open, VIX_Close, etc.)
+    // and _context_derived columns (Vol_Regime, Term_Structure_State, etc.) — virtual/cross-table fields
+    // not listed as named columns in the daily or context schema.
+    expect(allClassified.size).toBe(51);
+    expect(contextClassified.length).toBe(0); // context is LEGACY stub
 
-    expect(allClassified.size).toBe(52);
-    expect(allClassified.size).toBe(totalClassified);
-
-    // Every classified column should be in exactly one set
-    for (const col of [...dailyClassified, ...contextClassified]) {
+    // Every schema-described daily column should be in exactly one set
+    for (const col of dailyClassified) {
       expect(allClassified.has(col)).toBe(true);
     }
   });
@@ -104,19 +108,21 @@ describe('Derived Sets', () => {
     }
   });
 
-  test('OPEN_KNOWN_FIELDS has exactly 10 fields (5 daily + 5 context)', () => {
-    expect(OPEN_KNOWN_FIELDS.size).toBe(10);
+  test('OPEN_KNOWN_FIELDS has exactly 9 fields (5 daily + 4 VIX/derived)', () => {
+    // Phase 75: VIX_RTH_Open removed (not in VIX_FIELD_MAPPINGS). VIX_Gap_Pct moved to _context_derived (open-known).
+    expect(OPEN_KNOWN_FIELDS.size).toBe(9);
     // Daily open-known: open, Prior_Close, Gap_Pct, Prev_Return_Pct, Prior_Range_vs_ATR
     expect(DAILY_OPEN_FIELDS.size).toBe(5);
-    // Context open-known: VIX_Open, VIX_RTH_Open, VIX_Gap_Pct, VIX9D_Open, VIX3M_Open
-    expect(CONTEXT_OPEN_FIELDS.size).toBe(5);
+    // Context open-known: VIX_Open, VIX9D_Open, VIX3M_Open (3 VIX tickers) + VIX_Gap_Pct (from _context_derived) = 4
+    expect(CONTEXT_OPEN_FIELDS.size).toBe(4);
   });
 
-  test('CLOSE_KNOWN_FIELDS has exactly 39 fields (24 daily + 15 context)', () => {
+  test('CLOSE_KNOWN_FIELDS has exactly 39 fields (24 daily + 15 VIX/derived)', () => {
+    // Phase 75: VIX fields moved to market.daily ticker rows + market._context_derived.
+    // Daily close-derived: 16 Tier1 + 6 Tier3 + ivr/ivp on daily = 24
+    // VIX/derived close-derived: 11 VIX_FIELD_MAPPINGS close + 4 _context_derived close = 15
     expect(CLOSE_KNOWN_FIELDS.size).toBe(39);
-    // Daily close-derived: 18 Tier1 + 4 Tier3 + 2 Tier3 (Opening_Drive_Strength, Intraday_Realized_Vol) = 24
     expect(DAILY_CLOSE_FIELDS.size).toBe(24);
-    // Context close-derived: 14 + 1 (Trend_Direction) = 15
     expect(CONTEXT_CLOSE_FIELDS.size).toBe(15);
   });
 
@@ -148,11 +154,6 @@ describe('Derived Sets', () => {
 
   test('Consecutive_Days is close-derived', () => {
     expect(CLOSE_KNOWN_FIELDS.has('Consecutive_Days')).toBe(true);
-  });
-
-  test('BB_Width is close-derived (volatility compression — only known after close)', () => {
-    expect(CLOSE_KNOWN_FIELDS.has('BB_Width')).toBe(true);
-    expect(OPEN_KNOWN_FIELDS.has('BB_Width')).toBe(false);
   });
 
   test('Realized_Vol_5D is close-derived', () => {
@@ -195,10 +196,11 @@ describe('buildLookaheadFreeQuery', () => {
     expect(sql).toContain('lagged AS');
   });
 
-  test('JOINs market.daily with market.context', () => {
+  test('JOINs market.daily with VIX tickers and market._context_derived', () => {
     const { sql } = buildLookaheadFreeQuery(['2025-01-06']);
     expect(sql).toContain('FROM market.daily d');
-    expect(sql).toContain('LEFT JOIN market.context c ON d.date = c.date');
+    expect(sql).toContain("LEFT JOIN market.daily vix ON vix.date = d.date AND vix.ticker = 'VIX'");
+    expect(sql).toContain('LEFT JOIN market._context_derived cd ON cd.date = d.date');
   });
 
   test('passes open-known fields through without LAG', () => {
@@ -271,12 +273,13 @@ describe('buildLookaheadFreeQuery', () => {
     expect(params).toEqual(['SPX', '2025-01-06', 'MSFT', '2025-01-06']);
   });
 
-  test('ticker overload also JOINs market.daily with market.context', () => {
+  test('ticker overload also JOINs market.daily with VIX tickers and market._context_derived', () => {
     const { sql } = buildLookaheadFreeQuery([
       { ticker: 'SPX', date: '2025-01-06' },
     ]);
     expect(sql).toContain('FROM market.daily d');
-    expect(sql).toContain('LEFT JOIN market.context c ON d.date = c.date');
+    expect(sql).toContain("LEFT JOIN market.daily vix ON vix.date = d.date AND vix.ticker = 'VIX'");
+    expect(sql).toContain('LEFT JOIN market._context_derived cd ON cd.date = d.date');
   });
 });
 
@@ -291,10 +294,11 @@ describe('buildOutcomeQuery', () => {
     expect(sql).toContain('"VIX_Close"');
   });
 
-  test('queries from market.daily LEFT JOIN market.context', () => {
+  test('queries from market.daily with VIX ticker JOINs and market._context_derived', () => {
     const { sql } = buildOutcomeQuery(['2025-01-06']);
     expect(sql).toContain('FROM market.daily');
-    expect(sql).toContain('LEFT JOIN market.context');
+    expect(sql).toContain("LEFT JOIN market.daily vix ON vix.date = d.date AND vix.ticker = 'VIX'");
+    expect(sql).toContain('LEFT JOIN market._context_derived cd ON cd.date = d.date');
   });
 
   test('uses parameterized placeholders', () => {

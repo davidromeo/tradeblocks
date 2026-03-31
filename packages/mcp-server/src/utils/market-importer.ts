@@ -17,7 +17,8 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 import * as fs from "fs/promises";
 import { normalizeTicker } from "./ticker.js";
 import { upsertMarketImportMetadata } from "../sync/metadata.js";
-import { runEnrichment } from "./market-enricher.js";
+import { runEnrichment, runContextEnrichment } from "./market-enricher.js";
+import { getProvider, type AssetClass } from "./market-provider.js";
 
 // =============================================================================
 // Constants
@@ -27,6 +28,7 @@ const REQUIRED_SCHEMA_FIELDS: Record<string, string[]> = {
   daily: ["date", "open", "high", "low", "close"],
   context: ["date"],
   intraday: ["date", "time", "open", "high", "low", "close"],
+  _context_derived: ["date"],  // Phase 75: cross-ticker derived fields
 };
 
 // PK conflict target per table
@@ -34,6 +36,7 @@ const CONFLICT_TARGETS: Record<string, string> = {
   daily: "(ticker, date)",
   context: "(date)",
   intraday: "(ticker, date, time)",
+  _context_derived: "(date)",  // Phase 75: PK is date only
 };
 
 // =============================================================================
@@ -637,4 +640,312 @@ export async function importFromDatabase(
       // Non-fatal: detach failure should not mask the original error
     }
   }
+}
+
+// =============================================================================
+// importFromApi
+// =============================================================================
+
+/**
+ * Known index tickers that need the I: prefix when calling the Massive API.
+ * Used for auto-detection of asset class when not provided.
+ */
+const INDEX_TICKERS = new Set([
+  "VIX", "VIX9D", "VIX3M", "SPX", "NDX", "RUT", "DJX", "VXN", "OVX", "GVZ",
+]);
+
+/**
+ * Regex for OCC option ticker format: letters + 6-digit date + C/P + 8-digit strike.
+ * E.g., "SPX251219C05000000" or "AAPL240119P00150000"
+ */
+const OCC_TICKER_REGEX = /^[A-Z]+\d{6}[CP]\d{8}$/;
+
+/**
+ * Auto-detect Massive asset class from ticker symbol.
+ * - Known indices (VIX, SPX, NDX, etc.) → "index"
+ * - OCC option format → "option"
+ * - Otherwise → "stock"
+ */
+function detectAssetClass(ticker: string): AssetClass {
+  if (INDEX_TICKERS.has(ticker.toUpperCase())) return "index";
+  if (OCC_TICKER_REGEX.test(ticker.toUpperCase())) return "option";
+  return "stock";
+}
+
+export interface ImportFromApiOptions {
+  ticker: string;
+  from: string;              // YYYY-MM-DD
+  to: string;                // YYYY-MM-DD
+  targetTable: "daily" | "context" | "intraday";
+  timespan?: "minute" | "hour";  // only for intraday, default "minute"
+  multiplier?: number;           // only for intraday, default 1
+  assetClass?: AssetClass; // default: auto-detect from ticker/targetTable
+  dryRun?: boolean;
+  skipEnrichment?: boolean;
+}
+
+/**
+ * Import market data from the Massive.com REST API into DuckDB.
+ *
+ * Supports three import modes via `targetTable`:
+ *
+ * **daily** — Fetches OHLCV bars for any stock/index/option ticker and upserts
+ * into market.daily. Auto-triggers enrichment (Tier 1+2+3) after insert unless
+ * skipEnrichment=true.
+ *
+ * **context** — Ignores the `ticker` parameter. Makes three parallel fetchBars calls
+ * for VIX, VIX9D, and VIX3M, merges results by date, and upserts into market.context.
+ * Trigger Tier 2 context enrichment after insert unless skipEnrichment=true.
+ *
+ * **intraday** — Fetches minute or hour bars. Requires time field from Massive API
+ * (populated by fetchBars when timespan != "day"). Strips volume before insert since
+ * market.intraday schema does not include a volume column.
+ *
+ * Requires MASSIVE_API_KEY environment variable. Upserts on conflict — safe to
+ * re-import overlapping date ranges.
+ */
+export async function importFromApi(
+  conn: DuckDBConnection,
+  options: ImportFromApiOptions
+): Promise<ImportResult> {
+  const {
+    ticker,
+    from,
+    to,
+    targetTable,
+    timespan = "minute",
+    multiplier = 1,
+    assetClass,
+    dryRun = false,
+    skipEnrichment = false,
+  } = options;
+
+  const normalizedTicker = normalizeTicker(ticker) ?? ticker.toUpperCase();
+
+  if (targetTable === "daily") {
+    // --- Daily import: single fetchBars call, insert directly ---
+    const resolvedClass = assetClass ?? detectAssetClass(normalizedTicker);
+    const rows = await getProvider().fetchBars({
+      ticker: normalizedTicker,
+      from,
+      to,
+      timespan: "day",
+      multiplier: 1,
+      assetClass: resolvedClass,
+    });
+
+    // MassiveBarRow fields mapped to market.daily schema columns.
+    // Volume is intentionally omitted — market.daily schema has no volume column.
+    const mappedRows: Array<Record<string, unknown>> = rows.map((row) => ({
+      date: row.date,
+      open: row.open,
+      high: row.high,
+      low: row.low,
+      close: row.close,
+      ticker: row.ticker,
+    }));
+
+    const dateRange = computeDateRange(mappedRows);
+
+    if (dryRun) {
+      return {
+        rowsInserted: 0,
+        rowsUpdated: 0,
+        rowsSkipped: 0,
+        inputRowCount: mappedRows.length,
+        dateRange,
+        enrichment: {
+          status: "skipped",
+          message: `dry_run=true; no data written. Would import ${mappedRows.length} rows.`,
+        },
+      };
+    }
+
+    const { inserted, updated, skipped } = await insertMappedRows(conn, "daily", mappedRows);
+
+    await upsertMarketImportMetadata(conn, {
+      source: `import_from_api:daily:${normalizedTicker}`,
+      ticker: normalizedTicker,
+      target_table: "daily",
+      max_date: dateRange?.max ?? null,
+      enriched_through: null,
+      synced_at: new Date(),
+    });
+
+    const enrichment = await triggerEnrichment(conn, normalizedTicker, "daily", dateRange, skipEnrichment);
+
+    return {
+      rowsInserted: inserted,
+      rowsUpdated: updated,
+      rowsSkipped: skipped,
+      inputRowCount: mappedRows.length,
+      dateRange,
+      enrichment,
+    };
+  }
+
+  if (targetTable === "context") {
+    // --- Context convenience import: import VIX + VIX9D + VIX3M into market.daily (per D-12) ---
+    const contextTickers = ["VIX", "VIX9D", "VIX3M"];
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let totalInput = 0;
+    let combinedDateRange: { min: string; max: string } | null = null;
+
+    for (const ctxTicker of contextTickers) {
+      const bars = await getProvider().fetchBars({ ticker: ctxTicker, from, to, timespan: "day", assetClass: "index" });
+      const mappedRows = bars.map(bar => ({
+        ticker: ctxTicker,
+        date: bar.date,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      }));
+
+      totalInput += mappedRows.length;
+
+      if (mappedRows.length === 0) continue;
+
+      const dateRange = computeDateRange(mappedRows);
+      if (dateRange) {
+        if (!combinedDateRange) {
+          combinedDateRange = { ...dateRange };
+        } else {
+          if (dateRange.min < combinedDateRange.min) combinedDateRange.min = dateRange.min;
+          if (dateRange.max > combinedDateRange.max) combinedDateRange.max = dateRange.max;
+        }
+      }
+
+      if (!dryRun) {
+        const { inserted, updated, skipped } = await insertMappedRows(conn, "daily", mappedRows);
+        totalInserted += inserted;
+        totalUpdated += updated;
+        totalSkipped += skipped;
+
+        await upsertMarketImportMetadata(conn, {
+          source: `import_from_api:daily:${ctxTicker}`,
+          ticker: ctxTicker,
+          target_table: "daily",
+          max_date: dateRange?.max ?? null,
+          enriched_through: null,
+          synced_at: new Date(),
+        });
+      }
+    }
+
+    if (dryRun) {
+      return {
+        rowsInserted: 0,
+        rowsUpdated: 0,
+        rowsSkipped: 0,
+        inputRowCount: totalInput,
+        dateRange: combinedDateRange,
+        enrichment: {
+          status: "skipped",
+          message: `dry_run=true; no data written. Would import ${totalInput} rows for ${contextTickers.join(", ")} into market.daily.`,
+        },
+      };
+    }
+
+    // Trigger enrichment (Tier 2) to compute IVR/IVP + derived fields
+    let enrichment: ImportResult["enrichment"];
+    if (skipEnrichment) {
+      enrichment = {
+        status: "skipped",
+        message: "skip_enrichment=true; call enrich_market_data to populate computed fields.",
+      };
+    } else {
+      try {
+        const tier2Result = await runContextEnrichment(conn);
+        enrichment = {
+          status: tier2Result.status === "complete" || tier2Result.status === "skipped"
+            ? "complete" as const
+            : "error" as const,
+          message: tier2Result.reason ?? `Tier 2 enrichment: ${tier2Result.fieldsWritten ?? 0} fields`,
+        };
+      } catch (e) {
+        enrichment = {
+          status: "error" as const,
+          message: `Tier 2 enrichment failed: ${e instanceof Error ? e.message : String(e)}`,
+        };
+      }
+    }
+
+    return {
+      rowsInserted: totalInserted,
+      rowsUpdated: totalUpdated,
+      rowsSkipped: totalSkipped,
+      inputRowCount: totalInput,
+      dateRange: combinedDateRange,
+      enrichment,
+    };
+  }
+
+  // targetTable === "intraday"
+  // --- Intraday import: fetch minute/hour bars with time field ---
+  const resolvedClass = assetClass ?? detectAssetClass(normalizedTicker);
+  const rows = await getProvider().fetchBars({
+    ticker: normalizedTicker,
+    from,
+    to,
+    timespan: timespan,
+    multiplier: multiplier,
+    assetClass: resolvedClass,
+  });
+
+  // Strip volume — market.intraday schema does not include volume column.
+  // Also strip time=undefined rows (safety guard — all intraday bars should have time).
+  const mappedRows: Array<Record<string, unknown>> = rows
+    .filter((row) => row.time !== undefined)
+    .map((row) => ({
+      ticker: row.ticker,
+      date: row.date,
+      time: row.time as string,
+      open: row.open,
+      high: row.high,
+      low: row.low,
+      close: row.close,
+      // volume intentionally omitted — not in intraday schema
+    }));
+
+  const dateRange = computeDateRange(mappedRows);
+
+  if (dryRun) {
+    return {
+      rowsInserted: 0,
+      rowsUpdated: 0,
+      rowsSkipped: 0,
+      inputRowCount: mappedRows.length,
+      dateRange,
+      enrichment: {
+        status: "skipped",
+        message: `dry_run=true; no data written. Would import ${mappedRows.length} intraday rows.`,
+      },
+    };
+  }
+
+  const { inserted, updated, skipped } = await insertMappedRows(conn, "intraday", mappedRows);
+
+  await upsertMarketImportMetadata(conn, {
+    source: `import_from_api:intraday:${normalizedTicker}`,
+    ticker: normalizedTicker,
+    target_table: "intraday",
+    max_date: dateRange?.max ?? null,
+    enriched_through: null,
+    synced_at: new Date(),
+  });
+
+  return {
+    rowsInserted: inserted,
+    rowsUpdated: updated,
+    rowsSkipped: skipped,
+    inputRowCount: mappedRows.length,
+    dateRange,
+    enrichment: {
+      status: "skipped",
+      message: "Enrichment only runs for daily and context table imports; skipping for intraday.",
+    },
+  };
 }

@@ -45,7 +45,8 @@ async function createBlockWithTrades(
 }
 
 /**
- * Insert market data rows into DuckDB (market.daily + market.context).
+ * Insert market data rows into DuckDB (market.daily + market._context_derived).
+ * Phase 75: Vol_Regime and Trend_Direction moved to market._context_derived.
  * Each row needs: date, Vol_Regime, Trend_Direction, and basic OHLC.
  */
 async function insertMarketData(
@@ -61,15 +62,27 @@ async function insertMarketData(
   };
 
   for (const row of rows) {
-    // Insert market.daily row (needed for buildLookaheadFreeQuery LAG CTE)
+    // Insert market.daily row for SPX (needed for buildLookaheadFreeQuery LAG CTE)
     await c.run(
       `INSERT OR IGNORE INTO market.daily (ticker, date, Open, High, Low, Close, Prior_Close, Gap_Pct)
        VALUES ('SPX', '${row.date}', 4500, 4520, 4480, 4510, 4490, 0.1)`
     );
 
-    // Insert market.context row with Vol_Regime and Trend_Direction
+    // Insert market.daily VIX ticker row (Phase 75: VIX_Close source)
+    await c.run(
+      `INSERT OR IGNORE INTO market.daily (ticker, date, Open, High, Low, Close, Prior_Close)
+       VALUES ('VIX', '${row.date}', 18.0, 18.5, 17.5, 17.5, 17.8)`
+    );
+
+    // Insert market._context_derived row with Vol_Regime and Trend_Direction (Phase 75)
     const trendVal =
       row.trendDirection === null ? "NULL" : `'${row.trendDirection}'`;
+    await c.run(
+      `INSERT OR IGNORE INTO market._context_derived (date, Vol_Regime, Trend_Direction)
+       VALUES ('${row.date}', ${row.volRegime}, ${trendVal})`
+    );
+
+    // Also insert into market.context for backward compat (legacy queries)
     await c.run(
       `INSERT OR IGNORE INTO market.context (date, Vol_Regime, Trend_Direction, VIX_Open, VIX_Close)
        VALUES ('${row.date}', ${row.volRegime}, ${trendVal}, 18.0, 17.5)`

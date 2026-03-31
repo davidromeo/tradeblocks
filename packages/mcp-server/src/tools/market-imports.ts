@@ -1,8 +1,8 @@
 /**
  * Market Import Tools
  *
- * MCP tools for importing OHLCV market data into market.daily, market.context,
- * or market.intraday. Delegates all core logic to market-importer.ts.
+ * MCP tools for importing OHLCV market data into market.daily or market.intraday.
+ * Delegates all core logic to market-importer.ts.
  *
  * Tools registered:
  *   - import_market_csv    — Import from a local CSV file
@@ -18,7 +18,7 @@ import * as os from "os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getConnection, upgradeToReadWrite, downgradeToReadOnly } from "../db/connection.js";
 import { createToolOutput } from "../utils/output-formatter.js";
-import { importMarketCsvFile, importFromDatabase } from "../utils/market-importer.js";
+import { importMarketCsvFile, importFromDatabase, importFromApi } from "../utils/market-importer.js";
 
 /**
  * Register market import MCP tools on the given server.
@@ -34,7 +34,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
     "import_market_csv",
     {
       description:
-        "Import OHLCV market data from a CSV file into market.daily, market.context, or market.intraday. " +
+        "Import OHLCV market data from a CSV file into market.daily or market.intraday (target_table: 'context' imports VIX/VIX9D/VIX3M into market.daily). " +
         "Requires an explicit column_mapping object mapping CSV header names to schema column names. " +
         "Required schema fields: daily=[date,open,high,low,close], context=[date], intraday=[date,time,open,high,low,close]. " +
         "ticker is injected automatically (not required in mapping). " +
@@ -127,7 +127,7 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
     "import_from_database",
     {
       description:
-        "Import market data from an external DuckDB database into market.daily, market.context, or market.intraday. " +
+        "Import market data from an external DuckDB database into market.daily or market.intraday (target_table: 'context' imports VIX/VIX9D/VIX3M into market.daily). " +
         "The external database is ATTACHed read-only with alias 'ext_import_source'. " +
         "Your query must reference tables using this alias, e.g.: SELECT date, open, high, low, close FROM ext_import_source.my_table. " +
         "Supports JOINs and CTEs. " +
@@ -210,6 +210,110 @@ export function registerMarketImportTools(server: McpServer, baseDir: string): v
             {
               type: "text" as const,
               text: `Error importing from database: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      } finally {
+        await downgradeToReadOnly(baseDir);
+      }
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Tool: import_from_api
+  // ---------------------------------------------------------------------------
+  server.registerTool(
+    "import_from_api",
+    {
+      description:
+        "Import market data from the configured data provider (Massive.com or ThetaData) into market.daily or market.intraday. " +
+        "Requires MASSIVE_API_KEY environment variable. " +
+        "For daily: fetches OHLCV bars for any stock/index ticker. " +
+        "For context: imports VIX + VIX9D + VIX3M as ticker rows in market.daily (convenience shorthand), then runs enrichment to populate market._context_derived. " +
+        "For intraday: fetches minute or hour bars (use timespan param). " +
+        "Supports OCC option tickers (e.g., SPX251219C05000000). " +
+        "Upserts on conflict — safe to re-import overlapping date ranges.",
+      inputSchema: z.object({
+        ticker: z.string().describe(
+          "Ticker symbol (e.g., 'SPX', 'AAPL', 'VIX'). For context imports, this is ignored (VIX/VIX9D/VIX3M fetched automatically). For options, use OCC format (e.g., 'SPX251219C05000000')."
+        ),
+        from: z.string().describe("Start date YYYY-MM-DD"),
+        to: z.string().describe("End date YYYY-MM-DD"),
+        target_table: z.enum(["daily", "context", "intraday"]).describe(
+          "Target table: 'daily' for OHLCV, 'context' for VIX term structure (auto-fetches VIX+VIX9D+VIX3M), 'intraday' for minute/hour bars."
+        ),
+        timespan: z.enum(["1m", "5m", "15m", "1h"]).optional().describe(
+          "Bar timespan for intraday imports. Maps to Massive API: '1m'→1 minute, '5m'→5 minute, '15m'→15 minute, '1h'→1 hour. Ignored for daily/context."
+        ),
+        asset_class: z.enum(["stock", "index", "option"]).optional().describe(
+          "Asset class for ticker prefix. Auto-detected if omitted: VIX/SPX/NDX→index, OCC format→option, else stock."
+        ),
+        dry_run: z.boolean().default(false).describe(
+          "If true, validates parameters and shows what would be imported without writing."
+        ),
+        skip_enrichment: z.boolean().default(false).describe(
+          "If true, skips automatic enrichment after import."
+        ),
+      }),
+    },
+    async ({ ticker, from, to, target_table, timespan, asset_class, dry_run, skip_enrichment }) => {
+      // Parse timespan string to { timespan, multiplier } for Massive API
+      let parsedTimespan: "minute" | "hour" | undefined;
+      let parsedMultiplier: number | undefined;
+      if (timespan) {
+        if (timespan === "1m") {
+          parsedTimespan = "minute";
+          parsedMultiplier = 1;
+        } else if (timespan === "5m") {
+          parsedTimespan = "minute";
+          parsedMultiplier = 5;
+        } else if (timespan === "15m") {
+          parsedTimespan = "minute";
+          parsedMultiplier = 15;
+        } else if (timespan === "1h") {
+          parsedTimespan = "hour";
+          parsedMultiplier = 1;
+        }
+      }
+
+      await upgradeToReadWrite(baseDir);
+      try {
+        const conn = await getConnection(baseDir);
+
+        const result = await importFromApi(conn, {
+          ticker: ticker.toUpperCase(),
+          from,
+          to,
+          targetTable: target_table,
+          timespan: parsedTimespan,
+          multiplier: parsedMultiplier,
+          assetClass: asset_class,
+          dryRun: dry_run,
+          skipEnrichment: skip_enrichment,
+        });
+
+        const tickerDisplay = target_table === "context" ? "VIX/VIX9D/VIX3M" : ticker.toUpperCase();
+        const summary = dry_run
+          ? `[DRY RUN] Would import ${result.inputRowCount} rows into market.${target_table} (${tickerDisplay}) — no data written`
+          : `Imported ${result.rowsInserted} of ${result.inputRowCount} rows into market.${target_table} (${tickerDisplay})${result.rowsUpdated ? `; ${result.rowsUpdated} merged into existing rows` : ""}${result.rowsSkipped ? `; ${result.rowsSkipped} skipped` : ""}`;
+
+        return createToolOutput(summary, {
+          ticker: tickerDisplay,
+          targetTable: target_table,
+          inputRowCount: result.inputRowCount,
+          rowsInserted: result.rowsInserted,
+          rowsSkipped: result.rowsSkipped,
+          dateRange: result.dateRange,
+          enrichment: result.enrichment,
+          dryRun: dry_run,
+        });
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error importing from data provider: ${(error as Error).message}`,
             },
           ],
           isError: true,

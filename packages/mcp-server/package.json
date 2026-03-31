@@ -1,6 +1,6 @@
 {
   "name": "tradeblocks-mcp",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "MCP server for options trade analysis",
   "author": "David Romeo <davidmromeo@gmail.com>",
   "type": "module",
@@ -9,11 +9,10 @@
     "tradeblocks-mcp": "server/index.js"
   },
   "scripts": {
-    "build": "tsup && npm run build:http-server && npm run fix-http-import && npm run copy-skills",
+    "build": "tsup && npm run build:http-server && npm run fix-http-import",
     "build:http-server": "esbuild src/http-server.ts --bundle --outfile=server/http-server.js --format=esm --platform=node --target=node18 --packages=external",
     "fix-http-import": "node -e \"const fs=require('fs');const f='server/index.js';let c=fs.readFileSync(f,'utf8');c=c.replace(/\\.\\/http-server-[A-Z0-9]+\\.js/g,'./http-server.js');fs.writeFileSync(f,c);\" && rm -f server/http-server-*.js server/http-server-*.map",
-    "copy-skills": "node -e \"const fs=require('fs');fs.cpSync('../agent-skills','./agent-skills',{recursive:true,filter:(s)=>!s.includes('.git')})\"",
-    "dev": "tsup --watch",
+        "dev": "tsup --watch",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "mcpb:pack": "npm run build && node scripts/pack-mcpb.js",
     "pack:beta": "npm run build && npm pack --pack-destination .",

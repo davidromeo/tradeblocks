@@ -2,7 +2,7 @@
  * Market Enrichment Tools
  *
  * MCP tool for computing technical indicator fields from raw OHLCV data in
- * market.daily and VIX context fields in market.context.
+ * market.daily (including VIX tickers) and writing derived fields to market._context_derived.
  *
  * Tools registered:
  *   - enrich_market_data — Run three-tier enrichment pipeline for a ticker
@@ -10,8 +10,8 @@
  * Follows the RW lifecycle:
  *   upgradeToReadWrite → enrichment → downgradeToReadOnly (in finally)
  *
- * Tier 1: Computes ~22 fields from market.daily OHLCV (RSI, ATR, EMA, SMA, BB, realized vol, etc.)
- * Tier 2: Computes VIX regime fields in market.context (Vol_Regime, Term_Structure_State, VIX_Percentile, etc.)
+ * Tier 1: Computes ~20 fields from market.daily OHLCV (RSI, ATR, EMA, SMA, realized vol, etc.)
+ * Tier 2: Computes VIX IVR/IVP in market.daily and derived fields (Vol_Regime, Term_Structure_State) in market._context_derived
  * Tier 3: Intraday timing fields (High_Time, Low_Time, Reversal_Type) — always skipped until intraday CSV format is updated
  */
 
@@ -32,10 +32,10 @@ export function registerMarketEnrichmentTools(server: McpServer, baseDir: string
     "enrich_market_data",
     {
       description:
-        "Compute technical indicator fields from raw OHLCV data in market.daily and VIX regime fields in market.context. " +
+        "Compute technical indicator fields from raw OHLCV data in market.daily and write derived fields to market._context_derived. " +
         "Runs three enrichment tiers: " +
-        "Tier 1 (always) computes ~21 fields from daily OHLCV: RSI_14, ATR_Pct, Price_vs_EMA21_Pct, Price_vs_SMA50_Pct, BB_Position, BB_Width, Realized_Vol_5D, Realized_Vol_20D, Return_5D, Return_20D, Gap_Pct, Intraday_Range_Pct, Intraday_Return_Pct, Close_Position_In_Range, Gap_Filled, Consecutive_Days, Prev_Return_Pct, Prior_Close, Day_of_Week, Month, Is_Opex. " +
-        "Tier 2 (if VIX data in market.context) computes VIX regime fields: Vol_Regime, Term_Structure_State, VIX_Percentile, VIX_Gap_Pct, VIX_Change_Pct, VIX ratios, VIX_Spike_Pct. " +
+        "Tier 1 (always) computes ~19 fields from daily OHLCV: RSI_14, ATR_Pct, Price_vs_EMA21_Pct, Price_vs_SMA50_Pct, Realized_Vol_5D, Realized_Vol_20D, Return_5D, Return_20D, Gap_Pct, Intraday_Range_Pct, Intraday_Return_Pct, Close_Position_In_Range, Gap_Filled, Consecutive_Days, Prev_Return_Pct, Prior_Close, Day_of_Week, Month, Is_Opex. " +
+        "Tier 2 (if VIX data in market.daily) computes VIX IVR/IVP written back to market.daily and regime fields written to market._context_derived: Vol_Regime, Term_Structure_State, VIX_IVR, VIX_IVP, VIX9D_IVR, VIX9D_IVP, VIX3M_IVR, VIX3M_IVP, VIX_Gap_Pct, VIX_Change_Pct, VIX ratios, VIX_Spike_Pct. " +
         "Tier 3 (if intraday bars in market.intraday) computes timing fields: High_Time, Low_Time, High_Before_Low, Reversal_Type, Opening_Drive_Strength, Intraday_Realized_Vol. " +
         "Uses 200-day lookback window for Wilder smoothing warmup. Tracks enriched_through watermark in market._sync_metadata. " +
         "Call after import_market_csv or import_from_database to populate computed fields. " +

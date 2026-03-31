@@ -20,17 +20,6 @@ export default defineConfig([
     // Bundle @tradeblocks workspace packages
     noExternal: [/^@tradeblocks\//],
   },
-  // Skill installer module (library, no shebang) - stays in dist/
-  {
-    entry: ['src/skill-installer.ts'],
-    outDir: 'dist',
-    format: ['esm'],
-    target: 'node18',
-    dts: true,
-    sourcemap: true,
-    // Bundle workspace package content
-    noExternal: [/^@tradeblocks\//],
-  },
   // Test exports module - bundle utilities for testing
   {
     entry: ['src/test-exports.ts'],

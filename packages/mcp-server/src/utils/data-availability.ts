@@ -13,13 +13,13 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 export interface DataAvailabilityReport {
   /** Whether market.daily has rows for the requested ticker */
   hasDailyData: boolean;
-  /** Whether market.context has any rows (global, not ticker-specific) */
+  /** Whether market.daily has VIX ticker data (normalized schema — replaces market.context check) */
   hasContextData: boolean;
   /** Whether market.intraday has rows for the requested ticker */
   hasIntradayData: boolean;
   /** Date range available in market.daily for the ticker, or null if no data */
   dailyDateRange: { min: string; max: string } | null;
-  /** Date range available in market.context, or null if no data */
+  /** Date range of VIX data in market.daily, or null if no data */
   contextDateRange: { min: string; max: string } | null;
   /** Date range available in market.intraday for the ticker, or null if no data */
   intradayDateRange: { min: string; max: string } | null;
@@ -74,13 +74,13 @@ export async function checkDataAvailability(
     );
   }
 
-  // Check market.context (global — not ticker-specific)
+  // Check for VIX data in market.daily (normalized schema)
   let hasContextData = false;
   let contextDateRange: { min: string; max: string } | null = null;
   try {
     const contextResult = await conn.runAndReadAll(
       `SELECT COUNT(*) as cnt, MIN(date) as min_date, MAX(date) as max_date
-       FROM market.context`
+       FROM market.daily WHERE ticker = 'VIX'`
     );
     const rows = contextResult.getRowObjectsJson();
     if (rows.length > 0) {
@@ -92,14 +92,15 @@ export async function checkDataAvailability(
       }
     }
   } catch {
-    // market.context table doesn't exist yet — treat as no data
+    // market.daily may not exist yet
   }
 
   if (!hasContextData) {
     warnings.push(
-      `No market.context data (VIX/regime). ` +
-      `Import VIX data with import_market_csv (target_table: "context") ` +
-      `then run enrich_market_data for tier 2 enrichment.`
+      `No VIX data in market.daily. ` +
+      `Import VIX data with import_from_api (ticker: "VIX", target_table: "daily") ` +
+      `or import_market_csv (target_table: "context") ` +
+      `then run enrich_market_data for IVR/IVP enrichment.`
     );
   }
 

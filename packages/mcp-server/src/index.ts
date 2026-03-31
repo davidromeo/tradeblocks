@@ -30,13 +30,10 @@ import { registerGuideTools } from "./tools/guides.js";
 import { registerProfileTools } from "./tools/profiles.js";
 import { registerProfileAnalysisTools } from "./tools/profile-analysis.js";
 import { registerRegimeAdvisorTools } from "./tools/regime-advisor.js";
-import {
-  installSkills,
-  uninstallSkills,
-  checkInstallation,
-  getTargetPath,
-  type Platform,
-} from "./skill-installer.js";
+import { registerReplayTools } from "./tools/replay.js";
+import { registerSnapshotTools } from "./tools/snapshot.js";
+import { registerExitAnalysisTools } from "./tools/exit-analysis.js";
+import { registerBatchExitAnalysisTools } from "./tools/batch-exit-analysis.js";
 import { handleDirectCall } from "./cli-handler.js";
 import { closeConnection } from "./db/index.js";
 
@@ -81,34 +78,6 @@ Examples:
   tradeblocks-mcp --http --port 8080 ~/Trading/backtests
   tradeblocks-mcp install-skills --platform codex
 `);
-}
-
-// Parse CLI arguments for skill commands
-function parseSkillArgs(): { platform: Platform; force: boolean } {
-  const args = process.argv.slice(3);
-  let platform: Platform = "claude";
-  let force = false;
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--platform" && args[i + 1]) {
-      const p = args[i + 1].toLowerCase();
-      if (p === "claude" || p === "codex" || p === "gemini") {
-        platform = p;
-      } else {
-        console.error(`Unknown platform: ${args[i + 1]}`);
-        console.error("Valid platforms: claude, codex, gemini");
-        process.exit(1);
-      }
-      i++;
-    } else if (args[i] === "--force") {
-      force = true;
-    } else if (args[i] === "--help" || args[i] === "-h") {
-      printUsage();
-      process.exit(0);
-    }
-  }
-
-  return { platform, force };
 }
 
 // Parse CLI arguments for MCP server mode
@@ -159,81 +128,19 @@ function parseServerArgs(): {
   return { http, port, noAuth, directory, marketDb };
 }
 
-// Handle skill CLI commands
+// Handle skill CLI commands (deprecated — now use plugin)
 async function handleSkillCommand(command: string): Promise<void> {
-  const { platform, force } = parseSkillArgs();
-  const targetPath = getTargetPath(platform);
+  console.log("Skills have moved to a standalone plugin:");
+  console.log("  https://github.com/davidromeo/tradeblocks-skills");
+  console.log("");
+  console.log("Install via Claude Code:");
+  console.log("  /plugin marketplace add davidromeo/tradeblocks-skills");
+  console.log("  /plugin install tradeblocks@tradeblocks-skills");
 
   switch (command) {
-    case "install-skills": {
-      console.log(`Installing TradeBlocks skills to ${platform}...`);
-      console.log(`Target: ${targetPath}\n`);
-
-      const result = await installSkills(platform, { force });
-
-      if (result.installed.length > 0) {
-        console.log(`✓ Installed ${result.installed.length} skill(s):`);
-        result.installed.forEach((s) => console.log(`  - ${s}`));
-      }
-
-      if (result.skipped.length > 0) {
-        console.log(`⏭ Skipped ${result.skipped.length} skill(s) (already installed):`);
-        result.skipped.forEach((s) => console.log(`  - ${s}`));
-        if (!force) {
-          console.log("\n  Use --force to reinstall existing skills.");
-        }
-      }
-
-      if (result.errors.length > 0) {
-        console.error(`\n✗ Errors (${result.errors.length}):`);
-        result.errors.forEach((e) => console.error(`  - ${e}`));
-        process.exit(1);
-      }
-
-      console.log("\nDone.");
-      process.exit(0);
-    }
-
-    case "uninstall-skills": {
-      console.log(`Removing TradeBlocks skills from ${platform}...`);
-      console.log(`Target: ${targetPath}\n`);
-
-      const removed = await uninstallSkills(platform);
-
-      if (removed.length > 0) {
-        console.log(`✓ Removed ${removed.length} skill(s):`);
-        removed.forEach((s) => console.log(`  - ${s}`));
-      } else {
-        console.log("No skills were installed.");
-      }
-
-      console.log("\nDone.");
-      process.exit(0);
-    }
-
+    case "install-skills":
+    case "uninstall-skills":
     case "check-skills": {
-      console.log(`Checking TradeBlocks skills for ${platform}...`);
-      console.log(`Target: ${targetPath}\n`);
-
-      const status = await checkInstallation(platform);
-
-      if (status.installed.length > 0) {
-        console.log(`✓ Installed (${status.installed.length}):`);
-        status.installed.forEach((s) => console.log(`  - ${s}`));
-      }
-
-      if (status.missing.length > 0) {
-        console.log(`\n✗ Missing (${status.missing.length}):`);
-        status.missing.forEach((s) => console.log(`  - ${s}`));
-        console.log("\n  Run 'tradeblocks-mcp install-skills' to install.");
-      }
-
-      if (status.missing.length === 0 && status.installed.length > 0) {
-        console.log("\nAll skills installed.");
-      } else if (status.installed.length === 0 && status.missing.length > 0) {
-        console.log("\nNo skills installed.");
-      }
-
       process.exit(0);
     }
 
@@ -312,6 +219,10 @@ async function main(): Promise<void> {
     registerProfileTools(server, resolvedDir);
     registerProfileAnalysisTools(server, resolvedDir);
     registerRegimeAdvisorTools(server, resolvedDir);
+    registerReplayTools(server, resolvedDir);
+    registerSnapshotTools(server);
+    registerExitAnalysisTools(server, resolvedDir);
+    registerBatchExitAnalysisTools(server, resolvedDir);
     return server;
   };
 
