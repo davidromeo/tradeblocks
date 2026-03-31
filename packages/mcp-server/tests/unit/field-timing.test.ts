@@ -344,4 +344,16 @@ describe('buildOutcomeQuery', () => {
     expect(sql).toContain('m.date = requested.date');
     expect(params).toEqual(['SPX', '2025-01-06', 'MSFT', '2025-01-07']);
   });
+
+  test('ticker+date path joins VIX tables on m.date without corrupting aliases', () => {
+    const { sql } = buildOutcomeQuery([
+      { ticker: 'SPX', date: '2025-01-06' },
+    ]);
+
+    // VIX joins should reference m.date (not d.date) since base table alias is m
+    expect(sql).toContain('vix9d.date = m.date');
+    expect(sql).toContain('vix3m.date = m.date');
+    // Must NOT contain corrupted alias "vix9m" (regression: regex replace turned vix9d.date into vix9m.date)
+    expect(sql).not.toContain('vix9m');
+  });
 });

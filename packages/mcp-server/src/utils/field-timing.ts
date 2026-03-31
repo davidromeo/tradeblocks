@@ -169,9 +169,9 @@ export const STATIC_FIELDS: ReadonlySet<string> = new Set([
 // ============================================================================
 
 // Build the VIX JOIN clause (three LEFT JOINs: vix, vix9d, vix3m)
-function buildVixJoins(): string {
+function buildVixJoins(baseAlias: string = "d"): string {
   return VIX_TABLE_ALIASES
-    .map(alias => `LEFT JOIN market.daily ${alias} ON ${alias}.date = d.date AND ${alias}.ticker = '${VIX_TICKER_FOR_ALIAS[alias]}'`)
+    .map(alias => `LEFT JOIN market.daily ${alias} ON ${alias}.date = ${baseAlias}.date AND ${alias}.ticker = '${VIX_TICKER_FOR_ALIAS[alias]}'`)
     .join("\n      ");
 }
 
@@ -390,7 +390,7 @@ export function buildOutcomeQuery(
     )
     SELECT m.ticker, m.date, ${dailyCloseCols}, ${vixCloseCols}, ${derivedCloseCols}
     FROM market.daily m
-    ${vixJoins.replace(/d\.date/g, 'm.date')}
+    ${buildVixJoins("m")}
     LEFT JOIN market._context_derived cd ON cd.date = m.date
     JOIN requested
       ON m.ticker = requested.ticker
