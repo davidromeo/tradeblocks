@@ -8,7 +8,7 @@
 - ✅ **v2.9 Lookahead-Free Market Analytics** — Phases 55-59 (shipped 2026-02-09)
 - ✅ **v2.1 Strategy Profiles (beta 1)** — Phases 60-63 (shipped 2026-03-06)
 - ✅ **v2.1 Profile Schema V2 & Portfolio Analysis (beta 2)** — Phases 64-65 (shipped 2026-03-08)
-- 🚧 **v2.2 Massive.com Market Data Integration** — Phases 66-75 (in progress)
+- ✅ **v2.2 Massive.com Market Data Integration** — Phases 66-75 (shipped 2026-03-31)
 
 See [MILESTONES.md](MILESTONES.md) for full history.
 
