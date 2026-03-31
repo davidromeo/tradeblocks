@@ -345,7 +345,7 @@ describe('buildOutcomeQuery', () => {
     expect(params).toEqual(['SPX', '2025-01-06', 'MSFT', '2025-01-07']);
   });
 
-  test('ticker+date path joins VIX tables on m.date without corrupting aliases', () => {
+  test('ticker+date path uses m alias consistently (no d. references)', () => {
     const { sql } = buildOutcomeQuery([
       { ticker: 'SPX', date: '2025-01-06' },
     ]);
@@ -355,5 +355,8 @@ describe('buildOutcomeQuery', () => {
     expect(sql).toContain('vix3m.date = m.date');
     // Must NOT contain corrupted alias "vix9m" (regression: regex replace turned vix9d.date into vix9m.date)
     expect(sql).not.toContain('vix9m');
+    // Daily close columns must use m. prefix, not d. (base table is aliased as m)
+    expect(sql).not.toMatch(/\bd\."(high|low|close|RSI_14|ATR_Pct)"/);
+    expect(sql).toContain('m."high"');
   });
 });

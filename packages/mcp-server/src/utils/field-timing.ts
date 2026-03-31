@@ -353,27 +353,39 @@ export function buildOutcomeQuery(
     return { sql: `SELECT * FROM market.daily WHERE 1=0`, params: [] };
   }
 
-  const dailyCloseCols = [...DAILY_CLOSE_FIELDS].map((f) => `d."${f}"`).join(", ");
   const vixCloseCols = VIX_FIELD_MAPPINGS
     .filter(m => m.timing === 'close')
     .map(m => `${m.tableAlias}."${m.sourceCol}" AS "${m.alias}"`)
     .join(", ");
   const derivedCloseCols = [...DERIVED_CLOSE_FIELDS].map(f => `cd."${f}"`).join(", ");
-  const vixJoins = buildVixJoins();
 
   if (typeof tradeDatesOrKeys[0] === "string") {
-    const tradeDates = tradeDatesOrKeys as string[];
-    const placeholders = tradeDates.map((_, i) => `$${i + 1}`).join(", ");
-    const sql = `SELECT d.date, ${dailyCloseCols}, ${vixCloseCols}, ${derivedCloseCols}
-    FROM market.daily d
-    ${vixJoins}
-    LEFT JOIN market._context_derived cd ON cd.date = d.date
-    WHERE d.ticker = $${tradeDates.length + 1}
-      AND d.date IN (${placeholders})`;
-    return { sql, params: [...tradeDates, DEFAULT_MARKET_TICKER] };
+    return buildOutcomeQueryForDates(tradeDatesOrKeys as string[], vixCloseCols, derivedCloseCols);
   }
 
-  const tradeKeys = tradeDatesOrKeys as MarketLookupKey[];
+  return buildOutcomeQueryForKeys(tradeDatesOrKeys as MarketLookupKey[], vixCloseCols, derivedCloseCols);
+}
+
+function buildOutcomeQueryForDates(
+  tradeDates: string[], vixCloseCols: string, derivedCloseCols: string
+): { sql: string; params: string[] } {
+  const a = "d";
+  const dailyCloseCols = [...DAILY_CLOSE_FIELDS].map((f) => `${a}."${f}"`).join(", ");
+  const placeholders = tradeDates.map((_, i) => `$${i + 1}`).join(", ");
+  const sql = `SELECT ${a}.date, ${dailyCloseCols}, ${vixCloseCols}, ${derivedCloseCols}
+    FROM market.daily ${a}
+    ${buildVixJoins(a)}
+    LEFT JOIN market._context_derived cd ON cd.date = ${a}.date
+    WHERE ${a}.ticker = $${tradeDates.length + 1}
+      AND ${a}.date IN (${placeholders})`;
+  return { sql, params: [...tradeDates, DEFAULT_MARKET_TICKER] };
+}
+
+function buildOutcomeQueryForKeys(
+  tradeKeys: MarketLookupKey[], vixCloseCols: string, derivedCloseCols: string
+): { sql: string; params: string[] } {
+  const a = "m";
+  const dailyCloseCols = [...DAILY_CLOSE_FIELDS].map((f) => `${a}."${f}"`).join(", ");
   const normalizedKeys = tradeKeys.map((k) => ({
     date: k.date,
     ticker: k.ticker || DEFAULT_MARKET_TICKER,
@@ -388,13 +400,13 @@ export function buildOutcomeQuery(
   const sql = `WITH requested(ticker, date) AS (
       VALUES ${valuePlaceholders.join(", ")}
     )
-    SELECT m.ticker, m.date, ${dailyCloseCols}, ${vixCloseCols}, ${derivedCloseCols}
-    FROM market.daily m
-    ${buildVixJoins("m")}
-    LEFT JOIN market._context_derived cd ON cd.date = m.date
+    SELECT ${a}.ticker, ${a}.date, ${dailyCloseCols}, ${vixCloseCols}, ${derivedCloseCols}
+    FROM market.daily ${a}
+    ${buildVixJoins(a)}
+    LEFT JOIN market._context_derived cd ON cd.date = ${a}.date
     JOIN requested
-      ON m.ticker = requested.ticker
-     AND m.date = requested.date`;
+      ON ${a}.ticker = requested.ticker
+     AND ${a}.date = requested.date`;
 
   return { sql, params: values };
 }
