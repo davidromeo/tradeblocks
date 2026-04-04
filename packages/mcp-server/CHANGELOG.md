@@ -2,6 +2,15 @@
 
 All notable changes to the TradeBlocks MCP Server will be documented in this file.
 
+## [2.2.3] - 2026-04-04
+
+### Changed
+
+- Migrated CI/CD from GitHub Actions to GitLab CI
+- Docker images now published to both GitLab Container Registry and Docker Hub (`romeo345/tradeblocks-mcp`)
+- npm publishing uses OIDC trusted publisher with provenance attestation
+- All repository URLs updated to GitLab
+
 ## [2.0.0-beta.2] - 2026-02-26
 
 ### Added
