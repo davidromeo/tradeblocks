@@ -153,36 +153,39 @@ release:create:
     - job: publish:docker
   rules: !reference [.release-rules, rules]
   script:
-    - echo "Creating release v$VERSION"
-  release:
-    tag_name: v$VERSION
-    name: v$VERSION
-    description: |
+    - |
+      MAJOR_MINOR=$(echo $VERSION | sed 's/\.[0-9]*$//')
+      NOTES_URL="https://gitlab.com/davidromeo/tradeblocks/-/blob/master/releases/v${MAJOR_MINOR}.md"
+      cat > /tmp/release-notes.md << NOTES
+      **[Full Release Notes](${NOTES_URL})**
+
       ## Installation
 
       ### Claude Desktop (One-Click)
-      Download `tradeblocks-*.mcpb` from the package registry.
+      Download \`tradeblocks-*.mcpb\` below and double-click to install.
 
       ### npm
-      ```bash
+      \`\`\`bash
       npx tradeblocks-mcp ~/path/to/backtests
-      ```
+      \`\`\`
 
       ### Docker
-      ```bash
-      docker pull $CI_REGISTRY_IMAGE/tradeblocks-mcp:$VERSION
-      docker run -p 3100:3100 -v ./data:/data --env-file .env $CI_REGISTRY_IMAGE/tradeblocks-mcp:$VERSION
-      ```
+      \`\`\`bash
+      docker pull romeo345/tradeblocks-mcp:latest
+      docker run -p 3100:3100 -v ./data:/data --env-file .env romeo345/tradeblocks-mcp:latest
+      \`\`\`
 
       ### From Source
-      ```bash
+      \`\`\`bash
       git clone https://gitlab.com/davidromeo/tradeblocks
       cd tradeblocks && npm install && npm run build:mcp
-      ```
-    assets:
-      links:
-        - name: tradeblocks-mcp-${VERSION}.mcpb
-          url: ${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/packages/mcp-server/tradeblocks-mcp-${VERSION}.mcpb
+      \`\`\`
+      NOTES
+    - |
+      release-cli create \
+        --name "v$VERSION" \
+        --tag-name "v$VERSION" \
+        --description /tmp/release-notes.md
 
 # ==========================================
 # Beta Release — manual trigger only
@@ -270,11 +273,8 @@ beta:release:
     - job: beta:publish-docker
   rules: !reference [.beta-rules, rules]
   script:
-    - echo "Creating beta release v$VERSION"
-  release:
-    tag_name: v$VERSION
-    name: "v$VERSION (Beta)"
-    description: |
+    - |
+      cat > /tmp/release-notes.md << 'NOTES'
       ## Beta Release
 
       This is a **pre-release** for testing. Use `tradeblocks-mcp@latest` for the stable version.
@@ -286,13 +286,19 @@ beta:release:
 
       ### Docker
       ```bash
-      docker pull $CI_REGISTRY_IMAGE/tradeblocks-mcp:$VERSION
+      docker pull romeo345/tradeblocks-mcp:beta
       ```
 
       ### Revert to stable
       ```bash
       npm install -g tradeblocks-mcp@latest
       ```
+      NOTES
+    - |
+      release-cli create \
+        --name "v$VERSION (Beta)" \
+        --tag-name "v$VERSION" \
+        --description /tmp/release-notes.md
 
 # ==========================================
 # Scheduled: Treasury Rate Updates (weekly)
