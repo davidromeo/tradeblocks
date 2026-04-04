@@ -185,7 +185,7 @@ release:create:
       release-cli create \
         --name "v$VERSION" \
         --tag-name "v$VERSION" \
-        --description /tmp/release-notes.md
+        --description "$(cat /tmp/release-notes.md)"
 
 # ==========================================
 # Beta Release — manual trigger only
@@ -298,7 +298,7 @@ beta:release:
       release-cli create \
         --name "v$VERSION (Beta)" \
         --tag-name "v$VERSION" \
-        --description /tmp/release-notes.md
+        --description "$(cat /tmp/release-notes.md)"
 
 # ==========================================
 # Scheduled: Treasury Rate Updates (weekly)
