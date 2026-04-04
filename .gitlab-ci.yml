@@ -372,3 +372,21 @@ treasury:update:
       LAST_NEW_DATE=$(grep -oE '"[0-9]{4}-[0-9]{2}-[0-9]{2}"' packages/lib/data/treasury-rates.ts | tail -1 | tr -d '"')
       git commit -m "chore: update treasury rates through ${LAST_NEW_DATE}"
       git push origin HEAD:master
+
+# ==========================================
+# Scheduled: Renovate dependency updates
+# ==========================================
+
+renovate:
+  stage: test
+  image: renovate/renovate:latest
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  variables:
+    RENOVATE_PLATFORM: gitlab
+    RENOVATE_ENDPOINT: https://gitlab.com/api/v4/
+    RENOVATE_TOKEN: $GITLAB_PUSH_TOKEN
+    RENOVATE_REPOSITORIES: $CI_PROJECT_PATH
+    LOG_LEVEL: info
+  script:
+    - renovate
