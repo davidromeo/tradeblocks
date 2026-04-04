@@ -92,6 +92,9 @@ publish:npm:
   stage: publish
   needs: ["release:build"]
   rules: !reference [.release-rules, rules]
+  id_tokens:
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
   script:
     - |
       if npm view tradeblocks-mcp@$VERSION version 2>/dev/null; then
@@ -99,8 +102,7 @@ publish:npm:
         exit 0
       fi
     - npm run build -w packages/mcp-server
-    - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-    - npm publish -w packages/mcp-server --access public
+    - npm publish -w packages/mcp-server --access public --provenance
   environment:
     name: npm
     url: https://www.npmjs.com/package/tradeblocks-mcp
@@ -115,7 +117,9 @@ publish:docker:
   variables:
     DOCKER_TLS_CERTDIR: "/certs"
   before_script:
+    # Login to both registries
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
   script:
     # Need node to build MCP server before Docker build
     - apk add --no-cache nodejs npm
@@ -128,9 +132,15 @@ publish:docker:
         --label "org.opencontainers.image.source=$CI_PROJECT_URL" \
         -t $CI_REGISTRY_IMAGE/tradeblocks-mcp:$VERSION \
         -t $CI_REGISTRY_IMAGE/tradeblocks-mcp:latest \
+        -t romeo345/tradeblocks-mcp:$VERSION \
+        -t romeo345/tradeblocks-mcp:latest \
         packages/mcp-server
+    # Push to GitLab Container Registry
     - docker push $CI_REGISTRY_IMAGE/tradeblocks-mcp:$VERSION
     - docker push $CI_REGISTRY_IMAGE/tradeblocks-mcp:latest
+    # Push to Docker Hub
+    - docker push romeo345/tradeblocks-mcp:$VERSION
+    - docker push romeo345/tradeblocks-mcp:latest
 
 release:create:
   stage: release
@@ -209,6 +219,9 @@ beta:publish-npm:
   stage: publish
   needs: ["beta:build"]
   rules: !reference [.beta-rules, rules]
+  id_tokens:
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
   script:
     - |
       if npm view tradeblocks-mcp@$VERSION version 2>/dev/null; then
@@ -216,8 +229,7 @@ beta:publish-npm:
         exit 0
       fi
     - npm run build -w packages/mcp-server
-    - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-    - npm publish -w packages/mcp-server --tag beta --access public
+    - npm publish -w packages/mcp-server --tag beta --access public --provenance
 
 beta:publish-docker:
   stage: publish
@@ -230,6 +242,7 @@ beta:publish-docker:
     DOCKER_TLS_CERTDIR: "/certs"
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
   script:
     - apk add --no-cache nodejs npm
     - npm ci
@@ -240,8 +253,10 @@ beta:publish-docker:
         --label "org.opencontainers.image.version=$VERSION" \
         --label "org.opencontainers.image.source=$CI_PROJECT_URL" \
         -t $CI_REGISTRY_IMAGE/tradeblocks-mcp:$VERSION \
+        -t romeo345/tradeblocks-mcp:$VERSION \
         packages/mcp-server
     - docker push $CI_REGISTRY_IMAGE/tradeblocks-mcp:$VERSION
+    - docker push romeo345/tradeblocks-mcp:$VERSION
 
 beta:release:
   stage: release

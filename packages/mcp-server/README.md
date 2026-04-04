@@ -156,14 +156,14 @@ Run the MCP server in a container for remote/server deployments.
 ### Pre-built image (recommended)
 
 ```bash
-docker run -d -p 3100:3100 -v ./data:/data --env-file .env registry.gitlab.com/davidromeo/tradeblocks/tradeblocks-mcp:latest
+docker run -d -p 3100:3100 -v ./data:/data --env-file .env romeo345/tradeblocks-mcp:latest
 ```
 
 Or with docker compose, set the image in `docker-compose.yml`:
 ```yaml
 services:
   tradeblocks:
-    image: registry.gitlab.com/davidromeo/tradeblocks/tradeblocks-mcp:latest
+    image: romeo345/tradeblocks-mcp:latest
 ```
 
 ### Build from source
