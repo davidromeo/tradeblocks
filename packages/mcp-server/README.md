@@ -16,7 +16,7 @@ Model Context Protocol (MCP) server for options trading analysis. Works with Cla
 
 ### Option 1: MCPB Bundle (Claude Desktop - One Click)
 
-Download the latest `.mcpb` file from [GitHub Releases](https://github.com/davidromeo/tradeblocks/releases) and double-click to install.
+Download the latest `.mcpb` file from [Releases](https://gitlab.com/davidromeo/tradeblocks/-/releases) and double-click to install.
 
 The installer will prompt you to select your Trading Data Directory.
 
@@ -37,7 +37,7 @@ See [Configuration by Platform](#configuration-by-platform) below for platform-s
 ### Option 3: From Source
 
 ```bash
-git clone https://github.com/davidromeo/tradeblocks
+git clone https://gitlab.com/davidromeo/tradeblocks
 cd tradeblocks
 npm install
 npm run build -w packages/mcp-server
@@ -156,14 +156,14 @@ Run the MCP server in a container for remote/server deployments.
 ### Pre-built image (recommended)
 
 ```bash
-docker run -d -p 3100:3100 -v ./data:/data --env-file .env ghcr.io/davidromeo/tradeblocks-mcp:latest
+docker run -d -p 3100:3100 -v ./data:/data --env-file .env registry.gitlab.com/davidromeo/tradeblocks/tradeblocks-mcp:latest
 ```
 
 Or with docker compose, set the image in `docker-compose.yml`:
 ```yaml
 services:
   tradeblocks:
-    image: ghcr.io/davidromeo/tradeblocks-mcp:latest
+    image: registry.gitlab.com/davidromeo/tradeblocks/tradeblocks-mcp:latest
 ```
 
 ### Build from source

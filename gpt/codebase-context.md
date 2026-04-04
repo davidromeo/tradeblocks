@@ -7744,7 +7744,7 @@ Output: Working monorepo structure with packages/mcp-server/ scaffold and TypeSc
      "license": "MIT",
      "repository": {
        "type": "git",
-       "url": "https://github.com/davidromeo/tradeblocks",
+       "url": "https://gitlab.com/davidromeo/tradeblocks",
        "directory": "packages/mcp-server"
      }
    }
@@ -8796,7 +8796,7 @@ packages:
   "files": ["dist"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/davidromeo/tradeblocks",
+    "url": "https://gitlab.com/davidromeo/tradeblocks",
     "directory": "packages/mcp-server"
   }
 }
@@ -12905,8 +12905,8 @@ Create manifest.json for Desktop Extension packaging:
   "version": "0.1.0",
   "description": "Options trading analysis - backtest stats, walk-forward analysis, Monte Carlo, risk metrics",
   "author": "David Romeo",
-  "homepage": "https://github.com/davidromeo/tradeblocks",
-  "repository": "https://github.com/davidromeo/tradeblocks",
+  "homepage": "https://gitlab.com/davidromeo/tradeblocks",
+  "repository": "https://gitlab.com/davidromeo/tradeblocks",
   "license": "MIT",
   "server": {
     "type": "node",
@@ -14702,7 +14702,7 @@ jobs:
 
             ### From Source
             ```bash
-            git clone https://github.com/davidromeo/tradeblocks
+            git clone https://gitlab.com/davidromeo/tradeblocks
             cd tradeblocks && npm install && npm run build:mcp
             ```
 ```
