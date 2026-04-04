@@ -2,6 +2,8 @@
 
 Options trading analytics platform with a web dashboard and AI-powered analysis via MCP (Model Context Protocol).
 
+[Web App](https://tradeblocks.io) | [npm](https://www.npmjs.com/package/tradeblocks-mcp) | [Docker Hub](https://hub.docker.com/r/romeo345/tradeblocks-mcp) | [Buy Me a Coffee](https://www.buymeacoffee.com/davidromeo)
+
 ## Repository Structure
 
 ```
