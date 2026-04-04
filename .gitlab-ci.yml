@@ -285,8 +285,7 @@ treasury:update:
   extends: .node-setup
   stage: test
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_TYPE == "treasury"
-    - if: $CI_PIPELINE_SOURCE == "web" && $SCHEDULE_TYPE == "treasury"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
   script:
     - |
       # Get the last date in the file
