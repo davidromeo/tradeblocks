@@ -102,6 +102,7 @@ publish:npm:
         exit 0
       fi
     - npm run build -w packages/mcp-server
+    - npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}"
     - npm publish -w packages/mcp-server --access public --provenance
   environment:
     name: npm
@@ -229,6 +230,7 @@ beta:publish-npm:
         exit 0
       fi
     - npm run build -w packages/mcp-server
+    - npm config set "//registry.npmjs.org/:_authToken" "${NPM_TOKEN}"
     - npm publish -w packages/mcp-server --tag beta --access public --provenance
 
 beta:publish-docker:
