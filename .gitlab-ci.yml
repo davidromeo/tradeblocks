@@ -39,6 +39,8 @@ frontend:lint-build:
     - npm run lint
     - npm run build
   rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "master"
 
@@ -49,6 +51,8 @@ mcp-server:build-test:
     - npm run build -w packages/mcp-server
     - npm test -w packages/mcp-server
   rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "master"
 
@@ -58,7 +62,9 @@ mcp-server:build-test:
 
 .release-rules:
   rules:
-    - if: $CI_COMMIT_BRANCH == "master" && $CI_PIPELINE_SOURCE != "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "master" && $CI_PIPELINE_SOURCE == "push"
       changes:
         - packages/mcp-server/**/*
         - packages/agent-skills/**/*
