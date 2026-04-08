@@ -398,15 +398,19 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
     if (isLockError(errorMessage)) {
       const recovered = await tryRecoverLockByTerminatingStaleProcess(errorMessage, dbPath, forceRecovery);
       if (recovered) {
-        try {
-          return await openReadWriteConnection(dbPath, threads, memoryLimit);
-        } catch (recoveryError) {
-          resetConnectionState();
-          const recoveryMessage =
-            recoveryError instanceof Error ? recoveryError.message : String(recoveryError);
-          throw new Error(
-            `Failed to initialize DuckDB at ${dbPath} after lock recovery: ${recoveryMessage}`
-          );
+        // DuckDB file locks may linger briefly after process death — retry with backoff
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+          try {
+            return await openReadWriteConnection(dbPath, threads, memoryLimit);
+          } catch (retryError) {
+            const retryMsg = retryError instanceof Error ? retryError.message : String(retryError);
+            if (attempt < 2 && isLockError(retryMsg)) continue;
+            resetConnectionState();
+            throw new Error(
+              `Failed to initialize DuckDB at ${dbPath} after lock recovery: ${retryMsg}`
+            );
+          }
         }
       }
     }
@@ -479,9 +483,11 @@ export async function upgradeToReadWrite(
   if (connectionMode === "read_write" && connection) return connection;
   await closeConnection();
 
-  // Try RW with retries — another session may briefly hold the lock during its own sync
-  const maxRetries = 2;
-  const retryDelayMs = 500;
+  // Try RW with retries — another session may briefly hold the lock during its own sync.
+  // After /mcp reconnect, the old process may not have released the DuckDB file lock yet,
+  // so we retry with increasing delays to allow the lock to fully release.
+  const maxRetries = 4;
+  const retryDelayMs = 1000;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
