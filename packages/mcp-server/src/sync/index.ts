@@ -45,6 +45,25 @@ export interface SyncResult {
   results: BlockSyncResult[];
 }
 
+// --- Blocks Directory Override ---
+
+/**
+ * Optional override for where CSV block folders live.
+ * When set, sync functions scan this directory for blocks instead of baseDir.
+ * DuckDB connections still use baseDir.
+ *
+ * Set via --blocks-dir CLI flag or BLOCKS_DIRECTORY env var.
+ */
+let _blocksDir: string | null = null;
+
+export function setBlocksDir(dir: string): void {
+  _blocksDir = dir;
+}
+
+export function getBlocksDir(baseDir: string): string {
+  return _blocksDir ?? baseDir;
+}
+
 // --- Sync Functions ---
 
 /**
@@ -59,11 +78,12 @@ export interface SyncResult {
  */
 export async function syncAllBlocks(baseDir: string): Promise<SyncResult> {
   const conn = await getConnection(baseDir);
+  const blocksDir = getBlocksDir(baseDir);
   const results: BlockSyncResult[] = [];
   const errors: Array<{ blockId: string; error: string }> = [];
 
-  // 1. Detect changes
-  const { toSync, toDelete } = await detectBlockChanges(conn, baseDir);
+  // 1. Detect changes (scan blocksDir for CSV folders)
+  const { toSync, toDelete } = await detectBlockChanges(conn, blocksDir);
 
   // 2. Delete orphaned blocks
   for (const blockId of toDelete) {
@@ -78,7 +98,7 @@ export async function syncAllBlocks(baseDir: string): Promise<SyncResult> {
 
   // 3. Sync changed/new blocks
   for (const blockId of toSync) {
-    const blockPath = path.join(baseDir, blockId);
+    const blockPath = path.join(blocksDir, blockId);
     const result = await syncBlockInternal(conn, blockId, blockPath);
     results.push(result);
     if (result.status === "error" && result.error) {
@@ -111,7 +131,8 @@ export async function syncBlock(
   baseDir: string
 ): Promise<BlockSyncResult> {
   const conn = await getConnection(baseDir);
-  const blockPath = path.join(baseDir, blockId);
+  const blocksDir = getBlocksDir(baseDir);
+  const blockPath = path.join(blocksDir, blockId);
 
   // Check if folder exists
   try {

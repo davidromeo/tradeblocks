@@ -575,8 +575,8 @@ export async function detectBlockChanges(
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    if (entry.name.startsWith(".")) continue; // Skip hidden folders
-    if (entry.name === "_marketdata") continue; // Skip market data folder
+    if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue; // Skip hidden/internal folders
+    if (entry.name.includes(".")) continue; // Skip dotted names (analytics.duckdb.tmp, etc.)
 
     const blockId = entry.name;
     folderNames.add(blockId);
@@ -585,7 +585,11 @@ export async function detectBlockChanges(
 
     // Check if this is a new block (not in metadata)
     if (!syncedBlockIds.has(blockId)) {
-      toSync.push(blockId);
+      // Only sync if folder contains a tradelog CSV
+      const tradelog = await findTradelogFile(blockPath);
+      if (tradelog) {
+        toSync.push(blockId);
+      }
       continue;
     }
 
