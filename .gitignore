@@ -1,6 +1,9 @@
 # Planning docs (kept local)
 .planning/
 
+# Superpowers specs (local design docs)
+docs/superpowers/
+
 # MCP server config (contains local paths and API keys)
 .mcp.json
 
