@@ -634,8 +634,6 @@ describe("nanosToETMinuteKey", () => {
 
 // Bar timestamp: 2025-01-07 9:30 AM ET = 1736253000000 ms
 const OPTION_BAR_TS = 1736253000000;
-// Quote sip_timestamp in nanoseconds for the same minute
-const OPTION_QUOTE_NANOS = OPTION_BAR_TS * 1_000_000;
 
 function makeOptionBarsResponse(nextUrl?: string) {
   return {
@@ -672,10 +670,11 @@ describe("Quotes enrichment", () => {
   beforeEach(() => { process.env.MASSIVE_QUOTES_ENABLED = "true"; });
   afterEach(() => { delete process.env.MASSIVE_QUOTES_ENABLED; });
 
-  it("merges bid/ask into option intraday bars when quotes endpoint returns matching data", async () => {
+  it("fetchBars returns bars without bid/ask — enrichment handled by bar-cache", async () => {
+    // Quote enrichment moved from fetchBars() to fetchBarsWithCache() in bar-cache.ts.
+    // fetchBars() now returns raw OHLCV bars; bid/ask are added by the cache layer.
     fetchSpy
-      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
-      .mockResolvedValueOnce(mockResponse(makeQuotesResponse([{ bid: 12.4, ask: 13.6, nanos: OPTION_QUOTE_NANOS }])));
+      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()));
 
     const rows = await provider.fetchBars({
       ticker: "SPX250107C05000000",
@@ -686,35 +685,10 @@ describe("Quotes enrichment", () => {
     });
 
     expect(rows).toHaveLength(1);
-    expect(rows[0].bid).toBe(12.4);
-    expect(rows[0].ask).toBe(13.6);
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    // Second call must be to the quotes endpoint
-    expect((fetchSpy.mock.calls[1][0] as string)).toContain("/v3/quotes/");
-  });
-
-  it("last quote for the same minute wins (last quote overwrites earlier)", async () => {
-    // Two quotes at the same minute — second one (later sip_timestamp) should win
-    const earlyNanos = OPTION_QUOTE_NANOS;
-    const lateNanos = OPTION_QUOTE_NANOS + 30_000_000_000; // +30 seconds in nanos
-
-    fetchSpy
-      .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()))
-      .mockResolvedValueOnce(mockResponse(makeQuotesResponse([
-        { bid: 11.0, ask: 14.0, nanos: earlyNanos },
-        { bid: 12.5, ask: 13.5, nanos: lateNanos },
-      ])));
-
-    const rows = await provider.fetchBars({
-      ticker: "SPX250107C05000000",
-      from: "2025-01-07",
-      to: "2025-01-07",
-      timespan: "minute",
-      assetClass: "option",
-    });
-
-    expect(rows[0].bid).toBe(12.5);
-    expect(rows[0].ask).toBe(13.5);
+    expect(rows[0].bid).toBeUndefined();
+    expect(rows[0].ask).toBeUndefined();
+    // Only one fetch call — no quotes endpoint call from fetchBars
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it("bars without matching quotes retain undefined bid/ask", async () => {
