@@ -7,15 +7,15 @@
   "long_description": "TradeBlocks MCP server provides comprehensive options trading analysis capabilities. Import your trade logs and get detailed performance statistics, run walk-forward analysis to detect overfitting, perform Monte Carlo simulations for risk assessment, calculate optimal position sizing with Kelly criterion, and compare backtest results against actual trading performance. All analysis runs locally on your machine.",
   "author": {
     "name": "David Romeo",
-    "url": "https://gitlab.com/davidromeo"
+    "url": "https://github.com/davidromeo"
   },
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/davidromeo/tradeblocks"
+    "url": "https://github.com/davidromeo/tradeblocks"
   },
-  "homepage": "https://gitlab.com/davidromeo/tradeblocks",
-  "documentation": "https://gitlab.com/davidromeo/tradeblocks/-/tree/master/packages/mcp-server",
-  "support": "https://gitlab.com/davidromeo/tradeblocks/-/issues",
+  "homepage": "https://github.com/davidromeo/tradeblocks",
+  "documentation": "https://github.com/davidromeo/tradeblocks/tree/master/packages/mcp-server",
+  "support": "https://github.com/davidromeo/tradeblocks/issues",
   "server": {
     "type": "node",
     "entry_point": "server/index.js",
