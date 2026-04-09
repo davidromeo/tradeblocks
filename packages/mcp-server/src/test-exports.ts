@@ -333,6 +333,7 @@ export type { EnrichmentPlanInput } from './utils/quote-enricher.js';
 export {
   collapseFactors,
   computeAttribution,
+  computeGrossAttributionFlow,
   assessPrecision,
   type AttributionEntry,
   type AttributionSummaryResult,

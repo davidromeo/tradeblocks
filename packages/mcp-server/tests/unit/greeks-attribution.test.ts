@@ -2,6 +2,7 @@ import { describe, it, expect } from "@jest/globals";
 import {
   collapseFactors,
   computeAttribution,
+  computeGrossAttributionFlow,
   assessPrecision,
   filterSparseSteps,
 } from "../../src/test-exports.js";
@@ -76,6 +77,26 @@ describe("computeAttribution", () => {
     const totals = new Map<string, number>([["theta", 0], ["delta", 0]]);
     const entries = computeAttribution(totals, 0);
     expect(entries[0].pct).toBe(0);
+  });
+
+  it("adds signed gross-flow percentages when gross attribution flow is provided", () => {
+    const totals = new Map<string, number>([
+      ["theta", 600], ["delta", -100], ["vega", 200],
+    ]);
+    const entries = computeAttribution(totals, 100, 900);
+    const theta = entries.find(e => e.factor === "theta")!;
+    const delta = entries.find(e => e.factor === "delta")!;
+    expect(theta.pct_of_gross).toBe(66.7);
+    expect(delta.pct_of_gross).toBe(-11.1);
+  });
+});
+
+describe("computeGrossAttributionFlow", () => {
+  it("sums absolute factor contributions", () => {
+    const totals = new Map<string, number>([
+      ["theta", 600], ["delta", -100], ["vega", 200], ["residual", -50],
+    ]);
+    expect(computeGrossAttributionFlow(totals)).toBe(950);
   });
 });
 

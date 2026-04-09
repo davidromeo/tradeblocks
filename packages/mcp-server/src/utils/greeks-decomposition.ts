@@ -344,8 +344,8 @@ export function decomposeGreeks(config: GreeksDecompositionConfig): GreeksDecomp
     const legCount = Math.min(legs.length, cur.legPrices?.length ?? 0, next.legPrices?.length ?? 0);
 
     // Underlying prices at cur and next timestamps
-    const S1 = underlyingPrices?.get(cur.timestamp);
-    const S2 = underlyingPrices?.get(next.timestamp);
+    const S1 = cur.underlyingPrice ?? underlyingPrices?.get(cur.timestamp);
+    const S2 = next.underlyingPrice ?? underlyingPrices?.get(next.timestamp);
 
     for (let j = 0; j < legCount; j++) {
       const positionSize = legs[j].quantity * legs[j].multiplier;

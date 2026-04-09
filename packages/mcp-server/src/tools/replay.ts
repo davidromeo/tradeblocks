@@ -90,6 +90,12 @@ export const replayTradeSchema = z.object({
       "When to end the P&L path: 'trade' (default) truncates at the trade's actual close time, " +
       "'expiry' shows full path through option expiry. Only applies to tradelog mode."
     ),
+  skip_quotes: z
+    .boolean()
+    .default(false)
+    .describe(
+      "Skip NBBO quote enrichment for option bars. Faster, but uses cached trade bars / HL2 marks."
+    ),
 });
 
 // ---------------------------------------------------------------------------
@@ -148,7 +154,14 @@ export async function handleReplayTrade(
   baseDir: string,
   injectedConn?: import("@duckdb/node-api").DuckDBConnection
 ): Promise<ReplayResult> {
-  const { legs: inputLegs, block_id, trade_index, multiplier, close_at } = params;
+  const {
+    legs: inputLegs,
+    block_id,
+    trade_index,
+    multiplier,
+    close_at,
+    skip_quotes,
+  } = params;
   let { open_date, close_date } = params;
   let tradeCloseTimestamp: string | undefined; // "YYYY-MM-DD HH:MM" when trade actually closed
 
@@ -277,6 +290,7 @@ export async function handleReplayTrade(
       assetClass: 'option',
       conn: injectedConn,
       baseDir,
+      skipQuotes: skip_quotes,
     });
     if (bars.length > 0) return bars;
 
@@ -294,6 +308,7 @@ export async function handleReplayTrade(
         assetClass: 'option',
         conn: injectedConn,
         baseDir,
+        skipQuotes: skip_quotes,
       });
       if (fallbackBars.length > 0) {
         const leg = replayLegs.find(l => l.occTicker === occTicker);

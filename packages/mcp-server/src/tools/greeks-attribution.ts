@@ -23,6 +23,7 @@ export interface AttributionEntry {
   factor: string;
   pnl: number;
   pct: number;
+  pct_of_gross?: number;
 }
 
 export interface AttributionSummaryResult {
@@ -31,6 +32,9 @@ export interface AttributionSummaryResult {
   trades_skipped: number;
   trades_total: number;
   total_pnl: number;
+  mark_total_pnl: number;
+  execution_edge: number;
+  gross_attribution_flow: number;
   attribution: AttributionEntry[];
   precision: "high" | "low";
   hint?: string;
@@ -53,6 +57,9 @@ export interface AttributionInstanceResult {
   trade_index: number;
   trade_date: string;
   total_pnl: number;
+  mark_total_pnl: number;
+  execution_edge: number;
+  gross_attribution_flow: number;
   steps: AttributionStepEntry[];
   attribution: AttributionEntry[];
 }
@@ -113,6 +120,7 @@ export function collapseFactors(
 export function computeAttribution(
   totals: Map<string, number>,
   totalPnl: number,
+  grossAttributionFlow?: number,
 ): AttributionEntry[] {
   const entries: AttributionEntry[] = [];
   for (const [factor, pnl] of totals) {
@@ -120,6 +128,9 @@ export function computeAttribution(
       factor,
       pnl: Math.round(pnl * 100) / 100,
       pct: totalPnl !== 0 ? Math.round((pnl / totalPnl) * 1000) / 10 : 0,
+      ...(grossAttributionFlow && grossAttributionFlow !== 0
+        ? { pct_of_gross: Math.round((pnl / grossAttributionFlow) * 1000) / 10 }
+        : {}),
     });
   }
   entries.sort((a, b) => {
@@ -128,6 +139,14 @@ export function computeAttribution(
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
   return entries;
+}
+
+export function computeGrossAttributionFlow(totals: Map<string, number>): number {
+  let gross = 0;
+  for (const pnl of totals.values()) {
+    gross += Math.abs(pnl);
+  }
+  return gross;
 }
 
 export function assessPrecision(
@@ -176,12 +195,26 @@ async function handleSummaryMode(
 ): Promise<AttributionSummaryResult> {
   const conn = injectedConn ?? await getConnection(baseDir);
 
-  const countQuery = strategy
-    ? `SELECT COUNT(*) FROM trades.trade_data WHERE block_id = $1 AND LOWER(strategy) = LOWER($2)`
-    : `SELECT COUNT(*) FROM trades.trade_data WHERE block_id = $1`;
-  const countParams = strategy ? [block_id, strategy] : [block_id];
-  const countResult = await conn.runAndReadAll(countQuery, countParams);
-  const totalTrades = Number(countResult.getRows()[0]?.[0] ?? 0);
+  const selectedTradesQuery = strategy
+    ? `SELECT trade_index, pl
+       FROM (
+         SELECT ROW_NUMBER() OVER (ORDER BY date_opened) - 1 AS trade_index, pl, strategy
+         FROM trades.trade_data
+         WHERE block_id = $1
+       )
+       WHERE LOWER(strategy) = LOWER($2)
+       ORDER BY trade_index`
+    : `SELECT ROW_NUMBER() OVER (ORDER BY date_opened) - 1 AS trade_index, pl
+       FROM trades.trade_data
+       WHERE block_id = $1
+       ORDER BY trade_index`;
+  const selectedTradesParams = strategy ? [block_id, strategy] : [block_id];
+  const selectedTradesResult = await conn.runAndReadAll(selectedTradesQuery, selectedTradesParams);
+  const selectedTrades = selectedTradesResult.getRows().map((row) => ({
+    tradeIndex: Number(row[0] ?? 0),
+    actualPl: Number(row[1] ?? 0),
+  }));
+  const totalTrades = selectedTrades.length;
 
   if (totalTrades === 0) {
     throw new Error(
@@ -194,7 +227,8 @@ async function handleSummaryMode(
   const accumulated = new Map<string, number>();
   let decomposed = 0;
   let skipped = 0;
-  let totalPnl = 0;
+  let actualTotalPnl = 0;
+  let markTotalPnl = 0;
 
   // Process trades in concurrent batches for performance.
   // DuckDB supports concurrent reads; the replay engine is I/O-bound (bar cache lookups).
@@ -203,11 +237,12 @@ async function handleSummaryMode(
     const batchEnd = Math.min(batch + BATCH_SIZE, totalTrades);
     const promises = [];
     for (let i = batch; i < batchEnd; i++) {
+      const trade = selectedTrades[i];
       promises.push(
         handleDecomposeGreeks(
           {
             block_id,
-            trade_index: i,
+            trade_index: trade.tradeIndex,
             format: "summary",
             multiplier: 100,
             skip_quotes,
@@ -218,7 +253,8 @@ async function handleSummaryMode(
           for (const factor of result.factors) {
             accumulated.set(factor.factor, (accumulated.get(factor.factor) ?? 0) + factor.totalPnl);
           }
-          totalPnl += result.totalPnlChange;
+          actualTotalPnl += trade.actualPl;
+          markTotalPnl += result.totalPnlChange;
           decomposed++;
         }).catch(() => {
           skipped++;
@@ -235,6 +271,9 @@ async function handleSummaryMode(
       trades_skipped: skipped,
       trades_total: totalTrades,
       total_pnl: 0,
+      mark_total_pnl: 0,
+      execution_edge: 0,
+      gross_attribution_flow: 0,
       attribution: [],
       precision: "low",
       hint: "No trades could be decomposed. Ensure market data is cached for the trade dates.",
@@ -251,19 +290,42 @@ async function handleSummaryMode(
     detailed,
   );
 
-  const attribution = computeAttribution(collapsed, totalPnl);
+  const grossAttributionFlow = computeGrossAttributionFlow(collapsed);
+  const attribution = computeAttribution(collapsed, actualTotalPnl, grossAttributionFlow);
   const residualPnl = collapsed.get("residual") ?? 0;
-  const { precision, hint } = assessPrecision(residualPnl, totalPnl);
+  const precisionBase = grossAttributionFlow !== 0 ? grossAttributionFlow : markTotalPnl;
+  const { precision, hint } = assessPrecision(residualPnl, precisionBase);
+  const executionEdge = actualTotalPnl - markTotalPnl;
+
+  // Warn when the execution edge dwarfs actual P&L — signals sparse or
+  // low-quality market data rather than genuine fill advantage.
+  const hints: string[] = [];
+  if (hint) hints.push(hint);
+  const edgeRatio = Math.abs(actualTotalPnl) > 0.01
+    ? Math.abs(executionEdge) / Math.abs(actualTotalPnl)
+    : 0;
+  if (edgeRatio > 3) {
+    hints.push(
+      `Execution edge is ${Math.round(edgeRatio)}x the actual P&L — ` +
+      `mark-to-market pricing may be based on sparse or low-quality data. ` +
+      (skip_quotes
+        ? `Re-run with skip_quotes=false for NBBO-based marks.`
+        : `Consider whether intraday bar coverage is sufficient for this date range.`)
+    );
+  }
 
   return {
     block_id,
     trades_decomposed: decomposed,
     trades_skipped: skipped,
     trades_total: totalTrades,
-    total_pnl: Math.round(totalPnl * 100) / 100,
+    total_pnl: Math.round(actualTotalPnl * 100) / 100,
+    mark_total_pnl: Math.round(markTotalPnl * 100) / 100,
+    execution_edge: Math.round(executionEdge * 100) / 100,
+    gross_attribution_flow: Math.round(grossAttributionFlow * 100) / 100,
     attribution,
     precision,
-    ...(hint ? { hint } : {}),
+    ...(hints.length > 0 ? { hint: hints.join(' ') } : {}),
   };
 }
 
@@ -279,7 +341,7 @@ async function handleInstanceMode(
 
   // Get trade date for the response
   const tradeResult = await conn.runAndReadAll(
-    `SELECT date_opened, date_closed FROM trades.trade_data
+    `SELECT date_opened, date_closed, pl FROM trades.trade_data
      WHERE block_id = $1
      ORDER BY date_opened
      LIMIT 1 OFFSET $2`,
@@ -291,6 +353,7 @@ async function handleInstanceMode(
   }
   const tradeDate = String(tradeRows[0][0] ?? "");
   const closeDate = String(tradeRows[0][1] ?? tradeDate);
+  const actualPnl = Number(tradeRows[0][2] ?? 0);
 
   // Run decomposition with full step data
   const result = await handleDecomposeGreeks(
@@ -349,7 +412,9 @@ async function handleInstanceMode(
 
   // Compute total attribution for this trade
   const collapsed = collapseFactors(result.factors, detailed);
-  const attribution = computeAttribution(collapsed, result.totalPnlChange);
+  const grossAttributionFlow = computeGrossAttributionFlow(collapsed);
+  const attribution = computeAttribution(collapsed, actualPnl, grossAttributionFlow);
+  const executionEdge = actualPnl - result.totalPnlChange;
 
   const filteredSteps = filterSparseSteps(steps);
 
@@ -357,7 +422,10 @@ async function handleInstanceMode(
     block_id,
     trade_index,
     trade_date: tradeDate,
-    total_pnl: Math.round(result.totalPnlChange * 100) / 100,
+    total_pnl: Math.round(actualPnl * 100) / 100,
+    mark_total_pnl: Math.round(result.totalPnlChange * 100) / 100,
+    execution_edge: Math.round(executionEdge * 100) / 100,
+    gross_attribution_flow: Math.round(grossAttributionFlow * 100) / 100,
     steps: filteredSteps,
     attribution,
   };
@@ -405,8 +473,8 @@ export function registerGreeksAttributionTools(server: McpServer, baseDir: strin
 
         const isSummary = !("steps" in result);
         const summary = isSummary
-          ? `Block "${params.block_id}" attribution (${(result as AttributionSummaryResult).trades_decomposed}/${(result as AttributionSummaryResult).trades_total} trades): ${(result as AttributionSummaryResult).attribution.map(a => `${a.factor} ${a.pct}%`).join(", ")}`
-          : `Trade #${(result as AttributionInstanceResult).trade_index} attribution: ${(result as AttributionInstanceResult).attribution.map(a => `${a.factor} ${a.pct}%`).join(", ")}`;
+          ? `Block "${params.block_id}" attribution (${(result as AttributionSummaryResult).trades_decomposed}/${(result as AttributionSummaryResult).trades_total} trades): ${(result as AttributionSummaryResult).attribution.map(a => `${a.factor} ${a.pct_of_gross ?? a.pct}%`).join(", ")}, actual P&L ${(result as AttributionSummaryResult).total_pnl}, execution edge ${(result as AttributionSummaryResult).execution_edge}`
+          : `Trade #${(result as AttributionInstanceResult).trade_index} attribution: ${(result as AttributionInstanceResult).attribution.map(a => `${a.factor} ${a.pct_of_gross ?? a.pct}%`).join(", ")}, actual P&L ${(result as AttributionInstanceResult).total_pnl}, execution edge ${(result as AttributionInstanceResult).execution_edge}`;
 
         return createToolOutput(summary, result);
       } catch (error) {
