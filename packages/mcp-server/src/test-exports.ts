@@ -343,4 +343,5 @@ export {
 export {
   handleGetGreeksAttribution,
   getGreeksAttributionSchema,
+  filterSparseSteps,
 } from './tools/greeks-attribution.js';

@@ -333,14 +333,28 @@ async function handleInstanceMode(
   const collapsed = collapseFactors(result.factors, detailed);
   const attribution = computeAttribution(collapsed, result.totalPnlChange);
 
+  const filteredSteps = filterSparseSteps(steps);
+
   return {
     block_id,
     trade_index,
     trade_date: tradeDate,
     total_pnl: Math.round(result.totalPnlChange * 100) / 100,
-    steps,
+    steps: filteredSteps,
     attribution,
   };
+}
+
+/**
+ * Remove steps where all Greek contributions are zero (no market data for that bar).
+ * Keeps the output compact and useful.
+ */
+export function filterSparseSteps(steps: AttributionStepEntry[]): AttributionStepEntry[] {
+  return steps.filter(s =>
+    s.delta !== 0 || s.gamma !== 0 || s.theta !== 0 || s.vega !== 0 ||
+    s.residual !== 0 || (s.time_and_vol ?? 0) !== 0 ||
+    (s.charm ?? 0) !== 0 || (s.vanna ?? 0) !== 0
+  );
 }
 
 function getStepValue(

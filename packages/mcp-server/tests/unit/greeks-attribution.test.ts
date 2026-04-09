@@ -3,8 +3,9 @@ import {
   collapseFactors,
   computeAttribution,
   assessPrecision,
+  filterSparseSteps,
 } from "../../src/test-exports.js";
-import type { FactorContribution } from "../../src/test-exports.js";
+import type { FactorContribution, AttributionStepEntry } from "../../src/test-exports.js";
 
 describe("collapseFactors", () => {
   const makeFactors = (entries: Array<[string, number]>): FactorContribution[] =>
@@ -112,5 +113,37 @@ describe("FACTOR_ORDER includes time_and_vol", () => {
     const order = entries.map(e => e.factor);
     expect(order.indexOf("time_and_vol")).toBeGreaterThan(order.indexOf("gamma"));
     expect(order.indexOf("time_and_vol")).toBeLessThan(99);
+  });
+});
+
+describe("filterSparseSteps", () => {
+  it("removes steps where all numeric values are zero", () => {
+    const steps: AttributionStepEntry[] = [
+      { date: "2022-05-16", delta: 0, gamma: 0, theta: 0, vega: 0, residual: 0 },
+      { date: "2022-05-17", delta: 100, gamma: -50, theta: 0, vega: 0, residual: 0 },
+      { date: "2022-05-18", delta: 0, gamma: 0, theta: 0, vega: 0, residual: 0 },
+      { date: "2022-05-19", delta: 0, gamma: 0, theta: -20, vega: 10, residual: 5 },
+    ];
+    const result = filterSparseSteps(steps);
+    expect(result).toHaveLength(2);
+    expect(result[0].date).toBe("2022-05-17");
+    expect(result[1].date).toBe("2022-05-19");
+  });
+
+  it("keeps steps with non-zero time_and_vol", () => {
+    const steps: AttributionStepEntry[] = [
+      { date: "day-0", delta: 0, gamma: 0, theta: 0, vega: 0, residual: 0, time_and_vol: 50 },
+      { date: "day-1", delta: 0, gamma: 0, theta: 0, vega: 0, residual: 0 },
+    ];
+    const result = filterSparseSteps(steps);
+    expect(result).toHaveLength(1);
+    expect(result[0].date).toBe("day-0");
+  });
+
+  it("returns empty array when all steps are zero", () => {
+    const steps: AttributionStepEntry[] = [
+      { date: "day-0", delta: 0, gamma: 0, theta: 0, vega: 0, residual: 0 },
+    ];
+    expect(filterSparseSteps(steps)).toHaveLength(0);
   });
 });
