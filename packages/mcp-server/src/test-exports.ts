@@ -328,3 +328,14 @@ export {
 // Export quote enricher pure functions for unit testing
 export { shouldSkipEnrichment, buildEnrichmentPlan } from './utils/quote-enricher.js';
 export type { EnrichmentPlanInput } from './utils/quote-enricher.js';
+
+// Greeks attribution (v2.3)
+export {
+  collapseFactors,
+  computeAttribution,
+  assessPrecision,
+  type AttributionEntry,
+  type AttributionSummaryResult,
+  type AttributionInstanceResult,
+  type AttributionStepEntry,
+} from './tools/greeks-attribution.js';
