@@ -302,11 +302,13 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
       }));
 
       // Enrich with NBBO quotes: fill gaps + backfill bid/ask on existing bars.
-      // Skip if bars already look quote-enriched (>200 bars/day = dense minute coverage).
+      // Skip if bars are already dense AND have quote data (bid/ask populated).
+      // Dense trade-only caches (pre-enrichment) still need quote backfill.
       if (assetClass === "option" && quotesEnabled() && !opts.skipQuotes) {
         const dates = new Set(bars.map(b => b.date));
         const barsPerDay = dates.size > 0 ? bars.length / dates.size : 0;
-        if (barsPerDay < 200) {
+        const hasQuotes = bars.some(b => b.bid != null && b.ask != null);
+        if (barsPerDay < 200 || !hasQuotes) {
           const { bars: enriched, newBars } = await enrichWithQuotes(bars, ticker, from, to);
           await cacheNewBars(newBars, ticker, opts.conn, baseDir);
           return enriched;

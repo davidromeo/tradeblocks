@@ -576,7 +576,7 @@ export async function detectBlockChanges(
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue; // Skip hidden/internal folders
-    if (entry.name.includes(".")) continue; // Skip dotted names (analytics.duckdb.tmp, etc.)
+    if (entry.name.endsWith(".tmp") || entry.name.endsWith(".duckdb") || entry.name.endsWith(".duckdb.tmp")) continue; // Skip DuckDB/temp files
 
     const blockId = entry.name;
     folderNames.add(blockId);
