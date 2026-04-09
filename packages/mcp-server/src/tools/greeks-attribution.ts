@@ -256,15 +256,116 @@ async function handleSummaryMode(
   };
 }
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
 async function handleInstanceMode(
-  _block_id: string,
-  _trade_index: number,
-  _skip_quotes: boolean,
-  _detailed: boolean,
-  _baseDir: string,
-  _injectedConn?: import("@duckdb/node-api").DuckDBConnection,
+  block_id: string,
+  trade_index: number,
+  skip_quotes: boolean,
+  detailed: boolean,
+  baseDir: string,
+  injectedConn?: import("@duckdb/node-api").DuckDBConnection,
 ): Promise<AttributionInstanceResult> {
-  throw new Error("Instance mode not yet implemented");
+  const conn = injectedConn ?? await getConnection(baseDir);
+
+  // Get trade date for the response
+  const tradeResult = await conn.runAndReadAll(
+    `SELECT date_opened, date_closed FROM trades.trade_data
+     WHERE block_id = '${block_id.replace(/'/g, "''")}'
+     ORDER BY date_opened
+     LIMIT 1 OFFSET ${trade_index}`
+  );
+  const tradeRows = tradeResult.getRows();
+  if (tradeRows.length === 0) {
+    throw new Error(`Trade index ${trade_index} not found in block "${block_id}"`);
+  }
+  const tradeDate = String(tradeRows[0][0] ?? "");
+  const closeDate = String(tradeRows[0][1] ?? tradeDate);
+
+  // Run decomposition with full step data
+  const result = await handleDecomposeGreeks(
+    {
+      block_id,
+      trade_index,
+      format: "full",
+      multiplier: 100,
+    },
+    baseDir,
+    injectedConn,
+  );
+
+  // Build per-step entries from factor step arrays
+  const stepCount = result.stepCount;
+  const tradingDays = generateTradingDays(tradeDate, closeDate, stepCount + 1);
+
+  // Build factor lookup for quick access to step arrays
+  const factorSteps = new Map<string, number[]>();
+  for (const f of result.factors) {
+    factorSteps.set(f.factor, f.steps);
+  }
+
+  // Pivot: for each step, collect contributions from all factors
+  const steps: AttributionStepEntry[] = [];
+  for (let i = 0; i <= stepCount; i++) {
+    const entry: AttributionStepEntry = {
+      date: tradingDays[i] ?? `day-${i}`,
+      delta: getStepValue(factorSteps, "delta", i, detailed ? 0 : (factorSteps.get("charm")?.[i] ?? 0)),
+      gamma: getStepValue(factorSteps, "gamma", i, 0),
+      theta: getStepValue(factorSteps, "theta", i, 0),
+      vega: getStepValue(factorSteps, "vega", i, detailed ? 0 : (factorSteps.get("vanna")?.[i] ?? 0)),
+      residual: getStepValue(factorSteps, "residual", i, 0),
+    };
+    if (detailed) {
+      entry.charm = factorSteps.get("charm")?.[i] ?? 0;
+      entry.vanna = factorSteps.get("vanna")?.[i] ?? 0;
+    }
+    steps.push(entry);
+  }
+
+  // Compute total attribution for this trade
+  const collapsed = collapseFactors(result.factors, detailed);
+  const attribution = computeAttribution(collapsed, result.totalPnlChange);
+
+  // suppress unused parameter warning
+  void skip_quotes;
+
+  return {
+    block_id,
+    trade_index,
+    trade_date: tradeDate,
+    total_pnl: Math.round(result.totalPnlChange * 100) / 100,
+    steps,
+    attribution,
+  };
 }
-/* eslint-enable @typescript-eslint/no-unused-vars */
+
+function getStepValue(
+  factorSteps: Map<string, number[]>,
+  factor: string,
+  index: number,
+  collapsedAddition: number,
+): number {
+  return Math.round(((factorSteps.get(factor)?.[index] ?? 0) + collapsedAddition) * 100) / 100;
+}
+
+function generateTradingDays(fromDate: string, toDate: string, count: number): string[] {
+  const days: string[] = [];
+  const start = new Date(fromDate + "T12:00:00");
+  const end = new Date(toDate + "T12:00:00");
+  const current = new Date(start);
+
+  while (current <= end && days.length < count) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) {
+      const y = current.getFullYear();
+      const m = String(current.getMonth() + 1).padStart(2, "0");
+      const d = String(current.getDate()).padStart(2, "0");
+      days.push(`${y}-${m}-${d}`);
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  while (days.length < count) {
+    days.push(`day-${days.length}`);
+  }
+
+  return days;
+}
