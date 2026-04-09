@@ -12,6 +12,8 @@ import { z } from "zod";
 import { getConnection } from "../db/connection.js";
 import { handleDecomposeGreeks } from "./exit-analysis.js";
 import type { FactorContribution } from "../utils/greeks-decomposition.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createToolOutput } from "../utils/output-formatter.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -368,4 +370,44 @@ function generateTradingDays(fromDate: string, toDate: string, count: number): s
   }
 
   return days;
+}
+
+// ---------------------------------------------------------------------------
+// Tool registration
+// ---------------------------------------------------------------------------
+
+export function registerGreeksAttributionTools(server: McpServer, baseDir: string): void {
+  server.registerTool(
+    "get_greeks_attribution",
+    {
+      description:
+        "Decompose a block's P&L into Greek components (delta, gamma, theta, vega). " +
+        "Summary mode: attribution percentages across all trades — reveals what drives the strategy. " +
+        "Instance mode: per-day Greek P&L time-series for a single trade. " +
+        "Use skip_quotes=true (default) for fast analysis, false for NBBO-precision.",
+      inputSchema: getGreeksAttributionSchema,
+    },
+    async (params) => {
+      try {
+        const result = await handleGetGreeksAttribution(params, baseDir);
+
+        const isSummary = !("steps" in result);
+        const summary = isSummary
+          ? `Block "${params.block_id}" attribution (${(result as AttributionSummaryResult).trades_decomposed}/${(result as AttributionSummaryResult).trades_total} trades): ${(result as AttributionSummaryResult).attribution.map(a => `${a.factor} ${a.pct}%`).join(", ")}`
+          : `Trade #${(result as AttributionInstanceResult).trade_index} attribution: ${(result as AttributionInstanceResult).attribution.map(a => `${a.factor} ${a.pct}%`).join(", ")}`;
+
+        return createToolOutput(summary, result);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error in Greeks attribution: ${(error as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
 }

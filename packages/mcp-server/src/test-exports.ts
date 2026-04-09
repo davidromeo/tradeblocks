@@ -339,3 +339,8 @@ export {
   type AttributionInstanceResult,
   type AttributionStepEntry,
 } from './tools/greeks-attribution.js';
+
+export {
+  handleGetGreeksAttribution,
+  getGreeksAttributionSchema,
+} from './tools/greeks-attribution.js';
