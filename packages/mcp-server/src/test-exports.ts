@@ -316,4 +316,11 @@ export {
 export {
   fetchBarsWithCache,
   type FetchBarsWithCacheOptions,
+  mergeQuoteBars,
+  getDataTier,
+  readCachedBars,
+  fetchEntryBarsForCandidates,
+  fetchBarsForLegsBulk,
+  type DataTier,
+  type ReadCachedBarsOptions,
 } from './utils/bar-cache.js';
