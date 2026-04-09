@@ -152,7 +152,7 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
     )
   `);
 
-  // Migration: drop Trend_Score column (removed — not in any backtester, was an invented composite)
+  // Migration: drop Trend_Score column (removed — was an invented composite, not a real market metric)
   try {
     await conn.run(`ALTER TABLE market.daily DROP COLUMN Trend_Score`);
   } catch {
@@ -299,6 +299,36 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
     }
   }
 
+  // Option chain cache: contract-level metadata per underlying, date, and ticker
+  // PK: (underlying, date, ticker) — one row per option contract
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS market.option_chain (
+      underlying     VARCHAR NOT NULL,
+      date           VARCHAR NOT NULL,
+      ticker         VARCHAR NOT NULL,
+      contract_type  VARCHAR NOT NULL,
+      strike         DOUBLE  NOT NULL,
+      expiration     VARCHAR NOT NULL,
+      dte            INTEGER,
+      exercise_style VARCHAR,
+      PRIMARY KEY (underlying, date, ticker)
+    )
+  `);
+
+  // Data coverage tracking — fast lookup of what's cached per ticker/date/source
+  // PK: (ticker, date, source) — avoids scanning market.intraday for coverage checks
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS market.data_coverage (
+      ticker VARCHAR NOT NULL,
+      date VARCHAR NOT NULL,
+      source VARCHAR NOT NULL,       -- 'flatfile', 'api_trade', 'api_quote', 'csv_import'
+      bar_count INTEGER NOT NULL,
+      has_quotes BOOLEAN DEFAULT FALSE,
+      imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (ticker, date, source)
+    )
+  `);
+
   // Sync state tracking for market data imports
   // PK: (source, ticker, target_table) — tracks per-source, per-ticker, per-table sync state
   await conn.run(`
@@ -316,6 +346,9 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
       PRIMARY KEY (source, ticker, target_table)
     )
   `);
+
+  // Quote hydration job queue moved to standalone queue.duckdb (see quote-minute-cache.ts)
+  // to avoid locking market.duckdb during long-running backfill drains.
 
   // Phase 75: migrate legacy context data to normalized schema
   await migrateContextToNormalized(conn);
