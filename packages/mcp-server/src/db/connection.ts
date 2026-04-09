@@ -308,6 +308,21 @@ async function openReadWriteConnection(
   await ensureReportingDataTable(connection);
   await ensureMarketTables(connection);
   await ensureProfilesSchema(connection);
+
+  // Optional extensions (e.g., additional DB attachments, write-target overrides)
+  try {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — connection.ext.ts is intentionally absent in this repo; dynamic import fails silently
+    const ext = await import('./connection.ext.js');
+    const ctx = await ext.default(connection, {
+      baseDir: path.dirname(dbPath),
+      marketDbPath: storedMarketDbPath!,
+    });
+    if (ctx?.intradayWriteTable) _intradayWriteTable = ctx.intradayWriteTable;
+  } catch {
+    // No extensions present — defaults apply
+  }
+
   connectionMode = "read_write";
 
   return connection;
@@ -549,4 +564,18 @@ export function getConnectionMode(): "read_write" | "read_only" | null {
  */
 export function isConnected(): boolean {
   return connection !== null;
+}
+
+// ---------------------------------------------------------------------------
+// Intraday write target
+// ---------------------------------------------------------------------------
+
+let _intradayWriteTable = 'market.intraday';
+
+/**
+ * Returns the table name to INSERT intraday bars into.
+ * Default: 'market.intraday'. Can be overridden by connection extensions.
+ */
+export function getIntradayWriteTable(): string {
+  return _intradayWriteTable;
 }
