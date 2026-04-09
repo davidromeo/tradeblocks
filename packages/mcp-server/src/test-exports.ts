@@ -324,3 +324,7 @@ export {
   type DataTier,
   type ReadCachedBarsOptions,
 } from './utils/bar-cache.js';
+
+// Export quote enricher pure functions for unit testing
+export { shouldSkipEnrichment, buildEnrichmentPlan } from './utils/quote-enricher.js';
+export type { EnrichmentPlanInput } from './utils/quote-enricher.js';
