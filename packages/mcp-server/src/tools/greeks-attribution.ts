@@ -43,6 +43,7 @@ export interface AttributionStepEntry {
   theta: number;
   vega: number;
   residual: number;
+  time_and_vol?: number;
   charm?: number;
   vanna?: number;
 }
@@ -95,7 +96,7 @@ const COLLAPSE_MAP: Record<string, string> = {
   vanna: "vega",
 };
 
-const FACTOR_ORDER: string[] = ["theta", "vega", "delta", "gamma", "residual", "charm", "vanna"];
+const FACTOR_ORDER: string[] = ["theta", "vega", "delta", "gamma", "residual", "time_and_vol", "charm", "vanna"];
 
 export function collapseFactors(
   factors: FactorContribution[],
@@ -204,6 +205,7 @@ async function handleSummaryMode(
           trade_index: i,
           format: "summary",
           multiplier: 100,
+          skip_quotes,
         },
         baseDir,
         injectedConn,
@@ -289,6 +291,7 @@ async function handleInstanceMode(
       trade_index,
       format: "full",
       multiplier: 100,
+      skip_quotes,
     },
     baseDir,
     injectedConn,
@@ -315,6 +318,10 @@ async function handleInstanceMode(
       vega: getStepValue(factorSteps, "vega", i, detailed ? 0 : (factorSteps.get("vanna")?.[i] ?? 0)),
       residual: getStepValue(factorSteps, "residual", i, 0),
     };
+    // time_and_vol: present when numerical fallback was used (theta/vega couldn't be separated)
+    if (factorSteps.has("time_and_vol")) {
+      entry.time_and_vol = getStepValue(factorSteps, "time_and_vol", i, 0);
+    }
     if (detailed) {
       entry.charm = factorSteps.get("charm")?.[i] ?? 0;
       entry.vanna = factorSteps.get("vanna")?.[i] ?? 0;
@@ -325,9 +332,6 @@ async function handleInstanceMode(
   // Compute total attribution for this trade
   const collapsed = collapseFactors(result.factors, detailed);
   const attribution = computeAttribution(collapsed, result.totalPnlChange);
-
-  // suppress unused parameter warning
-  void skip_quotes;
 
   return {
     block_id,

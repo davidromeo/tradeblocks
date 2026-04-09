@@ -102,3 +102,15 @@ describe("assessPrecision", () => {
     expect(result.precision).toBe("low");
   });
 });
+
+describe("FACTOR_ORDER includes time_and_vol", () => {
+  it("sorts time_and_vol after residual in computeAttribution", () => {
+    const totals = new Map<string, number>([
+      ["time_and_vol", -500], ["delta", 200], ["gamma", 100],
+    ]);
+    const entries = computeAttribution(totals, 1000);
+    const order = entries.map(e => e.factor);
+    expect(order.indexOf("time_and_vol")).toBeGreaterThan(order.indexOf("gamma"));
+    expect(order.indexOf("time_and_vol")).toBeLessThan(99);
+  });
+});
