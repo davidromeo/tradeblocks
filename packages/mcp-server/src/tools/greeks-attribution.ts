@@ -196,28 +196,36 @@ async function handleSummaryMode(
   let skipped = 0;
   let totalPnl = 0;
 
-  for (let i = 0; i < totalTrades; i++) {
-    try {
-      const result = await handleDecomposeGreeks(
-        {
-          block_id,
-          trade_index: i,
-          format: "summary",
-          multiplier: 100,
-          skip_quotes,
-        },
-        baseDir,
-        injectedConn,
+  // Process trades in concurrent batches for performance.
+  // DuckDB supports concurrent reads; the replay engine is I/O-bound (bar cache lookups).
+  const BATCH_SIZE = 10;
+  for (let batch = 0; batch < totalTrades; batch += BATCH_SIZE) {
+    const batchEnd = Math.min(batch + BATCH_SIZE, totalTrades);
+    const promises = [];
+    for (let i = batch; i < batchEnd; i++) {
+      promises.push(
+        handleDecomposeGreeks(
+          {
+            block_id,
+            trade_index: i,
+            format: "summary",
+            multiplier: 100,
+            skip_quotes,
+          },
+          baseDir,
+          injectedConn,
+        ).then(result => {
+          for (const factor of result.factors) {
+            accumulated.set(factor.factor, (accumulated.get(factor.factor) ?? 0) + factor.totalPnl);
+          }
+          totalPnl += result.totalPnlChange;
+          decomposed++;
+        }).catch(() => {
+          skipped++;
+        })
       );
-
-      for (const factor of result.factors) {
-        accumulated.set(factor.factor, (accumulated.get(factor.factor) ?? 0) + factor.totalPnl);
-      }
-      totalPnl += result.totalPnlChange;
-      decomposed++;
-    } catch {
-      skipped++;
     }
+    await Promise.allSettled(promises);
   }
 
   if (decomposed === 0) {
