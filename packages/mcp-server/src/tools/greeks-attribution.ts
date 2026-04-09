@@ -299,7 +299,17 @@ async function handleInstanceMode(
 
   // Build per-step entries from factor step arrays
   const stepCount = result.stepCount;
-  const tradingDays = generateTradingDays(tradeDate, closeDate, stepCount + 1);
+
+  // Get actual trading dates from market data for this date range
+  const datesResult = await conn.runAndReadAll(
+    `SELECT DISTINCT date FROM market.intraday
+     WHERE date >= $1 AND date <= $2
+     ORDER BY date`,
+    [tradeDate, closeDate]
+  );
+  const tradingDates = datesResult.getRows().map(r => String(r[0]));
+  const getStepDate = (i: number): string =>
+    i < tradingDates.length ? tradingDates[i] : `day-${i}`;
 
   // Build factor lookup for quick access to step arrays
   const factorSteps = new Map<string, number[]>();
@@ -311,7 +321,7 @@ async function handleInstanceMode(
   const steps: AttributionStepEntry[] = [];
   for (let i = 0; i <= stepCount; i++) {
     const entry: AttributionStepEntry = {
-      date: tradingDays[i] ?? `day-${i}`,
+      date: getStepDate(i),
       delta: getStepValue(factorSteps, "delta", i, detailed ? 0 : (factorSteps.get("charm")?.[i] ?? 0)),
       gamma: getStepValue(factorSteps, "gamma", i, 0),
       theta: getStepValue(factorSteps, "theta", i, 0),
@@ -364,30 +374,6 @@ function getStepValue(
   collapsedAddition: number,
 ): number {
   return Math.round(((factorSteps.get(factor)?.[index] ?? 0) + collapsedAddition) * 100) / 100;
-}
-
-function generateTradingDays(fromDate: string, toDate: string, count: number): string[] {
-  const days: string[] = [];
-  const start = new Date(fromDate + "T12:00:00");
-  const end = new Date(toDate + "T12:00:00");
-  const current = new Date(start);
-
-  while (current <= end && days.length < count) {
-    const day = current.getDay();
-    if (day !== 0 && day !== 6) {
-      const y = current.getFullYear();
-      const m = String(current.getMonth() + 1).padStart(2, "0");
-      const d = String(current.getDate()).padStart(2, "0");
-      days.push(`${y}-${m}-${d}`);
-    }
-    current.setDate(current.getDate() + 1);
-  }
-
-  while (days.length < count) {
-    days.push(`day-${days.length}`);
-  }
-
-  return days;
 }
 
 // ---------------------------------------------------------------------------
