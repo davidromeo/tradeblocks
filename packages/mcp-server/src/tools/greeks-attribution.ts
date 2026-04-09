@@ -176,12 +176,11 @@ async function handleSummaryMode(
 ): Promise<AttributionSummaryResult> {
   const conn = injectedConn ?? await getConnection(baseDir);
 
-  const strategyFilter = strategy
-    ? ` AND LOWER(strategy) = LOWER('${strategy.replace(/'/g, "''")}')`
-    : "";
-  const countResult = await conn.runAndReadAll(
-    `SELECT COUNT(*) FROM trades.trade_data WHERE block_id = '${block_id.replace(/'/g, "''")}' ${strategyFilter}`
-  );
+  const countQuery = strategy
+    ? `SELECT COUNT(*) FROM trades.trade_data WHERE block_id = $1 AND LOWER(strategy) = LOWER($2)`
+    : `SELECT COUNT(*) FROM trades.trade_data WHERE block_id = $1`;
+  const countParams = strategy ? [block_id, strategy] : [block_id];
+  const countResult = await conn.runAndReadAll(countQuery, countParams);
   const totalTrades = Number(countResult.getRows()[0]?.[0] ?? 0);
 
   if (totalTrades === 0) {
@@ -273,9 +272,10 @@ async function handleInstanceMode(
   // Get trade date for the response
   const tradeResult = await conn.runAndReadAll(
     `SELECT date_opened, date_closed FROM trades.trade_data
-     WHERE block_id = '${block_id.replace(/'/g, "''")}'
+     WHERE block_id = $1
      ORDER BY date_opened
-     LIMIT 1 OFFSET ${trade_index}`
+     LIMIT 1 OFFSET $2`,
+    [block_id, trade_index]
   );
   const tradeRows = tradeResult.getRows();
   if (tradeRows.length === 0) {
