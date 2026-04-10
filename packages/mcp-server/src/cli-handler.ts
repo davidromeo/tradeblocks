@@ -23,6 +23,15 @@ import { registerEdgeDecayTools } from "./tools/edge-decay.js";
 import { registerGuideTools } from "./tools/guides.js";
 import { registerProfileTools } from "./tools/profiles.js";
 import { registerProfileAnalysisTools } from "./tools/profile-analysis.js";
+import { registerMarketImportTools } from "./tools/market-imports.js";
+import { registerMarketEnrichmentTools } from "./tools/market-enrichment.js";
+import { registerRegimeAdvisorTools } from "./tools/regime-advisor.js";
+import { registerReplayTools } from "./tools/replay.js";
+import { registerSnapshotTools } from "./tools/snapshot.js";
+import { registerExitAnalysisTools } from "./tools/exit-analysis.js";
+import { registerBatchExitAnalysisTools } from "./tools/batch-exit-analysis.js";
+import { registerGreeksAttributionTools } from "./tools/greeks-attribution.js";
+import { extraCliRegistrations } from "./cli-handler.ext.js";
 
 // Type for tool result content items
 type ContentItem =
@@ -122,6 +131,15 @@ export async function handleDirectCall(args: string[]): Promise<void> {
   registerGuideTools(mockServer);
   registerProfileTools(mockServer, resolvedDir);
   registerProfileAnalysisTools(mockServer, resolvedDir);
+  registerMarketImportTools(mockServer, resolvedDir);
+  registerMarketEnrichmentTools(mockServer, resolvedDir);
+  registerRegimeAdvisorTools(mockServer, resolvedDir);
+  registerReplayTools(mockServer, resolvedDir);
+  registerSnapshotTools(mockServer);
+  registerExitAnalysisTools(mockServer, resolvedDir);
+  registerBatchExitAnalysisTools(mockServer, resolvedDir);
+  registerGreeksAttributionTools(mockServer, resolvedDir);
+  for (const register of extraCliRegistrations) register(mockServer, resolvedDir);
 
   // Handle special case: list available tools
   if (!toolName || toolName === "--list" || toolName === "help") {
