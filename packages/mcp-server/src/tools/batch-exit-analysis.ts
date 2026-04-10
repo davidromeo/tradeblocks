@@ -254,6 +254,7 @@ export async function handleBatchExitAnalysis(
             multiplier,
             format: 'full',
             close_at: 'trade',
+            skip_quotes: false,
           },
           baseDir,
           injectedConn,

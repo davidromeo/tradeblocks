@@ -35,6 +35,7 @@ export interface PnlPoint {
   timestamp: string;       // "YYYY-MM-DD HH:MM" ET
   strategyPnl: number;     // Combined P&L across all legs at this minute
   legPrices: number[];     // Mark price for each leg at this minute (bid/ask mid or HL2 fallback)
+  underlyingPrice?: number; // Underlying price used for greeks / decomposition at this timestamp
   // Per-leg greeks (Phase 69) — array parallel to legPrices
   legGreeks?: GreeksResult[];
   // Net position greeks — quantity-weighted aggregation across legs
@@ -402,6 +403,7 @@ export function computeStrategyPnlPath(
         }
 
         if (underlyingPrice !== undefined) {
+          point.underlyingPrice = underlyingPrice;
           const legGreeksArr: GreeksResult[] = [];
           let netDelta = 0, netGamma = 0, netTheta = 0, netVega = 0;
           let allNull = true;

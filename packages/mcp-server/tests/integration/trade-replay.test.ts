@@ -12,6 +12,7 @@ import { jest } from "@jest/globals";
 
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
 import { handleReplayTrade } from "../../src/tools/replay.js";
+import { handleDecomposeGreeks } from "../../src/tools/exit-analysis.js";
 import type { MassiveAggregateResponse } from "../../src/utils/providers/massive.js";
 
 // =============================================================================
@@ -81,6 +82,12 @@ const SPY_475C_BARS = [
   { t: 1737124320000, o: 3.2, h: 3.3, l: 2.6, c: 2.7 },   // 09:32
 ];
 
+const SPY_UNDERLYING_BARS = [
+  { t: 1737124200000, o: 470.0, h: 470.5, l: 469.8, c: 470.2 },
+  { t: 1737124260000, o: 470.2, h: 471.0, l: 470.1, c: 470.8 },
+  { t: 1737124320000, o: 470.8, h: 471.4, l: 470.6, c: 471.1 },
+];
+
 // =============================================================================
 // Test suite
 // =============================================================================
@@ -119,6 +126,7 @@ describe("replay_trade integration", () => {
 
   afterEach(async () => {
     delete process.env.MASSIVE_API_KEY;
+    delete process.env.MASSIVE_QUOTES_ENABLED;
     jest.restoreAllMocks();
     conn.closeSync();
   });
@@ -252,6 +260,52 @@ describe("replay_trade integration", () => {
           "/tmp/test-replay"
         )
       ).rejects.toThrow("open_date and close_date are required");
+    });
+
+    test("decompose_greeks reuses replay underlying prices and honors skip_quotes", async () => {
+      process.env.MASSIVE_QUOTES_ENABLED = "true";
+
+      const optionResponse = buildMinuteBarResponse(
+        "O:SPY250124C00470000",
+        SPY_470C_BARS
+      );
+      const underlyingResponse = buildMinuteBarResponse(
+        "SPY",
+        SPY_UNDERLYING_BARS
+      );
+
+      const fetchSpy = mockFetch(
+        new Map([
+          ["SPY250124C00470000", optionResponse],
+          ["/ticker/SPY/", underlyingResponse],
+        ])
+      );
+
+      const result = await handleDecomposeGreeks(
+        {
+          legs: [
+            {
+              ticker: "SPY",
+              strike: 470,
+              type: "C",
+              expiry: "2025-01-24",
+              quantity: 1,
+              entry_price: 5.0,
+            },
+          ],
+          open_date: "2025-01-17",
+          close_date: "2025-01-17",
+          multiplier: 100,
+          skip_quotes: true,
+        },
+        "/tmp/test-replay"
+      );
+
+      expect(result.totalPnlChange).not.toBeNaN();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(
+        fetchSpy.mock.calls.some(([input]) => String(input).includes("/v3/quotes/"))
+      ).toBe(false);
     });
   });
 

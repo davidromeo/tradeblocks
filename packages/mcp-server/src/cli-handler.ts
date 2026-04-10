@@ -97,6 +97,13 @@ export async function handleDirectCall(args: string[]): Promise<void> {
     process.exit(1);
   }
 
+  // Configure separate blocks directory if specified
+  if (process.env.TRADEBLOCKS_BLOCKS_DIR) {
+    const resolvedBlocksDir = path.resolve(process.env.TRADEBLOCKS_BLOCKS_DIR);
+    const { setBlocksDir } = await import("./sync/index.js");
+    setBlocksDir(resolvedBlocksDir);
+  }
+
   // Create mock server and register all tools
   const capture = new ToolCapture();
 

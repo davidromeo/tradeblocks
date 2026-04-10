@@ -1,6 +1,6 @@
 {
   "name": "tradeblocks-mcp",
-  "version": "2.2.5",
+  "version": "2.3.0",
   "description": "MCP server for options trade analysis",
   "author": "David Romeo <davidmromeo@gmail.com>",
   "type": "module",
@@ -55,7 +55,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/davidromeo/tradeblocks",
+    "url": "https://github.com/davidromeo/tradeblocks",
     "directory": "packages/mcp-server"
   }
 }

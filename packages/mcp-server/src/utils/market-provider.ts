@@ -90,13 +90,102 @@ export interface FetchSnapshotResult {
   underlying_ticker: string;
 }
 
+/** Options for fetching historical option contract metadata (reference endpoint). */
+export interface FetchContractListOptions {
+  underlying: string;
+  as_of: string;           // "YYYY-MM-DD" -- historical date
+  expired?: boolean;       // default true for historical contract lookup
+  expiration_date_gte?: string;  // Only contracts expiring on or after this date
+  expiration_date_lte?: string;  // Only contracts expiring on or before this date
+}
+
+/** Single contract reference record (no greeks/pricing -- metadata only). */
+export interface ContractReference {
+  ticker: string;          // OCC ticker without O: prefix
+  contract_type: "call" | "put";
+  strike: number;
+  expiration: string;      // "YYYY-MM-DD"
+  exercise_style: string;  // "american" | "european"
+}
+
+/** Result from contract list reference endpoint. */
+export interface FetchContractListResult {
+  contracts: ContractReference[];
+  underlying: string;
+}
+
+/** Dataset types available for bulk flat-file download. */
+export type BulkDataset = "minute_bars" | "daily_bars" | "trades";
+
+/** Options for downloading and filtering a full day of flat-file data to Parquet. */
+export interface BulkDownloadOptions {
+  /** Trading date "YYYY-MM-DD" */
+  date: string;
+  /** Which dataset to download */
+  dataset: BulkDataset;
+  /** Asset class determines S3 path and CSV format */
+  assetClass: "option" | "index";
+  /** Plain tickers to filter for (e.g. ["SPX", "SPXW"] for options, ["SPX", "VIX"] for indices) */
+  tickers: string[];
+  /** Absolute path to write the output Parquet file */
+  outputPath: string;
+}
+
+/** Result from a bulk download operation. */
+export interface BulkDownloadResult {
+  /** Number of rows written to Parquet */
+  rowCount: number;
+  /** True if the output Parquet file already existed (skipped download) */
+  skipped: boolean;
+}
+
+/** Earliest available date per asset class. */
+export interface DataAvailability {
+  /** Earliest date with data, "YYYY-MM-DD" */
+  from: string;
+}
+
+/** Declares what data endpoints a provider supports. Used by the pipeline to build fetch plans. */
+export interface ProviderCapabilities {
+  tradeBars: boolean;       // minute OHLC from trade aggregates
+  quotes: boolean;          // NBBO bid/ask (tick or minute level)
+  greeks: boolean;          // provider-computed greeks on contracts
+  flatFiles: boolean;       // bulk S3/file download of historical data
+  bulkByRoot: boolean;      // one call returns all strikes for a root (ThetaData pattern)
+  perTicker: boolean;       // one call per OCC ticker (Massive/Polygon pattern)
+  minuteBars: boolean;      // minute-level resolution available
+  dailyBars: boolean;       // daily-level resolution available
+  /** Earliest available data per asset class. Used by download tools and data pipelines to avoid requesting data that doesn't exist. */
+  dataAvailability?: {
+    option?: DataAvailability;
+    index?: DataAvailability;
+    stock?: DataAvailability;
+  };
+}
+
 /** The contract every market data provider must implement. */
 export interface MarketDataProvider {
   readonly name: string;
+  /** Returns what data endpoints this provider supports. */
+  capabilities(): ProviderCapabilities;
   fetchBars(options: FetchBarsOptions): Promise<BarRow[]>;
   fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult>;
   /** Best-effort bid/ask quotes keyed by "YYYY-MM-DD HH:MM" ET. Optional — not all providers support this. */
   fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>>;
+  /** Historical option contract list from reference endpoint. Optional — not all providers support this. */
+  fetchContractList?(options: FetchContractListOptions): Promise<FetchContractListResult>;
+  /**
+   * Download a flat file for a single date, returning the local file path.
+   * Provider-specific: Massive uses S3/rclone, ThetaData uses HTTP flat files.
+   * Returns null if flat files aren't supported or the date doesn't exist.
+   */
+  downloadFlatFile?(date: string, assetClass: string): Promise<string | null>;
+  /**
+   * Download a day of flat-file data, filter to specific tickers, and write to Parquet.
+   * Provider-specific: Massive uses S3/rclone + DuckDB for filtering.
+   * Returns row count and whether the file was skipped (already existed).
+   */
+  downloadBulkData?(options: BulkDownloadOptions): Promise<BulkDownloadResult>;
 }
 
 // ---------------------------------------------------------------------------

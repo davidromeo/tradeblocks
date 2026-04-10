@@ -90,6 +90,12 @@ export const replayTradeSchema = z.object({
       "When to end the P&L path: 'trade' (default) truncates at the trade's actual close time, " +
       "'expiry' shows full path through option expiry. Only applies to tradelog mode."
     ),
+  skip_quotes: z
+    .boolean()
+    .default(false)
+    .describe(
+      "Skip NBBO quote enrichment for option bars. Faster, but uses cached trade bars / HL2 marks."
+    ),
 });
 
 // ---------------------------------------------------------------------------
@@ -128,15 +134,11 @@ export function resolveOODateRange(
   if (hints.length === 0) return null;
 
   const sorted = [...hints].sort();
-  const minDate = sorted[0];
   const maxDate = sorted[sorted.length - 1];
 
-  if (minDate === maxDate) {
-    // Single expiry — fetch from trade open to expiry
-    return { from: tradeOpenDate, to: maxDate };
-  }
-  // Calendar spread — near-term to far-term expiry
-  return { from: minDate, to: maxDate };
+  // Always start from trade open date — bars are needed from entry, not from expiry.
+  // End at the latest expiry to cover the full path.
+  return { from: tradeOpenDate, to: maxDate };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +150,14 @@ export async function handleReplayTrade(
   baseDir: string,
   injectedConn?: import("@duckdb/node-api").DuckDBConnection
 ): Promise<ReplayResult> {
-  const { legs: inputLegs, block_id, trade_index, multiplier, close_at } = params;
+  const {
+    legs: inputLegs,
+    block_id,
+    trade_index,
+    multiplier,
+    close_at,
+    skip_quotes,
+  } = params;
   let { open_date, close_date } = params;
   let tradeCloseTimestamp: string | undefined; // "YYYY-MM-DD HH:MM" when trade actually closed
 
@@ -176,7 +185,7 @@ export async function handleReplayTrade(
       `SELECT legs, premium, date_opened, date_closed, ticker, num_contracts, time_closed
        FROM trades.trade_data
        WHERE block_id = '${block_id.replace(/'/g, "''")}'
-       ORDER BY date_opened
+       ORDER BY date_opened, rowid
        LIMIT 1 OFFSET ${trade_index}`
     );
 
@@ -277,6 +286,7 @@ export async function handleReplayTrade(
       assetClass: 'option',
       conn: injectedConn,
       baseDir,
+      skipQuotes: skip_quotes,
     });
     if (bars.length > 0) return bars;
 
@@ -294,6 +304,7 @@ export async function handleReplayTrade(
         assetClass: 'option',
         conn: injectedConn,
         baseDir,
+        skipQuotes: skip_quotes,
       });
       if (fallbackBars.length > 0) {
         const leg = replayLegs.find(l => l.occTicker === occTicker);

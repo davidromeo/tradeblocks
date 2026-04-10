@@ -17,12 +17,18 @@
 import { z } from "zod";
 import type {
   MarketDataProvider,
+  ProviderCapabilities,
   BarRow,
   FetchBarsOptions,
   FetchSnapshotOptions,
   FetchSnapshotResult,
   OptionContract,
   AssetClass,
+  FetchContractListOptions,
+  FetchContractListResult,
+  ContractReference,
+  BulkDownloadOptions,
+  BulkDownloadResult,
 } from "../market-provider.js";
 import { computeLegGreeks } from "../black-scholes.js";
 
@@ -159,6 +165,24 @@ export const MassiveSnapshotResponseSchema = z.object({
 });
 
 // ===========================================================================
+// Zod Schemas — Contract List (Reference Endpoint)
+// ===========================================================================
+
+export const MassiveContractReferenceSchema = z.object({
+  ticker: z.string(),
+  strike_price: z.number(),
+  expiration_date: z.string(),
+  contract_type: z.string(),
+  exercise_style: z.string().optional().default("american"),
+});
+
+export const MassiveContractListResponseSchema = z.object({
+  results: z.array(MassiveContractReferenceSchema),
+  next_url: z.string().nullable().optional(),
+  count: z.number().optional(),
+});
+
+// ===========================================================================
 // Constants
 // ===========================================================================
 
@@ -208,6 +232,28 @@ export function nanosToETMinuteKey(nanosTimestamp: number): string {
   const date = massiveTimestampToETDate(ms);
   const time = massiveTimestampToETTime(ms);
   return `${date} ${time}`;
+}
+
+function etOffsetMinutesForDate(dateStr: string): number {
+  const probe = new Date(`${dateStr}T12:00:00Z`);
+  const offsetToken = probe.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "shortOffset",
+  }).match(/GMT([+-]\d{1,2})(?::(\d{2}))?/);
+  if (!offsetToken) {
+    throw new Error(`Unable to resolve ET offset for ${dateStr}`);
+  }
+  const hours = Number(offsetToken[1]);
+  const minutes = offsetToken[2] ? Number(offsetToken[2]) : 0;
+  return hours * 60 + Math.sign(hours || 1) * minutes;
+}
+
+function etDateTimeToUtcIso(dateStr: string, timeStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hour, minute] = timeStr.split(":").map(Number);
+  const offsetMinutes = etOffsetMinutesForDate(dateStr);
+  const utcMs = Date.UTC(year, month - 1, day, hour, minute) - offsetMinutes * 60_000;
+  return new Date(utcMs).toISOString().replace(".000Z", "Z");
 }
 
 // ===========================================================================
@@ -373,6 +419,25 @@ function mapContract(
 export class MassiveProvider implements MarketDataProvider {
   readonly name = "massive";
 
+  capabilities(): ProviderCapabilities {
+    const tier = (process.env.MASSIVE_DATA_TIER ?? '').toLowerCase();
+    return {
+      tradeBars: true,
+      quotes: tier === 'quotes',
+      greeks: false,          // Massive does not provide greeks — we compute via BSM
+      flatFiles: true,        // S3 flat files available via rclone
+      bulkByRoot: false,      // Massive is per-ticker, not bulk-by-root
+      perTicker: true,
+      minuteBars: true,
+      dailyBars: true,
+      dataAvailability: {
+        option: { from: '2014-01-02' },
+        index: { from: '2023-02-14' },
+        stock: { from: '2014-01-02' },
+      },
+    };
+  }
+
   async fetchBars(options: FetchBarsOptions): Promise<BarRow[]> {
     const apiKey = getApiKey();
     const {
@@ -460,24 +525,9 @@ export class MassiveProvider implements MarketDataProvider {
       }
     }
 
-    // Enrich option intraday bars with bid/ask from quotes endpoint (best-effort)
-    // Gated by MASSIVE_QUOTES_ENABLED env var — quotes endpoint requires higher Massive tier
-    const quotesEnabled = process.env.MASSIVE_QUOTES_ENABLED === 'true' || process.env.MASSIVE_QUOTES_ENABLED === '1';
-    if (quotesEnabled && assetClass === "option" && timespan !== "day" && allRows.length > 0) {
-      const quotesMap = await this.fetchQuotesForBars(apiTicker, headers, from, to);
-      if (quotesMap.size > 0) {
-        for (const row of allRows) {
-          if (row.time != null) {
-            const key = `${row.date} ${row.time}`;
-            const quote = quotesMap.get(key);
-            if (quote != null) {
-              row.bid = quote.bid;
-              row.ask = quote.ask;
-            }
-          }
-        }
-      }
-    }
+    // Quote enrichment (bid/ask backfill + synthetic gap bars) is now handled
+    // by fetchBarsWithCache → enrichWithQuotes in bar-cache.ts.
+    // This avoids double-fetching quotes when bars flow through the cache layer.
 
     return allRows;
   }
@@ -487,6 +537,15 @@ export class MassiveProvider implements MarketDataProvider {
    * Returns a Map keyed by "YYYY-MM-DD HH:MM" ET minute key.
    * Any error (network, HTTP error, parse failure) silently returns an empty Map.
    */
+  /**
+   * Fetch the last NBBO quote for each trading minute in the date range.
+   *
+   * Uses per-minute requests (`order=desc&limit=1`) in parallel batches.
+   * This is much faster than paginating through tick-level quotes: ~400
+   * small requests vs millions of raw NBBO ticks. With concurrency=20,
+   * a full day completes in ~6-7 seconds and results are cached so
+   * subsequent fetches are instant.
+   */
   private async fetchQuotesForBars(
     apiTicker: string,
     headers: Record<string, string>,
@@ -494,65 +553,57 @@ export class MassiveProvider implements MarketDataProvider {
     to: string,
   ): Promise<Map<string, { bid: number; ask: number }>> {
     const result = new Map<string, { bid: number; ask: number }>();
-    try {
+
+    // Iterate trading days in the range
+    const startDate = new Date(from + 'T00:00:00');
+    const endDate = new Date(to + 'T00:00:00');
+    const encodedTicker = encodeURIComponent(apiTicker);
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const day = d.getDay();
+      if (day === 0 || day === 6) continue; // skip weekends
+      const dateStr = d.toISOString().slice(0, 10);
+
+      // Convert RTH window (09:30-16:00 ET) to UTC using real America/New_York
+      // timezone rules. Month-based DST guesses shift pre-DST March quotes by 1 hour.
+      const fromTs = etDateTimeToUtcIso(dateStr, "09:30");
+      const toTs = etDateTimeToUtcIso(dateStr, "16:00");
+
+      // Paginated fetch: up to 50K quotes per page, ~3 pages for a full day
       let url: string | null =
-        `${MASSIVE_BASE_URL}/v3/quotes/${encodeURIComponent(apiTicker)}?timestamp.gte=${from}&timestamp.lte=${to}&order=asc&limit=${MASSIVE_MAX_LIMIT}`;
+        `${MASSIVE_BASE_URL}/v3/quotes/${encodedTicker}?timestamp.gte=${fromTs}&timestamp.lte=${toTs}&limit=50000&order=asc`;
 
-      const seenCursors = new Set<string>();
-      const QUOTES_MAX_PAGES = 100;
-      let pageCount = 0;
+      const dayQuotes: MassiveQuote[] = [];
+      let pages = 0;
 
-      while (url) {
-        pageCount++;
-        if (pageCount > QUOTES_MAX_PAGES) {
+      while (url && pages < 50) {
+        pages++;
+        try {
+          const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
+          if (!response.ok) break;
+          const json = await response.json();
+          const parsed = MassiveQuotesResponseSchema.safeParse(json);
+          if (!parsed.success) break;
+          dayQuotes.push(...parsed.data.results);
+          url = parsed.data.next_url ?? null;
+        } catch {
           break;
         }
-
-        let response: Response;
-        try {
-          response = await fetch(url, {
-            headers,
-            signal: AbortSignal.timeout(30_000),
-          });
-        } catch {
-          // Network error — return what we have so far (best-effort)
-          return result;
-        }
-
-        if (!response.ok) {
-          // 403 (tier restriction), 429 (rate limit), or any other HTTP error — swallow
-          return result;
-        }
-
-        const json = await response.json();
-        const parsed = MassiveQuotesResponseSchema.safeParse(json);
-        if (!parsed.success) {
-          // Schema mismatch — return what we have so far
-          return result;
-        }
-
-        const data = parsed.data;
-        // Since order=asc, later quotes for the same minute overwrite earlier (last quote wins)
-        for (const quote of data.results) {
-          const key = nanosToETMinuteKey(quote.sip_timestamp);
-          result.set(key, { bid: quote.bid_price, ask: quote.ask_price });
-        }
-
-        if (data.next_url) {
-          const nextUrlObj = new URL(data.next_url);
-          const cursor = nextUrlObj.searchParams.get("cursor") ?? data.next_url;
-          if (seenCursors.has(cursor)) {
-            break; // Pagination loop — stop gracefully
-          }
-          seenCursors.add(cursor);
-          url = data.next_url;
-        } else {
-          url = null;
-        }
       }
-    } catch {
-      // Any unexpected error — return empty map (best-effort)
-      return new Map();
+
+      // Aggregate tick quotes to minute-level NBBO (last quote per minute wins)
+      const byMinute = new Map<string, { bid: number; ask: number }>();
+      for (const q of dayQuotes) {
+        const key = nanosToETMinuteKey(q.sip_timestamp);
+        const [keyDate, keyTime] = key.split(" ");
+        if (keyDate !== dateStr || !keyTime) continue;
+        if (keyTime < "09:30" || keyTime > "16:00") continue;
+        byMinute.set(key, { bid: q.bid_price, ask: q.ask_price });
+      }
+
+      for (const [key, val] of byMinute) {
+        result.set(key, val);
+      }
     }
 
     return result;
@@ -563,6 +614,169 @@ export class MassiveProvider implements MarketDataProvider {
     const apiTicker = toMassiveTicker(ticker, "option");
     const headers = { Authorization: `Bearer ${apiKey}` };
     return this.fetchQuotesForBars(apiTicker, headers, from, to);
+  }
+
+  async downloadFlatFile(date: string, assetClass: string): Promise<string | null> {
+    const [year, month] = date.split('-');
+    const assetPathMap: Record<string, string> = {
+      option: 'us_options_opra/minute_aggs_v1',
+      index:  'us_indices/minute_aggs_v1',
+      stock:  'us_stocks_sip/minute_aggs_v1',
+    };
+    const assetPath = assetPathMap[assetClass] ?? assetPathMap.stock;
+    const s3Path = `s3massive:flatfiles/${assetPath}/${year}/${month}/${date}.csv.gz`;
+    // Separate tmp dirs per asset class to avoid file collisions
+    const tmpDir = assetClass === 'index' ? '/tmp/massive-flat-index' : '/tmp/massive-flat';
+    const localPath = `${tmpDir}/${date}.csv.gz`;
+
+    const { existsSync, mkdirSync } = await import('fs');
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+
+    mkdirSync(tmpDir, { recursive: true });
+    if (existsSync(localPath)) return localPath;
+
+    try {
+      await execFileAsync('rclone', ['copy', s3Path, `${tmpDir}/`], { timeout: 120_000 });
+    } catch {
+      return null;
+    }
+    return existsSync(localPath) ? localPath : null;
+  }
+
+  async downloadBulkData(options: BulkDownloadOptions): Promise<BulkDownloadResult> {
+    const { date, dataset, assetClass, tickers, outputPath } = options;
+
+    // Skip if output Parquet already exists
+    const { existsSync: exists, mkdirSync: mkdir } = await import('fs');
+    if (exists(outputPath)) {
+      return { rowCount: 0, skipped: true };
+    }
+
+    // Skip if date is before provider's data availability for this asset class
+    const availability = this.capabilities().dataAvailability?.[assetClass];
+    if (availability && date < availability.from) {
+      return { rowCount: 0, skipped: true };
+    }
+
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const { dirname } = await import('path');
+    const execFileAsync = promisify(execFile);
+
+    // S3 path mapping
+    const s3PathMap: Record<string, Record<string, string>> = {
+      option: {
+        minute_bars: 'us_options_opra/minute_aggs_v1',
+        daily_bars: 'us_options_opra/day_aggs_v1',
+        trades: 'us_options_opra/trades_v1',
+      },
+      index: {
+        minute_bars: 'us_indices/minute_aggs_v1',
+        daily_bars: 'us_indices/day_aggs_v1',
+      },
+    };
+
+    const s3Subpath = s3PathMap[assetClass]?.[dataset];
+    if (!s3Subpath) {
+      throw new Error(`Unsupported asset class/dataset combination: ${assetClass}/${dataset}`);
+    }
+
+    const [year, month] = date.split('-');
+    const s3Path = `s3massive:flatfiles/${s3Subpath}/${year}/${month}/${date}.csv.gz`;
+    const tmpDir = `/tmp/massive-bulk-${assetClass}-${dataset}`;
+    const localCsv = `${tmpDir}/${date}.csv.gz`;
+
+    mkdir(tmpDir, { recursive: true });
+    // Don't create output dir yet — only after successful download + filter
+
+    try {
+      // Download CSV.gz from S3 via rclone (if not already cached)
+      if (!exists(localCsv)) {
+        await execFileAsync('rclone', ['copy', s3Path, `${tmpDir}/`], { timeout: 300_000 });
+        if (!exists(localCsv)) {
+          throw new Error(`rclone download failed — file not found: ${localCsv}`);
+        }
+      }
+
+      // Build ticker filter WHERE clause
+      const prefix = assetClass === 'option' ? 'O:' : 'I:';
+      const tickerConditions = tickers
+        .map(t => `ticker LIKE '${prefix}${t}%'`)
+        .join(' OR ');
+      const whereClause = `WHERE ${tickerConditions}`;
+
+      // CSV column definitions differ by asset class
+      const isOption = assetClass === 'option';
+      const csvColumns = isOption
+        ? "columns = {'ticker': 'VARCHAR', 'volume': 'BIGINT', 'open': 'DOUBLE', 'close': 'DOUBLE', 'high': 'DOUBLE', 'low': 'DOUBLE', 'window_start': 'BIGINT', 'transactions': 'BIGINT'}"
+        : "columns = {'ticker': 'VARCHAR', 'open': 'DOUBLE', 'close': 'DOUBLE', 'high': 'DOUBLE', 'low': 'DOUBLE', 'window_start': 'BIGINT'}";
+
+      // EDT/EST offset logic in DuckDB SQL:
+      // EDT (UTC-4): months 4-10 always; month 3 if day >= 8; month 11 if day < 7
+      // EST (UTC-5): all other times
+      const etConversion = `
+        make_timestamp(CAST(window_start / 1000 AS BIGINT)) AS utc_ts,
+        CASE
+          WHEN month(make_timestamp(CAST(window_start / 1000 AS BIGINT))) > 3
+               AND month(make_timestamp(CAST(window_start / 1000 AS BIGINT))) < 11 THEN 4
+          WHEN month(make_timestamp(CAST(window_start / 1000 AS BIGINT))) = 3
+               AND day(make_timestamp(CAST(window_start / 1000 AS BIGINT))) >= 8 THEN 4
+          WHEN month(make_timestamp(CAST(window_start / 1000 AS BIGINT))) = 11
+               AND day(make_timestamp(CAST(window_start / 1000 AS BIGINT))) < 7 THEN 4
+          ELSE 5
+        END AS et_offset
+      `;
+
+      // Build full COPY query: read CSV.gz → filter tickers → convert timestamps → write Parquet
+      const sql = `
+        COPY (
+          SELECT
+            replace(replace(ticker, 'O:', ''), 'I:', '') AS ticker,
+            strftime(utc_ts - et_offset * INTERVAL '1' HOUR, '%Y-%m-%d') AS date,
+            strftime(utc_ts - et_offset * INTERVAL '1' HOUR, '%H:%M') AS time,
+            open,
+            high,
+            low,
+            close,
+            NULL::DOUBLE AS bid,
+            NULL::DOUBLE AS ask
+          FROM (
+            SELECT *, ${etConversion}
+            FROM read_csv('${localCsv}', ${csvColumns}, header = true, compression = 'gzip')
+            ${whereClause}
+          ) sub
+        ) TO '${outputPath}' (FORMAT PARQUET, COMPRESSION ZSTD)
+      `;
+
+      // Use in-memory DuckDB to run the conversion
+      const { DuckDBInstance } = await import('@duckdb/node-api');
+      const db = await DuckDBInstance.create(':memory:');
+      const conn = await db.connect();
+
+      try {
+        mkdir(dirname(outputPath), { recursive: true });
+        await conn.run(sql);
+
+        // Get row count from the written Parquet
+        const countResult = await conn.runAndReadAll(
+          `SELECT count(*) AS cnt FROM '${outputPath}'`
+        );
+        const rowCount = Number(countResult.getRows()[0][0]);
+        return { rowCount, skipped: false };
+      } finally {
+        conn.closeSync();
+      }
+    } finally {
+      // Clean up temp CSV (keep output Parquet)
+      try {
+        const { unlinkSync } = await import('fs');
+        if (exists(localCsv)) unlinkSync(localCsv);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 
   async fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult> {
@@ -664,5 +878,88 @@ export class MassiveProvider implements MarketDataProvider {
       underlying_price: underlyingPrice,
       underlying_ticker: underlyingTicker,
     };
+  }
+
+  async fetchContractList(options: FetchContractListOptions): Promise<FetchContractListResult> {
+    const apiKey = getApiKey();
+    const { underlying, as_of, expired = true, expiration_date_gte, expiration_date_lte } = options;
+
+    // The /v3/reference/options/contracts endpoint uses raw tickers (no I:/O: prefix).
+    // The I: prefix is only for bars/aggs endpoints.
+    const headers = { Authorization: `Bearer ${apiKey}` };
+
+    const params = new URLSearchParams({
+      underlying_ticker: underlying,
+      limit: "1000",
+    });
+    // Polygon API: as_of and expiration_date filters are incompatible.
+    // When expiration date filters are provided, drop as_of.
+    if (expiration_date_gte || expiration_date_lte) {
+      if (expiration_date_gte) params.set("expiration_date.gte", expiration_date_gte);
+      if (expiration_date_lte) params.set("expiration_date.lte", expiration_date_lte);
+    } else {
+      params.set("as_of", as_of);
+    }
+    if (expired) {
+      params.set("expired", "true");
+    }
+
+    let url: string | null =
+      `${MASSIVE_BASE_URL}/v3/reference/options/contracts?${params.toString()}`;
+
+    const allContracts: ContractReference[] = [];
+    const seenCursors = new Set<string>();
+    let pageCount = 0;
+
+    while (url) {
+      pageCount++;
+      if (pageCount > MASSIVE_MAX_PAGES) {
+        throw new Error(
+          `Pagination safety limit reached (${MASSIVE_MAX_PAGES} pages) -- possible API issue`,
+        );
+      }
+
+      const response = await fetchWithRetry(url, headers);
+
+      if (response.status === 401) {
+        throw new Error("MASSIVE_API_KEY rejected by Massive.com -- check your key");
+      }
+      if (!response.ok) {
+        throw new Error(`Massive.com API error: HTTP ${response.status} ${response.statusText}`);
+      }
+
+      const json = await response.json();
+      const parsed = MassiveContractListResponseSchema.safeParse(json);
+      if (!parsed.success) {
+        const issues = parsed.error.issues
+          .map((i) => `${String(i.path.join("."))}: ${i.message}`)
+          .join("; ");
+        throw new Error(`Massive contract list response validation failed: ${issues}`);
+      }
+
+      for (const contract of parsed.data.results) {
+        allContracts.push({
+          ticker: fromMassiveTicker(contract.ticker),
+          contract_type: contract.contract_type as "call" | "put",
+          strike: contract.strike_price,
+          expiration: contract.expiration_date,
+          exercise_style: contract.exercise_style ?? "american",
+        });
+      }
+
+      if (parsed.data.next_url) {
+        const nextUrlObj = new URL(parsed.data.next_url);
+        const cursor = nextUrlObj.searchParams.get("cursor") ?? parsed.data.next_url;
+        if (seenCursors.has(cursor)) {
+          throw new Error(`Pagination loop detected -- cursor repeated: ${cursor.slice(0, 50)}...`);
+        }
+        seenCursors.add(cursor);
+        url = parsed.data.next_url;
+      } else {
+        url = null;
+      }
+    }
+
+    return { contracts: allContracts, underlying };
   }
 }

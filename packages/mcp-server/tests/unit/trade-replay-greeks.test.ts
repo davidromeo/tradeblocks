@@ -50,6 +50,8 @@ describe('computeStrategyPnlPath with greeksConfig', () => {
   it('produces PnlPoints with legGreeks array when greeksConfig provided', () => {
     const result = computeStrategyPnlPath(legs, barsByLeg, greeksConfig);
     expect(result).toHaveLength(2);
+    expect(result[0].underlyingPrice).toBe(5750);
+    expect(result[1].underlyingPrice).toBe(5760);
     expect(result[0].legGreeks).toBeDefined();
     expect(result[0].legGreeks).toHaveLength(2);
     // Each leg should have a GreeksResult with delta, gamma, theta, vega, iv
@@ -107,9 +109,11 @@ describe('computeStrategyPnlPath with greeksConfig', () => {
     expect(result).toHaveLength(2);
     // 09:31 should have greeks
     expect(result[0].legGreeks).toBeDefined();
+    expect(result[0].underlyingPrice).toBe(5750);
     // 09:32 should NOT have greeks (underlying price missing)
     expect(result[1].legGreeks).toBeUndefined();
     expect(result[1].netDelta).toBeUndefined();
+    expect(result[1].underlyingPrice).toBeUndefined();
   });
 
   it('computes greeks for same-day expiry (DTE > 0 until 4 PM close)', () => {
@@ -189,7 +193,9 @@ describe('computeStrategyPnlPath with greeksConfig', () => {
     const result = computeStrategyPnlPath(legs, barsByLeg, dailyConfig);
     expect(result[0].legGreeks).toBeDefined();
     expect(result[0].netDelta).not.toBeNull();
+    expect(result[0].underlyingPrice).toBe(5755);
     // Both timestamps should resolve to the same daily price
     expect(result[1].legGreeks).toBeDefined();
+    expect(result[1].underlyingPrice).toBe(5755);
   });
 });

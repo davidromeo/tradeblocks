@@ -61,6 +61,28 @@ export async function ensureSyncTables(conn: DuckDBConnection): Promise<void> {
       sync_version INTEGER DEFAULT 1
     )
   `);
+
+  // Migration: sync-import.mjs creates this table from Parquet (no constraints).
+  // Detect missing PK and recreate so INSERT OR REPLACE works.
+  const result = await conn.run(`
+    SELECT COUNT(*) AS cnt FROM duckdb_constraints()
+    WHERE schema_name = 'trades' AND table_name = '_sync_metadata'
+      AND constraint_type = 'PRIMARY KEY'
+  `);
+  const rows = await result.getRows();
+  if (Number(rows[0][0]) === 0) {
+    await conn.run(`DROP TABLE trades._sync_metadata`);
+    await conn.run(`
+      CREATE TABLE trades._sync_metadata (
+        block_id VARCHAR PRIMARY KEY,
+        tradelog_hash VARCHAR NOT NULL,
+        dailylog_hash VARCHAR,
+        reportinglog_hash VARCHAR,
+        synced_at TIMESTAMP NOT NULL,
+        sync_version INTEGER DEFAULT 1
+      )
+    `);
+  }
 }
 
 /**

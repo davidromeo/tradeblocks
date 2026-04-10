@@ -2,6 +2,31 @@
 
 All notable changes to the TradeBlocks MCP Server will be documented in this file.
 
+## [2.3.0] - 2026-04-09
+
+### Added
+
+- **Greeks Attribution** — `get_greeks_attribution` decomposes a block's P&L into Greek factor contributions (delta, gamma, theta, vega) with optional charm/vanna detail. Two modes: summary (block-level percentages across all trades) and instance (per-day time-series for a single trade). Strategy filtering in summary mode. Execution edge attribution shows mark-to-market vs actual P&L gap.
+- **Market Data Provider Abstraction** — Full `MarketDataProvider` interface with capabilities declaration, contract list reference endpoints, and bulk flat-file download support. `getProvider()` factory selects active provider via `MARKET_DATA_PROVIDER` env var.
+- **ThetaData Provider** — Complete ThetaData Terminal integration: OHLC bars (daily + intraday), EOD quotes, option snapshots with greeks, contract list reference, auto-start/health-check for ThetaData Terminal Java process. Monthly date-range chunking, retry with exponential backoff, 472 NO_DATA handling.
+- **Quote Enrichment** — `enrich_quotes` for targeted NBBO enrichment of specific option tickers. Density-based skip logic avoids re-enriching already-dense data. Provider-agnostic via `fetchQuotes()` interface.
+- **Option Chain Table** — `market.option_chain` for historical chain snapshots, `market.data_coverage` for tracking imported date ranges per ticker.
+- **Bar Cache Improvements** — `MASSIVE_DATA_TIER` env var (`ohlc` | `trades` | `quotes`) controls which API endpoints are available. `mergeQuoteBars` creates synthetic minute bars from NBBO quotes for illiquid contracts. Bulk multi-ticker fetch (`fetchBarsForLegsBulk`), partial cache detection with 70% trading-day threshold.
+
+### Fixed
+
+- **Calendar spread replay date range** — `resolveOODateRange` now always starts from trade open date, not near-term expiry. Calendar trades opened before the short leg expiry were missing bars for the entire holding period, causing greeks decomposition to fall back to the numerical method.
+- **Stable trade ordering** — `replay_trade`, `decompose_greeks`, and `get_greeks_attribution` now use `ORDER BY date_opened, rowid` for deterministic trade indexing. Previously, trades sharing the same open date could return different results across queries.
+- **Partial cache rejection** — `fetchBarsWithCache` no longer rejects sparse cached option data when `skip_quotes` is true. The 70% trading-day heuristic was designed for data prep but rejected valid sparse trade bars and fell through to the API, which returns empty for expired contracts.
+- **Quote density check** — Cache-hit path now checks both bar density AND quote presence (`hasQuotes`). Dense trade-only caches from before enrichment was available now correctly trigger quote backfill.
+- **Block folder dot filter** — Sync scanning no longer excludes folders with dots in their names (e.g., `my.strategy`). Filter narrowed to specific extensions (`.tmp`, `.duckdb`).
+
+### Changed
+
+- `import_from_massive` renamed to `import_from_api` — works with any configured provider
+- Docker images published to Docker Hub (`romeo345/tradeblocks-mcp`) in addition to GHCR
+- Reverted GitLab migration — restored GitHub URLs and CI
+
 ## [2.2.3] - 2026-04-04
 
 ### Changed

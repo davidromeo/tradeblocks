@@ -128,6 +128,10 @@ export const decomposeGreeksSchema = z.object({
 
   format: z.enum(["summary", "full"]).default("summary")
     .describe("'summary' shows ranked factors, 'full' includes per-step contributions"),
+  skip_quotes: z
+    .boolean()
+    .default(false)
+    .describe("Skip NBBO quote enrichment for option bars. Faster, but lower precision."),
 });
 
 // ---------------------------------------------------------------------------
@@ -202,6 +206,7 @@ export async function handleAnalyzeExitTriggers(
       multiplier,
       format: 'full',
       close_at: 'trade',
+      skip_quotes: false,
     },
     baseDir,
     injectedConn,
@@ -324,7 +329,7 @@ export async function handleDecomposeGreeks(
   const {
     legs: inputLegs, block_id, trade_index,
     open_date, close_date, multiplier,
-    leg_groups, format,
+    leg_groups, format, skip_quotes,
   } = params;
 
   // 1. Run replay to get full P&L path with greeks
@@ -338,6 +343,7 @@ export async function handleDecomposeGreeks(
       multiplier,
       format: 'full',
       close_at: 'trade',
+      skip_quotes,
     },
     baseDir,
     injectedConn,
@@ -353,17 +359,12 @@ export async function handleDecomposeGreeks(
     );
   }
 
-  // 3. Fetch underlying prices for decomposition
-  const underlyingTicker = extractUnderlyingTicker(replayLegs[0]?.occTicker ?? '');
-  let underlyingPrices: Map<string, number> | undefined;
-
-  if (pnlPath.length > 0 && underlyingTicker) {
-    const firstDate = pnlPath[0].timestamp.slice(0, 10);
-    const lastDate = pnlPath[pnlPath.length - 1].timestamp.slice(0, 10);
-
-    underlyingPrices = await fetchPriceMap(
-      underlyingTicker, firstDate, lastDate,
-    );
+  // 3. Reuse the underlying prices already resolved during replay.
+  const underlyingPrices = new Map<string, number>();
+  for (const point of pnlPath) {
+    if (point.underlyingPrice !== undefined) {
+      underlyingPrices.set(point.timestamp, point.underlyingPrice);
+    }
   }
 
   // 4. Map leg groups
@@ -394,7 +395,7 @@ export async function handleDecomposeGreeks(
   const result = decomposeGreeks({
     pnlPath,
     legs: replayLegs,
-    underlyingPrices,
+    underlyingPrices: underlyingPrices.size > 0 ? underlyingPrices : undefined,
     legGroups: legGroupDefs,
     legPricingInputs,
     riskFreeRate: 0.045,

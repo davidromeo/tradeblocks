@@ -34,6 +34,7 @@ import { registerReplayTools } from "./tools/replay.js";
 import { registerSnapshotTools } from "./tools/snapshot.js";
 import { registerExitAnalysisTools } from "./tools/exit-analysis.js";
 import { registerBatchExitAnalysisTools } from "./tools/batch-exit-analysis.js";
+import { registerGreeksAttributionTools } from "./tools/greeks-attribution.js";
 import { handleDirectCall } from "./cli-handler.js";
 import { closeConnection } from "./db/index.js";
 
@@ -52,12 +53,14 @@ MCP Server Modes:
 Options:
   --http             Start HTTP server instead of stdio (for web platforms)
   --port <number>    HTTP server port (default: 3100, requires --http)
+  --blocks-dir <path> Directory containing CSV block folders (default: same as <folder>)
   --market-db <path> Path to market.duckdb (default: <folder>/market.duckdb)
   --no-auth          Disable authentication (only use behind an auth proxy)
 
 Environment:
-  BLOCKS_DIRECTORY  Default backtests folder if not specified
-  MARKET_DB_PATH    Path to market.duckdb (overrides default, overridden by --market-db)
+  BLOCKS_DIRECTORY    Default backtests folder if not specified
+  TRADEBLOCKS_BLOCKS_DIR  Directory for CSV block folders (overrides default, overridden by --blocks-dir)
+  MARKET_DB_PATH      Path to market.duckdb (overrides default, overridden by --market-db)
 
 Commands:
   install-skills    Install TradeBlocks skills to AI platform
@@ -86,6 +89,7 @@ function parseServerArgs(): {
   port: number;
   noAuth: boolean;
   directory: string | undefined;
+  blocksDir: string | undefined;
   marketDb: string | undefined;
 } {
   const args = process.argv.slice(2);
@@ -93,6 +97,7 @@ function parseServerArgs(): {
   let port = 3100;
   let noAuth = false;
   let directory: string | undefined;
+  let blocksDir: string | undefined;
   let marketDb: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
@@ -106,6 +111,9 @@ function parseServerArgs(): {
         port = parsedPort;
       }
       i++; // Skip next arg (the port value)
+    } else if (arg === "--blocks-dir" && args[i + 1]) {
+      blocksDir = args[i + 1];
+      i++; // Skip next arg (the path value)
     } else if (arg === "--market-db" && args[i + 1]) {
       marketDb = args[i + 1];
       i++; // Skip next arg (the path value)
@@ -121,11 +129,14 @@ function parseServerArgs(): {
   if (!directory) {
     directory = process.env.BLOCKS_DIRECTORY;
   }
+  if (!blocksDir) {
+    blocksDir = process.env.TRADEBLOCKS_BLOCKS_DIR;
+  }
   if (!marketDb) {
     marketDb = process.env.MARKET_DB_PATH;
   }
 
-  return { http, port, noAuth, directory, marketDb };
+  return { http, port, noAuth, directory, blocksDir, marketDb };
 }
 
 // Handle skill CLI commands (deprecated — now use plugin)
@@ -177,7 +188,7 @@ async function main(): Promise<void> {
   }
 
   // MCP Server mode - parse arguments
-  const { http, port, noAuth, directory: backtestDir } = parseServerArgs();
+  const { http, port, noAuth, directory: backtestDir, blocksDir } = parseServerArgs();
 
   if (!backtestDir) {
     printUsage();
@@ -192,6 +203,19 @@ async function main(): Promise<void> {
   } catch {
     console.error(`Error: Directory does not exist: ${resolvedDir}`);
     process.exit(1);
+  }
+
+  // Configure separate blocks directory if specified
+  if (blocksDir) {
+    const resolvedBlocksDir = path.resolve(blocksDir);
+    try {
+      await fs.access(resolvedBlocksDir);
+    } catch {
+      console.error(`Error: Blocks directory does not exist: ${resolvedBlocksDir}`);
+      process.exit(1);
+    }
+    const { setBlocksDir } = await import("./sync/index.js");
+    setBlocksDir(resolvedBlocksDir);
   }
 
   // Factory function to create configured MCP server instances
@@ -223,6 +247,7 @@ async function main(): Promise<void> {
     registerSnapshotTools(server);
     registerExitAnalysisTools(server, resolvedDir);
     registerBatchExitAnalysisTools(server, resolvedDir);
+    registerGreeksAttributionTools(server, resolvedDir);
     return server;
   };
 

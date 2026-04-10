@@ -16,7 +16,7 @@ Model Context Protocol (MCP) server for options trading analysis. Works with Cla
 
 ### Option 1: MCPB Bundle (Claude Desktop - One Click)
 
-Download the latest `.mcpb` file from [Releases](https://gitlab.com/davidromeo/tradeblocks/-/releases) and double-click to install.
+Download the latest `.mcpb` file from [Releases](https://github.com/davidromeo/tradeblocks/releases) and double-click to install.
 
 The installer will prompt you to select your Trading Data Directory.
 
@@ -37,7 +37,7 @@ See [Configuration by Platform](#configuration-by-platform) below for platform-s
 ### Option 3: From Source
 
 ```bash
-git clone https://gitlab.com/davidromeo/tradeblocks
+git clone https://github.com/davidromeo/tradeblocks
 cd tradeblocks
 npm install
 npm run build -w packages/mcp-server
@@ -147,7 +147,28 @@ tradeblocks-mcp ~/backtests
 # HTTP mode
 tradeblocks-mcp --http ~/backtests
 tradeblocks-mcp --http --port 8080 ~/backtests
+
+# Separate CSV blocks from DuckDB storage
+tradeblocks-mcp --directory ./data --blocks-dir ~/backtests
 ```
+
+### Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--http` | Start HTTP server instead of stdio | stdio |
+| `--port <n>` | HTTP server port | 3100 |
+| `--blocks-dir <path>` | Directory containing CSV block folders | same as data directory |
+| `--market-db <path>` | Path to market.duckdb | `<directory>/market.duckdb` |
+| `--no-auth` | Disable authentication (HTTP mode) | auth enabled |
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `BLOCKS_DIRECTORY` | Default data directory if not specified as argument |
+| `TRADEBLOCKS_BLOCKS_DIR` | Directory for CSV block folders (overridden by `--blocks-dir`) |
+| `MARKET_DB_PATH` | Path to market.duckdb (overridden by `--market-db`) |
 
 ## Docker Deployment
 
@@ -175,7 +196,7 @@ docker build -t tradeblocks-mcp .
 docker compose up -d
 ```
 
-Place your block folders (each containing CSV files) in the `data/` directory. The container runs in HTTP mode on port 3100 by default. See [Authentication](#authentication) below for configuring credentials.
+Place your block folders (each containing CSV files) in the `data/` directory, or use `--blocks-dir` to point at a separate folder. The container runs in HTTP mode on port 3100 by default. See [Authentication](#authentication) below for configuring credentials.
 
 Connect any MCP client to `http://<your-host>:3100/mcp`. How you expose this endpoint (reverse proxy, tunnel, VPN, etc.) is up to you.
 

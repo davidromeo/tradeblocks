@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Gitlab, ShieldQuestion } from "lucide-react";
+import { AlertTriangle, Github, ShieldQuestion } from "lucide-react";
 import Link from "next/link";
 
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -91,12 +91,12 @@ export function SidebarFooterLegal() {
             </a>
             <span className="text-muted-foreground/50">•</span>
             <Link
-              href="https://gitlab.com/davidromeo/tradeblocks"
+              href="https://github.com/davidromeo/tradeblocks"
               target="_blank"
               className="inline-flex items-center gap-1 transition hover:text-foreground"
             >
-              <Gitlab className="h-3.5 w-3.5" aria-hidden />
-              <span className="font-medium">GitLab</span>
+              <Github className="h-3.5 w-3.5" aria-hidden />
+              <span className="font-medium">GitHub</span>
             </Link>
           </div>
         )}
@@ -166,12 +166,12 @@ export function SidebarFooterLegal() {
         </a>
         <span className="text-muted-foreground/50">•</span>
         <Link
-          href="https://gitlab.com/davidromeo/tradeblocks"
+          href="https://github.com/davidromeo/tradeblocks"
           target="_blank"
           className="inline-flex items-center gap-1.5 transition hover:text-foreground"
         >
-          <Gitlab className="h-4 w-4" aria-hidden />
-          <span className="font-medium">GitLab</span>
+          <Github className="h-4 w-4" aria-hidden />
+          <span className="font-medium">GitHub</span>
         </Link>
       </div>
     </div>

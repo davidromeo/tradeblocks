@@ -316,4 +316,33 @@ export {
 export {
   fetchBarsWithCache,
   type FetchBarsWithCacheOptions,
+  mergeQuoteBars,
+  getDataTier,
+  readCachedBars,
+  fetchEntryBarsForCandidates,
+  fetchBarsForLegsBulk,
+  type DataTier,
+  type ReadCachedBarsOptions,
 } from './utils/bar-cache.js';
+
+// Export quote enricher pure functions for unit testing
+export { shouldSkipEnrichment, buildEnrichmentPlan } from './utils/quote-enricher.js';
+export type { EnrichmentPlanInput } from './utils/quote-enricher.js';
+
+// Greeks attribution (v2.3)
+export {
+  collapseFactors,
+  computeAttribution,
+  computeGrossAttributionFlow,
+  assessPrecision,
+  type AttributionEntry,
+  type AttributionSummaryResult,
+  type AttributionInstanceResult,
+  type AttributionStepEntry,
+} from './tools/greeks-attribution.js';
+
+export {
+  handleGetGreeksAttribution,
+  getGreeksAttributionSchema,
+  filterSparseSteps,
+} from './tools/greeks-attribution.js';
