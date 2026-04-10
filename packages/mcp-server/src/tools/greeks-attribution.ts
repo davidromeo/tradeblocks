@@ -198,13 +198,13 @@ async function handleSummaryMode(
   const selectedTradesQuery = strategy
     ? `SELECT trade_index, pl
        FROM (
-         SELECT ROW_NUMBER() OVER (ORDER BY date_opened) - 1 AS trade_index, pl, strategy
+         SELECT ROW_NUMBER() OVER (ORDER BY date_opened, rowid) - 1 AS trade_index, pl, strategy
          FROM trades.trade_data
          WHERE block_id = $1
        )
        WHERE LOWER(strategy) = LOWER($2)
        ORDER BY trade_index`
-    : `SELECT ROW_NUMBER() OVER (ORDER BY date_opened) - 1 AS trade_index, pl
+    : `SELECT ROW_NUMBER() OVER (ORDER BY date_opened, rowid) - 1 AS trade_index, pl
        FROM trades.trade_data
        WHERE block_id = $1
        ORDER BY trade_index`;
@@ -343,7 +343,7 @@ async function handleInstanceMode(
   const tradeResult = await conn.runAndReadAll(
     `SELECT date_opened, date_closed, pl FROM trades.trade_data
      WHERE block_id = $1
-     ORDER BY date_opened
+     ORDER BY date_opened, rowid
      LIMIT 1 OFFSET $2`,
     [block_id, trade_index]
   );

@@ -287,7 +287,10 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
     const expectedTradingDays = Math.max(1, Math.ceil(calendarDays * 5 / 7));
     const isPartialHit = rows.length > 0 && from !== to
       && cachedDates.size < expectedTradingDays * 0.7;
-    if (rows.length > 0 && !isPartialHit) {
+    // When skipQuotes is set, caller wants cached data only — don't reject partial hits.
+    // Options often have sparse coverage (traded days only), so the 70% heuristic
+    // wrongly rejects valid data and falls through to the API for expired contracts.
+    if (rows.length > 0 && (!isPartialHit || opts.skipQuotes)) {
       const bars = rows.map((row) => ({
         open:   Number(row[0]),
         high:   Number(row[1]),

@@ -134,15 +134,11 @@ export function resolveOODateRange(
   if (hints.length === 0) return null;
 
   const sorted = [...hints].sort();
-  const minDate = sorted[0];
   const maxDate = sorted[sorted.length - 1];
 
-  if (minDate === maxDate) {
-    // Single expiry — fetch from trade open to expiry
-    return { from: tradeOpenDate, to: maxDate };
-  }
-  // Calendar spread — near-term to far-term expiry
-  return { from: minDate, to: maxDate };
+  // Always start from trade open date — bars are needed from entry, not from expiry.
+  // End at the latest expiry to cover the full path.
+  return { from: tradeOpenDate, to: maxDate };
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +185,7 @@ export async function handleReplayTrade(
       `SELECT legs, premium, date_opened, date_closed, ticker, num_contracts, time_closed
        FROM trades.trade_data
        WHERE block_id = '${block_id.replace(/'/g, "''")}'
-       ORDER BY date_opened
+       ORDER BY date_opened, rowid
        LIMIT 1 OFFSET ${trade_index}`
     );
 

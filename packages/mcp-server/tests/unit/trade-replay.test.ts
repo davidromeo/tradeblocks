@@ -329,7 +329,7 @@ describe('computeReplayMfeMae', () => {
 });
 
 describe('resolveOODateRange', () => {
-  it('returns min/max expiry range for calendar spread legs', () => {
+  it('returns tradeOpenDate→maxExpiry range for calendar spread legs', () => {
     const legs = [
       { root: '', strike: 6610, type: 'P' as const, quantity: -1, expiryHint: 'Mar 12' },
       { root: '', strike: 6925, type: 'C' as const, quantity: -1, expiryHint: 'Mar 12' },
@@ -338,7 +338,7 @@ describe('resolveOODateRange', () => {
     ];
 
     const result = resolveOODateRange(legs, '2026', '2026-03-10');
-    expect(result).toEqual({ from: '2026-03-12', to: '2026-03-13' });
+    expect(result).toEqual({ from: '2026-03-10', to: '2026-03-13' });
   });
 
   it('returns tradeOpenDate→expiry for single-expiry legs', () => {
