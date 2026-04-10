@@ -346,3 +346,6 @@ export {
   getGreeksAttributionSchema,
   filterSparseSteps,
 } from './tools/greeks-attribution.js';
+
+// Extension point: additional test exports (e.g., backtest internals)
+export * from './test-exports.ext.js';

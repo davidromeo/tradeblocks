@@ -35,6 +35,7 @@ import { registerSnapshotTools } from "./tools/snapshot.js";
 import { registerExitAnalysisTools } from "./tools/exit-analysis.js";
 import { registerBatchExitAnalysisTools } from "./tools/batch-exit-analysis.js";
 import { registerGreeksAttributionTools } from "./tools/greeks-attribution.js";
+import { extraToolRegistrations } from './index.ext.js';
 import { handleDirectCall } from "./cli-handler.js";
 import { closeConnection } from "./db/index.js";
 
@@ -248,6 +249,7 @@ async function main(): Promise<void> {
     registerExitAnalysisTools(server, resolvedDir);
     registerBatchExitAnalysisTools(server, resolvedDir);
     registerGreeksAttributionTools(server, resolvedDir);
+    for (const register of extraToolRegistrations) register(server, resolvedDir);
     return server;
   };
 

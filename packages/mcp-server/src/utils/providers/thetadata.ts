@@ -1,4 +1,4 @@
-import { buildOccTicker } from "../trade-replay.js";
+import { buildOccTicker } from "./thetadata.ext.js";
 import type {
   MarketDataProvider,
   ProviderCapabilities,
