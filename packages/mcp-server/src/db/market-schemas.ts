@@ -347,6 +347,9 @@ export async function ensureMarketTables(conn: DuckDBConnection): Promise<void> 
     )
   `);
 
+  // Quote hydration job queue moved to standalone queue.duckdb (see quote-minute-cache.ts)
+  // to avoid locking market.duckdb during long-running backfill drains.
+
   // Phase 75: migrate legacy context data to normalized schema
   await migrateContextToNormalized(conn);
 }

@@ -429,6 +429,8 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
     const conn = await getConnection(baseDir);
 
     // Query 1: Trade stats per block from DuckDB
+    // Safety filter: exclude backtest rows (source='tradeblocks') — they live in backtests.trade_data
+    // after Phase b72. This WHERE clause prevents regression if old data lingers.
     const tradeStatsReader = await conn.runAndReadAll(`
       SELECT
         t.block_id,
@@ -438,13 +440,14 @@ export async function listBlocks(baseDir: string): Promise<BlockInfo[]> {
         SUM(t.pl) as total_pl,
         SUM(t.pl) - SUM(COALESCE(t.opening_commissions, 0) + COALESCE(t.closing_commissions, 0)) as net_pl
       FROM trades.trade_data t
+      WHERE t.source IS NULL OR t.source = 'csv'
       GROUP BY t.block_id
     `);
 
     // Separate query for strategies (avoids ARRAY_AGG DuckDB node-api serialization issues)
     const strategiesReader = await conn.runAndReadAll(`
       SELECT block_id, strategy
-      FROM (SELECT DISTINCT block_id, strategy FROM trades.trade_data WHERE strategy IS NOT NULL)
+      FROM (SELECT DISTINCT block_id, strategy FROM trades.trade_data WHERE strategy IS NOT NULL AND (source IS NULL OR source = 'csv'))
       ORDER BY block_id, strategy
     `);
     const strategiesByBlock = new Map<string, string[]>();

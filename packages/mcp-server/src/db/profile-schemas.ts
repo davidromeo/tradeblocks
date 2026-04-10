@@ -51,6 +51,25 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
   await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS close_on_completion BOOLEAN`);
   await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS ignore_margin_req BOOLEAN`);
 
+  // Migration: add backtest-specific param columns (Phase 76)
+  // Per D-01: block_id stays NOT NULL in the PRIMARY KEY. Template profiles (backtest
+  // definitions without a live block) use block_id = '_template' sentinel value.
+  // DuckDB does not support ALTER COLUMN ... DROP NOT NULL (see RESEARCH.md Pitfall 1).
+  const backtestCols: Array<{ name: string; type: string }> = [
+    { name: "slippage_entry", type: "DOUBLE" },
+    { name: "slippage_exit", type: "DOUBLE" },
+    { name: "slippage_stop_exit", type: "DOUBLE" },
+    { name: "commission_per_contract", type: "DOUBLE" },
+    { name: "starting_capital", type: "DOUBLE" },
+    { name: "margin_per_spread", type: "DOUBLE" },
+    { name: "entry_frequency", type: "VARCHAR" },
+    { name: "default_from_date", type: "VARCHAR" },
+    { name: "default_to_date", type: "VARCHAR" },
+  ];
+  for (const col of backtestCols) {
+    await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`);
+  }
+
   // Migration: normalize expected_regimes to canonical Vol_Regime labels
   // Old values: "low_vol", "moderate_vol", "high_vol", "normal", "low" (free-text)
   // Canonical:  "very_low", "low", "below_avg", "above_avg", "high", "extreme"

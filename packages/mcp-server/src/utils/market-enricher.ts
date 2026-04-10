@@ -71,26 +71,29 @@ export function computeRSI(closes: number[], period = 14): number[] {
   const result = new Array<number>(closes.length).fill(NaN);
   if (closes.length < period + 1) return result;
 
-  // Seed: average of first `period` gains and losses (changes at indices 1..period)
-  let avgGain = 0;
-  let avgLoss = 0;
-  for (let i = 1; i <= period; i++) {
+  // SMA-based RSI: rolling simple average of gains and losses over `period` bars.
+  // OO uses simple smoothing (confirmed from UI), not Wilder's exponential smoothing.
+  // This produces higher RSI values in trending markets (2-8 pts vs Wilder).
+
+  // Pre-compute per-bar gains and losses (changes at indices 1..N)
+  const gains = new Array<number>(closes.length).fill(0);
+  const losses = new Array<number>(closes.length).fill(0);
+  for (let i = 1; i < closes.length; i++) {
     const change = closes[i] - closes[i - 1];
-    if (change > 0) avgGain += change;
-    else avgLoss += Math.abs(change);
+    if (change > 0) gains[i] = change;
+    else losses[i] = Math.abs(change);
   }
-  avgGain /= period;
-  avgLoss /= period;
 
-  result[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-
-  // Wilder smoothing for subsequent bars
-  for (let i = period + 1; i < closes.length; i++) {
-    const change = closes[i] - closes[i - 1];
-    const gain = change > 0 ? change : 0;
-    const loss = change < 0 ? Math.abs(change) : 0;
-    avgGain = (avgGain * (period - 1) + gain) / period;
-    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  // Rolling SMA over the last `period` changes (indices i-period+1 .. i)
+  for (let i = period; i < closes.length; i++) {
+    let sumGain = 0;
+    let sumLoss = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      sumGain += gains[j];
+      sumLoss += losses[j];
+    }
+    const avgGain = sumGain / period;
+    const avgLoss = sumLoss / period;
     result[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
   }
 
