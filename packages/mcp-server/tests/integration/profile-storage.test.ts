@@ -17,6 +17,7 @@ import { tmpdir } from 'os';
 import {
   getConnection,
   closeConnection,
+  upgradeToReadWrite,
   upsertProfile,
   getProfile,
   listProfiles,
@@ -71,6 +72,10 @@ describe('Profile Storage Integration', () => {
   beforeEach(async () => {
     // Create isolated temp directory for each test
     testDir = await fs.mkdtemp(path.join(tmpdir(), 'profile-test-'));
+    // Pre-open connection in RW mode — getConnection() downgrades to RO after init,
+    // but profile tests need write access for INSERT operations
+    await getConnection(testDir);
+    await upgradeToReadWrite(testDir);
   });
 
   afterEach(async () => {

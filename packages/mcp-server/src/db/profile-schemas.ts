@@ -11,6 +11,14 @@
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 import type { StrategyProfile } from "../models/strategy-profile.js";
+import { isParquetMode } from "./parquet-writer.js";
+import {
+  upsertProfileJson,
+  getProfileJson,
+  listProfilesJson,
+  deleteProfileJson,
+} from "./json-adapters.js";
+import { getBlocksDir } from "../sync/index.js";
 
 /**
  * Ensure the profiles schema and strategy_profiles table exist.
@@ -242,8 +250,12 @@ const SELECT_COLUMNS = `
  */
 export async function upsertProfile(
   conn: DuckDBConnection,
-  profile: Omit<StrategyProfile, "createdAt" | "updatedAt">
+  profile: Omit<StrategyProfile, "createdAt" | "updatedAt">,
+  baseDir?: string
 ): Promise<StrategyProfile> {
+  if (isParquetMode() && baseDir) {
+    return upsertProfileJson(profile, getBlocksDir(baseDir));
+  }
   const legsJson = escSql(JSON.stringify(profile.legs));
   const entryFiltersJson = escSql(JSON.stringify(profile.entryFilters));
   const exitRulesJson = escSql(JSON.stringify(profile.exitRules));
@@ -312,7 +324,7 @@ export async function upsertProfile(
       updated_at = TIMESTAMPTZ '${nowTs}'
   `);
 
-  const stored = await getProfile(conn, profile.blockId, profile.strategyName);
+  const stored = await getProfile(conn, profile.blockId, profile.strategyName, baseDir);
   if (!stored) {
     throw new Error(
       `Failed to retrieve profile after upsert: ${profile.blockId}/${profile.strategyName}`
@@ -332,8 +344,12 @@ export async function upsertProfile(
 export async function getProfile(
   conn: DuckDBConnection,
   blockId: string,
-  strategyName: string
+  strategyName: string,
+  baseDir?: string
 ): Promise<StrategyProfile | null> {
+  if (isParquetMode() && baseDir) {
+    return getProfileJson(blockId, strategyName, getBlocksDir(baseDir));
+  }
   const result = await conn.runAndReadAll(`
     SELECT ${SELECT_COLUMNS}
     FROM profiles.strategy_profiles
@@ -354,8 +370,12 @@ export async function getProfile(
  */
 export async function listProfiles(
   conn: DuckDBConnection,
-  blockId?: string
+  blockId?: string,
+  baseDir?: string
 ): Promise<StrategyProfile[]> {
+  if (isParquetMode() && baseDir) {
+    return listProfilesJson(getBlocksDir(baseDir), blockId);
+  }
   const whereClause = blockId
     ? `WHERE block_id = '${escSql(blockId)}'`
     : "";
@@ -381,8 +401,12 @@ export async function listProfiles(
 export async function deleteProfile(
   conn: DuckDBConnection,
   blockId: string,
-  strategyName: string
+  strategyName: string,
+  baseDir?: string
 ): Promise<boolean> {
+  if (isParquetMode() && baseDir) {
+    return deleteProfileJson(blockId, strategyName, getBlocksDir(baseDir));
+  }
   // Check existence before delete so we can return accurate boolean
   const existing = await getProfile(conn, blockId, strategyName);
   if (!existing) return false;

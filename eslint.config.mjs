@@ -16,6 +16,7 @@ export default tseslint.config(
       "packages/*/server/**",
       "next-env.d.ts",
       ".claude/hooks/**",
+      ".claude/worktrees/**",
       ".worktrees/**",
     ],
   },
@@ -39,4 +40,17 @@ export default tseslint.config(
     },
   },
   ...tseslint.configs.recommended,
+  {
+    files: ["**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 );

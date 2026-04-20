@@ -31,7 +31,11 @@ import { registerSnapshotTools } from "./tools/snapshot.js";
 import { registerExitAnalysisTools } from "./tools/exit-analysis.js";
 import { registerBatchExitAnalysisTools } from "./tools/batch-exit-analysis.js";
 import { registerGreeksAttributionTools } from "./tools/greeks-attribution.js";
+import { registerMarketFetchTools } from "./tools/market-fetch.js";
 import { extraCliRegistrations } from "./cli-handler.ext.js";
+import { getConnection, getCurrentConnection } from "./db/connection.js";
+import { createMarketStores, type StoreContext, type MarketStores } from "./market/stores/index.js";
+import { loadRegistry } from "./market/tickers/loader.js";
 
 // Type for tool result content items
 type ContentItem =
@@ -119,27 +123,46 @@ export async function handleDirectCall(args: string[]): Promise<void> {
   // Cast to unknown then to McpServer type since we're mocking it
   const mockServer = capture as unknown as Parameters<typeof registerBlockTools>[0];
 
+  // Phase 4 CONSUMER-01: build a MarketStores bundle so widened registrars
+  // receive the third `stores` arg. Constructed once per CLI invocation
+  // (identical pattern to src/index.ts:261-269).
+  await getConnection(resolvedDir);
+  const parquetMode = process.env.TRADEBLOCKS_PARQUET === "true";
+  const tickers = await loadRegistry({ dataDir: resolvedDir });
+  // `conn` is a getter that resolves the *current* connection on every access.
+  // See src/index.ts for the full rationale — upgradeToReadWrite swaps the
+  // module-level handle, so a captured reference goes stale after the first
+  // write, surfacing as "connection disconnected".
+  const storeContext: StoreContext = {
+    get conn() { return getCurrentConnection(); },
+    dataDir: resolvedDir,
+    parquetMode,
+    tickers,
+  };
+  const marketStores: MarketStores = createMarketStores(storeContext);
+
   registerBlockTools(mockServer, resolvedDir);
   registerAnalysisTools(mockServer, resolvedDir);
   registerPerformanceTools(mockServer, resolvedDir);
   registerReportTools(mockServer, resolvedDir);
   registerImportTools(mockServer, resolvedDir);
-  registerMarketDataTools(mockServer, resolvedDir);
+  registerMarketDataTools(mockServer, resolvedDir, marketStores);
   registerSQLTools(mockServer, resolvedDir);
   registerSchemaTools(mockServer, resolvedDir);
   registerEdgeDecayTools(mockServer, resolvedDir);
   registerGuideTools(mockServer);
   registerProfileTools(mockServer, resolvedDir);
   registerProfileAnalysisTools(mockServer, resolvedDir);
-  registerMarketImportTools(mockServer, resolvedDir);
-  registerMarketEnrichmentTools(mockServer, resolvedDir);
+  registerMarketImportTools(mockServer, resolvedDir, marketStores);
+  registerMarketEnrichmentTools(mockServer, resolvedDir, marketStores);
   registerRegimeAdvisorTools(mockServer, resolvedDir);
-  registerReplayTools(mockServer, resolvedDir);
+  registerReplayTools(mockServer, resolvedDir, marketStores);
   registerSnapshotTools(mockServer);
-  registerExitAnalysisTools(mockServer, resolvedDir);
-  registerBatchExitAnalysisTools(mockServer, resolvedDir);
-  registerGreeksAttributionTools(mockServer, resolvedDir);
-  for (const register of extraCliRegistrations) register(mockServer, resolvedDir);
+  registerExitAnalysisTools(mockServer, resolvedDir, marketStores);
+  registerBatchExitAnalysisTools(mockServer, resolvedDir, marketStores);
+  registerGreeksAttributionTools(mockServer, resolvedDir, marketStores);
+  registerMarketFetchTools(mockServer, resolvedDir, marketStores);
+  for (const register of extraCliRegistrations) register(mockServer, resolvedDir, marketStores);
 
   // Handle special case: list available tools
   if (!toolName || toolName === "--list" || toolName === "help") {

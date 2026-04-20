@@ -3,15 +3,26 @@ import { jest } from "@jest/globals";
 /**
  * Unit tests for bar-cache.ts utilities.
  *
+ * Phase 4 / D-05 / SEP-01 update: fetchBarsWithCache no longer hits the
+ * provider. Cache misses return [] (silent-empty contract). The legacy
+ * "calls fetchBars on cache miss + writes to the minute-bar table" tests have
+ * been replaced with cache-only assertions matching the strict read/write
+ * separation invariant.
+ *
+ * Phase 6 Wave D: legacy minute-bar view is retired; bar-cache reads now
+ * target market.spot (the v3.0 ticker-first minute-bar view).
+ *
  * Covers:
- * - fetchBarsWithCache: cache-read → API-fetch → cache-write lifecycle
- * - getDataTier: env var-driven tier selection with legacy fallback
+ * - fetchBarsWithCache: cache-read only (no API fallback)
+ * - getDataTier: env var-driven Massive tier selection
  * - mergeQuoteBars: synthetic bar creation from NBBO quotes
+ * - fetchBarsForLegsBulk: bulk multi-date cache reads
  */
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 import {
   fetchBarsWithCache,
+  fetchBarsForLegsBulk,
   mergeQuoteBars,
   getDataTier,
 } from "../../src/test-exports.js";
@@ -26,12 +37,18 @@ type RunFn = (sql: string) => Promise<void>;
 function makeMockConn(opts: {
   cacheRows?: unknown[][];
   runFn?: RunFn;
+  queryFn?: (sql: string) => unknown[][] | undefined;
   throwOnQuery?: boolean;
 }): DuckDBConnection {
   return {
     runAndReadAll: jest.fn(async (sql: string) => {
       if (opts.throwOnQuery) throw new Error("DuckDB error");
-      if (sql.includes("SELECT") && opts.cacheRows !== undefined) {
+      const rows = opts.queryFn?.(sql);
+      if (rows !== undefined) {
+        return { getRows: () => rows };
+      }
+      // Only return cacheRows for market.spot queries, not option_quote_minutes
+      if (sql.includes("SELECT") && opts.cacheRows !== undefined && !sql.includes("option_quote_minutes")) {
         return { getRows: () => opts.cacheRows! };
       }
       return { getRows: () => [] };
@@ -64,25 +81,21 @@ afterEach(() => {
 describe("getDataTier", () => {
   it("returns 'ohlc' by default when no env vars are set", () => {
     delete process.env.MASSIVE_DATA_TIER;
-    delete process.env.MASSIVE_QUOTES_ENABLED;
     expect(getDataTier()).toBe("ohlc");
   });
 
   it("reads MASSIVE_DATA_TIER env var — 'quotes'", () => {
     process.env.MASSIVE_DATA_TIER = "quotes";
-    delete process.env.MASSIVE_QUOTES_ENABLED;
     expect(getDataTier()).toBe("quotes");
   });
 
   it("reads MASSIVE_DATA_TIER env var — 'trades'", () => {
     process.env.MASSIVE_DATA_TIER = "trades";
-    delete process.env.MASSIVE_QUOTES_ENABLED;
     expect(getDataTier()).toBe("trades");
   });
 
   it("reads MASSIVE_DATA_TIER env var — 'ohlc' explicit", () => {
     process.env.MASSIVE_DATA_TIER = "ohlc";
-    delete process.env.MASSIVE_QUOTES_ENABLED;
     expect(getDataTier()).toBe("ohlc");
   });
 
@@ -91,28 +104,8 @@ describe("getDataTier", () => {
     expect(getDataTier()).toBe("quotes");
   });
 
-  it("falls back to legacy MASSIVE_QUOTES_ENABLED='true' → 'quotes'", () => {
-    delete process.env.MASSIVE_DATA_TIER;
-    process.env.MASSIVE_QUOTES_ENABLED = "true";
-    expect(getDataTier()).toBe("quotes");
-  });
-
-  it("falls back to legacy MASSIVE_QUOTES_ENABLED='1' → 'quotes'", () => {
-    delete process.env.MASSIVE_DATA_TIER;
-    process.env.MASSIVE_QUOTES_ENABLED = "1";
-    expect(getDataTier()).toBe("quotes");
-  });
-
-  it("MASSIVE_DATA_TIER takes precedence over legacy MASSIVE_QUOTES_ENABLED", () => {
-    process.env.MASSIVE_DATA_TIER = "ohlc";
-    process.env.MASSIVE_QUOTES_ENABLED = "true";
-    // MASSIVE_DATA_TIER is explicitly 'ohlc', even though legacy says quotes
-    expect(getDataTier()).toBe("ohlc");
-  });
-
-  it("returns 'ohlc' when MASSIVE_QUOTES_ENABLED is 'false'", () => {
-    delete process.env.MASSIVE_DATA_TIER;
-    process.env.MASSIVE_QUOTES_ENABLED = "false";
+  it("falls back to 'ohlc' for invalid MASSIVE_DATA_TIER values", () => {
+    process.env.MASSIVE_DATA_TIER = "premium";
     expect(getDataTier()).toBe("ohlc");
   });
 });
@@ -246,7 +239,7 @@ describe("mergeQuoteBars", () => {
 // ---------------------------------------------------------------------------
 
 describe("fetchBarsWithCache", () => {
-  it("returns cached rows from market.intraday without calling fetchBars", async () => {
+  it("returns cached rows from market.spot without calling fetchBars", async () => {
     const cachedRow = [1.0, 2.0, 0.5, 1.5, null, null, "09:31", "2025-01-07"];
     const conn = makeMockConn({ cacheRows: [cachedRow] });
 
@@ -266,26 +259,8 @@ describe("fetchBarsWithCache", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("calls fetchBars on cache miss and writes result to market.intraday", async () => {
+  it("returns [] on cache miss WITHOUT calling the provider (D-05 / SEP-01)", async () => {
     const conn = makeMockConn({ cacheRows: [] });
-
-    // The test bar date/time must match what fetchBars returns from the mocked API.
-    // massiveTimestampToETDate(1736253060000) → "2025-01-07"
-    // massiveTimestampToETTime(1736253060000) → "09:31"
-    fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          ticker: "SPY",
-          queryCount: 1,
-          resultsCount: 1,
-          adjusted: false,
-          results: [{ o: 100, h: 102, l: 99, c: 101, t: 1736253060000, v: 500 }],
-          status: "OK",
-          request_id: "req-1",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      )
-    );
 
     const result = await fetchBarsWithCache({
       ticker: "SPY",
@@ -294,62 +269,16 @@ describe("fetchBarsWithCache", () => {
       conn,
     });
 
-    expect(result).toHaveLength(1);
-    expect(result[0].ticker).toBe("SPY");
-    expect(result[0].open).toBe(100);
-    expect(result[0].close).toBe(101);
-    // Should have called the Massive API once
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    // Should have called conn.run() to write the bars to market.intraday
-    expect(conn.run).toHaveBeenCalledWith(
-      expect.stringContaining("INSERT OR REPLACE INTO market.intraday")
-    );
-  });
-
-  it("returns empty array when both cache and API return nothing", async () => {
-    const conn = makeMockConn({ cacheRows: [] });
-    fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          ticker: "SPY",
-          queryCount: 0,
-          resultsCount: 0,
-          adjusted: false,
-          results: [],
-          status: "OK",
-          request_id: "req-2",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      )
-    );
-
-    const result = await fetchBarsWithCache({
-      ticker: "SPY",
-      from: "2025-01-07",
-      to: "2025-01-07",
-      conn,
-    });
-
+    // Strict silent-empty contract: cache miss means [], not an API call.
     expect(result).toEqual([]);
+    // CRITICAL invariant for SEP-01: NO provider fetch is triggered by reads.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // No INSERT — the cache-write side is gone too.
+    expect(conn.run).not.toHaveBeenCalled();
   });
 
-  it("falls through to API when DuckDB throws on cache read", async () => {
+  it("returns [] when DuckDB throws on cache read (silent-empty)", async () => {
     const conn = makeMockConn({ throwOnQuery: true });
-
-    fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          ticker: "SPX",
-          queryCount: 1,
-          resultsCount: 1,
-          adjusted: false,
-          results: [{ o: 5000, h: 5010, l: 4990, c: 5005, t: 1736253060000 }],
-          status: "OK",
-          request_id: "req-3",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      )
-    );
 
     const result = await fetchBarsWithCache({
       ticker: "SPX",
@@ -359,30 +288,15 @@ describe("fetchBarsWithCache", () => {
       conn,
     });
 
-    // Should still return API data even though DuckDB errored
-    expect(result).toHaveLength(1);
-    expect(result[0].ticker).toBe("SPX");
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([]);
+    // Even on DuckDB error, the function MUST NOT fall back to the provider.
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("passes timespan and assetClass to fetchBars API call", async () => {
+  it("never triggers a provider fetch even when timespan/assetClass are set", async () => {
     const conn = makeMockConn({ cacheRows: [] });
-    fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          ticker: "VIX",
-          queryCount: 0,
-          resultsCount: 0,
-          adjusted: false,
-          results: [],
-          status: "OK",
-          request_id: "req-4",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      )
-    );
 
-    await fetchBarsWithCache({
+    const result = await fetchBarsWithCache({
       ticker: "VIX",
       from: "2025-01-07",
       to: "2025-01-07",
@@ -391,9 +305,86 @@ describe("fetchBarsWithCache", () => {
       conn,
     });
 
-    // URL should contain the Massive index prefix I:VIX
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const callUrl = String(fetchSpy.mock.calls[0][0]);
-    expect(callUrl).toContain("VIX");
+    expect(result).toEqual([]);
+    // Phase 4: NO provider call regardless of how the caller asks for data.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchBarsForLegsBulk", () => {
+  it("merges quote minutes into selected legs and scopes queries by active dates", async () => {
+    const conn = makeMockConn({
+      queryFn: (sql) => {
+        if (sql.includes("FROM market.spot")) {
+          return [
+            ["OPT1", 1.5, 1.5, 1.5, 1.5, null, null, "09:31", "2025-01-07"],
+          ];
+        }
+        if (sql.includes("FROM market.option_quote_minutes")) {
+          return [
+            ["OPT1", "2025-01-07", "09:31", 1.4, 1.6],
+            ["OPT1", "2025-01-07", "09:32", 1.5, 1.7],
+            ["OPT2", "2025-01-07", "09:31", 2.0, 2.2],
+          ];
+        }
+        return undefined;
+      },
+    });
+
+    const result = await fetchBarsForLegsBulk(
+      [
+        { ticker: "OPT1", expiration: "2025-01-08", entryDate: "2025-01-07" },
+        { ticker: "OPT2", expiration: "2025-01-08", entryDate: "2025-01-07" },
+      ],
+      "2025-01-01",
+      conn,
+    );
+
+    const opt1 = result.get("OPT1");
+    expect(opt1).toBeDefined();
+    expect(opt1).toHaveLength(2);
+    expect(opt1?.map(bar => bar.time)).toEqual(["09:31", "09:32"]);
+    expect(opt1?.[0]?.close).toBe(1.5);
+    expect(opt1?.[0]?.bid).toBe(1.4);
+    expect(opt1?.[0]?.ask).toBe(1.6);
+    expect(opt1?.[1]?.close).toBeCloseTo(1.6);
+
+    const opt2 = result.get("OPT2");
+    expect(opt2).toBeDefined();
+    expect(opt2).toHaveLength(1);
+    expect(opt2?.[0]?.time).toBe("09:31");
+    expect(opt2?.[0]?.close).toBeCloseTo(2.1);
+
+    const sqlCalls = (conn.runAndReadAll as jest.Mock).mock.calls.map(([sql]) => String(sql));
+    const intradaySql = sqlCalls.find(sql => sql.includes("FROM market.spot"));
+    expect(intradaySql).toBeDefined();
+    expect(intradaySql).toContain("date = '2025-01-07'");
+    expect(intradaySql).toContain("date = '2025-01-08'");
+    expect(intradaySql).not.toContain("date >= '2025-01-01'");
+  });
+
+  it("caps active dates at activeUntilDate when a strategy has a hard replay ceiling", async () => {
+    const conn = makeMockConn({ queryFn: () => [] });
+
+    await fetchBarsForLegsBulk(
+      [
+        {
+          ticker: "OPT1",
+          expiration: "2025-01-10",
+          entryDate: "2025-01-07",
+          activeUntilDate: "2025-01-08",
+        },
+      ],
+      "2025-01-01",
+      conn,
+    );
+
+    const sqlCalls = (conn.runAndReadAll as jest.Mock).mock.calls.map(([sql]) => String(sql));
+    const intradaySql = sqlCalls.find(sql => sql.includes("FROM market.spot"));
+    expect(intradaySql).toBeDefined();
+    expect(intradaySql).toContain("date = '2025-01-07'");
+    expect(intradaySql).toContain("date = '2025-01-08'");
+    expect(intradaySql).not.toContain("date = '2025-01-09'");
+    expect(intradaySql).not.toContain("date = '2025-01-10'");
   });
 });

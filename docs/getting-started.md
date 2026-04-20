@@ -61,7 +61,7 @@ Massive.com adds automated market data import and on-demand option bar fetching 
      }
    }
    ```
-3. Use `import_from_api` for daily OHLCV, VIX context, or intraday bars
+3. Use `fetch_bars` for daily OHLCV or intraday bars, `compute_vix_context` for VIX regime fields, or `refresh_market_data` for a combined daily refresh
 4. Replay tools fetch option bars on cache miss automatically
 
 See [Market Data Guide](market-data.md) for full details on import paths, ticker formats, and enrichment.

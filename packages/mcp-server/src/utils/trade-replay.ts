@@ -43,7 +43,7 @@ export interface PnlPoint {
   netGamma?: number | null;
   netTheta?: number | null;
   netVega?: number | null;
-  // IVP from market.context
+  // IVP from canonical market datasets (typically VIX ticker rows in market.enriched)
   ivp?: number | null;
 }
 
