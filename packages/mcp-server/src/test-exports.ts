@@ -373,6 +373,9 @@ export {
 export { shouldSkipEnrichment, buildEnrichmentPlan } from './utils/quote-enricher.js';
 export type { EnrichmentPlanInput } from './utils/quote-enricher.js';
 
+// SQL tool validator — unit-tested for path-gate + hard-block rules
+export { validateQuery, isUnderDataRoot } from './tools/sql.js';
+
 // Contract selector pure functions (unit testing)
 export {
   selectByDelta,

@@ -23,10 +23,12 @@
  *   - market._sync_metadata: Import/enrichment tracking metadata
  */
 
+import * as path from "path";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { getConnection, upgradeToReadWrite, downgradeToReadOnly } from "../db/connection.js";
+import { getDataRoot } from "../db/data-root.js";
 import { withFullSync } from "./middleware/sync-middleware.js";
 import { createToolOutput } from "../utils/output-formatter.js";
 
@@ -46,7 +48,7 @@ const AVAILABLE_TABLES = [
 ];
 
 /**
- * Always-blocked SQL patterns — external access and config changes.
+ * Always-blocked SQL patterns — external access, writes, and config changes.
  */
 const BLOCKED_PATTERNS: Array<{ pattern: RegExp; operation: string }> = [
   // External access
@@ -55,16 +57,79 @@ const BLOCKED_PATTERNS: Array<{ pattern: RegExp; operation: string }> = [
   { pattern: /\bATTACH\b/i, operation: "ATTACH" },
   { pattern: /\bDETACH\b/i, operation: "DETACH" },
 
-  // File functions
-  { pattern: /\bread_csv\s*\(/i, operation: "read_csv()" },
-  { pattern: /\bread_parquet\s*\(/i, operation: "read_parquet()" },
-  { pattern: /\bread_json\s*\(/i, operation: "read_json()" },
+  // File functions that write or read arbitrary text
   { pattern: /\bread_text\s*\(/i, operation: "read_text()" },
   { pattern: /\bwrite_csv\s*\(/i, operation: "write_csv()" },
 
   // Configuration changes (standalone SET, not UPDATE ... SET)
   { pattern: /^\s*SET\b/i, operation: "SET" },
 ];
+
+/**
+ * File-read functions allowed only when every path argument resolves under
+ * --data-root. Lets debug queries inspect managed Parquet/CSV/JSON while
+ * preventing filesystem traversal via SQL.
+ */
+const PATH_GATED_READ_FUNCTIONS = ["read_parquet", "read_csv", "read_json"] as const;
+
+interface FileReadCall {
+  fn: string;
+  paths: string[];
+}
+
+function findMatchingParen(s: string, openIdx: number): number {
+  let depth = 0;
+  for (let i = openIdx; i < s.length; i++) {
+    if (s[i] === "(") depth++;
+    else if (s[i] === ")") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Scan SQL for path-gated file-read calls. Returns null if any call can't
+ * be parsed safely — the caller should treat null as a block verdict.
+ */
+function extractFileReadCalls(sql: string): FileReadCall[] | null {
+  const calls: FileReadCall[] = [];
+  for (const fn of PATH_GATED_READ_FUNCTIONS) {
+    const nameRegex = new RegExp(`\\b${fn}\\s*\\(`, "gi");
+    let m: RegExpExecArray | null;
+    while ((m = nameRegex.exec(sql)) !== null) {
+      const openIdx = m.index + m[0].length - 1;
+      const closeIdx = findMatchingParen(sql, openIdx);
+      if (closeIdx === -1) return null;
+      const args = sql.slice(openIdx + 1, closeIdx);
+      const paths: string[] = [];
+      const strRegex = /(['"])((?:\\.|(?!\1).)*)\1/g;
+      let s: RegExpExecArray | null;
+      while ((s = strRegex.exec(args)) !== null) {
+        paths.push(s[2]);
+      }
+      if (paths.length === 0) return null;
+      calls.push({ fn, paths });
+    }
+  }
+  return calls;
+}
+
+/**
+ * Is the given path under dataRoot? Strips glob characters from the end so
+ * patterns like `<root>/market/spot/ ** /*.parquet` validate against their
+ * literal prefix. Resolves both paths absolutely and compares with a
+ * separator guard to prevent `<root>-evil` from matching `<root>`.
+ */
+export function isUnderDataRoot(filePath: string, dataRoot: string): boolean {
+  const globMatch = filePath.match(/[*?[]/);
+  const prefix = globMatch?.index !== undefined ? filePath.slice(0, globMatch.index) : filePath;
+  const resolved = path.resolve(prefix);
+  const resolvedRoot = path.resolve(dataRoot);
+  const rootWithSep = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+  return resolved === resolvedRoot || resolved.startsWith(rootWithSep);
+}
 
 /**
  * Default and maximum query timeout in milliseconds
@@ -94,12 +159,25 @@ const CONFIRM_REQUIRED_PATTERNS: Array<{ pattern: RegExp; operation: string }> =
  * Validate SQL query for dangerous patterns.
  * Returns null if valid, or an error message if invalid.
  */
-function validateQuery(sql: string): string | null {
+export function validateQuery(sql: string, dataRoot: string): string | null {
   for (const { pattern, operation } of BLOCKED_PATTERNS) {
     if (pattern.test(sql)) {
       return `${operation} operations are not allowed.`;
     }
   }
+
+  const calls = extractFileReadCalls(sql);
+  if (calls === null) {
+    return "File-read function calls could not be parsed safely. Use the market.* views instead.";
+  }
+  for (const call of calls) {
+    for (const p of call.paths) {
+      if (!isUnderDataRoot(p, dataRoot)) {
+        return `${call.fn}() path must be under --data-root: ${p}`;
+      }
+    }
+  }
+
   return null;
 }
 
@@ -308,7 +386,7 @@ export function registerSQLTools(server: McpServer, baseDir: string): void {
     },
     withFullSync(baseDir, async ({ query, limit, confirm }) => {
       // Validate query for dangerous patterns
-      const validationError = validateQuery(query);
+      const validationError = validateQuery(query, getDataRoot(baseDir));
       if (validationError) {
         return {
           content: [{ type: "text" as const, text: validationError }],
