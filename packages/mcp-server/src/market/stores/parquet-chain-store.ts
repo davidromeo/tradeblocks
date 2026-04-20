@@ -74,6 +74,18 @@ export class ParquetChainStore extends ChainStore {
     }
   }
 
+  async writeFromSelect(
+    partition: { underlying: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }> {
+    return writeChainPartition(this.ctx.conn, {
+      dataDir: this.ctx.dataDir,
+      underlying: partition.underlying,
+      date: partition.date,
+      selectQuery: selectSql,
+    });
+  }
+
   async readChain(
     underlying: string,
     date: string,

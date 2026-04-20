@@ -84,6 +84,18 @@ export class ParquetQuoteStore extends QuoteStore {
     }
   }
 
+  async writeFromSelect(
+    partition: { underlying: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }> {
+    return writeQuoteMinutesPartition(this.ctx.conn, {
+      dataDir: this.ctx.dataDir,
+      underlying: partition.underlying,
+      date: partition.date,
+      selectQuery: selectSql,
+    });
+  }
+
   async readQuotes(
     occTickers: string[],
     from: string,

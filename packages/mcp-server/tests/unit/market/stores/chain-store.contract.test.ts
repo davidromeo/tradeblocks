@@ -109,6 +109,25 @@ describe.each([
     expect(cov.latest).toBeNull();
     expect(cov.totalDates).toBe(0);
   });
+
+  it("writeFromSelect lands rows in the partition and is readable via readChain", async () => {
+    const selectSql = `
+      SELECT * FROM (VALUES
+        ('SPX', '2025-01-06', 'SPXW250106C04700000', 'call', 4700.0, '2025-01-06', 0, 'european'),
+        ('SPX', '2025-01-06', 'SPXW250106P04700000', 'put',  4700.0, '2025-01-06', 0, 'european')
+      ) t(underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style)
+    `;
+    const { rowCount } = await store.writeFromSelect(
+      { underlying: "SPX", date: "2025-01-06" },
+      selectSql,
+    );
+    expect(rowCount).toBe(2);
+    await refreshViews(fixture);
+
+    const read = await store.readChain("SPX", "2025-01-06");
+    expect(read.length).toBe(2);
+    expect(read.map((r) => r.contract_type).sort()).toEqual(["call", "put"]);
+  });
 });
 
 describe("ChainStore backend parity", () => {

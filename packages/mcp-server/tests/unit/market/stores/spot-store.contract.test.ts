@@ -137,6 +137,28 @@ describe.each([
     expect(cov.totalDates).toBe(0);
     expect(cov.missingDates).toEqual([]);
   });
+
+  it("writeFromSelect lands rows in the partition and is readable via readBars", async () => {
+    // The SELECT produces the same 3-column-subset shape that writeBars writes.
+    // A typical LLM-composed SELECT would pull from read_parquet('/some/file');
+    // here we use a VALUES clause so the test doesn't depend on filesystem state.
+    const selectSql = `
+      SELECT * FROM (VALUES
+        ('SPX', '2025-01-06', '09:30', 100.0, 101.0,  99.0, 100.5, NULL::DOUBLE, NULL::DOUBLE),
+        ('SPX', '2025-01-06', '10:30', 100.5, 106.0, 100.0, 105.0, NULL::DOUBLE, NULL::DOUBLE)
+      ) t(ticker, date, time, open, high, low, close, bid, ask)
+    `;
+    const { rowCount } = await store.writeFromSelect(
+      { ticker: "SPX", date: "2025-01-06" },
+      selectSql,
+    );
+    expect(rowCount).toBe(2);
+    await refreshViews(fixture);
+
+    const read = await store.readBars("SPX", "2025-01-06", "2025-01-06");
+    expect(read.length).toBe(2);
+    expect(read.map((r) => r.time).sort()).toEqual(["09:30", "10:30"]);
+  });
 });
 
 describe("SpotStore backend parity", () => {

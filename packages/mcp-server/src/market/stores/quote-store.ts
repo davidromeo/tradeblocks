@@ -42,6 +42,18 @@ export abstract class QuoteStore {
   ): Promise<void>;
 
   /**
+   * Write quotes for a single (underlying, date) partition from a user-supplied SELECT.
+   *
+   * The SELECT must produce columns matching `market.option_quote_minutes`
+   * (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source).
+   * Single-partition semantics mirror `SpotStore.writeFromSelect`.
+   */
+  abstract writeFromSelect(
+    partition: { underlying: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }>;
+
+  /**
    * Read quotes for a batch of OCC tickers over a date range.
    *
    * All tickers MUST resolve to the same underlying via

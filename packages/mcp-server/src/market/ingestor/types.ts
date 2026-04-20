@@ -53,11 +53,35 @@ export interface IngestChainOptions {
   dryRun?: boolean;
 }
 
+/**
+ * Dataset types accepted by import_flat_file. Each maps to a single store:
+ *   spot_bars      → stores.spot.writeFromSelect
+ *   option_quotes  → stores.quote.writeFromSelect
+ *   option_chain   → stores.chain.writeFromSelect
+ *
+ * Enriched is computed locally and never imported; it's absent on purpose.
+ */
+export type FlatFileDatasetType = "spot_bars" | "option_quotes" | "option_chain";
+
 export interface IngestFlatFileOptions {
-  date: string;
-  assetClass: "option" | "index";
-  underlying: string;
-  provider?: "massive";
+  /** Absolute path to a local file DuckDB can read (parquet, csv, jsonl, gz, etc.). */
+  filePath: string;
+  /** Which store the rows land in. */
+  datasetType: FlatFileDatasetType;
+  /**
+   * SELECT (or WITH ... SELECT) that produces the target store's canonical
+   * columns. The LLM composes this after sniffing the file via
+   * `run_sql SELECT * FROM read_parquet('{filePath}') LIMIT 5` (or read_csv)
+   * and comparing columns against `describe_database`.
+   */
+  selectSql: string;
+  /**
+   * Single-partition target. Required keys depend on datasetType:
+   *   spot_bars      → { ticker, date }
+   *   option_quotes  → { underlying, date }
+   *   option_chain   → { underlying, date }
+   */
+  partition: { ticker?: string; underlying?: string; date: string };
   dryRun?: boolean;
 }
 

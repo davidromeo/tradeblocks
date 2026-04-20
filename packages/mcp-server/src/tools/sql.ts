@@ -182,6 +182,29 @@ export function validateQuery(sql: string, dataRoot: string): string | null {
 }
 
 /**
+ * Validate a user-supplied SELECT passed into import_flat_file.
+ *
+ * Keeps the hard blocks on external access, writes, and config changes —
+ * but relaxes the read_parquet/read_csv/read_json path gate because the
+ * purpose of the import tool is to pull data from arbitrary source files
+ * the LLM has been pointed at. The output location is sandboxed by the
+ * store's partition-path composer (data-root-relative, whitelisted
+ * partition values), so a malicious SELECT can only pollute the store
+ * it's writing to — it cannot exfiltrate or write outside the data root.
+ */
+export function validateImportSelect(sql: string): string | null {
+  for (const { pattern, operation } of BLOCKED_PATTERNS) {
+    if (pattern.test(sql)) {
+      return `${operation} operations are not allowed in select_sql.`;
+    }
+  }
+  if (/^\s*SELECT\b/i.test(sql) === false && /^\s*WITH\b/i.test(sql) === false) {
+    return "select_sql must be a SELECT or WITH statement.";
+  }
+  return null;
+}
+
+/**
  * Check if a query is destructive (DELETE/UPDATE) and needs confirmation.
  */
 function isDestructiveQuery(sql: string): { destructive: boolean; operation: string } {

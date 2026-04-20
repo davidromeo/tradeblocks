@@ -26,6 +26,27 @@ export abstract class SpotStore {
   }
 
   abstract writeBars(ticker: string, date: string, bars: BarRow[]): Promise<void>;
+
+  /**
+   * Write bars for a single (ticker, date) partition from a user-supplied SELECT.
+   *
+   * The SELECT must produce columns matching `market.spot`
+   * (ticker, date, time, open, high, low, close, bid, ask). Rows are expected
+   * to belong to the single partition named in `partition` — the caller is
+   * responsible for filtering upstream; mixed partitions are not rejected
+   * but will be written to the named partition's location (Parquet) or the
+   * single table (DuckDB).
+   *
+   * Parquet mode: `COPY (select) TO spot/ticker=X/date=Y/data.parquet` via
+   * the shared staging-table helper.
+   *
+   * DuckDB mode: `INSERT OR REPLACE INTO market.spot (cols...) <select>`.
+   */
+  abstract writeFromSelect(
+    partition: { ticker: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }>;
+
   abstract readBars(ticker: string, from: string, to: string): Promise<BarRow[]>;
   abstract readDailyBars(ticker: string, from: string, to: string): Promise<BarRow[]>;
   abstract getCoverage(ticker: string, from: string, to: string): Promise<CoverageReport>;

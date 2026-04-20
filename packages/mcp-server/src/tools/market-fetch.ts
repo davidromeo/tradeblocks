@@ -135,31 +135,53 @@ export function registerMarketFetchTools(
     "import_flat_file",
     {
       description:
-        "Bulk-import a single day of minute bars from a flat-file provider (Massive S3). " +
-        "Much faster than per-ticker API calls for a full day of option bars. " +
-        "Capability-gated: only Massive supports flat files. ThetaData returns status='unsupported'. " +
-        "For multi-day imports, call this repeatedly (caller iterates).",
+        "Provider-agnostic flat-file ingest. Reads rows from a local file (parquet, csv, jsonl, .gz — anything DuckDB can read via read_parquet/read_csv/read_json) and writes them to a target market store for a single partition.\n\n" +
+        "Typical workflow:\n" +
+        "  1. Sniff the file: run_sql SELECT * FROM read_parquet('<path>') LIMIT 5\n" +
+        "  2. Look up the target schema: describe_database\n" +
+        "  3. Compose a SELECT that maps the file's columns to the store's canonical columns\n" +
+        "  4. Call import_flat_file with {file_path, dataset_type, select_sql, partition}\n\n" +
+        "dataset_type routes the rows to the right store:\n" +
+        "  spot_bars      → market.spot                 — partition {ticker, date}\n" +
+        "  option_quotes  → market.option_quote_minutes — partition {underlying, date}\n" +
+        "  option_chain   → market.option_chain         — partition {underlying, date}\n\n" +
+        "The SELECT must output the target store's canonical columns in order. Writes are single-partition: every row must belong to the named partition. Works in both Parquet and DuckDB modes — the store handles mode routing.",
       inputSchema: z.object({
-        date: z.string().describe("Trading date YYYY-MM-DD"),
-        asset_class: z.enum(["option", "index"]).describe(
-          "'option' for OPRA option bars, 'index' for us_indices bars (VIX, VIX9D, SPX)",
+        file_path: z.string().describe(
+          "Absolute path to a local file DuckDB can read. The SELECT references this path via read_parquet('<file_path>') / read_csv('<file_path>') / read_json('<file_path>'). Provider downloads (e.g., Massive rclone output) or any user-supplied file are all valid sources.",
         ),
-        underlying: z.string().describe("Underlying ticker to filter for (e.g., 'SPX')"),
-        provider: z.enum(["massive"]).optional()
-          .describe("Must be 'massive' or omitted — other providers unsupported."),
+        dataset_type: z.enum(["spot_bars", "option_quotes", "option_chain"]).describe(
+          "Target store. Determines which writeFromSelect is invoked and which partition keys are required.",
+        ),
+        select_sql: z.string().describe(
+          "SELECT (or WITH ... SELECT) that produces the target store's canonical columns. " +
+          "spot_bars columns: (ticker, date, time, open, high, low, close, bid, ask). " +
+          "option_quote_minutes columns: (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source). " +
+          "option_chain columns: (underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style).",
+        ),
+        partition: z.object({
+          ticker: z.string().optional().describe("Required for dataset_type='spot_bars'."),
+          underlying: z.string().optional().describe("Required for dataset_type='option_quotes' | 'option_chain'."),
+          date: z.string().describe("Partition date YYYY-MM-DD."),
+        }).describe("Single-partition target. Keys depend on dataset_type."),
         dry_run: z.boolean().default(false),
       }),
     },
-    async ({ date, asset_class, underlying, provider, dry_run }) => {
+    async ({ file_path, dataset_type, select_sql, partition, dry_run }) => {
       await upgradeToReadWrite(baseDir);
       try {
         const result = await ingestor.ingestFlatFile({
-          date, assetClass: asset_class, underlying, provider, dryRun: dry_run,
+          filePath: file_path,
+          datasetType: dataset_type,
+          selectSql: select_sql,
+          partition,
+          dryRun: dry_run,
         });
         const summary =
+          result.status === "error" ? `Error: ${result.error}` :
           result.status === "unsupported" ? `Unsupported: ${result.error}` :
-          dry_run ? `[DRY RUN] Would import ${asset_class} bars for ${underlying} on ${date}` :
-          `${result.status}: imported ${result.rowsWritten} bars`;
+          dry_run ? `[DRY RUN] Would write ${dataset_type} rows from ${file_path}` :
+          `${result.status}: wrote ${result.rowsWritten} rows to ${dataset_type}`;
         return createToolOutput(summary, result);
       } finally {
         await downgradeToReadOnly(baseDir);

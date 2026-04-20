@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
-import { mkdirSync, rmSync } from "fs";
+import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { DuckDBInstance } from "@duckdb/node-api";
@@ -7,8 +7,14 @@ import { MarketIngestor } from "../../../../src/market/ingestor/index.js";
 import { createMarketStores } from "../../../../src/market/stores/index.js";
 import { ensureMarketDataTables } from "../../../../src/db/market-schemas.js";
 import { TickerRegistry } from "../../../../src/market/tickers/registry.js";
-import type { MarketDataProvider } from "../../../../src/utils/market-provider.js";
 
+/**
+ * ingestFlatFile is the LLM-driven import dispatcher. The LLM sniffs a file,
+ * composes a SELECT mapping file columns → store canonical columns, and calls
+ * with {filePath, datasetType, selectSql, partition}. These tests exercise the
+ * dispatch layer and the security gates. Store-specific writeFromSelect tests
+ * live alongside the concrete stores.
+ */
 describe("MarketIngestor.ingestFlatFile", () => {
   let dataDir: string;
   let instance: DuckDBInstance;
@@ -30,68 +36,169 @@ describe("MarketIngestor.ingestFlatFile", () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it("returns unsupported when provider lacks flatFiles capability", async () => {
-    const provider: MarketDataProvider = {
-      name: "no-flat",
-      capabilities: () => ({
-        tradeBars: true,
-        quotes: true,
-        greeks: false,
-        flatFiles: false,
-        bulkByRoot: false,
-        perTicker: true,
-        minuteBars: true,
-        dailyBars: true,
-      }),
-      fetchBars: async () => [],
-      fetchOptionSnapshot: async () => ({ contracts: [], underlying_price: 0, underlying_ticker: "SPX" }),
-    };
-    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
-    const ingestor = new MarketIngestor({ stores, dataRoot: dataDir, providerFactory: () => provider });
+  // Build a tiny CSV the LLM could realistically point the tool at.
+  function writeFixtureCsv(): string {
+    const path = join(dataDir, "fixture.csv");
+    writeFileSync(
+      path,
+      "t,d,hm,o,h,l,c\n" +
+        "SPX,2026-01-05,09:30,4700.0,4710.0,4695.0,4705.0\n" +
+        "SPX,2026-01-05,09:31,4705.0,4712.0,4703.0,4710.0\n",
+    );
+    return path;
+  }
 
-    const result = await ingestor.ingestFlatFile({
-      date: "2026-01-05",
-      assetClass: "option",
-      underlying: "SPX",
+  describe("dispatch", () => {
+    it("writes spot_bars rows through stores.spot.writeFromSelect", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+      const filePath = writeFixtureCsv();
+
+      const result = await ingestor.ingestFlatFile({
+        filePath,
+        datasetType: "spot_bars",
+        selectSql:
+          `SELECT t AS ticker, d AS date, hm AS time, o AS open, h AS high, l AS low, c AS close, ` +
+          `NULL::DOUBLE AS bid, NULL::DOUBLE AS ask FROM read_csv('${filePath}', header=true)`,
+        partition: { ticker: "SPX", date: "2026-01-05" },
+      });
+
+      expect(result.status).toBe("ok");
+      expect(result.rowsWritten).toBe(2);
+
+      const probe = await conn.runAndReadAll(
+        `SELECT COUNT(*)::INTEGER FROM market.spot WHERE ticker = 'SPX' AND date = '2026-01-05'`,
+      );
+      expect(Number(probe.getRows()[0][0])).toBe(2);
     });
 
-    expect(result.status).toBe("unsupported");
-    expect(result.error).toMatch(/flat[_\s-]?file/i);
+    it("rejects spot_bars without partition.ticker", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "spot_bars",
+        selectSql: "SELECT 1",
+        partition: { date: "2026-01-05" },
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error).toMatch(/partition\.ticker/);
+    });
+
+    it("rejects option_quotes without partition.underlying", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "option_quotes",
+        selectSql: "SELECT 1",
+        partition: { date: "2026-01-05" },
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error).toMatch(/partition\.underlying/);
+    });
+
+    it("rejects option_chain without partition.underlying", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "option_chain",
+        selectSql: "SELECT 1",
+        partition: { date: "2026-01-05" },
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error).toMatch(/partition\.underlying/);
+    });
+
+    it("rejects missing partition.date", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "spot_bars",
+        selectSql: "SELECT 1",
+        partition: { ticker: "SPX" } as unknown as { date: string; ticker: string },
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error).toMatch(/partition\.date/);
+    });
   });
 
-  it("delegates to provider.downloadBulkData and returns ok with rowsWritten", async () => {
-    let downloadCalled = false;
+  describe("security", () => {
+    it("blocks COPY TO in select_sql", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
 
-    const provider: MarketDataProvider = {
-      name: "has-flat",
-      capabilities: () => ({
-        tradeBars: true,
-        quotes: true,
-        greeks: false,
-        flatFiles: true,
-        bulkByRoot: false,
-        perTicker: true,
-        minuteBars: true,
-        dailyBars: true,
-      }),
-      fetchBars: async () => [],
-      fetchOptionSnapshot: async () => ({ contracts: [], underlying_price: 0, underlying_ticker: "SPX" }),
-      downloadBulkData: async () => {
-        downloadCalled = true;
-        return { rowCount: 5000, skipped: false };
-      },
-    };
-    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
-    const ingestor = new MarketIngestor({ stores, dataRoot: dataDir, providerFactory: () => provider });
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "spot_bars",
+        selectSql: "COPY foo TO '/etc/evil'",
+        partition: { ticker: "SPX", date: "2026-01-05" },
+      });
 
-    const result = await ingestor.ingestFlatFile({
-      date: "2026-01-05",
-      assetClass: "option",
-      underlying: "SPX",
+      expect(result.status).toBe("error");
+      expect(result.error).toMatch(/COPY/);
     });
 
-    expect(downloadCalled).toBe(true);
-    expect(result.status).toBe("ok");
-    expect(result.rowsWritten).toBe(5000);
+    it("blocks ATTACH in select_sql", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "spot_bars",
+        selectSql: "ATTACH '/tmp/other.db'",
+        partition: { ticker: "SPX", date: "2026-01-05" },
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error).toMatch(/ATTACH/);
+    });
+
+    it("rejects non-SELECT select_sql", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "spot_bars",
+        selectSql: "DROP TABLE foo",
+        partition: { ticker: "SPX", date: "2026-01-05" },
+      });
+
+      expect(result.status).toBe("error");
+    });
+  });
+
+  describe("dry_run", () => {
+    it("returns skipped without writing", async () => {
+      const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+      const ingestor = new MarketIngestor({ stores, dataRoot: dataDir });
+
+      const result = await ingestor.ingestFlatFile({
+        filePath: "/tmp/unused.csv",
+        datasetType: "spot_bars",
+        selectSql: "SELECT 1",
+        partition: { ticker: "SPX", date: "2026-01-05" },
+        dryRun: true,
+      });
+
+      expect(result.status).toBe("skipped");
+      expect(result.rowsWritten).toBe(0);
+
+      const probe = await conn.runAndReadAll(
+        `SELECT COUNT(*)::INTEGER FROM market.spot`,
+      );
+      expect(Number(probe.getRows()[0][0])).toBe(0);
+    });
   });
 });

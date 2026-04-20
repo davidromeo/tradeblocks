@@ -179,6 +179,24 @@ describe.each([
     expect(cov.latest).toBeNull();
     expect(cov.totalDates).toBe(0);
   });
+
+  it("writeFromSelect lands rows in the partition and is readable via readQuotes", async () => {
+    const selectSql = `
+      SELECT * FROM (VALUES
+        ('SPX', '2025-01-06', '${SPX_CALL}', '09:30', 1.0, 1.1, 1.05, NULL::BIGINT, NULL::VARCHAR),
+        ('SPX', '2025-01-06', '${SPX_CALL}', '10:30', 1.2, 1.3, 1.25, NULL::BIGINT, NULL::VARCHAR)
+      ) t(underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source)
+    `;
+    const { rowCount } = await store.writeFromSelect(
+      { underlying: "SPX", date: "2025-01-06" },
+      selectSql,
+    );
+    expect(rowCount).toBe(2);
+    await refreshViews(fixture);
+
+    const result = await store.readQuotes([SPX_CALL], "2025-01-06", "2025-01-06");
+    expect(result.get(SPX_CALL)?.length).toBe(2);
+  });
 });
 
 describe("QuoteStore backend parity", () => {

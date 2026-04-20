@@ -44,6 +44,18 @@ export class DuckdbChainStore extends ChainStore {
     );
   }
 
+  async writeFromSelect(
+    _partition: { underlying: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }> {
+    const result = await this.ctx.conn.run(
+      `INSERT OR REPLACE INTO market.option_chain
+         (underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style)
+       ${selectSql}`,
+    );
+    return { rowCount: Number(result.rowsChanged) };
+  }
+
   async readChain(
     underlying: string,
     date: string,

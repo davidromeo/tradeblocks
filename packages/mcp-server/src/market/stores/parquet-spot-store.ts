@@ -73,6 +73,18 @@ export class ParquetSpotStore extends SpotStore {
     }
   }
 
+  async writeFromSelect(
+    partition: { ticker: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }> {
+    return writeSpotPartition(this.ctx.conn, {
+      dataDir: this.ctx.dataDir,
+      ticker: partition.ticker,
+      date: partition.date,
+      selectQuery: selectSql,
+    });
+  }
+
   async readBars(
     ticker: string,
     from: string,

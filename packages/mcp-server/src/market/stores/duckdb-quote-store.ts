@@ -51,6 +51,18 @@ export class DuckdbQuoteStore extends QuoteStore {
     );
   }
 
+  async writeFromSelect(
+    _partition: { underlying: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }> {
+    const result = await this.ctx.conn.run(
+      `INSERT OR REPLACE INTO market.option_quote_minutes
+         (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source)
+       ${selectSql}`,
+    );
+    return { rowCount: Number(result.rowsChanged) };
+  }
+
   async readQuotes(
     occTickers: string[],
     from: string,

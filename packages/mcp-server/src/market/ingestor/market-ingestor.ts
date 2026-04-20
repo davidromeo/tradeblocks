@@ -1,11 +1,10 @@
-import * as path from "path";
 import type { MarketStores } from "../stores/index.js";
 import type { MarketDataProvider, BarRow } from "../../utils/market-provider.js";
 import { getProvider } from "../../utils/market-provider.js";
 import { MassiveProvider } from "../../utils/providers/massive.js";
 import { ThetaDataProvider } from "../../utils/providers/thetadata.js";
 import { extractRoot } from "../tickers/resolver.js";
-import { DATASETS_V3, resolveMarketDir } from "../../db/market-datasets.js";
+import { validateImportSelect } from "../../tools/sql.js";
 import type {
   IngestBarsOptions,
   IngestQuotesOptions,
@@ -385,46 +384,79 @@ export class MarketIngestor {
     return Math.max(0, Math.round((expMs - asOfMs) / msPerDay));
   }
 
+  /**
+   * Generic flat-file ingest — the LLM is the parser.
+   *
+   * The caller (typically an LLM that has sniffed the file via run_sql +
+   * read_parquet/read_csv and compared columns to describe_database) supplies:
+   *   - filePath:    local path to a file DuckDB can read
+   *   - datasetType: which store to write to
+   *   - selectSql:   a SELECT that produces the store's canonical columns
+   *   - partition:   the target (ticker/underlying, date) partition
+   *
+   * No provider is called — downloads happen beforehand (via the provider's
+   * own tools, rclone, or the user pasting a file). The store's writeFromSelect
+   * handles mode-routing (Parquet COPY vs DuckDB INSERT) so this dispatch
+   * layer stays provider-agnostic and format-agnostic.
+   */
   async ingestFlatFile(opts: IngestFlatFileOptions): Promise<IngestResult> {
-    const provider = this.resolveProvider(opts.provider);
-    const caps = provider.capabilities();
-
-    if (!caps.flatFiles || typeof provider.downloadBulkData !== "function") {
-      return {
-        status: "unsupported",
-        rowsWritten: 0,
-        error: `Provider ${provider.name} does not support flat-file imports`,
-      };
+    const selectError = validateImportSelect(opts.selectSql);
+    if (selectError) {
+      return { status: "error", rowsWritten: 0, error: selectError };
     }
 
     if (opts.dryRun) {
       return { status: "skipped", rowsWritten: 0, details: { reason: "dry_run" } };
     }
 
-    // Write to the spot partition: <dataRoot>/market/spot/ticker=X/date=Y/data.parquet
-    const ticker = opts.underlying.toUpperCase();
-    const spotDef = DATASETS_V3.spot;
-    const outputPath = path.join(
-      resolveMarketDir(this.deps.dataRoot),
-      spotDef.subdir,
-      `ticker=${ticker}`,
-      `date=${opts.date}`,
-      spotDef.filename,
-    );
+    const partitionDate = opts.partition.date;
+    if (!partitionDate) {
+      return { status: "error", rowsWritten: 0, error: "partition.date is required" };
+    }
 
-    const result = await provider.downloadBulkData({
-      date: opts.date,
-      dataset: "minute_bars",
-      assetClass: opts.assetClass,
-      tickers: [ticker],
-      outputPath,
-    });
-
-    return {
-      status: result.skipped ? "skipped" : "ok",
-      rowsWritten: result.rowCount,
-      dateRange: { from: opts.date, to: opts.date },
-    };
+    try {
+      switch (opts.datasetType) {
+        case "spot_bars": {
+          const ticker = opts.partition.ticker;
+          if (!ticker) {
+            return { status: "error", rowsWritten: 0, error: "partition.ticker is required for datasetType='spot_bars'" };
+          }
+          const { rowCount } = await this.deps.stores.spot.writeFromSelect(
+            { ticker: ticker.toUpperCase(), date: partitionDate },
+            opts.selectSql,
+          );
+          return { status: "ok", rowsWritten: rowCount, dateRange: { from: partitionDate, to: partitionDate } };
+        }
+        case "option_quotes": {
+          const underlying = opts.partition.underlying;
+          if (!underlying) {
+            return { status: "error", rowsWritten: 0, error: "partition.underlying is required for datasetType='option_quotes'" };
+          }
+          const { rowCount } = await this.deps.stores.quote.writeFromSelect(
+            { underlying: underlying.toUpperCase(), date: partitionDate },
+            opts.selectSql,
+          );
+          return { status: "ok", rowsWritten: rowCount, dateRange: { from: partitionDate, to: partitionDate } };
+        }
+        case "option_chain": {
+          const underlying = opts.partition.underlying;
+          if (!underlying) {
+            return { status: "error", rowsWritten: 0, error: "partition.underlying is required for datasetType='option_chain'" };
+          }
+          const { rowCount } = await this.deps.stores.chain.writeFromSelect(
+            { underlying: underlying.toUpperCase(), date: partitionDate },
+            opts.selectSql,
+          );
+          return { status: "ok", rowsWritten: rowCount, dateRange: { from: partitionDate, to: partitionDate } };
+        }
+        default: {
+          const _exhaustive: never = opts.datasetType;
+          return { status: "error", rowsWritten: 0, error: `Unknown datasetType: ${String(_exhaustive)}` };
+        }
+      }
+    } catch (err) {
+      return { status: "error", rowsWritten: 0, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   async computeVixContext(opts: ComputeVixContextOptions): Promise<IngestResult> {

@@ -46,6 +46,20 @@ export class DuckdbSpotStore extends SpotStore {
     );
   }
 
+  async writeFromSelect(
+    _partition: { ticker: string; date: string },
+    selectSql: string,
+  ): Promise<{ rowCount: number }> {
+    // INSERT OR REPLACE preserves idempotency semantics of writeBars.
+    // Column list matches market.spot schema (ticker, date, time, open, high, low, close, bid, ask).
+    const result = await this.ctx.conn.run(
+      `INSERT OR REPLACE INTO market.spot
+         (ticker, date, time, open, high, low, close, bid, ask)
+       ${selectSql}`,
+    );
+    return { rowCount: Number(result.rowsChanged) };
+  }
+
   async readBars(
     ticker: string,
     from: string,
