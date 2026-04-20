@@ -129,6 +129,24 @@ Rules for type 1 (trade dates from CSVs):
 
 ### MCP Server Considerations
 
+**Design principle — the LLM is the intelligence layer.** When designing MCP tools, push sniffing, classification, and config decisions UP to the caller instead of hardcoding them into a dispatch matrix. The LLM has `describe_database`, `run_sql` with path-gated `read_parquet`/`read_csv`/`read_json`, and schema context — it can inspect any file, match it to a target store, and supply a transforming SELECT. Tools should accept that config (e.g., `{file_path, dataset_type, select_sql, partition}`) rather than bake in per-provider or per-format parsers.
+
+Symptoms you're building in the wrong place:
+- Adding a "format registry" or per-format parser class to the server
+- Dispatching by `(provider, asset_class, dataset)` tuples
+- Sniffing file schemas inside a tool handler
+- Growing a `switch` on provider names inside shared code
+
+Symptoms you're in the right place:
+- Tool signatures accept a typed config from the caller
+- Stores expose a single mode-aware write primitive (`writeX` or `writeFromSelect`) and nothing more
+- Providers own fetch/download only; everything after the bytes hit disk is provider-agnostic
+- Adding a new format or dataset needs zero server-code changes when the LLM can compose a SELECT
+
+This principle applies to flat-file ingestion, CSV import, enrichment configuration, and any future "take arbitrary input and route to the right place" surface.
+
+---
+
 When adding new metrics, calculations, or chart data to the UI, **consider whether it should also be exposed via the MCP server** (`packages/mcp-server/`). The MCP server allows Claude to programmatically access portfolio data and statistics.
 
 **Key MCP tools to consider updating:**
@@ -242,7 +260,7 @@ If the server fails to start or init times out, fix the issue BEFORE declaring a
 - `fetch_bars { tickers, timespan, from, to }` — fetch daily or intraday OHLCV bars from the configured provider and write to Parquet
 - `fetch_quotes { tickers, from, to }` — fetch option minute quotes and write to Parquet
 - `fetch_chain { underlying, date }` — fetch option chain snapshot and write to Parquet
-- `import_flat_file { file_path, ticker, timespan }` — import a local Parquet or CSV flat file
+- `import_flat_file { file_path, dataset_type, select_sql, partition }` — dispatch any DuckDB-readable file (parquet, csv, jsonl, gz) to a target market store (`spot_bars` / `option_quotes` / `option_chain`) via an LLM-composed SELECT. Workflow: run_sql to sniff the file, describe_database for the target shape, compose a bridging SELECT, then call import_flat_file. See `releases/v3.0.md` for details.
 - `compute_vix_context { from, to }` — compute cross-ticker VIX regime fields (Vol_Regime, Term_Structure_State, etc.) for a date range
 - `refresh_market_data { tickers, from, to }` — composite daily-refresh: calls fetch_bars for all tickers, then auto-fires compute_vix_context when VIX-family tickers are present, and returns a coverage report. Use this for routine end-of-day data updates.
 
