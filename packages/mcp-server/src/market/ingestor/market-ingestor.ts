@@ -1,9 +1,11 @@
+import * as path from "path";
 import type { MarketStores } from "../stores/index.js";
 import type { MarketDataProvider, BarRow } from "../../utils/market-provider.js";
 import { getProvider } from "../../utils/market-provider.js";
 import { MassiveProvider } from "../../utils/providers/massive.js";
 import { ThetaDataProvider } from "../../utils/providers/thetadata.js";
 import { extractRoot } from "../tickers/resolver.js";
+import { DATASETS_V3, resolveMarketDir } from "../../db/market-datasets.js";
 import type {
   IngestBarsOptions,
   IngestQuotesOptions,
@@ -399,12 +401,23 @@ export class MarketIngestor {
       return { status: "skipped", rowsWritten: 0, details: { reason: "dry_run" } };
     }
 
+    // Write to the spot partition: <dataRoot>/market/spot/ticker=X/date=Y/data.parquet
+    const ticker = opts.underlying.toUpperCase();
+    const spotDef = DATASETS_V3.spot;
+    const outputPath = path.join(
+      resolveMarketDir(this.deps.dataRoot),
+      spotDef.subdir,
+      `ticker=${ticker}`,
+      `date=${opts.date}`,
+      spotDef.filename,
+    );
+
     const result = await provider.downloadBulkData({
       date: opts.date,
       dataset: "minute_bars",
       assetClass: opts.assetClass,
-      tickers: [opts.underlying.toUpperCase()],
-      outputPath: this.deps.dataRoot,
+      tickers: [ticker],
+      outputPath,
     });
 
     return {
