@@ -3,6 +3,8 @@ import type {
   MarketDataProvider,
   ProviderCapabilities,
   BarRow,
+  BulkQuotesOptions,
+  BulkQuoteRow,
   FetchBarsOptions,
   FetchSnapshotOptions,
   FetchSnapshotResult,
@@ -16,6 +18,13 @@ import { ensureThetaTerminalRunning } from "./thetadata-terminal.js";
 
 const THETADATA_BASE_URL = "http://127.0.0.1:25503";
 const THETADATA_TIMEOUT_MS = 30_000;
+/**
+ * NDJSON wildcard streams (`/v3/option/history/quote` with strike=*, expiration=*)
+ * for a full SPXW day can run 30–60 min end-to-end. The single-request 30s timeout
+ * kills them. Use a long default here, overridable via `THETADATA_STREAM_TIMEOUT_MS`
+ * env for pathological cases.
+ */
+const THETADATA_STREAM_TIMEOUT_MS = 3_600_000; // 60 min
 const THETADATA_RETRY_BASE_MS = 250;
 const THETADATA_MAX_ATTEMPTS = 4;
 const RETRYABLE_THETA_STATUS_CODES = new Set([429, 474, 571]);
@@ -38,6 +47,31 @@ const THETA_ERROR_NAMES: Record<number, string> = {
 
 type ThetaJsonObject = Record<string, unknown>;
 type ThetaJsonArray = ThetaJsonObject[];
+
+export interface ThetaHistoryQuoteGroup {
+  symbol: string;
+  expiration: string;
+  strike: number;
+  right: "call" | "put";
+  data: Array<{
+    timestamp: string;
+    bid: number | null;
+    ask: number | null;
+  }>;
+}
+
+export interface ThetaBulkQuoteRequest {
+  symbol: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  expiration?: string;
+  strike?: string;
+  right?: "call" | "put" | "both";
+  interval?: string;
+  maxDte?: number;
+  strikeRange?: number;
+}
 
 interface ParsedOccTicker {
   root: string;
@@ -62,6 +96,13 @@ function getTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
     env.THETADATA_REQUEST_TIMEOUT_MS || String(THETADATA_TIMEOUT_MS),
     10,
   ) || THETADATA_TIMEOUT_MS;
+}
+
+function getStreamTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  return Number.parseInt(
+    env.THETADATA_STREAM_TIMEOUT_MS || String(THETADATA_STREAM_TIMEOUT_MS),
+    10,
+  ) || THETADATA_STREAM_TIMEOUT_MS;
 }
 
 function getRetryBaseMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -260,6 +301,128 @@ async function requestThetaArray(
   params: Record<string, string | number | boolean | undefined>,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ThetaJsonArray> {
+  return await requestThetaJson(endpointPath, params, env) as ThetaJsonArray;
+}
+
+/**
+ * Streams an NDJSON response from ThetaData, yielding one parsed object per line.
+ * Unlike requestThetaJson, this never materializes the full response body as a
+ * single string — so wildcard queries that exceed V8's ~512MB string-length cap
+ * (SPXW full chains on large expiration days) don't crash. Retries on transport
+ * or 429/571/474 errors; "no data" (472) is treated as an empty stream.
+ */
+async function* streamThetaNdjson(
+  endpointPath: string,
+  params: Record<string, string | number | boolean | undefined>,
+  env: NodeJS.ProcessEnv = process.env,
+): AsyncGenerator<ThetaJsonObject, void, void> {
+  await maybeEnsureThetaRunning(env);
+
+  const url = new URL(endpointPath, getBaseUrl(env));
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null) continue;
+    url.searchParams.set(key, String(value));
+  }
+  url.searchParams.set("format", "ndjson");
+
+  const maxAttempts = getMaxAttempts(env);
+  const retryBaseMs = getRetryBaseMs(env);
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(getStreamTimeoutMs(env)),
+      });
+
+      if (response.status === 472) {
+        const text = await response.text();
+        if (text.trim().startsWith("No data found for your request")) return;
+        throw new Error(thetaErrorMessage(response.status, text));
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        if (RETRYABLE_THETA_STATUS_CODES.has(response.status) && attempt < maxAttempts) {
+          await sleep(retryBaseMs * attempt);
+          continue;
+        }
+        throw new Error(thetaErrorMessage(response.status, text));
+      }
+
+      if (!response.body) return;
+
+      const decoder = new TextDecoder();
+      const reader = response.body.getReader();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let newlineIdx = buffer.indexOf("\n");
+          while (newlineIdx >= 0) {
+            const line = buffer.slice(0, newlineIdx).trim();
+            buffer = buffer.slice(newlineIdx + 1);
+            if (line) {
+              let parsed: unknown;
+              try {
+                parsed = JSON.parse(line);
+              } catch (error) {
+                throw new Error(
+                  `ThetaData returned invalid NDJSON line from ${endpointPath}: ${
+                    error instanceof Error ? error.message : String(error)
+                  }`,
+                );
+              }
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                yield parsed as ThetaJsonObject;
+              }
+            }
+            newlineIdx = buffer.indexOf("\n");
+          }
+        }
+        const tail = buffer.trim();
+        if (tail) {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(tail);
+          } catch (error) {
+            throw new Error(
+              `ThetaData returned invalid NDJSON tail from ${endpointPath}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            yield parsed as ThetaJsonObject;
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      return;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      lastError = err;
+      const isTransportError = err.message === "fetch failed";
+      if ((isTransportError || err.name === "AbortError") && attempt < maxAttempts) {
+        await sleep(retryBaseMs * attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError ?? new Error(`ThetaData stream failed for ${endpointPath}`);
+}
+
+async function requestThetaJson(
+  endpointPath: string,
+  params: Record<string, string | number | boolean | undefined>,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<unknown[]> {
   await maybeEnsureThetaRunning(env);
 
   const url = new URL(endpointPath, getBaseUrl(env));
@@ -311,14 +474,14 @@ async function requestThetaArray(
         );
       }
 
-      if (Array.isArray(parsed)) return parsed as ThetaJsonArray;
+      if (Array.isArray(parsed)) return parsed;
       if (parsed && typeof parsed === "object") {
         const object = parsed as {
           data?: unknown[];
           response?: unknown[];
         };
-        if (Array.isArray(object.data)) return object.data as ThetaJsonArray;
-        if (Array.isArray(object.response)) return object.response as ThetaJsonArray;
+        if (Array.isArray(object.data)) return object.data;
+        if (Array.isArray(object.response)) return object.response;
       }
 
       throw new Error(`ThetaData ${endpointPath} returned unexpected JSON shape`);
@@ -353,6 +516,97 @@ function flattenThetaRows(rows: ThetaJsonArray): ThetaJsonArray {
     flat.push(row);
   }
   return flat;
+}
+
+function normalizeThetaExpiration(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    throw new Error("ThetaData row missing expiration");
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{8}$/.test(raw)) {
+    return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+  }
+  throw new Error(`Unsupported ThetaData expiration: ${raw}`);
+}
+
+function normalizeThetaBulkRight(value: ThetaBulkQuoteRequest["right"]): string {
+  if (!value || value === "both") return "both";
+  return value;
+}
+
+export async function fetchOptionHistoryQuoteGroups(
+  request: ThetaBulkQuoteRequest,
+): Promise<ThetaHistoryQuoteGroup[]> {
+  const {
+    symbol,
+    date,
+    startDate,
+    endDate,
+    expiration = "*",
+    strike = "*",
+    right = "both",
+    interval = "1m",
+    maxDte,
+    strikeRange,
+  } = request;
+
+  if (!date && (!startDate || !endDate)) {
+    throw new Error("fetchOptionHistoryQuoteGroups requires date or startDate/endDate");
+  }
+
+  const params: Record<string, string | number | boolean | undefined> = {
+    symbol,
+    expiration,
+    strike,
+    right: normalizeThetaBulkRight(right),
+    interval,
+    ...(date ? { date: compactDate(date) } : {
+      start_date: compactDate(startDate!),
+      end_date: compactDate(endDate!),
+    }),
+    ...(maxDte != null ? { max_dte: maxDte } : {}),
+    ...(strikeRange != null ? { strike_range: strikeRange } : {}),
+  };
+
+  const grouped = new Map<string, ThetaHistoryQuoteGroup>();
+
+  for await (const row of streamThetaNdjson("/v3/option/history/quote", params)) {
+    // NDJSON emits one flat quote per line with contract fields alongside the
+    // quote fields. No grouped {contract, data[]} shape to handle here.
+    const rowSymbol = String(row.symbol ?? symbol).toUpperCase();
+    const rowStrike = toNumber(row.strike);
+    if (rowStrike == null) continue;
+    const rowExpiration = normalizeThetaExpiration(row.expiration);
+    const rowRight = normalizeThetaRight(row.right);
+    const timestamp = String(row.timestamp ?? "");
+    if (!timestamp) continue;
+
+    const key = thetaKey({
+      symbol: rowSymbol,
+      expiration: rowExpiration,
+      strike: rowStrike,
+      right: rowRight,
+    });
+    let bucket = grouped.get(key);
+    if (!bucket) {
+      bucket = {
+        symbol: rowSymbol,
+        expiration: rowExpiration,
+        strike: rowStrike,
+        right: rowRight,
+        data: [],
+      };
+      grouped.set(key, bucket);
+    }
+    bucket.data.push({
+      timestamp,
+      bid: toNumber(row.bid),
+      ask: toNumber(row.ask),
+    });
+  }
+
+  return [...grouped.values()];
 }
 
 function mapIntradayRow(row: ThetaJsonObject, ticker: string): BarRow {
@@ -408,9 +662,8 @@ async function fetchOptionHistoryRows(
       right: toThetaRight(occ.right),
       format: "json",
       ...(interval ? { interval } : {}),
-      ...(chunk.from === chunk.to
-        ? { date: compactDate(chunk.from) }
-        : { start_date: compactDate(chunk.from), end_date: compactDate(chunk.to) }),
+      start_date: compactDate(chunk.from),
+      end_date: compactDate(chunk.to),
     };
     rows.push(...flattenThetaRows(
       await requestThetaArray(`/v3/option/history/${endpoint}`, params),
@@ -436,9 +689,8 @@ async function fetchSymbolHistoryRows(
       symbol: ticker,
       format: "json",
       ...(interval ? { interval } : {}),
-      ...(chunk.from === chunk.to
-        ? { date: compactDate(chunk.from) }
-        : { start_date: compactDate(chunk.from), end_date: compactDate(chunk.to) }),
+      start_date: compactDate(chunk.from),
+      end_date: compactDate(chunk.to),
     };
     rows.push(...flattenThetaRows(
       await requestThetaArray(`/v3/${assetClass}/history/${endpoint}`, params),
@@ -517,6 +769,110 @@ export class ThetaDataProvider implements MarketDataProvider {
     return quotes;
   }
 
+  /**
+   * Stream every contract's minute quotes for one underlying on one date via
+   * ThetaData's wildcard `/v3/option/history/quote` endpoint. Replaces
+   * thousands of per-ticker calls with up to 4 wire requests (SPX monthlies +
+   * SPXW dailies, each split into calls and puts because wildcards don't work
+   * on `right`).
+   *
+   * The 4 (root, right) streams run **in parallel** — ThetaTerminal advertises
+   * 4 concurrent slots, so this saturates the budget and wall-clock drops to
+   * the longest single stream instead of the sum. Rows are multiplexed through
+   * a bounded queue that applies backpressure to producers faster than the
+   * consumer.
+   *
+   * Yields rows in **chunks** (`BULK_YIELD_CHUNK`) rather than one-by-one —
+   * per-row yield/await overhead dominated the runtime at 5M+ rows when tested.
+   *
+   * Wildcard failures (500/471/571 mid-stream) surface as thrown errors — the
+   * ingestor decides whether to fall back to per-ticker or abort.
+   */
+  async *fetchBulkQuotes(options: BulkQuotesOptions): AsyncGenerator<BulkQuoteRow[], void, void> {
+    const { underlying, date } = options;
+    const upperUnderlying = underlying.toUpperCase();
+    const roots = upperUnderlying === "SPX" ? ["SPX", "SPXW"] : [upperUnderlying];
+    const rights: Array<"call" | "put"> = ["call", "put"];
+    const groups = roots.flatMap((root) => rights.map((right) => ({ root, right })));
+
+    const BULK_YIELD_CHUNK = 50_000;
+    const QUEUE_CAP = 8; // ×50k = 400k rows ≈ 50 MB steady state
+
+    const queue: BulkQuoteRow[][] = [];
+    let producersLeft = groups.length;
+    let producerError: Error | null = null;
+    let notifyConsumer: (() => void) | null = null;
+    let notifyProducer: (() => void) | null = null;
+
+    const wakeConsumer = () => {
+      if (notifyConsumer) { const r = notifyConsumer; notifyConsumer = null; r(); }
+    };
+    const wakeProducer = () => {
+      if (notifyProducer) { const r = notifyProducer; notifyProducer = null; r(); }
+    };
+
+    const producers = groups.map(async ({ root, right }) => {
+      const params: Record<string, string | number | boolean | undefined> = {
+        symbol: root,
+        expiration: "*",
+        strike: "*",
+        right: normalizeThetaBulkRight(right),
+        interval: "1m",
+        date: compactDate(date),
+      };
+      let buf: BulkQuoteRow[] = [];
+      const flushLocal = async () => {
+        while (queue.length >= QUEUE_CAP) {
+          await new Promise<void>((r) => { notifyProducer = r; });
+        }
+        queue.push(buf);
+        buf = [];
+        wakeConsumer();
+      };
+      try {
+        for await (const row of streamThetaNdjson("/v3/option/history/quote", params)) {
+          const symbol = String(row.symbol ?? root).toUpperCase();
+          const strike = toNumber(row.strike);
+          if (strike == null) continue;
+          const expiration = normalizeThetaExpiration(row.expiration);
+          const rowRight = normalizeThetaRight(row.right);
+          const timestamp = String(row.timestamp ?? "");
+          if (!timestamp) continue;
+          const bid = toNumber(row.bid);
+          const ask = toNumber(row.ask);
+          if (bid == null || ask == null) continue;
+          const rightChar: "C" | "P" = rowRight === "call" ? "C" : "P";
+          const ticker = buildOccTicker(symbol, expiration, rightChar, strike);
+          const etTimestamp = `${thetaTimestampToEtDate(timestamp)} ${thetaTimestampToEtTime(timestamp)}`;
+          buf.push({ ticker, timestamp: etTimestamp, bid, ask });
+          if (buf.length >= BULK_YIELD_CHUNK) await flushLocal();
+        }
+        if (buf.length > 0) await flushLocal();
+      } catch (e) {
+        if (!producerError) producerError = e instanceof Error ? e : new Error(String(e));
+      } finally {
+        producersLeft--;
+        wakeConsumer();
+      }
+    });
+
+    try {
+      while (queue.length > 0 || producersLeft > 0) {
+        if (producerError) throw producerError;
+        if (queue.length === 0) {
+          await new Promise<void>((r) => { notifyConsumer = r; });
+          continue;
+        }
+        const chunk = queue.shift()!;
+        wakeProducer();
+        yield chunk;
+      }
+      if (producerError) throw producerError;
+    } finally {
+      await Promise.allSettled(producers);
+    }
+  }
+
   async fetchContractList(options: FetchContractListOptions): Promise<FetchContractListResult> {
     const { underlying, as_of, expiration_date_gte, expiration_date_lte } = options;
     const maxDte = expiration_date_lte
@@ -529,12 +885,18 @@ export class ThetaDataProvider implements MarketDataProvider {
         )
       : undefined;
 
-    const rows = await requestThetaArray("/v3/option/list/contracts/quote", {
-      symbol: underlying,
+    // SPX monthlies and SPXW dailies are separate roots in ThetaData.
+    // Query both when underlying is SPX to get the full chain.
+    const roots = underlying === "SPX" ? ["SPX", "SPXW"] : [underlying];
+    const baseParams = {
       date: compactDate(as_of),
-      format: "json",
+      format: "json" as const,
       ...(maxDte != null ? { max_dte: maxDte } : {}),
-    });
+    };
+    const rowArrays = await Promise.all(
+      roots.map(root => requestThetaArray("/v3/option/list/contracts/quote", { ...baseParams, symbol: root })),
+    );
+    const rows = rowArrays.flat();
 
     const contracts: ContractReference[] = [];
     for (const row of rows) {

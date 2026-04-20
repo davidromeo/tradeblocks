@@ -1,0 +1,283 @@
+/**
+ * Market Parquet View Layer
+ *
+ * Creates DuckDB views over shared Parquet files in the market/ directory.
+ * When Parquet files exist, views replace physical tables for reads —
+ * DuckDB becomes a query engine over immutable Parquet rather than a data store.
+ *
+ * Falls back gracefully: missing files are tracked in `tablesKept` so the caller
+ * can create physical tables for those datasets instead.
+ *
+ * Parquet directory layout (v3.0 — produced by import pipelines when TRADEBLOCKS_PARQUET=true):
+ *   {dataDir}/market/
+ *     spot/ticker=X/date=Y/data.parquet                   (ticker-first Hive-partitioned minute bars)
+ *     enriched/ticker=X/data.parquet                      (per-ticker daily indicator Parquet)
+ *     enriched/context/data.parquet                       (cross-ticker derived-fields Parquet)
+ *     option_chain/date=YYYY-MM-DD/data.parquet           (Hive-partitioned)
+ *     option_quote_minutes/date=YYYY-MM-DD/data.parquet   (Hive-partitioned)
+ *
+ * View surface registered over these files: market.spot, market.spot_daily (RTH aggregation),
+ * market.enriched, market.enriched_context, market.option_chain, market.option_quote_minutes.
+ *
+ * Phase 6 Wave D (SQL-02 closure): the legacy view-registration blocks for
+ * the retired daily / date_context / intraday names have been DELETED; reads
+ * against those names now fail with a DuckDB Binder/Catalog error by design.
+ */
+
+import type { DuckDBConnection } from "@duckdb/node-api";
+import { existsSync, readdirSync } from "fs";
+import * as path from "path";
+import {
+  resolveCanonicalMarketPartitionDir,
+  resolveMarketDir,
+} from "./market-datasets.js";
+
+export interface ViewCreationResult {
+  viewsCreated: string[];
+  tablesKept: string[];
+  parquetActive: boolean;
+}
+
+/**
+ * Check if a Hive-partitioned directory has at least one top-level partition
+ * containing a Parquet file.
+ *
+ * The `partitionKey` parameter defaults to "date" so existing callers (intraday,
+ * option_chain, option_quote_minutes — all date-only) continue working unchanged.
+ * Pass "ticker" for ticker-first partitioning (the 3.0 spot directory).
+ */
+function hasParquetPartitions(
+  dir: string,
+  partitionKey: string = "date",
+): boolean {
+  if (!existsSync(dir)) return false;
+  try {
+    const prefix = `${partitionKey}=`;
+    return readdirSync(dir).some((entry) => {
+      if (!entry.startsWith(prefix)) return false;
+      const partDir = path.join(dir, entry);
+      // Accept both data.parquet (manual/drain-queue) and data_0.parquet (COPY TO PARTITION_BY).
+      // Also recurse one level for ticker-first layouts where partDir = ticker=X containing
+      // date=Y subdirectories; in that case look for any .parquet file in the nested tree.
+      try {
+        const entries = readdirSync(partDir);
+        for (const sub of entries) {
+          if (sub.endsWith(".parquet")) return true;
+          const nested = path.join(partDir, sub);
+          try {
+            if (readdirSync(nested).some((f) => f.endsWith(".parquet"))) return true;
+          } catch {
+            /* not a directory */
+          }
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True if `<dir>/ticker=<X>/data.parquet` exists for at least one ticker.
+ * Used by the enriched view (no date partition under ticker — single file per ticker).
+ */
+function hasEnrichedTickerFiles(dir: string): boolean {
+  if (!existsSync(dir)) return false;
+  try {
+    return readdirSync(dir).some((entry) => {
+      if (!entry.startsWith("ticker=")) return false;
+      return existsSync(path.join(dir, entry, "data.parquet"));
+    });
+  } catch {
+    return false;
+  }
+}
+
+/** True if `<dir>/context/data.parquet` exists (single global file). */
+function hasEnrichedContextFile(dir: string): boolean {
+  return existsSync(path.join(dir, "context", "data.parquet"));
+}
+
+/**
+ * Create DuckDB views over canonical market Parquet files.
+ *
+ * For each v3.0 market dataset (spot, enriched, enriched_context, option_chain,
+ * option_quote_minutes, spot_daily):
+ *   - If the Parquet file/directory exists: DROP any existing physical TABLE, then CREATE VIEW
+ *   - If missing: record in tablesKept (caller should create physical table as fallback)
+ *
+ * Phase 6 Wave D retired the legacy single-file (daily, date_context) and
+ * Hive-partitioned (intraday) view registrations; reads against those names
+ * now fail with a DuckDB Binder/Catalog error by design.
+ *
+ * @param conn - Active DuckDB connection with market catalog attached
+ * @param dataDir - Base data directory (parent of market/ subdirectory)
+ * @returns ViewCreationResult with lists of views created vs tables kept
+ */
+export async function createMarketParquetViews(
+  conn: DuckDBConnection,
+  dataDir: string,
+): Promise<ViewCreationResult> {
+  const viewsCreated: string[] = [];
+  const tablesKept: string[] = [];
+
+  // --- Hive-partitioned views ---
+
+  // `option_chain` accepts either the legacy date-only layout
+  // (`option_chain/date=Y/...`) or the Market Data 3.0 underlying-first layout
+  // (`option_chain/underlying=X/date=Y/...`) — the new store writers
+  // (Plan 02-03) produce the underlying-first layout.
+  const hiveViews: Array<{ name: string; subdir: string; partitionKey: string }> = [
+    { name: "option_chain", subdir: resolveCanonicalMarketPartitionDir(dataDir, "option_chain"), partitionKey: "underlying" },
+  ];
+
+  for (const { name, subdir, partitionKey } of hiveViews) {
+    const dirPath = subdir;
+    // Accept either the dataset's primary partition key (e.g. `underlying` for
+    // Market Data 3.0 option_chain) or the legacy `date` top-level partition.
+    const hasNewLayout = existsSync(dirPath) && hasParquetPartitions(dirPath, partitionKey);
+    const hasLegacyLayout = partitionKey !== "date" && existsSync(dirPath) && hasParquetPartitions(dirPath, "date");
+    if (hasNewLayout || hasLegacyLayout) {
+      try { await conn.run(`DROP VIEW IF EXISTS market.${name}`); } catch { /* wrong type */ }
+      try { await conn.run(`DROP TABLE IF EXISTS market.${name}`); } catch { /* wrong type */ }
+      await conn.run(
+        `CREATE OR REPLACE VIEW market.${name} AS SELECT * FROM read_parquet('${dirPath}/**/*.parquet', hive_partitioning=true)`,
+      );
+      viewsCreated.push(name);
+    } else {
+      try { await conn.run(`DROP VIEW IF EXISTS market.${name}`); } catch { /* not a view */ }
+      tablesKept.push(name);
+    }
+  }
+
+  // --- Option quote minutes view (moved from connection.ext.ts) ---
+  //
+  // Accepts both the legacy date-only layout (`date=Y/...`) and the Market
+  // Data 3.0 underlying-first layout (`underlying=X/date=Y/...`) produced by
+  // Plan 02-03 Parquet writers. When `underlying=X` is the top-level partition
+  // directory, `hive_partitioning=true` exposes it as a column that
+  // downstream reads (buildReadQuotesSQL `WHERE underlying = $1`) depend on.
+
+  const optionMinuteQuoteDir = resolveCanonicalMarketPartitionDir(dataDir, "option_quote_minutes");
+  const optionQuoteHasNewLayout = hasParquetPartitions(optionMinuteQuoteDir, "underlying");
+  const optionQuoteHasLegacyLayout = hasParquetPartitions(optionMinuteQuoteDir, "date");
+  if (optionQuoteHasNewLayout || optionQuoteHasLegacyLayout) {
+    try { await conn.run("DROP VIEW IF EXISTS market.option_quote_minutes"); } catch { /* wrong type */ }
+    try { await conn.run("DROP TABLE IF EXISTS market.option_quote_minutes"); } catch { /* wrong type */ }
+    // SELECT * preserves the `underlying` partition column when present,
+    // which buildReadQuotesSQL needs in its WHERE clause. Projection
+    // filtering happens at the SQL-builder layer, not here.
+    await conn.run(
+      `CREATE OR REPLACE VIEW market.option_quote_minutes AS
+       SELECT * FROM read_parquet('${optionMinuteQuoteDir}/**/*.parquet', hive_partitioning=true)`,
+    );
+    viewsCreated.push("option_quote_minutes");
+  } else {
+    try { await conn.run("DROP VIEW IF EXISTS market.option_quote_minutes"); } catch { /* not a view */ }
+    tablesKept.push("option_quote_minutes");
+  }
+
+  // ============================================================================
+  // Market Data 3.0 — Phase 2 + Phase 6 new views (D-22 / Phase 6 D-01)
+  // Added alongside the existing view code. Old views stay active for Phase 4
+  // consumer migration; removal of legacy daily / intraday / date_context views
+  // is Phase 6 / EXT-01. No changes to connection.ext.ts (D-23).
+  // ============================================================================
+
+  // market.spot — ticker-first Hive partitioning: spot/ticker=X/date=Y/data.parquet
+  const spotDir = path.join(resolveMarketDir(dataDir), "spot");
+  if (hasParquetPartitions(spotDir, "ticker")) {
+    try { await conn.run("DROP VIEW  IF EXISTS market.spot"); } catch { /* wrong type */ }
+    try { await conn.run("DROP TABLE IF EXISTS market.spot"); } catch { /* wrong type */ }
+    await conn.run(
+      `CREATE OR REPLACE VIEW market.spot AS
+       SELECT * FROM read_parquet('${spotDir}/**/*.parquet', hive_partitioning=true)`,
+    );
+    viewsCreated.push("spot");
+  } else {
+    try { await conn.run("DROP VIEW IF EXISTS market.spot"); } catch { /* not a view */ }
+    tablesKept.push("spot");
+  }
+
+  // market.enriched — per-ticker single file: enriched/ticker=X/data.parquet (no date partition)
+  const enrichedDir = path.join(resolveMarketDir(dataDir), "enriched");
+  if (hasEnrichedTickerFiles(enrichedDir)) {
+    try { await conn.run("DROP VIEW  IF EXISTS market.enriched"); } catch { /* wrong type */ }
+    try { await conn.run("DROP TABLE IF EXISTS market.enriched"); } catch { /* wrong type */ }
+    await conn.run(
+      `CREATE OR REPLACE VIEW market.enriched AS
+       SELECT * FROM read_parquet('${enrichedDir}/ticker=*/data.parquet', hive_partitioning=true)`,
+    );
+    viewsCreated.push("enriched");
+  } else {
+    try { await conn.run("DROP VIEW IF EXISTS market.enriched"); } catch { /* not a view */ }
+    tablesKept.push("enriched");
+  }
+
+  // market.enriched_context — global single file: enriched/context/data.parquet (no partition)
+  if (hasEnrichedContextFile(enrichedDir)) {
+    try { await conn.run("DROP VIEW  IF EXISTS market.enriched_context"); } catch { /* wrong type */ }
+    try { await conn.run("DROP TABLE IF EXISTS market.enriched_context"); } catch { /* wrong type */ }
+    await conn.run(
+      `CREATE OR REPLACE VIEW market.enriched_context AS
+       SELECT * FROM read_parquet('${path.join(enrichedDir, "context", "data.parquet")}')`,
+    );
+    viewsCreated.push("enriched_context");
+  } else {
+    try { await conn.run("DROP VIEW IF EXISTS market.enriched_context"); } catch { /* not a view */ }
+    tablesKept.push("enriched_context");
+  }
+
+  // market.spot_daily — view over market.spot with RTH aggregation. Bridge for
+  // SQL callers that need daily OHLCV after the legacy-daily-view retirement
+  // (Phase 6 D-01; see PATTERNS.md §market-views.ts for the exact SQL contract).
+  // Semantics match SpotStore.readDailyBars: first(open), max(high), min(low),
+  // last(close), first(bid), last(ask), RTH 09:30–16:00, GROUP BY ticker+date.
+  // Unconditional registration — DuckDB view over table-or-view works when
+  // market.spot exists as either a Parquet view or fallback table (Pitfall 3).
+  // However, CREATE VIEW binds the underlying reference immediately, so if
+  // market.spot exists in NEITHER form (empty dir AND no pre-existing fallback
+  // table — see Phase 2 "empty market/ dir" test), we skip the registration
+  // and push to tablesKept. In production, connection.ts calls
+  // ensureMarketDataTables() which creates a market.spot fallback table when
+  // the view is absent, so this skip branch applies only to unit-test fixtures
+  // that deliberately avoid BOTH paths.
+  const spotExists = await (async () => {
+    try {
+      await conn.run("SELECT * FROM market.spot WHERE 1=0");
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  if (spotExists) {
+    try { await conn.run("DROP VIEW  IF EXISTS market.spot_daily"); } catch { /* wrong type */ }
+    try { await conn.run("DROP TABLE IF EXISTS market.spot_daily"); } catch { /* wrong type */ }
+    await conn.run(`
+      CREATE OR REPLACE VIEW market.spot_daily AS
+        SELECT ticker, date,
+               first(open  ORDER BY time) AS open,
+               max(high)                  AS high,
+               min(low)                   AS low,
+               last(close  ORDER BY time) AS close,
+               first(bid   ORDER BY time) AS bid,
+               last(ask    ORDER BY time) AS ask
+        FROM market.spot
+        WHERE time >= '09:30' AND time <= '16:00'
+        GROUP BY ticker, date
+    `);
+    viewsCreated.push("spot_daily");
+  } else {
+    try { await conn.run("DROP VIEW IF EXISTS market.spot_daily"); } catch { /* not a view */ }
+    tablesKept.push("spot_daily");
+  }
+
+  return {
+    viewsCreated,
+    tablesKept,
+    parquetActive: viewsCreated.length > 0,
+  };
+}

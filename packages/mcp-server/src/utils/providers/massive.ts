@@ -31,6 +31,7 @@ import type {
   BulkDownloadResult,
 } from "../market-provider.js";
 import { computeLegGreeks } from "../black-scholes.js";
+import { resolveMassiveDataTier } from "../massive-tier.js";
 
 // ===========================================================================
 // Zod Schemas — Aggregates (OHLCV Bars)
@@ -420,7 +421,7 @@ export class MassiveProvider implements MarketDataProvider {
   readonly name = "massive";
 
   capabilities(): ProviderCapabilities {
-    const tier = (process.env.MASSIVE_DATA_TIER ?? '').toLowerCase();
+    const tier = resolveMassiveDataTier();
     return {
       tradeBars: true,
       quotes: tier === 'quotes',
@@ -525,9 +526,11 @@ export class MassiveProvider implements MarketDataProvider {
       }
     }
 
-    // Quote enrichment (bid/ask backfill + synthetic gap bars) is now handled
-    // by fetchBarsWithCache → enrichWithQuotes in bar-cache.ts.
-    // This avoids double-fetching quotes when bars flow through the cache layer.
+    // Quote enrichment (bid/ask backfill + synthetic gap bars) used to be
+    // handled by `fetchBarsWithCache → enrichWithQuotes` in bar-cache.ts.
+    // Phase 4 / D-05 / SEP-01 removed `enrichWithQuotes` (reads no longer
+    // trigger provider writes); the equivalent backfill now lives in the
+    // pipeline-side `enrich_quotes` MCP tool / quote-minute-cache.
 
     return allRows;
   }

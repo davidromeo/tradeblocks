@@ -667,8 +667,8 @@ function makeQuotesResponse(quotes: Array<{ bid: number; ask: number; nanos: num
 }
 
 describe("Quotes enrichment", () => {
-  beforeEach(() => { process.env.MASSIVE_QUOTES_ENABLED = "true"; });
-  afterEach(() => { delete process.env.MASSIVE_QUOTES_ENABLED; });
+  beforeEach(() => { process.env.MASSIVE_DATA_TIER = "quotes"; });
+  afterEach(() => { delete process.env.MASSIVE_DATA_TIER; });
 
   it("fetchBars returns bars without bid/ask — enrichment handled by bar-cache", async () => {
     // Quote enrichment moved from fetchBars() to fetchBarsWithCache() in bar-cache.ts.

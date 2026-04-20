@@ -14,10 +14,12 @@
  * Available tables:
  *   - trades.trade_data: Trade records from all blocks (includes inferred ticker)
  *   - trades.reporting_data: Reporting/actual trade records from strategy logs
- *   - market.daily: Daily OHLCV + enriched indicators keyed by (ticker, date); VIX tickers stored here too
- *   - market.context: Global market conditions (VIX, regime) keyed by (date) — LEGACY, prefer market._context_derived
- *   - market._context_derived: Cross-ticker derived fields (Vol_Regime, Term_Structure_State, etc.) keyed by (date)
- *   - market.intraday: Intraday bars at any resolution keyed by (ticker, date, time)
+ *   - market.spot: Minute bars, ticker-first layout (indicators source)
+ *   - market.spot_daily: RTH-aggregated daily OHLCV view over market.spot (ticker, date)
+ *   - market.enriched: Daily technical indicators (RSI, ATR, IVR/IVP, etc.), ticker-first
+ *   - market.enriched_context: Cross-ticker derived fields (Vol_Regime, Term_Structure_State, etc.)
+ *   - market.option_chain: Option contract metadata keyed by (underlying, date)
+ *   - market.option_quote_minutes: Option NBBO minute bars keyed by (underlying, date)
  *   - market._sync_metadata: Import/enrichment tracking metadata
  */
 
@@ -34,10 +36,12 @@ import { createToolOutput } from "../utils/output-formatter.js";
 const AVAILABLE_TABLES = [
   "trades.trade_data",
   "trades.reporting_data",
-  "market.daily",
-  "market.context",         // Legacy — kept for backward compat
-  "market._context_derived", // Phase 75: cross-ticker derived fields (Vol_Regime, Term_Structure_State, etc.)
-  "market.intraday",
+  "market.spot",
+  "market.spot_daily",
+  "market.enriched",
+  "market.enriched_context",
+  "market.option_chain",
+  "market.option_quote_minutes",
   "market._sync_metadata",
 ];
 
@@ -283,7 +287,8 @@ export function registerSQLTools(server: McpServer, baseDir: string): void {
         "SELECT runs freely. All mutating operations (DELETE, UPDATE, INSERT, CREATE, ALTER, DROP, TRUNCATE) " +
         "require confirm=true — without it, returns a preview or confirmation prompt. " +
         "Query trades (trades.trade_data, trades.reporting_data) and market data " +
-        "(market.daily, market.context, market._context_derived, market.intraday, market._sync_metadata). " +
+        "(market.spot, market.enriched, market.enriched_context, market.spot_daily, " +
+        "market.option_chain, market.option_quote_minutes, market._sync_metadata). " +
         "Trade queries should filter by block_id (e.g. WHERE block_id = 'my-strategy'). " +
         "Call describe_database first to discover available block_ids and column names. " +
         "Returns up to 1000 rows for SELECT queries.",

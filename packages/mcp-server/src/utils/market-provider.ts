@@ -163,6 +163,29 @@ export interface ProviderCapabilities {
   };
 }
 
+/** Options for fetching every contract's minute quotes under an underlying for a single date. */
+export interface BulkQuotesOptions {
+  /** Canonical underlying (e.g. "SPX"). Provider expands to its wire-level roots (e.g. SPX monthlies + SPXW dailies). */
+  underlying: string;
+  /** Trading date "YYYY-MM-DD" ET. */
+  date: string;
+}
+
+/**
+ * One minute-level bid/ask tick emitted by the bulk-quote stream. The provider
+ * MUST emit rows as they arrive (async iterable) — a full SPX/SPXW day can be
+ * hundreds of MB when materialized, which OOMs node even at 8 GB heap. Consumers
+ * batch and write in bounded chunks.
+ */
+export interface BulkQuoteRow {
+  /** OCC ticker (e.g. "SPXW260417C04800000"). */
+  ticker: string;
+  /** "YYYY-MM-DD HH:MM" ET. */
+  timestamp: string;
+  bid: number;
+  ask: number;
+}
+
 /** The contract every market data provider must implement. */
 export interface MarketDataProvider {
   readonly name: string;
@@ -172,6 +195,16 @@ export interface MarketDataProvider {
   fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult>;
   /** Best-effort bid/ask quotes keyed by "YYYY-MM-DD HH:MM" ET. Optional — not all providers support this. */
   fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>>;
+  /**
+   * Stream every contract's minute quotes for one underlying on one date via
+   * the provider's wildcard/bulk endpoint. Yields one `BulkQuoteRow` per
+   * (OCC ticker, minute) so the ingestor can batch-write in bounded chunks —
+   * materializing a full SPX day overflows V8's default 4 GB heap.
+   *
+   * Capability-gated behind `capabilities().bulkByRoot` — providers that are
+   * per-ticker-only (Massive, Polygon) do NOT implement this.
+   */
+  fetchBulkQuotes?(options: BulkQuotesOptions): AsyncIterable<BulkQuoteRow>;
   /** Historical option contract list from reference endpoint. Optional — not all providers support this. */
   fetchContractList?(options: FetchContractListOptions): Promise<FetchContractListResult>;
   /**

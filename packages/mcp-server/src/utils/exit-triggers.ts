@@ -61,6 +61,7 @@ export interface ExitTriggerConfig {
   multiplier?: number;                           // Default 100
   // Internal: set by handler when unit='percent' to compute dollar threshold
   entryCost?: number;                            // D-11: cost/credit of entry (negative = credit received)
+  entrySLRatio?: number;                         // Runtime-hydrated opening short/long ratio for slRatioMove
 }
 
 export interface TriggerFireEvent {
@@ -140,6 +141,21 @@ function computeSLRatio(
   const maxLoss = spreadWidth * contracts * multiplier;
   if (maxLoss === 0) return 0;
   return spreadValue / maxLoss;
+}
+
+function computeSLRatioMove(initial: number, current: number): number {
+  if (initial === 0) return current === 0 ? 0 : Number.POSITIVE_INFINITY;
+  return (current - initial) / initial;
+}
+
+function crossesDirectionalMove(pctMove: number, threshold: number): boolean {
+  if (threshold < 0) return pctMove <= threshold;
+  if (threshold > 0) return pctMove >= threshold;
+  return pctMove !== 0;
+}
+
+function adjustLegDeltaForPosition(rawDelta: number, leg?: ReplayLeg): number {
+  return leg != null && leg.quantity < 0 ? -rawDelta : rawDelta;
 }
 
 // ---------------------------------------------------------------------------
@@ -258,6 +274,7 @@ export function evaluateTrigger(
 
   // State for triggers that track running values
   let runningMaxPnl = -Infinity;
+  let profitTargetHits = 0;
   let initialSLRatio: number | null = null;
   let firstUnderlyingPrice: number | null = null;
   let firstVixPrice: number | null = null;
@@ -277,14 +294,19 @@ export function evaluateTrigger(
       case 'profitTarget': {
         // unit='percent' requires entryCost; if missing, cannot compute — no fire
         if (trigger.unit === 'percent' && trigger.entryCost == null) break;
+        const requiredHits = (trigger.requiredHits as number | undefined) ?? 2;
         const dollarThresholdPT = trigger.unit === 'percent'
           ? threshold * Math.abs(trigger.entryCost!)
           : threshold;
         if (pnl >= dollarThresholdPT) {
+          if (point.allLegsSync !== false) profitTargetHits++;
+          if (profitTargetHits < requiredHits) break;
           fired = true;
           detail = trigger.unit === 'percent'
             ? `P&L $${pnl.toFixed(2)} >= ${(threshold * 100).toFixed(0)}% of $${Math.abs(trigger.entryCost!).toFixed(2)} ($${dollarThresholdPT.toFixed(2)})`
             : `P&L $${pnl.toFixed(2)} >= target $${dollarThresholdPT.toFixed(2)}`;
+        } else if (point.allLegsSync !== false) {
+          profitTargetHits = 0;
         }
         break;
       }
@@ -400,7 +422,8 @@ export function evaluateTrigger(
         if (trigger.legIndex != null) {
           // Target a specific leg
           if (trigger.legIndex >= point.legGreeks.length) break;
-          const legDelta = point.legGreeks[trigger.legIndex].delta ?? 0;
+          const rawDelta = point.legGreeks[trigger.legIndex].delta ?? 0;
+          const legDelta = adjustLegDeltaForPosition(rawDelta, legs[trigger.legIndex]);
           if (trigger.exitAbove != null) {
             if (legDelta > trigger.exitAbove) {
               fired = true;
@@ -421,7 +444,8 @@ export function evaluateTrigger(
         } else {
           // No legIndex — iterate all legs with abs() (backward compat)
           for (let li = 0; li < point.legGreeks.length; li++) {
-            const legDelta = point.legGreeks[li].delta ?? 0;
+            const rawDelta = point.legGreeks[li].delta ?? 0;
+            const legDelta = adjustLegDeltaForPosition(rawDelta, legs[li]);
             if (Math.abs(legDelta) >= threshold) {
               fired = true;
               detail = `Leg ${li} delta ${legDelta.toFixed(4)} >= threshold ${threshold}`;
@@ -499,14 +523,17 @@ export function evaluateTrigger(
         const mp = trigger.multiplier ?? 100;
         if (sw === 0) break;
         const slRatio = computeSLRatio(point, legs, sw, ct, mp);
+        if (initialSLRatio === null && typeof trigger.entrySLRatio === 'number') {
+          initialSLRatio = trigger.entrySLRatio;
+        }
         if (initialSLRatio === null) {
           initialSLRatio = slRatio;
           break; // Can't compute change on first point
         }
-        const change = Math.abs(slRatio - initialSLRatio);
-        if (change >= threshold) {
+        const pctMove = computeSLRatioMove(initialSLRatio, slRatio);
+        if (crossesDirectionalMove(pctMove, threshold)) {
           fired = true;
-          detail = `S/L ratio change ${change.toFixed(4)} from initial ${initialSLRatio.toFixed(4)} >= threshold ${threshold}`;
+          detail = `S/L ratio moved ${(pctMove * 100).toFixed(2)}% from initial ${initialSLRatio.toFixed(4)} to ${slRatio.toFixed(4)} (threshold ${(threshold * 100).toFixed(2)}%)`;
         }
         break;
       }

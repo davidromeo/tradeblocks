@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createToolOutput } from "../utils/output-formatter.js";
 import { handleReplayTrade } from "./replay.js";
-import { getProvider } from "../utils/market-provider.js";
+import type { MarketStores } from "../market/stores/index.js";
 import {
   analyzeExitTriggers,
   type ExitTriggerConfig,
@@ -154,28 +154,34 @@ function extractUnderlyingTicker(occTicker: string): string {
 }
 
 /**
- * Fetch VIX or VIX9D minute bars and build a timestamp->price map.
+ * Read VIX, VIX9D, or underlying minute bars via SpotStore and build a
+ * timestamp->price map. Phase 4 / SEP-01: reads NEVER trigger provider calls.
+ * Falls back to daily aggregates when minute bars are absent (mirrors the
+ * pattern in tools/replay.ts:343-358). Empty map on cache miss is the
+ * silent-empty contract — callers treat absent data as "trigger inactive."
  */
 async function fetchPriceMap(
+  stores: MarketStores,
   ticker: string,
   from: string,
   to: string,
 ): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   try {
-    const bars = await getProvider().fetchBars({
-      ticker,
-      from,
-      to,
-      timespan: "minute",
-      assetClass: "index",
-    });
+    let bars = await stores.spot.readBars(ticker, from, to);
+    if (bars.length === 0) {
+      try {
+        bars = await stores.spot.readDailyBars(ticker, from, to);
+      } catch {
+        // No daily fallback available — return empty map
+      }
+    }
     for (const b of bars) {
       const ts = `${b.date} ${b.time ?? ''}`.trim();
       map.set(ts, markPrice(b));
     }
   } catch {
-    // VIX/VIX9D data is best-effort
+    // Best-effort — empty map signals "trigger data unavailable"
   }
   return map;
 }
@@ -187,6 +193,7 @@ async function fetchPriceMap(
 export async function handleAnalyzeExitTriggers(
   params: z.infer<typeof analyzeExitTriggersSchema>,
   baseDir: string,
+  stores: MarketStores,   // Phase 4 CONSUMER-01 — threaded through for Wave 2+ rewrite.
   injectedConn?: import("@duckdb/node-api").DuckDBConnection,
 ): Promise<ReturnType<typeof analyzeExitTriggers>> {
   const {
@@ -209,6 +216,7 @@ export async function handleAnalyzeExitTriggers(
       skip_quotes: false,
     },
     baseDir,
+    stores,
     injectedConn,
   );
 
@@ -254,14 +262,14 @@ export async function handleAnalyzeExitTriggers(
   const needsUnderlying = allTriggerTypes.has('underlyingPriceMove');
 
   if (needsVix) {
-    vixPrices = await fetchPriceMap('VIX', firstDate, lastDate);
+    vixPrices = await fetchPriceMap(stores, 'VIX', firstDate, lastDate);
   }
   if (needsVix9d) {
-    vix9dPrices = await fetchPriceMap('VIX9D', firstDate, lastDate);
+    vix9dPrices = await fetchPriceMap(stores, 'VIX9D', firstDate, lastDate);
   }
   if (needsUnderlying) {
     underlyingPrices = await fetchPriceMap(
-      underlyingTicker, firstDate, lastDate,
+      stores, underlyingTicker, firstDate, lastDate,
     );
   }
 
@@ -324,6 +332,7 @@ export async function handleAnalyzeExitTriggers(
 export async function handleDecomposeGreeks(
   params: z.infer<typeof decomposeGreeksSchema>,
   baseDir: string,
+  stores: MarketStores,   // Phase 4 CONSUMER-01 — threaded through for Wave 2+ rewrite.
   injectedConn?: import("@duckdb/node-api").DuckDBConnection,
 ): Promise<import("../utils/greeks-decomposition.js").GreeksDecompositionResult> {
   const {
@@ -346,6 +355,7 @@ export async function handleDecomposeGreeks(
       skip_quotes,
     },
     baseDir,
+    stores,
     injectedConn,
   );
 
@@ -424,6 +434,7 @@ export async function handleDecomposeGreeks(
 export function registerExitAnalysisTools(
   server: McpServer,
   baseDir: string,
+  stores: MarketStores,   // Phase 4 CONSUMER-01 — threaded through for Wave 2+ rewrite.
 ): void {
   server.registerTool(
     "analyze_exit_triggers",
@@ -433,12 +444,13 @@ export function registerExitAnalysisTools(
         "-- provide block_id + trade_index or explicit legs. Evaluates 14 trigger types " +
         "(profit target, stop loss, trailing stop, DTE, DIT, clock time, underlying move, " +
         "delta, VIX moves, S/L ratio) against minute-by-minute P&L path with greeks. " +
-        "Uses cached bars from market.intraday when available; fetches from Massive.com on cache miss (requires MASSIVE_API_KEY).",
+        "Reads VIX/VIX9D/underlying bars from SpotStore (cache only); triggers that need " +
+        "missing data are silently skipped. Use the data-pipeline tools to backfill cache.",
       inputSchema: analyzeExitTriggersSchema,
     },
     async (params) => {
       try {
-        const result = await handleAnalyzeExitTriggers(params, baseDir);
+        const result = await handleAnalyzeExitTriggers(params, baseDir, stores);
 
         const summary = result.overall.summary;
         return createToolOutput(summary, result);
@@ -464,12 +476,13 @@ export function registerExitAnalysisTools(
         "vega, residual). Runs replay internally. Shows which factor drove P&L movement " +
         "and by how much. For calendar/double-calendar strategies, includes per-leg-group " +
         "vega attribution showing front vs back month IV divergence. " +
-        "Uses cached bars from market.intraday when available; fetches from Massive.com on cache miss (requires MASSIVE_API_KEY).",
+        "Reads option-leg quotes via QuoteStore and underlying bars via SpotStore (cache only); " +
+        "missing data yields a degenerate replay. Use the data-pipeline tools to backfill cache.",
       inputSchema: decomposeGreeksSchema,
     },
     async (params) => {
       try {
-        const result = await handleDecomposeGreeks(params, baseDir);
+        const result = await handleDecomposeGreeks(params, baseDir, stores);
 
         const summary = result.summary;
         return createToolOutput(summary, result);
