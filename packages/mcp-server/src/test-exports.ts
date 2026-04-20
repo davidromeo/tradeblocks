@@ -373,6 +373,17 @@ export {
 export { shouldSkipEnrichment, buildEnrichmentPlan } from './utils/quote-enricher.js';
 export type { EnrichmentPlanInput } from './utils/quote-enricher.js';
 
+// Contract selector pure functions (unit testing)
+export {
+  selectByDelta,
+  selectByOtmPct,
+  selectAtm,
+  selectByFixedPremium,
+  selectByOffset,
+  selectStrike,
+} from './utils/contract-selector.js';
+export type { SelectionOptions, SelectionResult } from './utils/contract-selector.js';
+
 // Greeks attribution (v2.3)
 export {
   collapseFactors,

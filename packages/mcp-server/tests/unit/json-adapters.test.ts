@@ -1,12 +1,11 @@
 /**
- * Unit tests for json-adapters.ts and json-adapters.ext.ts
+ * Unit tests for json-adapters.ts
  *
- * Tests all five metadata store JSON adapters:
+ * Tests four metadata store JSON adapters:
  * 1. Profile adapter (upsert, get, list, delete)
  * 2. Sync metadata adapter (get, upsert, delete, getAllSyncedBlockIds)
  * 3. Market import metadata adapter (get, upsert)
  * 4. Flat import log adapter (get, upsert)
- * 5. Strategy definition adapter (.ext.ts -- save, load, list)
  */
 
 import * as os from "os";
@@ -30,10 +29,6 @@ import {
   // Flat import log adapter
   getFlatImportLogJson,
   upsertFlatImportLogJson,
-  // Strategy definition adapter (.ext.ts)
-  saveStrategyDefinitionJson,
-  loadStrategyDefinitionJson,
-  listStrategyDefinitionsJson,
 } from "../../src/test-exports.js";
 
 // ---------------------------------------------------------------------------
@@ -375,82 +370,5 @@ describe("Flat import log adapter", () => {
     // Verify the update (get should still return 1 date)
     const dates = await getFlatImportLogJson("option", "SPX", "2025-06-01", "2025-06-30", dataDir);
     expect(dates.size).toBe(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Strategy Definition Adapter Tests (.ext.ts)
-// ---------------------------------------------------------------------------
-
-describe("Strategy definition adapter (.ext.ts)", () => {
-  let dataDir: string;
-
-  beforeEach(async () => {
-    dataDir = makeTmpDir("strategies");
-    await fs.mkdir(dataDir, { recursive: true });
-  });
-
-  afterEach(async () => {
-    await fs.rm(dataDir, { recursive: true, force: true });
-  });
-
-  const baseStrategy = {
-    strategy_name: "Pickle RIC v2",
-    underlying: "SPX",
-    legs: [{
-      contract_type: "put" as const,
-      direction: "sell" as const,
-      dte_target: 45,
-      dte_tolerance: 2,
-      quantity: 1,
-      strike_spec: { method: "delta" as const, target: 0.16 },
-      multiplier: 100,
-    }],
-    entry_rules: {
-      frequency: "daily" as const,
-      entry_time: "09:45",
-      max_open_trades: 1,
-      at_capacity: "skip" as const,
-    },
-    position_sizing: {
-      mode: "fixed_contracts" as const,
-      contracts: 1,
-    },
-    slippage_entry: 0.25,
-    slippage_exit: 0.25,
-    slippage_stop_exit: 0.50,
-    commission_per_contract: 0.50,
-    max_entry_spread_pct: 0.20,
-  };
-
-  it("saveStrategyDefinitionJson writes to {dataDir}/strategies/{slug}.json", async () => {
-    await saveStrategyDefinitionJson(baseStrategy, dataDir);
-
-    const filePath = path.join(dataDir, "strategies", "pickle-ric-v2-spx.json");
-    const exists = await fs.access(filePath).then(() => true).catch(() => false);
-    expect(exists).toBe(true);
-  });
-
-  it("loadStrategyDefinitionJson reads and returns StrategyDefinition or null", async () => {
-    // Not found
-    const notFound = await loadStrategyDefinitionJson("Pickle RIC v2", "SPX", dataDir);
-    expect(notFound).toBeNull();
-
-    // Found
-    await saveStrategyDefinitionJson(baseStrategy, dataDir);
-    const found = await loadStrategyDefinitionJson("Pickle RIC v2", "SPX", dataDir);
-    expect(found).not.toBeNull();
-    expect(found!.strategy_name).toBe("Pickle RIC v2");
-    expect(found!.underlying).toBe("SPX");
-  });
-
-  it("listStrategyDefinitionsJson lists all strategies", async () => {
-    await saveStrategyDefinitionJson(baseStrategy, dataDir);
-    await saveStrategyDefinitionJson({ ...baseStrategy, strategy_name: "IC Basic", underlying: "QQQ" }, dataDir);
-
-    const strategies = await listStrategyDefinitionsJson(dataDir);
-    expect(strategies).toHaveLength(2);
-    const names = strategies.map(s => s.strategy_name).sort();
-    expect(names).toEqual(["IC Basic", "Pickle RIC v2"]);
   });
 });
