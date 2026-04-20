@@ -384,6 +384,30 @@ export {
 } from './utils/contract-selector.js';
 export type { SelectionOptions, SelectionResult } from './utils/contract-selector.js';
 
+// Strategy schema (Zod) for unit testing
+export {
+  StrategyDefinitionSchema,
+  LegDefinitionSchema,
+  StrikeSpecSchema,
+} from './utils/strategy-schema.js';
+
+// Chain loader pure functions (unit testing)
+export { filterChain } from './utils/chain-loader.js';
+
+// Provider classes for capability-resolution testing
+export { ThetaDataProvider } from './utils/providers/thetadata.js';
+
+// ThetaTerminal config helpers (unit testing)
+export {
+  defaultThetaTerminalHome,
+  legacyThetaTerminalHome,
+  parseJavaMajorVersion,
+  resolveThetaTerminalConfig,
+} from './utils/providers/thetadata-terminal.js';
+
+// Parquet view registration (integration testing)
+export { createMarketParquetViews } from './db/market-views.js';
+
 // Greeks attribution (v2.3)
 export {
   collapseFactors,
