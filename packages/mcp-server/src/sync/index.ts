@@ -5,6 +5,7 @@
  * Exports hashing utilities, metadata operations, and sync functions.
  */
 
+import { existsSync } from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { getConnection } from "../db/connection.js";
@@ -61,7 +62,9 @@ export function setBlocksDir(dir: string): void {
 }
 
 export function getBlocksDir(baseDir: string): string {
-  return _blocksDir ?? baseDir;
+  if (_blocksDir) return _blocksDir;
+  const nestedBlocksDir = path.join(baseDir, "blocks");
+  return existsSync(nestedBlocksDir) ? nestedBlocksDir : baseDir;
 }
 
 // --- Sync Functions ---
@@ -88,7 +91,7 @@ export async function syncAllBlocks(baseDir: string): Promise<SyncResult> {
   // 2. Delete orphaned blocks
   for (const blockId of toDelete) {
     try {
-      await cleanupDeletedBlocks(conn, [blockId]);
+      await cleanupDeletedBlocks(conn, [blockId], blocksDir);
       results.push({ blockId, status: "deleted" });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -139,9 +142,9 @@ export async function syncBlock(
     await fs.access(blockPath);
   } catch {
     // Block folder doesn't exist - if it was synced before, clean it up
-    const existing = await getSyncMetadata(conn, blockId);
+    const existing = await getSyncMetadata(conn, blockId, blocksDir);
     if (existing) {
-      await cleanupDeletedBlocks(conn, [blockId]);
+      await cleanupDeletedBlocks(conn, [blockId], blocksDir);
       return { blockId, status: "deleted" };
     }
     return { blockId, status: "error", error: `Block folder not found: ${blockId}` };
@@ -149,4 +152,3 @@ export async function syncBlock(
 
   return syncBlockInternal(conn, blockId, blockPath);
 }
-

@@ -171,7 +171,7 @@ export async function handleProfileStrategy(
       requireTwoPricesPT: input.requireTwoPricesPT,
       closeOnCompletion: input.closeOnCompletion,
       ignoreMarginReq: input.ignoreMarginReq,
-    });
+    }, baseDir);
     return createToolOutput(
       `Profile saved: ${input.strategyName} for block ${input.blockId}`,
       { profile: stored }
@@ -189,7 +189,7 @@ export async function handleGetStrategyProfile(
   baseDir: string
 ): Promise<ReturnType<typeof createToolOutput>> {
   const conn = await getConnection(baseDir);
-  const profile = await getProfile(conn, input.blockId, input.strategyName);
+  const profile = await getProfile(conn, input.blockId, input.strategyName, baseDir);
   if (!profile) {
     return createToolOutput(
       `No profile found for strategy '${input.strategyName}' in block '${input.blockId}'`,
@@ -210,7 +210,7 @@ export async function handleListProfiles(
   baseDir: string
 ): Promise<ReturnType<typeof createToolOutput>> {
   const conn = await getConnection(baseDir);
-  const profiles = await listProfiles(conn, input.blockId);
+  const profiles = await listProfiles(conn, input.blockId, baseDir);
   const summaryRows = profiles.map((p) => ({
     blockId: p.blockId,
     strategyName: p.strategyName,
@@ -236,7 +236,7 @@ export async function handleDeleteProfile(
   await upgradeToReadWrite(baseDir);
   try {
     const conn = await getConnection(baseDir);
-    const deleted = await deleteProfile(conn, input.blockId, input.strategyName);
+    const deleted = await deleteProfile(conn, input.blockId, input.strategyName, baseDir);
     if (deleted) {
       return createToolOutput(
         `Deleted profile: ${input.strategyName} from block ${input.blockId}`,

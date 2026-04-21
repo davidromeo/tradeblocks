@@ -1,6 +1,6 @@
 {
   "name": "tradeblocks-mcp",
-  "version": "2.3.0",
+  "version": "3.0.0-beta.2",
   "description": "MCP server for options trade analysis",
   "author": "David Romeo <davidmromeo@gmail.com>",
   "type": "module",
@@ -12,7 +12,7 @@
     "build": "tsup && npm run build:http-server && npm run fix-http-import",
     "build:http-server": "esbuild src/http-server.ts --bundle --outfile=server/http-server.js --format=esm --platform=node --target=node18 --packages=external",
     "fix-http-import": "node -e \"const fs=require('fs');const f='server/index.js';let c=fs.readFileSync(f,'utf8');c=c.replace(/\\.\\/http-server-[A-Z0-9]+\\.js/g,'./http-server.js');fs.writeFileSync(f,c);\" && rm -f server/http-server-*.js server/http-server-*.map",
-        "dev": "tsup --watch",
+    "dev": "tsup --watch",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "mcpb:pack": "npm run build && node scripts/pack-mcpb.js",
     "pack:beta": "npm run build && npm pack --pack-destination .",
@@ -20,9 +20,9 @@
   },
   "dependencies": {
     "@duckdb/node-api": "^1.4.4-r.3",
-    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.3.1",
+    "express-rate-limit": "^8.3.2",
     "jose": "^6.2.2",
     "zod": "^4.3.6"
   },
@@ -32,7 +32,7 @@
     "@types/node": "^22.0.0",
     "archiver": "^7.0.1",
     "jest": "^30.3.0",
-    "ts-jest": "^29.4.6",
+    "ts-jest": "^29.4.9",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0"
   },

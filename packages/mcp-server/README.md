@@ -329,6 +329,12 @@ backtests/
 |------|-------------|
 | `import_market_csv` | Import market data CSV with column mapping |
 | `import_from_database` | Import from external DuckDB databases |
+| `import_flat_file` | Import a local Parquet or CSV flat file for a ticker/timespan |
+| `fetch_bars` | Fetch daily or intraday OHLCV bars from configured provider |
+| `fetch_quotes` | Fetch option minute quotes from configured provider |
+| `fetch_chain` | Fetch option chain snapshot for an underlying on a given date |
+| `compute_vix_context` | Compute cross-ticker VIX regime fields for a date range |
+| `refresh_market_data` | Composite daily refresh: fetch bars, auto-fire VIX context, return coverage report |
 | `enrich_market_data` | Compute ~40 derived indicators from raw OHLCV |
 | `enrich_trades` | Enrich trades with market context (lookahead-free) |
 | `analyze_regime_performance` | Analyze P&L by market regime |
@@ -369,18 +375,27 @@ npm run mcpb:pack
 
 ## Market Data (Optional)
 
-For market context (VIX regimes, intraday timing, gap analysis), import market data from TradingView exports using MCP tools:
+For market context (VIX regimes, intraday timing, gap analysis), import market data using MCP tools:
 
+**From a data provider (Massive.com default, or ThetaData):**
+1. **Fetch bars** via `fetch_bars { tickers, timespan, from, to }` — writes directly to Parquet
+2. **Fetch VIX context** via `fetch_bars` for VIX/VIX9D/VIX3M then `compute_vix_context`
+3. **Or use** `refresh_market_data` for a combined daily refresh in one call
+
+**From TradingView CSV exports:**
 1. **Export** from TradingView (any chart: SPX daily, VIX daily, SPX 5-min, etc.)
-2. **Import** via `import_market_csv` with a column mapping
+2. **Import** via `import_market_csv` with a column mapping or `import_flat_file` for Parquet
 3. **Enrich** via `enrich_market_data` to compute ~40 derived indicators
 
 No Pine Scripts needed — TradingView exports raw OHLCV natively.
 
-Market data lives in a separate `market.duckdb` (configurable via `MARKET_DB_PATH` or `--market-db`). Tables:
-- `market.daily` — Daily OHLCV + enriched indicators (keyed by `ticker, date`)
-- `market.context` — VIX / volatility context (keyed by `date`)
-- `market.intraday` — Intraday bars at any resolution (keyed by `ticker, date, time`)
+Market data lives in a separate `market.duckdb` (configurable via `MARKET_DB_PATH` or `--market-db`). Canonical v3.0 datasets:
+- `market.spot` — Raw per-minute OHLCV bars, ticker-first layout (keyed by `ticker, date, time`)
+- `market.spot_daily` — RTH-aggregated daily OHLCV view derived from `market.spot` (keyed by `ticker, date`)
+- `market.enriched` — Per-ticker computed enrichment indicators and calendar fields; OHLCV is NOT stored here (join `market.spot_daily` for OHLCV — keyed by `ticker, date`)
+- `market.enriched_context` — Cross-ticker derived regime context (keyed by `date`)
+- `market.option_chain` — Contract universe snapshots by date
+- `market.option_quote_minutes` — Dense option quote cache by minute
 
 See the [Market Data Guide](../../docs/market-data.md) for import examples, ticker formats, and column mapping reference.
 
