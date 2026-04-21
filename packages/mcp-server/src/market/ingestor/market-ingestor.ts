@@ -14,6 +14,7 @@ import type {
   RefreshOptions,
   IngestResult,
   RefreshResult,
+  BulkProgressReporter,
 } from "./types.js";
 
 export interface MarketIngestorDeps {
@@ -145,7 +146,13 @@ export class MarketIngestor {
     }
 
     return hasUnderlyings
-      ? this.ingestQuotesByUnderlying(provider, opts.underlyings!, opts.from, opts.to)
+      ? this.ingestQuotesByUnderlying(
+          provider,
+          opts.underlyings!,
+          opts.from,
+          opts.to,
+          opts.onProgress,
+        )
       : this.ingestQuotesByTicker(provider, opts.tickers!, opts.from, opts.to);
   }
 
@@ -198,6 +205,7 @@ export class MarketIngestor {
     underlyings: string[],
     from: string,
     to: string,
+    onProgress?: BulkProgressReporter,
   ): Promise<IngestResult> {
     const caps = provider.capabilities();
     if (!caps.bulkByRoot || typeof provider.fetchBulkQuotes !== "function") {
@@ -216,12 +224,25 @@ export class MarketIngestor {
     for (const underlying of underlyings) {
       const upperUnderlying = underlying.toUpperCase();
       for (const date of dates) {
-        const written = await this.drainBulkQuotes(provider, upperUnderlying, date);
+        const written = await this.drainBulkQuotes(
+          provider,
+          upperUnderlying,
+          date,
+          onProgress,
+        );
         if (written > 0) {
           totalRows += written;
           if (!minDate || date < minDate) minDate = date;
           if (!maxDate || date > maxDate) maxDate = date;
         }
+        // Always emit a date-flushed event — even on 0 rows — so callers see
+        // predictable progress even for empty dates (holidays, missing data).
+        await this.safeEmit(onProgress, {
+          kind: "date-flushed",
+          underlying: upperUnderlying,
+          date,
+          rowsWritten: written,
+        });
       }
     }
 
@@ -230,6 +251,22 @@ export class MarketIngestor {
       rowsWritten: totalRows,
       dateRange: minDate ? { from: minDate, to: maxDate! } : undefined,
     };
+  }
+
+  /**
+   * Invoke a progress reporter without ever letting its errors fail the
+   * ingest. Awaits promise-returning reporters so async back-pressure works.
+   */
+  private async safeEmit(
+    reporter: BulkProgressReporter | undefined,
+    event: Parameters<BulkProgressReporter>[0],
+  ): Promise<void> {
+    if (!reporter) return;
+    try {
+      await reporter(event);
+    } catch {
+      // best-effort: progress must never fail the ingest
+    }
   }
 
   /**
@@ -245,6 +282,7 @@ export class MarketIngestor {
     provider: MarketDataProvider,
     upperUnderlying: string,
     date: string,
+    onProgress?: BulkProgressReporter,
   ): Promise<number> {
     // Tickers → resolved underlying mapping is cached per call; the typical
     // case is all contracts mapping to the same underlying (e.g. SPX + SPXW
@@ -253,7 +291,28 @@ export class MarketIngestor {
     const resolvedCache = new Map<string, string>();
     const bucket = new Map<string, Array<{ occ_ticker: string; timestamp: string; bid: number; ask: number }>>();
 
-    const stream = provider.fetchBulkQuotes!({ underlying: upperUnderlying, date });
+    // Build the per-(root,right) completion hook that fans provider-side
+    // group completions out to the transport-aware reporter. The provider
+    // wraps the invocation in its own try/catch so an upstream reporter
+    // throw can't corrupt the stream — we still wrap here as a second
+    // safety net (in case the provider forgets).
+    const onGroupComplete = onProgress
+      ? (info: { root: string; right: "call" | "put"; date: string; status: "ok" | "error" }) => {
+          // Fire-and-forget — provider callsite is synchronous; async work
+          // is scheduled on the next microtask. Any failure is swallowed by
+          // safeEmit so progress remains best-effort.
+          void this.safeEmit(onProgress, {
+            kind: "group",
+            underlying: upperUnderlying,
+            root: info.root,
+            right: info.right,
+            date: info.date,
+            status: info.status,
+          });
+        }
+      : undefined;
+
+    const stream = provider.fetchBulkQuotes!({ underlying: upperUnderlying, date, onGroupComplete });
     for await (const chunk of stream) {
       for (const row of chunk) {
         const root = extractRoot(row.ticker);

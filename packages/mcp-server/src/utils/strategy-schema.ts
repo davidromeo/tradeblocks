@@ -308,6 +308,8 @@ export const StrategyDefinitionSchema = z.object({
   slippage_exit: z.number().min(0).default(0.25),
   slippage_stop_exit: z.number().min(0).default(0.5),
   commission_per_contract: z.number().min(0).default(0.50),
+  opening_commission: z.number().min(0).optional(),
+  closing_commission: z.number().min(0).optional(),
   max_entry_spread_pct: z.number().min(0).max(1).default(0.20),
   entry_filters: z.array(EntryFilterSchema).optional(),
   exit_triggers: z.array(ExitTriggerSchema).optional(),

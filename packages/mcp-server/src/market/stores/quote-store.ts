@@ -17,6 +17,7 @@
  * 02-03 Task 3.
  */
 import type { StoreContext, QuoteRow, CoverageReport } from "./types.js";
+import { extractRoot } from "../tickers/resolver.js";
 
 export abstract class QuoteStore {
   constructor(protected readonly ctx: StoreContext) {}
@@ -66,6 +67,80 @@ export abstract class QuoteStore {
     from: string,
     to: string,
   ): Promise<Map<string, QuoteRow[]>>;
+
+  /**
+   * Group a `(date -> OCC tickers)` request map by resolved underlying.
+   *
+   * `readQuotes(...)` and `writeQuotes(...)` both enforce single-underlying
+   * batches, so multi-date callers need this shared bucketing before they can
+   * fan out to backend-specific bulk paths.
+   */
+  protected groupTickersByUnderlying(
+    tickersByDate: Map<string, Set<string>>,
+  ): Map<string, Map<string, Set<string>>> {
+    const byUnderlying = new Map<string, Map<string, Set<string>>>();
+    for (const [date, tickers] of tickersByDate) {
+      for (const ticker of tickers) {
+        const underlying = this.ctx.tickers.resolve(extractRoot(ticker));
+        let perDate = byUnderlying.get(underlying);
+        if (!perDate) {
+          perDate = new Map();
+          byUnderlying.set(underlying, perDate);
+        }
+        let dateTickers = perDate.get(date);
+        if (!dateTickers) {
+          dateTickers = new Set<string>();
+          perDate.set(date, dateTickers);
+        }
+        dateTickers.add(ticker);
+      }
+    }
+    return byUnderlying;
+  }
+
+  /**
+   * Bulk-read quotes for N (date, tickers) pairs across N dates, with a
+   * caller-supplied time window pushed into the query.
+   *
+   * The base implementation is a backend-respecting fallback that fans out to
+   * per-date `readQuotes(...)` calls. Concrete backends can override it with a
+   * more efficient bulk query shape without changing the public contract.
+   *
+   * `tickersByDate` may list the same ticker on multiple dates (e.g. a 3-DTE
+   * option appearing across a Mon/Tue/Wed window). Returns a Map keyed by
+   * OCC ticker whose values contain quotes for that ticker across every date
+   * in which it was requested; callers filter by (ticker, date) against the
+   * input map if they need date-specific isolation.
+   */
+  async readQuotesBulk(
+    tickersByDate: Map<string, Set<string>>,
+    timeStart: string,
+    timeEnd: string,
+  ): Promise<Map<string, QuoteRow[]>> {
+    const out = new Map<string, QuoteRow[]>();
+    if (tickersByDate.size === 0) return out;
+
+    for (const [, perDate] of this.groupTickersByUnderlying(tickersByDate)) {
+      for (const [date, occs] of perDate) {
+        if (occs.size === 0) continue;
+        const quotesByOcc = await this.readQuotes([...occs], date, date);
+        for (const [occ, quotes] of quotesByOcc) {
+          let arr = out.get(occ);
+          if (!arr) {
+            arr = [];
+            out.set(occ, arr);
+          }
+          for (const quote of quotes) {
+            const spaceIdx = quote.timestamp.indexOf(" ");
+            const time = spaceIdx === -1 ? "" : quote.timestamp.slice(spaceIdx + 1);
+            if (time < timeStart || time > timeEnd) continue;
+            arr.push(quote);
+          }
+        }
+      }
+    }
+    return out;
+  }
 
   abstract getCoverage(
     underlying: string,

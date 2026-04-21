@@ -68,6 +68,8 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
     { name: "slippage_exit", type: "DOUBLE" },
     { name: "slippage_stop_exit", type: "DOUBLE" },
     { name: "commission_per_contract", type: "DOUBLE" },
+    { name: "opening_commission", type: "DOUBLE" },
+    { name: "closing_commission", type: "DOUBLE" },
     { name: "starting_capital", type: "DOUBLE" },
     { name: "margin_per_spread", type: "DOUBLE" },
     { name: "entry_frequency", type: "VARCHAR" },

@@ -169,6 +169,20 @@ export interface BulkQuotesOptions {
   underlying: string;
   /** Trading date "YYYY-MM-DD" ET. */
   date: string;
+  /**
+   * Optional per-(root,right) completion hook. Invoked once per wire-level
+   * group as soon as its producer stream finishes — ok or error. Used by the
+   * ingestor to drive long-running-call progress notifications. Pure-data
+   * callback: MUST NOT throw, providers are expected to wrap invocations in
+   * their own try/catch so an unhandled exception in a caller's reporter
+   * never propagates into the stream machinery.
+   */
+  onGroupComplete?: (info: {
+    root: string;
+    right: "call" | "put";
+    date: string;
+    status: "ok" | "error";
+  }) => void;
 }
 
 /**

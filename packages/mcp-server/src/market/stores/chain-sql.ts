@@ -27,3 +27,30 @@ export function buildReadChainSQL(
     params: [underlying, date],
   };
 }
+
+/**
+ * Build a bulk read for N dates under the same underlying via `date IN (...)`.
+ *
+ * DuckDB's `market.option_chain` view glob-expands `option_chain/**\/*.parquet`
+ * on every call — a ~430ms fixed cost even for a single-partition read. Issuing
+ * one IN-list query instead of N per-date queries collapses that overhead.
+ * Measured: 12 per-date reads = ~5.2s, one IN(12) read = ~0.43s (12x speedup).
+ *
+ * Throws when `dates` is empty (prevents `IN ()` which DuckDB rejects).
+ */
+export function buildReadChainDatesSQL(
+  underlying: string,
+  dates: string[],
+): BuiltSQL<string[]> {
+  if (dates.length === 0) {
+    throw new Error("buildReadChainDatesSQL: dates must not be empty");
+  }
+  const placeholders = dates.map((_, i) => `$${i + 2}`).join(", ");
+  return {
+    sql: `SELECT underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style
+          FROM market.option_chain
+          WHERE underlying = $1 AND date IN (${placeholders})
+          ORDER BY date, ticker`,
+    params: [underlying, ...dates],
+  };
+}

@@ -23,6 +23,10 @@ import {
   writeChainPartition,
 } from "../../db/market-datasets.js";
 
+function escapeSqlLiteral(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
 export class ParquetChainStore extends ChainStore {
   async writeChain(
     underlying: string,
@@ -94,6 +98,45 @@ export class ParquetChainStore extends ChainStore {
     const reader = await this.ctx.conn.runAndReadAll(
       sql,
       params as (string | number | boolean | null | bigint)[],
+    );
+    return reader.getRows().map((r) => ({
+      underlying: String(r[0]),
+      date: String(r[1]),
+      ticker: String(r[2]),
+      contract_type: String(r[3]) as ContractRow["contract_type"],
+      strike: Number(r[4]),
+      expiration: String(r[5]),
+      dte: Number(r[6]),
+      exercise_style: String(r[7]),
+    }));
+  }
+
+  override async readChainDates(
+    underlying: string,
+    dates: string[],
+  ): Promise<ContractRow[]> {
+    if (dates.length === 0) return [];
+
+    const marketDir = resolveMarketDir(this.ctx.dataDir);
+    const directPaths: string[] = [];
+    for (const date of dates) {
+      const partitionPath = path.join(
+        marketDir,
+        "option_chain",
+        `underlying=${underlying}`,
+        `date=${date}`,
+        "data.parquet",
+      );
+      if (existsSync(partitionPath)) directPaths.push(partitionPath);
+    }
+    if (directPaths.length === 0) return super.readChainDates(underlying, dates);
+
+    const fileList = directPaths.map((filePath) => `'${escapeSqlLiteral(filePath)}'`).join(", ");
+    const reader = await this.ctx.conn.runAndReadAll(
+      `SELECT underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style
+         FROM read_parquet([${fileList}], hive_partitioning=true)
+         ORDER BY date, ticker`,
+      [],
     );
     return reader.getRows().map((r) => ({
       underlying: String(r[0]),

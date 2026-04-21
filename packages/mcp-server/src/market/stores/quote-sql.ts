@@ -21,27 +21,45 @@ import type { BuiltSQL } from "./spot-sql.js";
 /**
  * Build the bulk quote read. Throws if `occTickers` is empty (prevents emitting
  * an invalid `ticker IN ()` clause).
+ *
+ * Optional `timeStart`/`timeEnd` push an `AND time BETWEEN …` filter into SQL.
+ * This matters when callers only need a narrow entry-time window (often a
+ * single minute): without the filter, DuckDB returns every minute bar in the
+ * [from, to] range per ticker, blowing JS heap when bulking across many dates.
  */
 export function buildReadQuotesSQL(
   underlying: string,
   occTickers: string[],
   from: string,
   to: string,
+  opts?: { timeStart?: string; timeEnd?: string },
 ): BuiltSQL<string[]> {
   if (occTickers.length === 0) {
     throw new Error("buildReadQuotesSQL: occTickers must not be empty");
   }
-  // Build $4, $5, ... for the IN list. The first three placeholders are the
-  // underlying + date range; OCC ticker placeholders start at $4.
-  const tickerPlaceholders = occTickers.map((_, i) => `$${i + 4}`).join(", ");
+  const timeStart = opts?.timeStart;
+  const timeEnd = opts?.timeEnd;
+  const hasTimeFilter = timeStart != null && timeEnd != null;
+  // $1..$3: underlying + date range. Optional time filter consumes $4/$5
+  // when present. OCC ticker IN-list placeholders follow.
+  const timeOffset = hasTimeFilter ? 2 : 0;
+  const tickerPlaceholders = occTickers
+    .map((_, i) => `$${i + 4 + timeOffset}`)
+    .join(", ");
+  const params: string[] = [underlying, from, to];
+  if (hasTimeFilter) params.push(timeStart!, timeEnd!);
+  params.push(...occTickers);
+  const timeClause = hasTimeFilter
+    ? `AND time >= $4 AND time <= $5\n           `
+    : "";
   return {
     sql: `SELECT ticker, date, time, bid, ask, mid, last_updated_ns
           FROM market.option_quote_minutes
           WHERE underlying = $1
             AND date >= $2
             AND date <= $3
-            AND ticker IN (${tickerPlaceholders})
+            ${timeClause}AND ticker IN (${tickerPlaceholders})
           ORDER BY ticker, date, time`,
-    params: [underlying, from, to, ...occTickers],
+    params,
   };
 }

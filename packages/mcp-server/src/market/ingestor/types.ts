@@ -43,7 +43,46 @@ export interface IngestQuotesOptions {
   to: string;
   provider?: "massive" | "thetadata";
   dryRun?: boolean;
+  /**
+   * Optional progress callback for the bulk (`underlyings`) branch. The
+   * ingestor invokes it once per (root, right, date) producer completion AND
+   * once per (underlying, date) flush. The per-ticker branch ignores this —
+   * per-ticker calls are fast enough to not need progress events.
+   *
+   * Reporter exceptions are caught and swallowed — progress is best-effort
+   * and MUST NOT fail the ingest.
+   */
+  onProgress?: BulkProgressReporter;
 }
+
+/**
+ * Event shape surfaced to callers that opt in to long-running-ingest progress
+ * via `IngestQuotesOptions.onProgress`. Two kinds:
+ *   - `"group"`        — fired after each (root, right, date) wildcard stream
+ *                        producer finishes (ok or error). One per group.
+ *   - `"date-flushed"` — fired after the ingestor flushes the per-date
+ *                        writeQuotes buckets to disk. One per (underlying,
+ *                        date) pair.
+ */
+export type BulkProgressEvent =
+  | {
+      kind: "group";
+      underlying: string;
+      root: string;
+      right: "call" | "put";
+      date: string;
+      status: "ok" | "error";
+    }
+  | {
+      kind: "date-flushed";
+      underlying: string;
+      date: string;
+      rowsWritten: number;
+    };
+
+export type BulkProgressReporter = (
+  event: BulkProgressEvent,
+) => void | Promise<void>;
 
 export interface IngestChainOptions {
   underlyings: string[];

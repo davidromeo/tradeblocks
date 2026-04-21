@@ -182,7 +182,10 @@ export function mergeQuoteBars(
   const syntheticBars: BarRow[] = [];
   for (const [key, quote] of quotesMap) {
     if (tradeBarKeys.has(key)) continue; // trade bar exists — skip
-    if (quote.bid <= 0 || quote.ask <= 0) continue; // invalid quote (one-sided NBBO would distort mid)
+    // Keep rows where ask > 0 — "bid=0, ask=pennies" is a valid quote for
+    // deep-OTM options near expiry (no bidders, but still quoted to close).
+    // Drop only when there's genuinely no market.
+    if (quote.ask <= 0 || quote.bid < 0) continue;
     const mid = (quote.bid + quote.ask) / 2;
     const [date, time] = key.split(' ');
     if (!date || !time) continue;

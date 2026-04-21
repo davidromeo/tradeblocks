@@ -90,7 +90,8 @@ export class ParquetSpotStore extends SpotStore {
     from: string,
     to: string,
   ): Promise<BarRow[]> {
-    const { sql, params } = buildReadBarsSQL(ticker, from, to);
+    const direct = this.buildDirectParquetReadBarsSQL(ticker, from, to);
+    const { sql, params } = direct ?? buildReadBarsSQL(ticker, from, to);
     const reader = await this.ctx.conn.runAndReadAll(
       sql,
       params as (string | number | boolean | null | bigint)[],
@@ -114,7 +115,8 @@ export class ParquetSpotStore extends SpotStore {
     from: string,
     to: string,
   ): Promise<BarRow[]> {
-    const { sql, params } = buildReadDailyBarsSQL(ticker, from, to);
+    const direct = this.buildDirectParquetReadBarsSQL(ticker, from, to, { dailyAgg: true });
+    const { sql, params } = direct ?? buildReadDailyBarsSQL(ticker, from, to);
     const reader = await this.ctx.conn.runAndReadAll(
       sql,
       params as (string | number | boolean | null | bigint)[],

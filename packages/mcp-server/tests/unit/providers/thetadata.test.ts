@@ -2,6 +2,8 @@ import { jest } from "@jest/globals";
 import {
   ThetaDataProvider,
   fetchOptionHistoryQuoteGroups,
+  isThetaWildcardServerError,
+  listExpirationsForRoot,
 } from "../../../src/utils/providers/thetadata.js";
 
 const provider = new ThetaDataProvider();
@@ -566,5 +568,145 @@ describe("ThetaDataProvider.fetchOptionSnapshot", () => {
         break_even: 201.2,
       },
     ]);
+  });
+});
+
+describe("isThetaWildcardServerError", () => {
+  it("matches the ThetaData 500 NPE prefix", () => {
+    expect(isThetaWildcardServerError(new Error("ThetaData 500 HTTP_500: <html>...</html>"))).toBe(true);
+    expect(isThetaWildcardServerError(new Error("ThetaData 500 "))).toBe(true);
+  });
+
+  it("does not match other ThetaData error statuses or unrelated errors", () => {
+    expect(isThetaWildcardServerError(new Error("ThetaData 472 NO_DATA"))).toBe(false);
+    expect(isThetaWildcardServerError(new Error("ThetaData 571 SERVER_STARTING"))).toBe(false);
+    expect(isThetaWildcardServerError(new Error("fetch failed"))).toBe(false);
+    expect(isThetaWildcardServerError("random string")).toBe(false);
+  });
+});
+
+describe("listExpirationsForRoot", () => {
+  it("returns sorted unique expirations from the contract-list endpoint", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockJsonResponse({
+        response: [
+          { symbol: "SPXW", strike: 3950, expiration: "2022-07-22", right: "CALL" },
+          { symbol: "SPXW", strike: 3950, expiration: "2022-07-22", right: "PUT" },
+          { symbol: "SPXW", strike: 3900, expiration: "2022-07-15", right: "CALL" },
+          { symbol: "SPXW", strike: 3900, expiration: "2022-07-15", right: "PUT" },
+        ],
+      })
+    );
+
+    const expirations = await listExpirationsForRoot("SPXW", "2022-07-14");
+
+    expect(expirations).toEqual(["2022-07-15", "2022-07-22"]);
+    const url = String(fetchSpy.mock.calls[0][0]);
+    expect(url).toContain("/v3/option/list/contracts/quote");
+    expect(url).toContain("symbol=SPXW");
+    expect(url).toContain("date=20220714");
+  });
+});
+
+describe("ThetaDataProvider.fetchBulkQuotes", () => {
+  it("falls back to per-expiration enumeration when the wildcard stream returns HTTP 500", async () => {
+    // Route each fetch by URL shape so the 4 producer fan-out (or here 2, since
+    // NDX has a single root) can run in any order without flaking the test.
+    fetchSpy.mockImplementation(async (input: Parameters<typeof globalThis.fetch>[0]) => {
+      const urlStr = String(input);
+      if (urlStr.includes("/v3/option/list/contracts/quote")) {
+        return mockJsonResponse({
+          response: [
+            { symbol: "NDX", strike: 15000, expiration: "2022-07-15", right: "CALL" },
+            { symbol: "NDX", strike: 15000, expiration: "2022-07-15", right: "PUT" },
+            { symbol: "NDX", strike: 15500, expiration: "2022-07-22", right: "CALL" },
+            { symbol: "NDX", strike: 15500, expiration: "2022-07-22", right: "PUT" },
+          ],
+        });
+      }
+      if (urlStr.includes("/v3/option/history/quote")) {
+        const specific = /expiration=(\d{8})/.exec(urlStr);
+        if (!specific) {
+          // Wildcard path — reproduce the ThetaTerminal NPE envelope.
+          return new Response("<html>HTTP 500 Internal Server Error</html>", {
+            status: 500,
+            statusText: "500",
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+        const exp = specific[1]; // YYYYMMDD
+        const right = urlStr.includes("right=call") ? "CALL" : "PUT";
+        const dashedExp = `${exp.slice(0, 4)}-${exp.slice(4, 6)}-${exp.slice(6, 8)}`;
+        const strike = exp === "20220715" ? 15000 : 15500;
+        return mockNdjsonResponse([
+          {
+            symbol: "NDX",
+            expiration: dashedExp,
+            strike,
+            right,
+            timestamp: "2022-07-14T09:30:00.000",
+            bid: 1.1,
+            ask: 1.3,
+          },
+        ]);
+      }
+      throw new Error(`Unexpected fetch URL: ${urlStr}`);
+    });
+
+    const rows: Array<{ ticker: string; timestamp: string; bid: number; ask: number }> = [];
+    for await (const chunk of provider.fetchBulkQuotes({
+      underlying: "NDX",
+      date: "2022-07-14",
+    })) {
+      rows.push(...chunk);
+    }
+
+    // 2 producers (NDX call + NDX put) × 2 expirations × 1 row each = 4 rows.
+    expect(rows).toHaveLength(4);
+    const tickers = rows.map((r) => r.ticker).sort();
+    expect(tickers).toEqual([
+      "NDX220715C15000000",
+      "NDX220715P15000000",
+      "NDX220722C15500000",
+      "NDX220722P15500000",
+    ]);
+    for (const row of rows) {
+      expect(row.timestamp).toBe("2022-07-14 09:30");
+      expect(row.bid).toBe(1.1);
+      expect(row.ask).toBe(1.3);
+    }
+
+    const urls = fetchSpy.mock.calls.map((call) => String(call[0]));
+    // Per producer: 1 wildcard attempt (500) + 1 contract-list + 2 per-expiration streams.
+    expect(urls.filter((u) => u.includes("/v3/option/history/quote") && !/expiration=\d{8}/.test(u))).toHaveLength(2);
+    expect(urls.filter((u) => u.includes("/v3/option/list/contracts/quote"))).toHaveLength(2);
+    expect(urls.filter((u) => /expiration=\d{8}/.test(u) && u.includes("/v3/option/history/quote"))).toHaveLength(4);
+  });
+
+  it("propagates non-500 errors from the wildcard stream without falling back", async () => {
+    // mockImplementation (not mockResolvedValue) so each producer gets a fresh
+    // Response body — otherwise the second `response.text()` read throws
+    // "Body is unusable" and masks the real 471 error.
+    fetchSpy.mockImplementation(async () =>
+      new Response("Requires value subscription", {
+        status: 471,
+        statusText: "471",
+        headers: { "Content-Type": "text/plain" },
+      })
+    );
+
+    const iter = provider.fetchBulkQuotes({ underlying: "NDX", date: "2022-07-14" });
+    await expect(
+      (async () => {
+        for await (const _chunk of iter) {
+          // drain
+        }
+      })()
+    ).rejects.toThrow("ThetaData 471 PERMISSION");
+
+    // Should never have called the contract-list endpoint — the error was not
+    // the wildcard NPE, so no fallback triggered.
+    const urls = fetchSpy.mock.calls.map((call) => String(call[0]));
+    expect(urls.every((u) => !u.includes("/v3/option/list/contracts/quote"))).toBe(true);
   });
 });

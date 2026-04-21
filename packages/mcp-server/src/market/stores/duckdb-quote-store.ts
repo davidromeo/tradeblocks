@@ -15,6 +15,10 @@ import type { QuoteRow, CoverageReport } from "./types.js";
 import { buildReadQuotesSQL } from "./quote-sql.js";
 import { extractRoot } from "../tickers/resolver.js";
 
+function escapeSqlLiteral(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
 export class DuckdbQuoteStore extends QuoteStore {
   async writeQuotes(
     underlying: string,
@@ -110,6 +114,72 @@ export class DuckdbQuoteStore extends QuoteStore {
       }
       arr.push(qr);
     }
+    return out;
+  }
+
+  override async readQuotesBulk(
+    tickersByDate: Map<string, Set<string>>,
+    timeStart: string,
+    timeEnd: string,
+  ): Promise<Map<string, QuoteRow[]>> {
+    const out = new Map<string, QuoteRow[]>();
+    if (tickersByDate.size === 0) return out;
+
+    const perf = process.env.MARKET_PERF_DEBUG === "1";
+
+    for (const [underlying, perDate] of this.groupTickersByUnderlying(tickersByDate)) {
+      const occUnion = new Set<string>();
+      const wantedPairs: string[] = [];
+
+      for (const [date, occs] of perDate) {
+        if (occs.size === 0) continue;
+        for (const occ of occs) {
+          occUnion.add(occ);
+          wantedPairs.push(`('${escapeSqlLiteral(date)}', '${escapeSqlLiteral(occ)}')`);
+        }
+      }
+
+      if (wantedPairs.length === 0) continue;
+
+      const sql = `WITH wanted(date, ticker) AS (
+                     VALUES ${wantedPairs.join(", ")}
+                   )
+                   SELECT q.ticker, q.date, q.time, q.bid, q.ask
+                   FROM market.option_quote_minutes AS q
+                   JOIN wanted AS w
+                     ON q.date = w.date AND q.ticker = w.ticker
+                   WHERE q.underlying = $1
+                     AND q.time >= $2 AND q.time <= $3
+                   ORDER BY q.ticker, q.date, q.time`;
+
+      const queryStart = perf ? Date.now() : 0;
+      const reader = await this.ctx.conn.runAndReadAll(
+        sql,
+        [underlying, timeStart, timeEnd] as (string | number | boolean | null | bigint)[],
+      );
+      const rows = reader.getRows();
+      if (perf) {
+        console.log(
+          `    [P] readQuotesBulk underlying=${underlying} dates=${perDate.size} ` +
+          `tickers=${occUnion.size} rows=${rows.length} queryMs=${Date.now() - queryStart}`,
+        );
+      }
+      for (const row of rows) {
+        const occ = String(row[0]);
+        const date = String(row[1]);
+        const time = String(row[2]);
+        const quote: QuoteRow = {
+          occ_ticker: occ,
+          timestamp: `${date} ${time}`,
+          bid: Number(row[3]),
+          ask: Number(row[4]),
+        };
+        const bucket = out.get(occ);
+        if (bucket) bucket.push(quote);
+        else out.set(occ, [quote]);
+      }
+    }
+
     return out;
   }
 

@@ -7,6 +7,7 @@
  * returns all contracts observed for that underlying on that trading date.
  */
 import type { StoreContext, ContractRow, CoverageReport } from "./types.js";
+import { buildReadChainDatesSQL } from "./chain-sql.js";
 
 export abstract class ChainStore {
   constructor(protected readonly ctx: StoreContext) {}
@@ -26,5 +27,35 @@ export abstract class ChainStore {
   ): Promise<{ rowCount: number }>;
 
   abstract readChain(underlying: string, date: string): Promise<ContractRow[]>;
+
+  /**
+   * Bulk read chains for N dates under a single underlying. Returns a flat list;
+   * the caller groups by `date`. Both backends share the same SQL path since
+   * `market.option_chain` resolves to either a Parquet view or a physical table
+   * with identical columns. Use this instead of N per-date `readChain` calls —
+   * per-call glob-expansion / planning overhead dominates for view reads.
+   */
+  async readChainDates(
+    underlying: string,
+    dates: string[],
+  ): Promise<ContractRow[]> {
+    if (dates.length === 0) return [];
+    const built = buildReadChainDatesSQL(underlying, dates);
+    const reader = await this.ctx.conn.runAndReadAll(
+      built.sql,
+      built.params as (string | number | boolean | null | bigint)[],
+    );
+    return reader.getRows().map((r) => ({
+      underlying: String(r[0]),
+      date: String(r[1]),
+      ticker: String(r[2]),
+      contract_type: String(r[3]) as ContractRow["contract_type"],
+      strike: Number(r[4]),
+      expiration: String(r[5]),
+      dte: Number(r[6]),
+      exercise_style: String(r[7]),
+    }));
+  }
+
   abstract getCoverage(underlying: string, from: string, to: string): Promise<CoverageReport>;
 }

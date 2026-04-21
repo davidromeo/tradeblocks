@@ -6,10 +6,68 @@
  * The `abstract` keyword enforces at compile time that every subclass provides
  * an implementation of all four methods (STORE-05 contract).
  */
+import { existsSync } from "fs";
+import * as path from "path";
 import type { StoreContext, BarRow, CoverageReport } from "./types.js";
+import { resolveMarketDir } from "../../db/market-datasets.js";
+import { listPartitionValues } from "./coverage.js";
+
+function escapeSqlLiteral(value: string): string {
+  return value.replace(/'/g, "''");
+}
 
 export abstract class SpotStore {
   constructor(protected readonly ctx: StoreContext) {}
+
+  /**
+   * Return `read_parquet([...])` SQL over exact `ticker=X/date=Y/data.parquet`
+   * files for a (ticker, from..to) range, or null if no files exist on disk.
+   * Used by concrete stores to bypass the `market.spot` view's glob walk.
+   */
+  protected buildDirectParquetReadBarsSQL(
+    ticker: string,
+    from: string,
+    to: string,
+    opts?: { rthOnly?: boolean; dailyAgg?: boolean },
+  ): { sql: string; params: [] } | null {
+    const tickerDir = path.join(resolveMarketDir(this.ctx.dataDir), "spot", `ticker=${ticker}`);
+    if (!existsSync(tickerDir)) return null;
+    const allDates = listPartitionValues(tickerDir, "date");
+    const dates = allDates.filter((d) => d >= from && d <= to);
+    if (dates.length === 0) return null;
+    const paths: string[] = [];
+    for (const d of dates) {
+      const p = path.join(tickerDir, `date=${d}`, "data.parquet");
+      if (existsSync(p)) paths.push(p);
+    }
+    if (paths.length === 0) return null;
+    const fileList = paths.map(p => `'${escapeSqlLiteral(p)}'`).join(", ");
+    const tickerLit = `'${escapeSqlLiteral(ticker)}'`;
+    if (opts?.dailyAgg) {
+      return {
+        sql: `SELECT ${tickerLit} AS ticker, date,
+                   first(open  ORDER BY time) AS open,
+                   max(high)                  AS high,
+                   min(low)                   AS low,
+                   last(close  ORDER BY time) AS close,
+                   first(bid   ORDER BY time) AS bid,
+                   last(ask    ORDER BY time) AS ask
+              FROM read_parquet([${fileList}], hive_partitioning=true)
+              WHERE time >= '09:30' AND time <= '16:00'
+              GROUP BY date
+              ORDER BY date`,
+        params: [],
+      };
+    }
+    const rthClause = opts?.rthOnly ? "AND time >= '09:30' AND time <= '16:00'" : "";
+    return {
+      sql: `SELECT ${tickerLit} AS ticker, date, time, open, high, low, close, bid, ask
+            FROM read_parquet([${fileList}], hive_partitioning=true)
+            WHERE 1=1 ${rthClause}
+            ORDER BY date, time`,
+      params: [],
+    };
+  }
 
   /**
    * Public accessor for the data directory root (WR-03).

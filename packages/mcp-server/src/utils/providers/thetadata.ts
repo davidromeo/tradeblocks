@@ -700,6 +700,69 @@ async function fetchSymbolHistoryRows(
   return rows;
 }
 
+/**
+ * True when `err` looks like the ThetaTerminal NullPointerException that fires
+ * on `expiration=*&strike=*` for a small subset of historical dates (e.g.
+ * 2022-07-11, 2022-07-14 as of 2026-04). The error body is HTML with status
+ * 500; `thetaErrorMessage(500, ...)` produces a message starting with
+ * "ThetaData 500 HTTP_500". We match on the stable `ThetaData 500` prefix.
+ *
+ * Because `streamThetaNdjson` only yields rows after the initial response is
+ * 200, a 500 here always means zero rows produced — safe to retry with a
+ * narrower query shape without creating duplicates downstream.
+ */
+export function isThetaWildcardServerError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.startsWith("ThetaData 500 ");
+}
+
+/**
+ * List unique expiration dates (YYYY-MM-DD) for one ThetaData option root on
+ * one trading date. Used by `fetchBulkQuotes` as the enumeration source when
+ * the full `expiration=*` wildcard 500s — passing explicit expirations sidesteps
+ * the terminal's wildcard-expansion NPE while keeping each sub-call in bulk-
+ * over-strikes mode.
+ */
+export async function listExpirationsForRoot(
+  root: string,
+  date: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string[]> {
+  const rows = await requestThetaArray(
+    "/v3/option/list/contracts/quote",
+    { symbol: root, date: compactDate(date), format: "json" },
+    env,
+  );
+  const expirations = new Set<string>();
+  for (const row of rows) {
+    const exp = String(row.expiration ?? "").trim();
+    if (exp) expirations.add(exp);
+  }
+  return [...expirations].sort();
+}
+
+/**
+ * Wire-level roots that `fetchBulkQuotes` expands an underlying into. SPX has
+ * both monthly (`SPX`) and daily (`SPXW`) expiration roots in ThetaData;
+ * everything else is a single root. Exported so callers (e.g. the ingestor's
+ * progress-total calculation) don't duplicate the rule.
+ */
+export function bulkQuoteRootsForUnderlying(underlying: string): string[] {
+  const upper = underlying.toUpperCase();
+  return upper === "SPX" ? ["SPX", "SPXW"] : [upper];
+}
+
+/**
+ * Number of (root, right) wildcard groups `fetchBulkQuotes` will open per
+ * date for a given underlying — i.e. `roots.length × 2`, where the `2`
+ * reflects the call/put split (ThetaData wildcards don't apply to `right`).
+ * Used by the tool handler to compute the `total` field on progress
+ * notifications without peeking at provider internals.
+ */
+export function countBulkQuoteGroupsPerDate(underlying: string): number {
+  return bulkQuoteRootsForUnderlying(underlying).length * 2;
+}
+
 export class ThetaDataProvider implements MarketDataProvider {
   readonly name = "thetadata";
 
@@ -785,13 +848,16 @@ export class ThetaDataProvider implements MarketDataProvider {
    * Yields rows in **chunks** (`BULK_YIELD_CHUNK`) rather than one-by-one —
    * per-row yield/await overhead dominated the runtime at 5M+ rows when tested.
    *
-   * Wildcard failures (500/471/571 mid-stream) surface as thrown errors — the
-   * ingestor decides whether to fall back to per-ticker or abort.
+   * Wildcard 500s (ThetaTerminal NPE on specific historical dates) trigger an
+   * in-producer fallback: enumerate expirations via the contract-list endpoint,
+   * then stream each expiration individually with `strike=*`. Other errors
+   * (471/571/mid-stream failures) still surface as thrown errors for the
+   * ingestor to handle.
    */
   async *fetchBulkQuotes(options: BulkQuotesOptions): AsyncGenerator<BulkQuoteRow[], void, void> {
-    const { underlying, date } = options;
+    const { underlying, date, onGroupComplete } = options;
     const upperUnderlying = underlying.toUpperCase();
-    const roots = upperUnderlying === "SPX" ? ["SPX", "SPXW"] : [upperUnderlying];
+    const roots = bulkQuoteRootsForUnderlying(upperUnderlying);
     const rights: Array<"call" | "put"> = ["call", "put"];
     const groups = roots.flatMap((root) => rights.map((right) => ({ root, right })));
 
@@ -812,15 +878,15 @@ export class ThetaDataProvider implements MarketDataProvider {
     };
 
     const producers = groups.map(async ({ root, right }) => {
-      const params: Record<string, string | number | boolean | undefined> = {
+      const baseParams: Record<string, string | number | boolean | undefined> = {
         symbol: root,
-        expiration: "*",
         strike: "*",
         right: normalizeThetaBulkRight(right),
         interval: "1m",
         date: compactDate(date),
       };
       let buf: BulkQuoteRow[] = [];
+      let errored = false;
       const flushLocal = async () => {
         while (queue.length >= QUEUE_CAP) {
           await new Promise<void>((r) => { notifyProducer = r; });
@@ -829,8 +895,10 @@ export class ThetaDataProvider implements MarketDataProvider {
         buf = [];
         wakeConsumer();
       };
-      try {
-        for await (const row of streamThetaNdjson("/v3/option/history/quote", params)) {
+      const ingestFromParams = async (
+        streamParams: Record<string, string | number | boolean | undefined>,
+      ): Promise<void> => {
+        for await (const row of streamThetaNdjson("/v3/option/history/quote", streamParams)) {
           const symbol = String(row.symbol ?? root).toUpperCase();
           const strike = toNumber(row.strike);
           if (strike == null) continue;
@@ -847,11 +915,39 @@ export class ThetaDataProvider implements MarketDataProvider {
           buf.push({ ticker, timestamp: etTimestamp, bid, ask });
           if (buf.length >= BULK_YIELD_CHUNK) await flushLocal();
         }
+      };
+      try {
+        try {
+          await ingestFromParams({ ...baseParams, expiration: "*" });
+        } catch (wildcardErr) {
+          // ThetaTerminal throws a server-side NPE (HTTP 500) on
+          // `expiration=*&strike=*` for a subset of historical dates. The
+          // terminal's wildcard expansion is a per-contract fan-out convenience
+          // with no equivalent at the MDDS gRPC layer — narrowing to a single
+          // explicit expiration bypasses the broken code path. On detection,
+          // enumerate expirations via the contract-list endpoint (which works
+          // on the same date) and stream each expiration with `strike=*`.
+          if (!isThetaWildcardServerError(wildcardErr)) throw wildcardErr;
+          const expirations = await listExpirationsForRoot(root, date);
+          for (const exp of expirations) {
+            await ingestFromParams({ ...baseParams, expiration: compactDate(exp) });
+          }
+        }
         if (buf.length > 0) await flushLocal();
       } catch (e) {
+        errored = true;
         if (!producerError) producerError = e instanceof Error ? e : new Error(String(e));
       } finally {
         producersLeft--;
+        // Fire the long-running-call progress hook AFTER the producer count
+        // drops, BEFORE we wake the consumer — so the consumer sees a
+        // consistent view on its next yield. Never let a reporter error
+        // escape into the stream machinery.
+        if (onGroupComplete) {
+          try {
+            onGroupComplete({ root, right, date, status: errored ? "error" : "ok" });
+          } catch { /* best-effort */ }
+        }
         wakeConsumer();
       }
     });
