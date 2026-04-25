@@ -149,7 +149,7 @@ export class MarketIngestor {
   }
 
   private detectAssetClass(ticker: string): "stock" | "index" | "option" {
-    const VIX_FAMILY = new Set(["VIX", "VIX9D", "VIX3M", "VXN", "SPX", "NDX"]);
+    const VIX_FAMILY = new Set(["VIX", "VIX9D", "VIX1D", "VIX3M", "VXN", "SPX", "NDX"]);
     if (VIX_FAMILY.has(ticker)) return "index";
     if (/^[A-Z]{1,6}\d{6}[CP]\d{8}$/.test(ticker)) return "option";
     return "stock";
