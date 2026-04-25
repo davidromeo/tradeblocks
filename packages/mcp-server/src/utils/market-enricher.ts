@@ -773,6 +773,12 @@ async function setupParquetWorkingTables(
   // no constraints), so attach one explicitly here.
   await conn.run(`CREATE UNIQUE INDEX "idx_${dateContextTable}_date" ON "${dateContextTable}"(date)`);
 
+  // Same rationale for the daily working table: batchUpdateDaily uses
+  // INSERT OR REPLACE so first-time enrichment of a ticker (whose seed
+  // contains zero rows for that ticker) populates the working table from
+  // computed values rather than silently no-op-ing on UPDATE.
+  await conn.run(`CREATE UNIQUE INDEX "idx_${dailyTable}_pk" ON "${dailyTable}"(ticker, date)`);
+
   return { dailyTable, dateContextTable };
 }
 
@@ -869,12 +875,14 @@ async function batchUpdateDaily(
       return `(${params.join(", ")})`;
     })
     .join(", ");
-  const setClauses = columns.map((c) => `${c} = v.${c}`).join(", ");
+  // INSERT OR REPLACE (relies on UNIQUE INDEX on (ticker, date) attached in
+  // setupParquetWorkingTables). REPLACE semantics handle the re-enrichment
+  // case identically to the prior UPDATE; INSERT semantics are needed for
+  // first-time enrichment of a ticker whose seed contains no rows for it
+  // (previously silently dropped via the UPDATE no-op).
   const sql = `
-    UPDATE ${tableName} AS t
-    SET ${setClauses}
-    FROM (VALUES ${placeholders}) AS v(${allCols.join(", ")})
-    WHERE t.ticker = v.ticker AND t.date = v.date
+    INSERT OR REPLACE INTO ${tableName} (${allCols.join(", ")})
+    VALUES ${placeholders}
   `;
   const params = rows.flatMap((row) => allCols.map((col) => row[col] ?? null));
   await conn.run(sql, params as (string | number | boolean | null | bigint)[]);
