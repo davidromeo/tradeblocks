@@ -35,8 +35,9 @@ export {
 } from './sync/index.js';
 
 // Export DuckDB connection utilities for integration testing
-export { getConnection, closeConnection, isConnected, getConnectionMode, upgradeToReadWrite, downgradeToReadOnly, getCurrentConnection } from './db/connection.js';
+export { getConnection, getReadOnlyConnection, closeConnection, isConnected, getConnectionMode, upgradeToReadWrite, downgradeToReadOnly, getCurrentConnection } from './db/connection.js';
 export { setDataRoot, getDataRoot, resetDataRoot } from './db/data-root.js';
+export { yesterdayET } from './utils/trading-dates.js';
 export {
   resolveCanonicalMarketFile,
   resolveCanonicalMarketPartitionDir,
@@ -273,6 +274,26 @@ export {
   type GreeksResult,
 } from './utils/black-scholes.js';
 
+export { computeFractionalDte } from './utils/option-time.js';
+export {
+  applyQuoteGreeks,
+  hasQuoteGreeks,
+  OPTION_QUOTE_GREEKS_REVISION,
+  type QuoteGreeksMode,
+  type QuoteGreeksSource,
+} from './utils/option-quote-greeks.js';
+export {
+  readOptionQuoteSnapshotsWindow,
+  readOptionQuoteSnapshotsForLookups,
+  type OptionQuoteSnapshotRow,
+  type OptionQuoteSnapshotLookup,
+} from './utils/option-quote-snapshots.js';
+export {
+  describeReadParquetColumns,
+  quoteParquetCanonicalProjection,
+  readParquetFilesSql,
+} from './utils/quote-parquet-projection.js';
+
 // Export parquet-writer utility functions for unit testing (Phase 02-01)
 export { isParquetMode, writeParquetAtomic, writeParquetPartition, resolveMarketDir } from './db/parquet-writer.js';
 
@@ -350,13 +371,6 @@ export {
 } from './tools/batch-exit-analysis.js';
 
 // Export shared bar fetch+cache utility for unit testing.
-//
-// Phase 4 / D-05 / SEP-01: `fetchBarsWithCache` is now CACHE-ONLY (no API
-// fallback) — the provider-side enrichment helper has been removed. The
-// remaining symbols stay re-exported until plans 04-02 (replay.ts +
-// market-data-loader.ts) and 04-04 (orchestrator + quote-minute-cache)
-// finish migrating their callers; at that point this entire block goes
-// away along with `utils/bar-cache.ts` itself.
 export {
   fetchBarsWithCache,
   type FetchBarsWithCacheOptions,
@@ -697,6 +711,13 @@ export type {
   RowDiff,
 } from './utils/enrichment-verification.js';
 export { calibrateProviderFetch } from './utils/calibration-probe.js';
+export {
+  collectStrategyDeltaTargetBps,
+  collectStrategiesDeltaTargetBps,
+  deltaTargetBasisPoints,
+  getLegStrikeSpec,
+  strategyHasDeltaLegs,
+} from './utils/strategy-delta-targets.js';
 // ============================================================================
 
 // Extension point: additional test exports provided by the optional private extension.

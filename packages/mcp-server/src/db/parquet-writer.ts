@@ -78,6 +78,15 @@ export async function writeParquetAtomic(
     compression = "ZSTD",
   } = opts;
 
+  // Write to a temp sibling path, then atomic-rename into place. DuckDB's
+  // COPY ... TO 'data.parquet' writes directly to the target — concurrent
+  // readers (e.g. createMarketParquetViews globbing the archive) can observe
+  // the file as empty / truncated / missing during the write. fs.rename is
+  // atomic on local filesystems (APFS, ext4), so after this block a reader
+  // either sees the old file or the new file, never a partially-written or
+  // absent one. The temp name ends in `.tmp-PID-TS` (not `.parquet`) so
+  // `**/data.parquet` and `**/*.parquet` globs both skip it.
+  const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   try {
     // Stage data into a temp table
     await conn.run(`CREATE TEMP TABLE "${stagingName}" AS ${selectQuery}`);
@@ -85,10 +94,13 @@ export async function writeParquetAtomic(
     // Ensure parent directory exists
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
 
-    // Write to Parquet with specified compression
+    // Write to sidecar temp path
     await conn.run(
-      `COPY "${stagingName}" TO '${targetPath}' (FORMAT PARQUET, COMPRESSION ${compression})`,
+      `COPY "${stagingName}" TO '${tempPath}' (FORMAT PARQUET, COMPRESSION ${compression})`,
     );
+
+    // Atomic replace
+    await fs.rename(tempPath, targetPath);
 
     // Get row count from staging table
     const reader = await conn.runAndReadAll(
@@ -97,6 +109,10 @@ export async function writeParquetAtomic(
     const rowCount = Number(reader.getRows()[0][0]);
 
     return { rowCount };
+  } catch (writeErr) {
+    // Clean up sidecar on failure so the next attempt starts fresh
+    try { await fs.unlink(tempPath); } catch { /* may not exist */ }
+    throw writeErr;
   } finally {
     // Always clean up staging table
     try {

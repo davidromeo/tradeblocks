@@ -16,7 +16,13 @@
  * Concrete subclasses (ParquetQuoteStore, DuckdbQuoteStore) ship in Plan
  * 02-03 Task 3.
  */
-import type { StoreContext, QuoteRow, CoverageReport } from "./types.js";
+import type {
+  StoreContext,
+  QuoteRow,
+  CoverageReport,
+  ReadWindowParams,
+  WindowQuoteRow,
+} from "./types.js";
 import { extractRoot } from "../tickers/resolver.js";
 
 export abstract class QuoteStore {
@@ -46,7 +52,8 @@ export abstract class QuoteStore {
    * Write quotes for a single (underlying, date) partition from a user-supplied SELECT.
    *
    * The SELECT must produce columns matching `market.option_quote_minutes`
-   * (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source).
+   * (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source,
+   *  delta, gamma, theta, vega, iv, greeks_source, greeks_revision).
    * Single-partition semantics mirror `SpotStore.writeFromSelect`.
    */
   abstract writeFromSelect(
@@ -147,4 +154,15 @@ export abstract class QuoteStore {
     from: string,
     to: string,
   ): Promise<CoverageReport>;
+
+  /**
+   * Read every option-quote row in the leg-envelope union over a time window.
+   * Returns rows joined back to chain metadata (contract_type, strike, expiration,
+   * dte) so the caller doesn't OCC-parse. Greeks columns project as-is from the
+   * quote table.
+   *
+   * Per P1: this is the single read primitive. Ranking + top-N selection happen
+   * in JS at the call site. No SQL ranking CTE.
+   */
+  abstract readWindow(params: ReadWindowParams): Promise<WindowQuoteRow[]>;
 }

@@ -66,7 +66,7 @@ export interface EnrichedContextRow extends ContextRow {
 // =============================================================================
 
 /**
- * Wilder's RSI.
+ * Wilder's RSI (the standard formulation).
  * Input: closing prices ordered oldest→newest.
  * Returns array same length as input; first `period` entries are NaN (warmup).
  *
@@ -74,34 +74,34 @@ export interface EnrichedContextRow extends ContextRow {
  * - Seed avgGain/avgLoss from SMA of first `period` changes (bars 1..period)
  * - result[period] = 100 - 100/(1 + avgGain/avgLoss)
  * - Subsequent: avgGain = (prev*(period-1) + gain)/period (Wilder smoothing)
+ *
+ * Empirical OO calibration (9-23-dc, 37 RSI-failing missing dates): Wilder
+ * smoothing reproduces OO's filter passes on 33/37 (89%) vs SMA's 13/37 (35%).
+ * Earlier comments in this file claimed OO used SMA — that was incorrect.
  */
 export function computeRSI(closes: number[], period = 14): number[] {
   const result = new Array<number>(closes.length).fill(NaN);
   if (closes.length < period + 1) return result;
 
-  // SMA-based RSI: rolling simple average of gains and losses over `period` bars.
-  // OO uses simple smoothing (confirmed from UI), not Wilder's exponential smoothing.
-  // This produces higher RSI values in trending markets (2-8 pts vs Wilder).
-
-  // Pre-compute per-bar gains and losses (changes at indices 1..N)
-  const gains = new Array<number>(closes.length).fill(0);
-  const losses = new Array<number>(closes.length).fill(0);
-  for (let i = 1; i < closes.length; i++) {
+  // Seed avgGain/avgLoss from SMA of the first `period` changes.
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
     const change = closes[i] - closes[i - 1];
-    if (change > 0) gains[i] = change;
-    else losses[i] = Math.abs(change);
+    if (change > 0) avgGain += change;
+    else avgLoss += -change;
   }
+  avgGain /= period;
+  avgLoss /= period;
+  result[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
 
-  // Rolling SMA over the last `period` changes (indices i-period+1 .. i)
-  for (let i = period; i < closes.length; i++) {
-    let sumGain = 0;
-    let sumLoss = 0;
-    for (let j = i - period + 1; j <= i; j++) {
-      sumGain += gains[j];
-      sumLoss += losses[j];
-    }
-    const avgGain = sumGain / period;
-    const avgLoss = sumLoss / period;
+  // Wilder smoothing: avg = (prev*(period-1) + current) / period
+  for (let i = period + 1; i < closes.length; i++) {
+    const change = closes[i] - closes[i - 1];
+    const gain = change > 0 ? change : 0;
+    const loss = change < 0 ? -change : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
     result[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
   }
 
@@ -509,6 +509,7 @@ export function computeIVP(values: number[], period = 252): number[] {
 export interface EnrichmentOptions {
   forceFull?: boolean;
   dataDir?: string;  // Required in Parquet mode for file paths
+  parquetMode?: boolean;
 }
 
 /**
@@ -710,6 +711,46 @@ async function setupParquetWorkingTables(
       }
     }
     await alignDailyWorkingTableColumns(conn, dailyTable);
+  }
+
+  // quick-260421-l63 Rule 2: backfill missing (ticker, date) identity rows from
+  // market.spot_daily so batchUpdateDaily has rows to UPDATE. Applies to ALL
+  // seed paths above:
+  //   - Legacy daily.parquet branch: daily.parquet is historical; any new (ticker,date)
+  //     in market.spot_daily that isn't in the seed needs to be inserted before
+  //     enrichment. Usually a no-op (pre-deletion inventories agreed).
+  //   - Enriched-ticker-files branch: the seed only contains tickers with an
+  //     enriched/ticker=X/data.parquet file. Tickers that have spot data but
+  //     no enriched file yet (e.g. after partial delete — which is the L63
+  //     re-enrichment scenario) will be missed.
+  //   - Fresh branch: working table is empty, so every (ticker, date) in
+  //     market.spot_daily is new.
+  //
+  // Without this backfill, UPDATE ... WHERE (ticker,date) matches 0 rows and
+  // the enricher silently writes an empty enriched/ticker=X/data.parquet file —
+  // corrupting historical enrichment on the first run after enriched/ is
+  // deleted. OHLCV columns stay NULL (io.spotStore is the canonical OHLCV
+  // source post-Phase-5; Tier 2 SPX JOIN uses enrichment fields, not OHLCV).
+  try {
+    // CAST date to VARCHAR — market.spot_daily.date is inferred as DATE by
+    // DuckDB (hive partition type inference); the working table's date column
+    // is VARCHAR (per physical market.enriched fallback schema).
+    // strftime produces 'YYYY-MM-DD' which matches the partition value format.
+    // ANTI-JOIN: only INSERT (ticker,date) pairs that don't already exist in
+    // the working table, preserving any prior enrichment data in the seed.
+    await conn.run(
+      `INSERT INTO "${dailyTable}" (ticker, date)
+       SELECT s.ticker, strftime(s.date, '%Y-%m-%d') AS d
+       FROM market.spot_daily s
+       WHERE NOT EXISTS (
+         SELECT 1 FROM "${dailyTable}" t
+         WHERE t.ticker = s.ticker
+           AND t.date = strftime(s.date, '%Y-%m-%d')
+       )`,
+    );
+  } catch {
+    // market.spot_daily absent (truly-fresh clone before any spot data) —
+    // leave the working table empty; enrichment will be a no-op in that case.
   }
 
   // ---- Date-context working table seed -------------------------------------
@@ -1160,7 +1201,7 @@ export async function runEnrichment(
   const { forceFull = false } = opts;
 
   // Parquet mode: create working temp tables for all writes
-  const parquetMode = isParquetMode() && !!opts.dataDir;
+  const parquetMode = (opts.parquetMode ?? isParquetMode()) && !!opts.dataDir;
   let workingTables: { dailyTable: string; dateContextTable: string } | null = null;
 
   if (parquetMode) {
@@ -1240,6 +1281,27 @@ export async function runEnrichment(
       enrichedThrough: null,
     };
   }
+
+  // 3b. Defensive zero-OHLC filter (quick-260421-l63). Partitions should already
+  // be clean after the L63 cleanup + ParquetSpotStore.writeBars guard, but this
+  // second line of defense catches any future provider-outage bleed and prevents
+  // RSI/ATR/EMA/SMA/RealizedVol from being poisoned by zero closes. Filter at
+  // the rawRows level so date/OHLC alignment is preserved across all five arrays
+  // (dates/opens/highs/lows/closes) constructed below.
+  const filteredRawRows = rawRows.filter((r) => {
+    const o = Number(r[2]);
+    const h = Number(r[3]);
+    const l = Number(r[4]);
+    const c = Number(r[5]);
+    return !(o === 0 && h === 0 && l === 0 && c === 0);
+  });
+  const zeroRowsDropped = rawRows.length - filteredRawRows.length;
+  if (zeroRowsDropped > 0) {
+    console.warn(
+      `[market-enricher] ticker=${ticker} dropped ${zeroRowsDropped} all-zero-OHLC rows before indicator math`,
+    );
+  }
+  rawRows = filteredRawRows;
 
   // 4. Extract typed arrays from raw rows
   // Columns: ticker(0), date(1), open(2), high(3), low(4), close(5)

@@ -134,8 +134,18 @@ export interface RefreshOptions {
   spotTickers: string[];
   chainUnderlyings?: string[];
   quoteTickers?: string[];
+  quoteUnderlyings?: string[];
   computeVixContext?: boolean;
   provider?: "massive" | "thetadata";
+  /**
+   * Optional progress callback forwarded into the bulk (`quoteUnderlyings`)
+   * branch of ingestQuotes. Only that branch invokes it — per-ticker quote
+   * calls, spot bars, chain, and VIX context stay silent. Used by the
+   * refresh_market_data MCP handler to emit notifications/progress events
+   * during multi-minute bulk SPX quote fetches so the claude.ai MCP
+   * connector's 60s idle timeout doesn't fire.
+   */
+  onProgress?: BulkProgressReporter;
 }
 
 export interface RefreshResult {

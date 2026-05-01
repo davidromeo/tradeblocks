@@ -29,6 +29,23 @@ export abstract class ChainStore {
   abstract readChain(underlying: string, date: string): Promise<ContractRow[]>;
 
   /**
+   * Cheap chain-existence probe used by entry-pipeline snapshot reads. Returns
+   * `true` when the (underlying, date) chain partition has at least one
+   * contract; otherwise `false`. Lets the resolver skip a date without paying
+   * the ~342ms / 39K-row cost of a full `readChain` call when only the empty
+   * check matters.
+   */
+  async hasChain(underlying: string, date: string): Promise<boolean> {
+    const reader = await this.ctx.conn.runAndReadAll(
+      `SELECT 1 FROM market.option_chain
+        WHERE underlying = $1 AND date = $2
+        LIMIT 1`,
+      [underlying, date] as (string | number | boolean | null | bigint)[],
+    );
+    return reader.getRows().length > 0;
+  }
+
+  /**
    * Bulk read chains for N dates under a single underlying. Returns a flat list;
    * the caller groups by `date`. Both backends share the same SQL path since
    * `market.option_chain` resolves to either a Parquet view or a physical table

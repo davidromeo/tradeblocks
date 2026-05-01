@@ -25,8 +25,8 @@
  * orphaned MCP processes (PPID=1) and terminating them before retrying.
  *
  * Configuration via environment variables:
- *   DUCKDB_MEMORY_LIMIT    - Memory limit (default: 512MB)
- *   DUCKDB_THREADS         - Number of threads (default: 2)
+ *   DUCKDB_MEMORY_LIMIT    - Memory limit (default: 75% of system RAM, floor 1GB)
+ *   DUCKDB_THREADS         - Number of threads (default: 2 — higher counts cause driver flakiness)
  *   DUCKDB_LOCK_RECOVERY   - Force-kill ANY lock-holding tradeblocks-mcp (default: false)
  *   DUCKDB_LOCK_RECOVERY_TIMEOUT_MS - Wait time for SIGTERM (default: 1500)
  *   MARKET_DB_PATH         - Path to market.duckdb (overrides default, overridden by --market-db)
@@ -45,6 +45,7 @@
 import { DuckDBInstance, DuckDBConnection } from "@duckdb/node-api";
 import { execFile } from "child_process";
 import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
 import { ensureSyncTables, ensureTradeDataTable, ensureReportingDataTable } from "./schemas.js";
@@ -64,6 +65,33 @@ let storedMemoryLimit: string | null = null;
 let storedMarketDbPath: string | null = null;
 const execFileAsync = promisify(execFile);
 const isWindows = process.platform === "win32";
+
+/**
+ * Default DuckDB memory limit when `DUCKDB_MEMORY_LIMIT` is unset.
+ *
+ * Scales to 75% of total system RAM — DuckDB's own native default is 80%; we
+ * keep a small headroom for Node's heap, the OS, and other processes. Floored
+ * at 1GB so very small VMs / CI containers still work; no upper cap. Returns
+ * a DuckDB-compatible string like "90GB".
+ */
+function defaultMemoryLimit(): string {
+  const totalGB = os.totalmem() / (1024 ** 3);
+  const targetGB = Math.max(1, Math.floor(totalGB * 0.75));
+  return `${targetGB}GB`;
+}
+
+/**
+ * Default DuckDB thread count when `DUCKDB_THREADS` is unset.
+ *
+ * Stays at 2 — empirically, higher counts trigger intermittent
+ * `Failed to execute prepared statement` errors mid-run on long parquet-mode
+ * read workloads (tested 4, 8, 32 — all flaky). The hot path is per-date
+ * partition reads which are I/O-bound, not CPU-bound. Users with large
+ * parallel-read workloads can override via the env var.
+ */
+function defaultThreads(): string {
+  return "2";
+}
 
 function isLockError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -433,9 +461,10 @@ export async function getConnection(dataDir: string): Promise<DuckDBConnection> 
 
   const dbPath = path.join(dataDir, "analytics.duckdb");
 
-  // Configuration from environment with sensible defaults
-  const threads = process.env.DUCKDB_THREADS || "2";
-  const memoryLimit = process.env.DUCKDB_MEMORY_LIMIT || "512MB";
+  // Configuration from environment with sensible defaults — thread count and
+  // memory limit auto-scale to host capacity (see helpers above).
+  const threads = process.env.DUCKDB_THREADS || defaultThreads();
+  const memoryLimit = process.env.DUCKDB_MEMORY_LIMIT || defaultMemoryLimit();
 
   // Store config for reuse by upgrade/downgrade
   storedDbPath = dbPath;
@@ -555,8 +584,8 @@ export async function upgradeToReadWrite(
   // downgrade back to RO immediately after init.
   // storedDbPath/storedThreads/storedMemoryLimit are set by the initial getConnection() call.
   const dbPath = storedDbPath || path.join(dataDir, "analytics.duckdb");
-  const threads = storedThreads || process.env.DUCKDB_THREADS || "2";
-  const memoryLimit = storedMemoryLimit || process.env.DUCKDB_MEMORY_LIMIT || "512MB";
+  const threads = storedThreads || process.env.DUCKDB_THREADS || defaultThreads();
+  const memoryLimit = storedMemoryLimit || process.env.DUCKDB_MEMORY_LIMIT || defaultMemoryLimit();
   if (!storedMarketDbPath) {
     storedMarketDbPath = resolveMarketDbPath(dataDir);
   }
@@ -611,6 +640,41 @@ export async function downgradeToReadOnly(dataDir: string): Promise<void> {
   if (storedDbPath && storedThreads && storedMemoryLimit) {
     await openReadOnlyConnection(storedDbPath, storedThreads, storedMemoryLimit);
   }
+}
+
+/**
+ * Open a fresh read-only connection without going through `getConnection()`'s
+ * RW-init phase. The standard `getConnection()` flow always opens RW briefly
+ * to create schemas + parquet views before downgrading; that brief RW window
+ * is exclusive across processes (DuckDB is single-process-write) and races
+ * fatally with sibling readers when multiple consumers spin up at once.
+ *
+ * Use this when:
+ *   - Schemas + market views already exist (some prior RW caller initialized them)
+ *   - The caller only needs to *read* — no write tools, no schema setup
+ *   - Multiple processes need concurrent access to the same database
+ *
+ * The fork-pool in `self-improve.mjs --score all` is the canonical caller —
+ * each child worker reads strategy JSON + OO trades + parquet partitions and
+ * writes nothing back. Two RO connections never conflict.
+ *
+ * Returns a connection that's NOT shared via the module-level singleton —
+ * the caller owns it and is responsible for closing. (The internal
+ * `connection`/`instance` module state is still mutated for compatibility
+ * with `getCurrentConnection()` / store contexts that read from it; in a
+ * subprocess that's fine since the module state is per-worker.)
+ */
+export async function getReadOnlyConnection(dataDir: string): Promise<DuckDBConnection> {
+  if (connection) return connection;
+  const dbPath = path.join(dataDir, "analytics.duckdb");
+  const threads = process.env.DUCKDB_THREADS || defaultThreads();
+  const memoryLimit = process.env.DUCKDB_MEMORY_LIMIT || defaultMemoryLimit();
+  storedDbPath = dbPath;
+  storedThreads = threads;
+  storedMemoryLimit = memoryLimit;
+  storedMarketDbPath = resolveMarketDbPath(dataDir);
+  await openReadOnlyConnection(dbPath, threads, memoryLimit);
+  return connection!;
 }
 
 /**

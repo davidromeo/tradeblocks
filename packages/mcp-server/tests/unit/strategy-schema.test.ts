@@ -3,15 +3,6 @@
  *
  * Tests Zod schema validation for StrategyDefinitionSchema, LegDefinitionSchema,
  * StrikeSpecSchema, EntryRulesSchema, and PositionSizingSchema.
- *
- * Test coverage:
- *   - Valid iron condor (2-leg) round-trips through parse + JSON.stringify
- *   - All 5 strike spec methods are accepted
- *   - Max 8 legs accepted; 9 legs rejected
- *   - Unknown strike method rejected with descriptive error
- *   - Missing required fields rejected
- *   - Defaults applied correctly (dte_tolerance, multiplier, slippage, etc.)
- *   - offset strike spec requires parent_leg and points
  */
 
 // @ts-expect-error - importing from src (not bundled output)
@@ -28,6 +19,13 @@ const validLeg = {
 
 const validEntryRules = { frequency: "weekly" };
 const validPositionSizing = { mode: "fixed_contracts", contracts: 1 };
+const validCosts = {
+  slippage_entry: 0.1,
+  slippage_exit: 0.1,
+  slippage_stop_exit: 0.1,
+  opening_commission: 0.5,
+  closing_commission: 0.5,
+};
 
 describe("StrategyDefinitionSchema", () => {
   it("round-trips a valid 2-leg iron condor definition", () => {
@@ -52,6 +50,11 @@ describe("StrategyDefinitionSchema", () => {
       ],
       entry_rules: { frequency: "weekly", max_open_trades: 3 },
       position_sizing: { mode: "fixed_contracts", contracts: 1 },
+      slippage_entry: 0.1,
+      slippage_exit: 0.1,
+      slippage_stop_exit: 0.1,
+      opening_commission: 1.78,
+      closing_commission: 0.78,
     };
 
     const parsed = StrategyDefinitionSchema.parse(input);
@@ -59,13 +62,17 @@ describe("StrategyDefinitionSchema", () => {
     expect(parsed.underlying).toBe("SPX");
     expect(parsed.legs).toHaveLength(2);
 
-    // Round-trip: re-parse serialized output — all defaults should be present
     const roundTripped = JSON.parse(JSON.stringify(parsed));
-    expect(roundTripped.slippage_entry).toBe(0.25);
-    expect(roundTripped.slippage_exit).toBe(0.25);
-    expect(roundTripped.slippage_stop_exit).toBe(0.5);
-    expect(roundTripped.commission_per_contract).toBe(0.50);
-    expect(roundTripped.legs[0].dte_tolerance).toBe(2);
+    expect(roundTripped.slippage_entry).toBe(0.1);
+    expect(roundTripped.slippage_exit).toBe(0.1);
+    expect(roundTripped.slippage_stop_exit).toBe(0.1);
+    expect(roundTripped.opening_commission).toBe(1.78);
+    expect(roundTripped.closing_commission).toBe(0.78);
+    // dte_tolerance is now optional (no schema default). The fixture above
+    // doesn't set it, so the parsed leg has dte_tolerance undefined — which
+    // signals the resolver to slide forward unbounded ("Use Exact DTE OFF"
+    // OO semantics). The round-trip therefore omits the field entirely.
+    expect(roundTripped.legs[0].dte_tolerance).toBeUndefined();
     expect(roundTripped.legs[0].multiplier).toBe(100);
     expect(roundTripped.entry_rules.entry_time).toBe("09:45");
     expect(roundTripped.entry_rules.max_open_trades).toBe(3);
@@ -93,6 +100,7 @@ describe("StrategyDefinitionSchema", () => {
       legs: [validLeg],
       entry_rules: validEntryRules,
       position_sizing: validPositionSizing,
+      ...validCosts,
     };
     const result = StrategyDefinitionSchema.safeParse(input);
     expect(result.success).toBe(true);
@@ -105,6 +113,7 @@ describe("StrategyDefinitionSchema", () => {
       legs: Array(8).fill(validLeg),
       entry_rules: validEntryRules,
       position_sizing: validPositionSizing,
+      ...validCosts,
     };
     const result = StrategyDefinitionSchema.safeParse(input);
     expect(result.success).toBe(true);
@@ -117,10 +126,10 @@ describe("StrategyDefinitionSchema", () => {
       legs: Array(9).fill(validLeg),
       entry_rules: validEntryRules,
       position_sizing: validPositionSizing,
+      ...validCosts,
     };
     const result = StrategyDefinitionSchema.safeParse(input);
     expect(result.success).toBe(false);
-    // Error should reference the array constraint
     if (!result.success) {
       const errorText = JSON.stringify(result.error.issues);
       expect(errorText).toMatch(/legs|too_big|max/i);
@@ -132,7 +141,6 @@ describe("StrategyDefinitionSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const errorText = JSON.stringify(result.error.issues);
-      // Discriminated union error should reference the invalid value or the method field
       expect(errorText).toMatch(/method|discriminator|invalid|unknown_method/i);
     }
   });
@@ -142,42 +150,78 @@ describe("StrategyDefinitionSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const errorText = JSON.stringify(result.error.issues);
-      // Should mention missing required fields
       expect(errorText).toMatch(/strategy_name|underlying|legs|required/i);
     }
   });
 
-  it("applies defaults correctly", () => {
+  it("rejects missing opening_commission / closing_commission", () => {
+    const noCommissions = {
+      strategy_name: "Missing commissions",
+      underlying: "SPX",
+      legs: [validLeg],
+      entry_rules: validEntryRules,
+      position_sizing: validPositionSizing,
+      slippage_entry: 0.1,
+      slippage_exit: 0.1,
+      slippage_stop_exit: 0.1,
+    };
+    const result = StrategyDefinitionSchema.safeParse(noCommissions);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const errorText = JSON.stringify(result.error.issues);
+      expect(errorText).toMatch(/opening_commission|closing_commission/);
+    }
+  });
+
+  it("applies leg and entry defaults correctly", () => {
     const input = {
       strategy_name: "Minimal",
       underlying: "SPX",
       legs: [validLeg],
       entry_rules: { frequency: "daily" },
       position_sizing: { mode: "fixed_contracts", contracts: 1 },
+      ...validCosts,
     };
     const parsed = StrategyDefinitionSchema.parse(input);
 
-    // Top-level defaults
-    expect(parsed.slippage_entry).toBe(0.25);
-    expect(parsed.slippage_exit).toBe(0.25);
-    expect(parsed.slippage_stop_exit).toBe(0.5);
-    expect(parsed.commission_per_contract).toBe(0.50);
+    expect(parsed.slippage_entry).toBe(0.1);
+    expect(parsed.slippage_exit).toBe(0.1);
+    expect(parsed.slippage_stop_exit).toBe(0.1);
+    expect(parsed.opening_commission).toBe(0.5);
+    expect(parsed.closing_commission).toBe(0.5);
 
-    // Leg defaults
-    expect(parsed.legs[0].dte_tolerance).toBe(2);
+    // dte_tolerance is optional with no schema default — undefined signals
+    // unlimited forward slide (mirrors OO "Use Exact DTE OFF").
+    expect(parsed.legs[0].dte_tolerance).toBeUndefined();
     expect(parsed.legs[0].multiplier).toBe(100);
 
-    // Entry rules defaults
     expect(parsed.entry_rules.entry_time).toBe("09:45");
     expect(parsed.entry_rules.max_open_trades).toBe(1);
   });
 
+  it("defaults RSI timing to intraday_to_entry", () => {
+    const input = {
+      strategy_name: "RSI strategy",
+      underlying: "SPX",
+      legs: [validLeg],
+      entry_rules: { frequency: "daily" },
+      position_sizing: { mode: "fixed_contracts", contracts: 1 },
+      entry_filters: [{ type: "rsi", field: "RSI_14", min: 60 }],
+      ...validCosts,
+    };
+
+    const parsed = StrategyDefinitionSchema.parse(input);
+
+    expect(parsed.entry_filters?.[0]).toMatchObject({
+      type: "rsi",
+      timing: "intraday_to_entry",
+    });
+  });
+
   it("offset strike spec requires parent_leg and points", () => {
-    // Missing parent_leg and points → should fail
     const noFields = StrikeSpecSchema.safeParse({ method: "offset" });
     expect(noFields.success).toBe(false);
 
-    // Both fields present → should succeed
     const withFields = StrikeSpecSchema.safeParse({
       method: "offset",
       parent_leg: 0,
@@ -201,8 +245,6 @@ describe("StrategyDefinitionSchema", () => {
     });
     expect(result.success).toBe(false);
   });
-
-  // --- New field tests: exact and max_width (D-13) ---
 
   it("offset exact defaults to true when omitted", () => {
     const result = StrikeSpecSchema.parse({
@@ -327,6 +369,7 @@ describe("StrategyDefinitionSchema", () => {
       ],
       entry_rules: { frequency: "weekly" },
       position_sizing: { mode: "fixed_contracts", contracts: 1 },
+      ...validCosts,
     };
 
     const parsed = StrategyDefinitionSchema.parse(input);

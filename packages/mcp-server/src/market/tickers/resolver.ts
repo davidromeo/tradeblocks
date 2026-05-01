@@ -11,10 +11,14 @@
  */
 import type { TickerRegistry } from "./registry.js"; // TYPE-ONLY — break runtime cycle (Pitfall 10)
 
-// OCC option ticker shape: root + YYMMDD + C/P + 8-digit strike (15+ chars after root).
-// When input matches OCC, extract just the leading letters as the root.
-// Otherwise treat the whole input as a bare root (preserves "VIX9D", "VIX3M", etc.).
-const OCC_RE = /^([A-Z]+)\d{6}[CP]\d{8}$/;
+// OCC-like option ticker shape: root + YYMMDD + C/P + 6-11 digit strike.
+// Standard OCC encodes strike × 1000 in 8 digits, but ThetaData emits wider
+// strike fields (up to 10 digits seen on adjusted/non-standard SPX series —
+// e.g. SPX240719C1262721200, SPX240719P845310800). Accept 6-11 so unusual but
+// well-formed tickers still extract their root cleanly instead of falling
+// through to the passthrough branch below (which previously leaked the full
+// OCC string as the partition key).
+const OCC_RE = /^([A-Z]+)\d{6}[CP]\d{6,11}$/;
 const LEADING_LETTERS_RE = /^([A-Z]+)/;
 
 /**

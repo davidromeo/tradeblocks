@@ -213,4 +213,86 @@ describe("MarketIngestor.ingestQuotes", () => {
     expect(result.rowsWritten).toBe(3);
     expect(result.dateRange).toEqual({ from: "2026-01-05", to: "2026-01-05" });
   });
+
+  it("bulk path: non-standard wide-strike tickers land in the requested underlying (regression: 2024-07-09 leak)", async () => {
+    // Before the resolver.ts OCC_RE fix, tickers with 9- or 10-digit strikes
+    // (e.g. SPX240719C1262721200, SPX240719P845310800 — real examples from
+    // ThetaData on 2024-07-09) failed extractRoot and leaked into per-OCC
+    // partitions via the registry identity-fallback. This test writes one of
+    // each and asserts every row lands under underlying="SPX".
+    const spxTickers = new TickerRegistry([{ underlying: "SPX", roots: ["SPX", "SPXW"] }]);
+    const provider: MarketDataProvider = {
+      name: "bulk-wide-strike",
+      capabilities: () => ({
+        tradeBars: true, quotes: true, greeks: false, flatFiles: false,
+        bulkByRoot: true, perTicker: false, minuteBars: true, dailyBars: true,
+      }),
+      fetchBars: async () => [],
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+      fetchBulkQuotes: async function* () {
+        yield [
+          // 8-digit (standard) — sanity row
+          { ticker: "SPX240719C00560000", timestamp: "2024-07-09 09:30", bid: 1.0, ask: 1.2 },
+          // 9-digit (non-standard, observed in the 2024-07-09 leak)
+          { ticker: "SPX240719C845310800", timestamp: "2024-07-09 09:30", bid: 2.0, ask: 2.2 },
+          // 10-digit (non-standard, observed in the 2024-07-09 leak)
+          { ticker: "SPX240719C1262721200", timestamp: "2024-07-09 09:30", bid: 3.0, ask: 3.2 },
+        ];
+      },
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers: spxTickers });
+    const ingestor = new MarketIngestor({ stores, dataRoot: dataDir, providerFactory: () => provider });
+
+    const result = await ingestor.ingestQuotes({
+      underlyings: ["SPX"],
+      from: "2024-07-09",
+      to: "2024-07-09",
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.rowsWritten).toBe(3);
+
+    // All three rows must sit under underlying="SPX" — not under the raw OCC strings.
+    const reader = await conn.runAndReadAll(
+      `SELECT underlying, COUNT(*) AS n FROM market.option_quote_minutes GROUP BY underlying ORDER BY underlying`,
+    );
+    const rows = reader.getRows() as Array<[string, bigint | number]>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0][0]).toBe("SPX");
+    expect(Number(rows[0][1])).toBe(3);
+  });
+
+  it("bulk path: resolution mismatch aborts the ingest (defense-in-depth)", async () => {
+    // A row whose ticker resolves to a different underlying than requested
+    // must throw instead of silently writing to the wrong partition. We force
+    // the mismatch by yielding a QQQ ticker from a request for underlying=SPX.
+    const mixedTickers = new TickerRegistry([
+      { underlying: "SPX", roots: ["SPX", "SPXW"] },
+      { underlying: "QQQ", roots: ["QQQ"] },
+    ]);
+    const provider: MarketDataProvider = {
+      name: "bulk-mismatch",
+      capabilities: () => ({
+        tradeBars: true, quotes: true, greeks: false, flatFiles: false,
+        bulkByRoot: true, perTicker: false, minuteBars: true, dailyBars: true,
+      }),
+      fetchBars: async () => [],
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+      fetchBulkQuotes: async function* () {
+        yield [
+          { ticker: "QQQ241227P00500000", timestamp: "2024-12-20 09:30", bid: 1.0, ask: 1.2 },
+        ];
+      },
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers: mixedTickers });
+    const ingestor = new MarketIngestor({ stores, dataRoot: dataDir, providerFactory: () => provider });
+
+    await expect(
+      ingestor.ingestQuotes({
+        underlyings: ["SPX"],
+        from: "2024-12-20",
+        to: "2024-12-20",
+      }),
+    ).rejects.toThrow(/root resolution mismatch/);
+  });
 });

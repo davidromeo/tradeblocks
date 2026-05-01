@@ -90,10 +90,54 @@ export class ParquetChainStore extends ChainStore {
     });
   }
 
+  /**
+   * Filesystem-based chain probe — bypasses both the `market.option_chain`
+   * view glob (~430ms per call) AND the `extract_statements` GC handle leak
+   * that accumulates over long-running read workloads.
+   * The chain partition path is deterministic, so the probe collapses to a
+   * single `existsSync` syscall.
+   */
+  override async hasChain(underlying: string, date: string): Promise<boolean> {
+    const partitionPath = path.join(
+      resolveMarketDir(this.ctx.dataDir),
+      "option_chain",
+      `underlying=${underlying}`,
+      `date=${date}`,
+      "data.parquet",
+    );
+    return existsSync(partitionPath);
+  }
+
   async readChain(
     underlying: string,
     date: string,
   ): Promise<ContractRow[]> {
+    const partitionPath = path.join(
+      resolveMarketDir(this.ctx.dataDir),
+      "option_chain",
+      `underlying=${underlying}`,
+      `date=${date}`,
+      "data.parquet",
+    );
+    if (existsSync(partitionPath)) {
+      // Direct-parquet path: no params → no extract_statements leak, no view
+      // glob overhead. SQL string is fully literal (path is from typed config,
+      // not user input — no injection vector beyond the existing data dir).
+      const sql = `SELECT underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style
+                     FROM read_parquet('${escapeSqlLiteral(partitionPath)}', hive_partitioning=true)
+                     ORDER BY ticker`;
+      const reader = await this.ctx.conn.runAndReadAll(sql);
+      return reader.getRows().map((r) => ({
+        underlying: String(r[0]),
+        date: String(r[1]),
+        ticker: String(r[2]),
+        contract_type: String(r[3]) as ContractRow["contract_type"],
+        strike: Number(r[4]),
+        expiration: String(r[5]),
+        dte: Number(r[6]),
+        exercise_style: String(r[7]),
+      }));
+    }
     const { sql, params } = buildReadChainSQL(underlying, date);
     const reader = await this.ctx.conn.runAndReadAll(
       sql,
@@ -132,11 +176,12 @@ export class ParquetChainStore extends ChainStore {
     if (directPaths.length === 0) return super.readChainDates(underlying, dates);
 
     const fileList = directPaths.map((filePath) => `'${escapeSqlLiteral(filePath)}'`).join(", ");
+    // Direct path: omit params arg entirely to bypass extract_statements
+    // (parquet-quote-store.ts:327 has the full root-cause writeup).
     const reader = await this.ctx.conn.runAndReadAll(
       `SELECT underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style
          FROM read_parquet([${fileList}], hive_partitioning=true)
          ORDER BY date, ticker`,
-      [],
     );
     return reader.getRows().map((r) => ({
       underlying: String(r[0]),

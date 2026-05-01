@@ -28,6 +28,22 @@ export class ParquetSpotStore extends SpotStore {
     bars: BarRow[],
   ): Promise<void> {
     if (bars.length === 0) return;
+    // quick-260421-l63: defense-in-depth write-side guard.
+    // Reject batches where every row is all-zero OHLC — typically a provider
+    // outage or holiday response that would poison downstream indicator math
+    // (RSI/ATR/EMA/SMA/RealizedVol). Mixed batches (some zero rows, some valid
+    // rows) are permitted — the caller owns that shape and the enricher's
+    // read-side filter strips zero rows before indicator math.
+    const allZero = bars.every(
+      (b) => b.open === 0 && b.high === 0 && b.low === 0 && b.close === 0,
+    );
+    if (allZero) {
+      throw new Error(
+        `ParquetSpotStore.writeBars: refusing to write all-zero OHLC batch ` +
+          `(ticker=${ticker} date=${date} rows=${bars.length}). This indicates a ` +
+          `provider outage or holiday response that should be dropped upstream.`,
+      );
+    }
     const staging = `_spot_write_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     await this.ctx.conn.run(
       `CREATE TEMP TABLE "${staging}" (
@@ -91,11 +107,19 @@ export class ParquetSpotStore extends SpotStore {
     to: string,
   ): Promise<BarRow[]> {
     const direct = this.buildDirectParquetReadBarsSQL(ticker, from, to);
-    const { sql, params } = direct ?? buildReadBarsSQL(ticker, from, to);
-    const reader = await this.ctx.conn.runAndReadAll(
-      sql,
-      params as (string | number | boolean | null | bigint)[],
-    );
+    // Direct path: no params, call runAndReadAll(sql) without 2nd arg to bypass
+    // extract_statements (which leaks C++ handles per call — see
+    // parquet-quote-store.ts:327 for the full root-cause writeup).
+    let reader;
+    if (direct) {
+      reader = await this.ctx.conn.runAndReadAll(direct.sql);
+    } else {
+      const fallback = buildReadBarsSQL(ticker, from, to);
+      reader = await this.ctx.conn.runAndReadAll(
+        fallback.sql,
+        fallback.params as (string | number | boolean | null | bigint)[],
+      );
+    }
     return reader.getRows().map((r) => ({
       ticker: String(r[0]),
       date: String(r[1]),
@@ -116,11 +140,16 @@ export class ParquetSpotStore extends SpotStore {
     to: string,
   ): Promise<BarRow[]> {
     const direct = this.buildDirectParquetReadBarsSQL(ticker, from, to, { dailyAgg: true });
-    const { sql, params } = direct ?? buildReadDailyBarsSQL(ticker, from, to);
-    const reader = await this.ctx.conn.runAndReadAll(
-      sql,
-      params as (string | number | boolean | null | bigint)[],
-    );
+    let reader;
+    if (direct) {
+      reader = await this.ctx.conn.runAndReadAll(direct.sql);
+    } else {
+      const fallback = buildReadDailyBarsSQL(ticker, from, to);
+      reader = await this.ctx.conn.runAndReadAll(
+        fallback.sql,
+        fallback.params as (string | number | boolean | null | bigint)[],
+      );
+    }
     return reader.getRows().map((r) => ({
       ticker: String(r[0]),
       date: String(r[1]),

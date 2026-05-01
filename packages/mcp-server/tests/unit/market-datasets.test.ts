@@ -159,11 +159,18 @@ describe("writeChainPartition — path resolution", () => {
 
 describe("writeQuoteMinutesPartition — path resolution", () => {
   it("writes to {dataDir}/market/option_quote_minutes/underlying=SPX/date=2025-01-06/data.parquet", async () => {
+    // Inline VALUES with time + ticker so the ORDER BY q.time, q.ticker inside
+    // writeQuoteMinutesPartition can resolve the columns.
+    const selectQuery = `SELECT * FROM (VALUES
+      ('09:30'::VARCHAR, 'A'::VARCHAR),
+      ('09:30'::VARCHAR, 'B'::VARCHAR),
+      ('09:35'::VARCHAR, 'C'::VARCHAR)
+    ) t(time, ticker)`;
     const { rowCount } = await writeQuoteMinutesPartition(conn, {
       dataDir: tmpDir,
       underlying: "SPX",
       date: "2025-01-06",
-      selectQuery: "SELECT * FROM src",
+      selectQuery,
     });
     expect(rowCount).toBe(3);
     expect(

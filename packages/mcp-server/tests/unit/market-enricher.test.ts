@@ -38,7 +38,7 @@ import {
 } from '../../src/test-exports.js';
 import type { DuckDBConnection, DuckDBInstance as DuckDBInstanceType } from '@duckdb/node-api';
 import { DuckDBInstance } from '@duckdb/node-api';
-import { mkdirSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -1012,6 +1012,20 @@ describe('runEnrichment injected IO path (Plan 02-04)', () => {
        WHERE source = 'enrichment' AND ticker = 'SPX' AND target_table = 'daily'`,
     );
     expect(metaRows.getRows().length).toBe(0);
+  });
+
+  test('explicit parquetMode uses working tables even when market.enriched is a view', async () => {
+    delete process.env.TRADEBLOCKS_PARQUET;
+    await seedDailyFixture(conn, 'SPX', ['2025-01-06', '2025-01-07', '2025-01-08']);
+    await seedDailyFixture(conn, 'VIX', ['2025-01-06', '2025-01-07', '2025-01-08']);
+    await conn.run(`ALTER TABLE market.enriched RENAME TO enriched_backing`);
+    await conn.run(`CREATE VIEW market.enriched AS SELECT * FROM enriched_backing`);
+
+    const result = await runEnrichment(conn, 'SPX', { dataDir: tmpDir, parquetMode: true });
+    expect(result.tier1.status).toBe('complete');
+
+    const enrichedPath = join(tmpDir, 'market', 'enriched', 'ticker=SPX', 'data.parquet');
+    expect(existsSync(enrichedPath)).toBe(true);
   });
 });
 

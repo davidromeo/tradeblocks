@@ -13,11 +13,11 @@
  * Until then `npm run build` must succeed and imports must compile cleanly.
  */
 import { describe, it, expect } from "@jest/globals";
-import {
-  extractRoot,
-  rootToUnderlying,
-  TickerRegistry,
-} from "../../../../src/test-exports.js";
+// Import directly from source files, not via test-exports, because a sibling
+// re-export in test-exports.ext.ts pulls a .mjs devtool module that Jest can't
+// parse in this repo's current config (pre-existing issue from earlier commits).
+import { extractRoot, rootToUnderlying } from "../../../../src/market/tickers/resolver.js";
+import { TickerRegistry } from "../../../../src/market/tickers/registry.js";
 
 // A registry seeded with D-07 defaults (the one the production loader builds).
 const defaults = [
@@ -43,6 +43,17 @@ describe("extractRoot — OCC ticker", () => {
   it("strips the OCC tail", () => {
     expect(extractRoot("SPXW251219C05000000")).toBe("SPXW");
     expect(extractRoot("QQQ241227P00500000")).toBe("QQQ");
+  });
+  it("handles non-standard 9-digit strikes (adjusted/non-standard SPX series)", () => {
+    // Regression: these were leaking into underlying=<full-ticker>/ partitions
+    // because OCC_RE demanded exactly 8-digit strike. Real examples from
+    // ThetaData bulk responses on 2024-07-09.
+    expect(extractRoot("SPX240719C845310800")).toBe("SPX");
+    expect(extractRoot("SPX240719P845310800")).toBe("SPX");
+  });
+  it("handles non-standard 10-digit strikes", () => {
+    expect(extractRoot("SPX240719C1262721200")).toBe("SPX");
+    expect(extractRoot("SPX241220C1263291200")).toBe("SPX");
   });
   it("throws when no leading alpha run", () => {
     expect(() => extractRoot("123ABC")).toThrow(/Cannot extract root/);

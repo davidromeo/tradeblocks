@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { upgradeToReadWrite, downgradeToReadOnly } from "../db/connection.js";
+import { getDataRoot } from "../db/data-root.js";
 import { MarketIngestor } from "../market/ingestor/index.js";
 import type { MarketStores } from "../market/stores/index.js";
 import type { BulkProgressReporter } from "../market/ingestor/types.js";
@@ -35,7 +36,7 @@ export function registerMarketFetchTools(
   baseDir: string,
   stores: MarketStores,
 ): void {
-  const ingestor = new MarketIngestor({ stores, dataRoot: baseDir });
+  const ingestor = new MarketIngestor({ stores, dataRoot: getDataRoot(baseDir) });
 
   // fetch_bars
   server.registerTool(
@@ -214,7 +215,7 @@ export function registerMarketFetchTools(
         select_sql: z.string().describe(
           "SELECT (or WITH ... SELECT) that produces the target store's canonical columns. " +
           "spot_bars columns: (ticker, date, time, open, high, low, close, bid, ask). " +
-          "option_quote_minutes columns: (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source). " +
+          "option_quote_minutes columns: (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source, delta, gamma, theta, vega, iv, greeks_source, greeks_revision); missing greeks columns are filled as null. " +
           "option_chain columns: (underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style).",
         ),
         partition: z.object({
@@ -283,33 +284,89 @@ export function registerMarketFetchTools(
         "Composite daily-refresh driver. Calls fetch_bars \u2192 fetch_chain \u2192 fetch_quotes \u2192 compute_vix_context for a caller-supplied universe, then returns coverage report. " +
         "Intended for scheduled jobs (cron, /schedule skill, etc.) that populate the cache nightly with yesterday's data. " +
         "compute_vix_context auto-fires when any VIX-family ticker is in spot_tickers and compute_vix_context flag is true (default). " +
+        "Quote ingest persists minute greeks inline on option_quote_minutes when provider data exists or computed fallback is available. " +
         "Per-operation errors surface in the result's 'errors' array — safe to monitor/alert on.",
       inputSchema: z.object({
         asOf: z.string().describe("Target date YYYY-MM-DD. Typically yesterday."),
         spot_tickers: z.array(z.string()).min(1).describe("Tickers to fetch daily bars for"),
         chain_underlyings: z.array(z.string()).optional().describe("Underlyings to fetch option chains for"),
         quote_tickers: z.array(z.string()).optional().describe("Option tickers to fetch minute quotes for"),
+        quote_underlyings: z.array(z.string()).optional().describe(
+          "Underlyings to fetch minute quotes for via the bulk-by-underlying path (e.g., ['SPX']). " +
+            "Complementary with quote_tickers — pass whichever matches the target provider's capability. " +
+            "ThetaData supports bulk mode; Massive is per-ticker only. Both may be passed in one call — " +
+            "they dispatch as independent ingestQuotes invocations.",
+        ),
         compute_vix_context: z.boolean().default(true).describe(
           "If true and any VIX-family ticker is in spot_tickers, runs compute_vix_context at the end. Default true.",
         ),
         provider: z.enum(["massive", "thetadata"]).optional(),
       }),
     },
-    async ({ asOf, spot_tickers, chain_underlyings, quote_tickers, compute_vix_context, provider }) => {
+    async ({ asOf, spot_tickers, chain_underlyings, quote_tickers, quote_underlyings, compute_vix_context, provider }, extra) => {
       await upgradeToReadWrite(baseDir);
       try {
+        // Bulk-underlying quote fetches are the only step in this composite
+        // that can take multiple minutes. When the caller opts in via
+        // `_meta.progressToken`, mirror fetch_quotes: stream
+        // `notifications/progress` events so the claude.ai MCP connector's
+        // 60s idle timeout doesn't trip during slow SPX quote bulk fetches.
+        // refresh always passes from=to=asOf to ingestQuotes, so
+        // `dates.length === 1`; we still route through
+        // enumerateDatesForProgress for pattern parity with fetch_quotes.
+        // Per-ticker quote_tickers, spot bars, chain, and VIX context stay
+        // silent — they're fast enough that the proxy keep-alive problem
+        // doesn't apply.
+        const progressToken = extra?._meta?.progressToken;
+        let onProgress: BulkProgressReporter | undefined;
+        if (progressToken !== undefined && quote_underlyings && quote_underlyings.length > 0) {
+          const dates = enumerateDatesForProgress(asOf, asOf);
+          const groupsPerDate = quote_underlyings.reduce(
+            (acc, u) => acc + countBulkQuoteGroupsPerDate(u.toUpperCase()),
+            0,
+          );
+          const total = groupsPerDate * dates.length + quote_underlyings.length * dates.length;
+          let progress = 0;
+          onProgress = async (event) => {
+            progress++;
+            const message = event.kind === "group"
+              ? `${event.underlying} ${event.root}/${event.right} ${event.date} done (${event.status})`
+              : `${event.underlying} ${event.date} flushed — ${event.rowsWritten} rows`;
+            try {
+              await extra.sendNotification({
+                method: "notifications/progress",
+                params: { progressToken, progress, total, message },
+              });
+            } catch {
+              // best-effort: notification failure must not fail the ingest
+            }
+          };
+        }
+
         const result = await ingestor.refresh({
           asOf,
           spotTickers: spot_tickers,
           chainUnderlyings: chain_underlyings,
           quoteTickers: quote_tickers,
+          quoteUnderlyings: quote_underlyings,
           computeVixContext: compute_vix_context,
           provider,
+          onProgress,
         });
+        const operationResults = [
+          ...result.perOperation.spot,
+          ...result.perOperation.chain,
+          ...result.perOperation.quotes,
+          ...(result.perOperation.vixContext ? [result.perOperation.vixContext] : []),
+        ];
+        const unsupportedCount = operationResults.filter((item) => item.status === "unsupported").length;
+        const skippedCount = operationResults.filter((item) => item.status === "skipped").length;
         const summary =
           result.status === "error"
             ? `Refresh completed with ${result.errors.length} error(s): ${result.errors.join("; ")}`
-            : `Refresh complete for ${asOf}: ${result.perOperation.spot.length} spot, ${result.perOperation.chain.length} chain, ${result.perOperation.quotes.length} quote operation(s)`;
+            : unsupportedCount > 0 || skippedCount > 0
+              ? `Refresh completed for ${asOf} with ${unsupportedCount} unsupported and ${skippedCount} skipped operation(s): ${result.perOperation.spot.length} spot, ${result.perOperation.chain.length} chain, ${result.perOperation.quotes.length} quote operation(s)`
+              : `Refresh complete for ${asOf}: ${result.perOperation.spot.length} spot, ${result.perOperation.chain.length} chain, ${result.perOperation.quotes.length} quote operation(s)`;
         return createToolOutput(summary, result);
       } finally {
         await downgradeToReadOnly(baseDir);

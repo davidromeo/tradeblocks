@@ -23,8 +23,8 @@ import type { BuiltSQL } from "./spot-sql.js";
  * an invalid `ticker IN ()` clause).
  *
  * Optional `timeStart`/`timeEnd` push an `AND time BETWEEN …` filter into SQL.
- * This matters when callers only need a narrow entry-time window (often a
- * single minute): without the filter, DuckDB returns every minute bar in the
+ * This is critical for prefetch where the entry-time window is often a single
+ * minute: without the filter, DuckDB returns every minute bar in the
  * [from, to] range per ticker, blowing JS heap when bulking across many dates.
  */
 export function buildReadQuotesSQL(
@@ -53,7 +53,8 @@ export function buildReadQuotesSQL(
     ? `AND time >= $4 AND time <= $5\n           `
     : "";
   return {
-    sql: `SELECT ticker, date, time, bid, ask, mid, last_updated_ns
+    sql: `SELECT ticker, date, time, bid, ask, mid, last_updated_ns,
+                 delta, gamma, theta, vega, iv, greeks_source, greeks_revision
           FROM market.option_quote_minutes
           WHERE underlying = $1
             AND date >= $2

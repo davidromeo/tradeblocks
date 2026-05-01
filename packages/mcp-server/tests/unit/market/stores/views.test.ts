@@ -103,6 +103,30 @@ async function writeEnrichedContextFixture(): Promise<void> {
   `);
 }
 
+async function writeLegacyOptionQuoteFixture(): Promise<void> {
+  const dir = join(
+    tmpDir,
+    "market",
+    "option_quote_minutes",
+    "underlying=SPX",
+    "date=2025-01-06",
+  );
+  mkdirSync(dir, { recursive: true });
+  await conn.run(`
+    COPY (
+      SELECT 'SPX'::VARCHAR AS underlying,
+             '2025-01-06'::VARCHAR AS date,
+             'SPXW250106C05000000'::VARCHAR AS ticker,
+             '09:30'::VARCHAR AS time,
+             1.0 AS bid,
+             1.1 AS ask,
+             1.05 AS mid,
+             NULL::BIGINT AS last_updated_ns,
+             NULL::VARCHAR AS source
+    ) TO '${join(dir, "data.parquet")}' (FORMAT PARQUET);
+  `);
+}
+
 /**
  * Phase 6 Plan 06-00 Task 1 — multi-bar fixture for RTH aggregation tests.
  * Writes N minute bars for a given (ticker, date) so the market.spot_daily
@@ -182,6 +206,19 @@ describe("Phase 2 market-views registration", () => {
       `SELECT COUNT(*) FROM market.enriched_context`,
     );
     expect(Number(read.getRows()[0][0])).toBe(1);
+  });
+
+  it("creates nullable greeks columns for legacy option quote partitions", async () => {
+    await writeLegacyOptionQuoteFixture();
+    const result = await createMarketParquetViews(conn, tmpDir);
+    expect(result.viewsCreated).toContain("option_quote_minutes");
+
+    const read = await conn.runAndReadAll(
+      `SELECT delta, gamma, theta, vega, iv, greeks_source, greeks_revision
+         FROM market.option_quote_minutes
+        WHERE ticker = 'SPXW250106C05000000'`,
+    );
+    expect(read.getRows()).toEqual([[null, null, null, null, null, null, null]]);
   });
 
   it("view-vs-table transparency: same SELECT works against view as against physical table (Pattern 2)", async () => {

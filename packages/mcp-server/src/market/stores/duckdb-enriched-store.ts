@@ -32,7 +32,7 @@ export class DuckdbEnrichedStore extends EnrichedStore {
     await runEnrichment(
       this.ctx.conn,
       ticker,
-      { dataDir: this.ctx.dataDir },
+      { dataDir: this.ctx.dataDir, parquetMode: false },
       {
         spotStore: this.spotStore,
         watermarkStore: {
@@ -48,7 +48,7 @@ export class DuckdbEnrichedStore extends EnrichedStore {
       await runEnrichment(
         this.ctx.conn,
         ticker,
-        { dataDir: this.ctx.dataDir },
+        { dataDir: this.ctx.dataDir, parquetMode: false },
         {
           spotStore: this.spotStore,
           watermarkStore: {

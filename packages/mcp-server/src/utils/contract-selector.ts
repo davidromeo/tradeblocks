@@ -1,7 +1,7 @@
 /**
  * contract-selector.ts
  *
- * Pure strike selection engine for the options backtesting system (Phase 77).
+ * Pure strike selection engine for the options strategy system.
  *
  * Resolves strategy leg definitions into specific option contracts from a historical chain.
  * All 5 strike selection methods are implemented:
@@ -59,6 +59,8 @@ export interface SelectionOptions {
    * Falls back to iv_estimate for strikes not in the map.
    */
   iv_by_strike?: Map<number, number>;
+  /** Direct per-contract delta map when a persisted greek exists for the entry minute. */
+  delta_by_ticker?: Map<string, number>;
   /** Target DTE for offset legs — when multiple contracts match the exact strike,
    *  prefer the one closest to this DTE. Prevents picking the shortest expiration
    *  in the tolerance window (which would invert a calendar spread). */
@@ -180,9 +182,17 @@ export function selectByDelta(
     return { skipped: true, reason: 'no_contracts_after_filter' };
   }
 
-  const { underlying_price: S, iv_estimate: sigma, r = 0.045, q = 0.015, parent_strike, iv_by_strike } = opts;
+  const {
+    underlying_price: S,
+    iv_estimate: sigma,
+    r = 0.045,
+    q = 0.015,
+    parent_strike,
+    iv_by_strike,
+    delta_by_ticker,
+  } = opts;
   _selectionEntryTime = opts.entry_time;
-  const preferConservativeTarget = (iv_by_strike?.size ?? 0) === 0;
+  const preferConservativeTarget = (iv_by_strike?.size ?? 0) === 0 && (delta_by_ticker?.size ?? 0) === 0;
 
   let pool = contracts;
   if (max_width != null && parent_strike != null) {
@@ -193,34 +203,60 @@ export function selectByDelta(
     contract: ContractRow;
     absDelta: number;
     dist: number;
+    dteDist: number;
   };
+
+  // DTE-first ranking: when the caller supplies opts.dte_target, prefer the
+  // contract whose DTE is closest to target; delta is only the tiebreaker.
+  // DTE drives the trade's structural risk profile (multi-leg spread geometry,
+  // theta/gamma/vega exposure); delta is a strike-level refinement. Treating
+  // delta as primary makes selection fragile to tiny greek perturbations.
+  // When dte_target is absent, dteDist is 0 for all candidates and behavior
+  // degenerates to pure delta-distance ranking (back-compat).
+  const dteTarget = opts.dte_target;
 
   let bestContract = pool[0];
   let bestDist = Infinity;
+  let bestDteDist = Infinity;
   let bestBelowOrEqual: DeltaCandidate | null = null;
 
   for (const c of pool) {
+    const persistedDelta = delta_by_ticker?.get(c.ticker);
     // Apply log-moneyness vol skew for delta computation.
     // Calibrated against OO DC fill prices: put IV ≈ 1.10x ATM, call IV ≈ 0.85x ATM.
     // β_put=-2.5 gives 5/11 exact put matches; β_call=-7.0 gives 5/11 exact call matches.
-    let strikeIv: number;
-    if (iv_by_strike?.has(c.strike)) {
-      strikeIv = iv_by_strike.get(c.strike)!;
+    let delta: number;
+    if (persistedDelta != null) {
+      delta = persistedDelta;
     } else {
-      const logMoneyness = Math.log(c.strike / S);
-      const beta = logMoneyness < 0 ? -2.5 : -7.0;
-      strikeIv = Math.max(sigma * (1 + beta * logMoneyness), 0.01);
+      let strikeIv: number;
+      if (iv_by_strike?.has(c.strike)) {
+        strikeIv = iv_by_strike.get(c.strike)!;
+      } else {
+        const logMoneyness = Math.log(c.strike / S);
+        const beta = logMoneyness < 0 ? -2.5 : -7.0;
+        strikeIv = Math.max(sigma * (1 + beta * logMoneyness), 0.01);
+      }
+      delta = computeDelta(c, S, r, q, strikeIv);
     }
-    const delta = computeDelta(c, S, r, q, strikeIv);
     const absDelta = Math.abs(delta);
     const dist = Math.abs(absDelta - Math.abs(target_delta));
-    if (dist < bestDist) {
+    const dteDist = dteTarget != null ? Math.abs(c.dte - dteTarget) : 0;
+    if (
+      dteDist < bestDteDist
+      || (dteDist === bestDteDist && dist < bestDist)
+    ) {
+      bestDteDist = dteDist;
       bestDist = dist;
       bestContract = c;
     }
     if (absDelta <= Math.abs(target_delta)) {
-      if (bestBelowOrEqual == null || dist < bestBelowOrEqual.dist) {
-        bestBelowOrEqual = { contract: c, absDelta, dist };
+      if (
+        bestBelowOrEqual == null
+        || dteDist < bestBelowOrEqual.dteDist
+        || (dteDist === bestBelowOrEqual.dteDist && dist < bestBelowOrEqual.dist)
+      ) {
+        bestBelowOrEqual = { contract: c, absDelta, dist, dteDist };
       }
     }
   }

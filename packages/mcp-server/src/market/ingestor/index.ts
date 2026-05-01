@@ -1,4 +1,7 @@
-export { MarketIngestor, type MarketIngestorDeps } from "./market-ingestor.js";
+export {
+  MarketIngestor,
+  type MarketIngestorDeps,
+} from "./market-ingestor.js";
 export type {
   IngestStatus,
   IngestResult,

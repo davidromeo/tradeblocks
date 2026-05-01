@@ -2,7 +2,7 @@
  * Strategy Definition Zod Schemas
  *
  * Provides Zod-validated schema for the StrategyDefinition type used by the
- * backtesting engine (Phase 76). Supports 1-8 legs with 5 strike selection methods.
+ * strategy engine. Supports 1-8 legs with 5 strike selection methods.
  *
  * Strike Methods:
  *   delta         - Target a specific delta (e.g., 0.16 for 16-delta put)
@@ -11,24 +11,12 @@
  *   fixed_premium - Target a specific premium amount
  *   offset        - Offset in points from another leg (for spreads)
  *
- * New fields (D-13):
- *   exact      (offset only) - When true (default), skip the leg if no strike exists at
- *                              exactly the offset distance. When false, snap to the nearest
- *                              directional strike within the chain.
- *   max_width  (delta, otm_pct, fixed_premium, offset) - Maximum distance in points from
- *                              the parent leg's strike. Optional constraint; leg is skipped
- *                              when the selected strike would exceed this width.
+ * Commissions and slippage are modeled per-side (Option Omega convention):
+ * opening_commission + closing_commission are applied per contract × leg
+ * quantity, and slippage_entry / slippage_exit are applied at fill.
  *
- * Defaults applied on parse:
- *   LegDefinition.dte_tolerance = 2
- *   LegDefinition.multiplier    = 100
- *   EntryRules.entry_time       = "09:45"
- *   EntryRules.max_open_trades  = 1
- *   StrategyDefinition.slippage_entry         = 0.25
- *   StrategyDefinition.slippage_exit          = 0.25
- *   StrategyDefinition.slippage_stop_exit     = 0.50
- *   StrategyDefinition.commission_per_contract = 0.50
- *   StrategyDefinition.max_entry_spread_pct   = 0.20
+ * Blackout days use named shared lists referenced by slug (e.g.
+ * "shw-tuesdays") from {dataRoot}/blackouts/{ref}.json.
  */
 
 import { z } from "zod";
@@ -70,7 +58,19 @@ export const LegDefinitionSchema = z.object({
   contract_type: z.enum(["call", "put"]),
   direction: z.enum(["buy", "sell"]),
   dte_target: z.number().int().nonnegative(),
-  dte_tolerance: z.number().int().nonnegative().default(2),
+  /**
+   * DTE selection policy. Mirrors OO's "Use Exact DTE" toggle:
+   *   - omitted/undefined → "Use Exact DTE = OFF" (default): slide forward to
+   *     the next available expiry at or after `dte_target`. No upper cap —
+   *     OO docs: "If Exact DTE is toggled off, then the next available
+   *     expiration further out in time is used; there is no limit to how far
+   *     it will look".
+   *   - 0 → "Use Exact DTE = ON": only the exact `dte_target` expiry is
+   *     accepted; if not in the chain, skip the date.
+   *   - N > 0 → cap forward roll at `dte_target + N`. Less common; useful when
+   *     a strategy wants slide behavior but with a sanity cap.
+   */
+  dte_tolerance: z.number().int().nonnegative().optional(),
   quantity: z.number().positive(),
   strike_spec: StrikeSpecSchema,
   multiplier: z.number().positive().default(100),
@@ -82,7 +82,9 @@ export const LegDefinitionSchema = z.object({
 export const EntryFilterSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("blackout_dates"),
-    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1),
+    // Reference to a shared blackout list under {dataRoot}/blackouts/{ref}.json
+    // (or an array of such refs, combined via union).
+    ref: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
   }),
   z.object({
     type: z.literal("vix_range"),
@@ -118,12 +120,34 @@ export const EntryFilterSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("rsi"),
     field: z.string().default("RSI_14"),  // column name in market.enriched
+    timing: z.enum(["intraday_to_entry", "prior_close"]).default("intraday_to_entry"),
     min: z.number().optional(),
     max: z.number().optional(),
   }),
   z.object({
+    // Mirrors OO's "Below/Above N-Day SMA" entry condition.
+    // SMA computed from the last N daily closes prior to entry; spot from
+    // intraday at-or-before entry (default) or prior close.
+    type: z.literal("sma"),
+    field: z.string().default("SMA_9"),  // SMA_<N> determines the period
+    timing: z.enum(["intraday_to_entry", "prior_close"]).default("intraday_to_entry"),
+    direction: z.enum(["below", "above"]),
+  }),
+  z.object({
     type: z.literal("min_sl_ratio"),
     min: z.number().positive(),
+  }),
+  z.object({
+    // Mirrors OO's "Use Min/Max Entry Premium" with credit/debit polarity.
+    // Computed post-strike as the net entry mark (sells receive, buys pay) per
+    // contract — including the multiplier — so a 1-lot SPX DC priced at $1.50
+    // net debit yields entry_premium = -150. `direction: "debit"` flips the
+    // sign so positive thresholds map to debit values; `direction: "credit"`
+    // keeps the natural positive sign for credits.
+    type: z.literal("entry_premium"),
+    direction: z.enum(["credit", "debit"]),
+    min: z.number().optional(),
+    max: z.number().optional(),
   }),
 ]);
 
@@ -148,6 +172,8 @@ export const ExitTriggerSchema = z.discriminatedUnion("type", [
     type: z.literal("profitTarget"),
     threshold: z.number(),
     unit: ExitTriggerUnitSchema,
+    requiredHits: z.number().int().positive().optional(),
+    capProfits: z.boolean().optional(), // default false; clamps pnlAtFire to target after 09:32 when true
     entryCost: z.number().optional(), // runtime-injected
   }).passthrough(),
 
@@ -295,7 +321,7 @@ export const EntryRulesSchema = z.object({
 });
 
 /**
- * Complete strategy definition for the backtesting engine.
+ * Complete strategy definition for the strategy engine.
  * Supports 1–8 legs with configurable entry rules, position sizing, and cost parameters.
  */
 export const StrategyDefinitionSchema = z.object({
@@ -304,12 +330,11 @@ export const StrategyDefinitionSchema = z.object({
   legs: z.array(LegDefinitionSchema).min(1).max(8),
   entry_rules: EntryRulesSchema,
   position_sizing: PositionSizingSchema,
-  slippage_entry: z.number().min(0).default(0.25),
-  slippage_exit: z.number().min(0).default(0.25),
-  slippage_stop_exit: z.number().min(0).default(0.5),
-  commission_per_contract: z.number().min(0).default(0.50),
-  opening_commission: z.number().min(0).optional(),
-  closing_commission: z.number().min(0).optional(),
+  slippage_entry: z.number().min(0),
+  slippage_exit: z.number().min(0),
+  slippage_stop_exit: z.number().min(0),
+  opening_commission: z.number().min(0),
+  closing_commission: z.number().min(0),
   max_entry_spread_pct: z.number().min(0).max(1).default(0.20),
   entry_filters: z.array(EntryFilterSchema).optional(),
   exit_triggers: z.array(ExitTriggerSchema).optional(),

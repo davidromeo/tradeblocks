@@ -1,42 +1,26 @@
 /**
  * bar-cache.ts
  *
- * Cache-only minute-bar reader for the Market Data 3.0 transition.
+ * Cache-only minute-bar reader for the Market Data 3.0 surface.
  *
- * Phase 4 / D-05 / SEP-01: the API fallback that previously lived in
- * `fetchBarsWithCache` is GONE — reads NEVER trigger a provider fetch any
- * more. The function is now a thin wrapper over the cache-read path only;
- * cache misses return `[]` (the D-09 silent-empty contract). The provider-
- * side quote write helper (`enrichWithQuotes`) is also gone — that behavior
- * moves into `quote-backfill.ts` in plan 04-06 (Wave 6) where it lives next
- * to the rest of the pipeline-side backfill orchestration.
- *
- * Surviving public surface (Wave A — transitional):
- *   - `fetchBarsWithCache` — cache-read only; will be deleted in plan 04-02
- *     once `tools/replay.ts` is on the spot store.
- *   - `readCachedBars` — pure cache read; consumed by `market-data-loader.ts`
- *     until plan 04-02 migrates the underlying-bar load to `stores.spot`.
- *   - `fetchBarsForLegsBulk` / `fetchEntryBarsForCandidates` — bulk cache
- *     reads consumed by `backtest/orchestrator.ts`; deleted in plan 04-04.
- *   - `mergeQuoteBars` — pure helper; will move to a tiny utility module in
- *     plan 04-04 once the last callers are gone.
- *   - `getDataTier` — provider capability passthrough; unchanged.
- *
- * Surviving private surface (still required by `fetchBarsForLegsBulk`):
- *   - `intradayDateSource` / `optionQuoteMinuteSource` — partition-source
- *     helpers; duplicated in `market-data-loader.ts` (D-11) and deleted there
- *     by plan 04-02. Once both that copy and `fetchBarsForLegsBulk` migrate,
- *     this duplicate goes too (plan 04-04).
+ * Reads NEVER trigger a provider fetch. The function is a thin wrapper over
+ * the cache-read path only; cache misses return `[]`. Callers that need to
+ * trigger a hydration must invoke the data-pipeline tools explicitly so
+ * read/write separation is preserved.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { BarRow, AssetClass } from './market-provider.js';
 import { getDataRoot } from '../db/data-root.js';
-import { resolveCanonicalMarketPartitionFile } from '../db/market-datasets.js';
+import { resolveCanonicalMarketPartitionFile, resolveMarketDir } from '../db/market-datasets.js';
+import { extractRoot } from '../market/tickers/resolver.js';
+import type { TickerRegistry } from '../market/tickers/registry.js';
 import type { DuckDBConnection } from '@duckdb/node-api';
 import { getConnection } from '../db/connection.js';
 import { resolveMassiveDataTier, type MassiveDataTier } from './provider-capabilities.js';
+
+const OCC_TICKER_RE = /^[A-Z]+\d{6}[CP]\d{8}$/;
 
 /**
  * Massive.com acquisition tier. Default is "ohlc" when MASSIVE_DATA_TIER is unset.
@@ -238,22 +222,77 @@ export function mergeQuoteBars(
  * Returns a quotes map compatible with mergeQuoteBars(). Returns empty map
  * if the table doesn't exist or the query fails.
  */
+/**
+ * Enumerate Hive-partition date values under a partition-parent directory
+ * (e.g. `spot/ticker=SPX/` or `option_quote_minutes/underlying=SPX/`), clamped
+ * to [from, to]. Returns the existing `date=YYYY-MM-DD/data.parquet` paths.
+ */
+function listExistingDateParquets(parentDir: string, from: string, to: string): string[] {
+  if (!existsSync(parentDir)) return [];
+  const paths: string[] = [];
+  try {
+    for (const entry of readdirSync(parentDir)) {
+      if (!entry.startsWith('date=')) continue;
+      const date = entry.slice(5);
+      if (date < from || date > to) continue;
+      const p = resolve(parentDir, entry, 'data.parquet');
+      if (existsSync(p)) paths.push(p);
+    }
+  } catch { /* best-effort */ }
+  return paths;
+}
+
+function resolveQuoteUnderlying(
+  ticker: string,
+  tickers?: Pick<TickerRegistry, 'resolve'>,
+): string {
+  const root = extractRoot(ticker);
+  return tickers?.resolve(root) ?? root;
+}
+
 async function readCachedQuotes(
   conn: DuckDBConnection,
   ticker: string,
   from: string,
   to: string,
+  tickers?: Pick<TickerRegistry, 'resolve'>,
 ): Promise<Map<string, { bid: number; ask: number }>> {
   const quotes = new Map<string, { bid: number; ask: number }>();
   try {
     const escaped = ticker.replace(/'/g, "''");
-    const result = await conn.runAndReadAll(
-      `SELECT date, time, bid, ask
-       FROM market.option_quote_minutes
-       WHERE ticker = '${escaped}'
-         AND date >= '${from}'
-         AND date <= '${to}'`
-    );
+
+    // Direct-parquet fast path (v3.0 layout: option_quote_minutes/underlying=X/
+    // date=Y/data.parquet). Avoids the market.option_quote_minutes view glob
+    // walk. OCC tickers resolve to their underlying root for directory lookup.
+    let sql: string;
+    if (OCC_TICKER_RE.test(ticker)) {
+      const marketDir = resolveMarketDir('.');
+      const parent = resolve(
+        marketDir,
+        'option_quote_minutes',
+        `underlying=${resolveQuoteUnderlying(ticker, tickers)}`,
+      );
+      const paths = listExistingDateParquets(parent, from, to);
+      if (paths.length > 0) {
+        const fileList = paths.map(p => `'${escapeSqlLiteral(p)}'`).join(', ');
+        sql = `SELECT date, time, bid, ask
+               FROM read_parquet([${fileList}], hive_partitioning=true)
+               WHERE ticker = '${escaped}'`;
+      } else {
+        sql = `SELECT date, time, bid, ask
+               FROM market.option_quote_minutes
+               WHERE ticker = '${escaped}'
+                 AND date >= '${from}'
+                 AND date <= '${to}'`;
+      }
+    } else {
+      sql = `SELECT date, time, bid, ask
+             FROM market.option_quote_minutes
+             WHERE ticker = '${escaped}'
+               AND date >= '${from}'
+               AND date <= '${to}'`;
+    }
+    const result = await conn.runAndReadAll(sql);
     for (const row of result.getRows() as unknown[][]) {
       const date = String(row[0]);
       const time = String(row[1]);
@@ -286,6 +325,8 @@ export interface FetchBarsWithCacheOptions {
   /** Skip NBBO quote enrichment even when data tier supports it. Use for
    *  hot paths like strike selection where quotes add latency but no value. */
   skipQuotes?: boolean;
+  /** Optional ticker registry for OCC root -> underlying resolution. */
+  tickers?: Pick<TickerRegistry, 'resolve'>;
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +338,7 @@ export interface ReadCachedBarsOptions {
   from: string;
   to: string;
   conn: DuckDBConnection;
+  tickers?: Pick<TickerRegistry, 'resolve'>;
 }
 
 /**
@@ -306,19 +348,32 @@ export interface ReadCachedBarsOptions {
  * data is prepared in advance.
  */
 export async function readCachedBars(opts: ReadCachedBarsOptions): Promise<BarRow[]> {
-  const { ticker, from, to, conn } = opts;
+  const { ticker, from, to, conn, tickers } = opts;
   try {
     const escaped = ticker.replace(/'/g, "''");
-    // Phase 6 Wave D: legacy minute-bar view FROM clause rewritten to
-    // `FROM market.spot` (v3.0 ticker-first minute-bar view; schema unchanged).
-    const cached = await conn.runAndReadAll(
-      `SELECT open, high, low, close, bid, ask, time, date
-       FROM market.spot
-       WHERE ticker = '${escaped}'
-         AND date >= '${from}'
-         AND date <= '${to}'
-       ORDER BY date, time`
-    );
+    // Direct-parquet fast path (v3.0 layout: spot/ticker=X/date=Y/data.parquet).
+    // Avoids the market.spot view glob walk, which is ~430ms planning per call
+    // and dominates runtime for multi-year index reads (VIX/VIX9D/underlying).
+    const marketDir = resolveMarketDir('.');
+    const tickerDir = resolve(marketDir, 'spot', `ticker=${ticker}`);
+    const directPaths = listExistingDateParquets(tickerDir, from, to);
+    let sql: string;
+    if (directPaths.length > 0) {
+      const fileList = directPaths.map(p => `'${escapeSqlLiteral(p)}'`).join(', ');
+      sql = `SELECT open, high, low, close, bid, ask, time, date
+             FROM read_parquet([${fileList}], hive_partitioning=true)
+             ORDER BY date, time`;
+    } else {
+      // Phase 6 Wave D: legacy minute-bar view FROM clause rewritten to
+      // `FROM market.spot` (v3.0 ticker-first minute-bar view; schema unchanged).
+      sql = `SELECT open, high, low, close, bid, ask, time, date
+             FROM market.spot
+             WHERE ticker = '${escaped}'
+               AND date >= '${from}'
+               AND date <= '${to}'
+             ORDER BY date, time`;
+    }
+    const cached = await conn.runAndReadAll(sql);
     const rows = cached.getRows() as unknown[][];
     let bars: BarRow[] = rows.map((row) => ({
       open:   Number(row[0]),
@@ -335,7 +390,7 @@ export async function readCachedBars(opts: ReadCachedBarsOptions): Promise<BarRo
 
     // Enrich with backfilled quotes from option_quote_minutes (Parquet cache).
     // This fills gaps in sparse trade-bar data with dense NBBO minute bars.
-    const cachedQuotes = await readCachedQuotes(conn, ticker, from, to);
+    const cachedQuotes = await readCachedQuotes(conn, ticker, from, to, tickers);
     if (cachedQuotes.size > 0) {
       bars = mergeQuoteBars(bars, cachedQuotes, ticker);
     }
@@ -354,16 +409,13 @@ export async function readCachedBars(opts: ReadCachedBarsOptions): Promise<BarRo
  * Read minute bars for a ticker over a date range from `market.spot` +
  * `market.option_quote_minutes`.
  *
- * Phase 4 / D-05 / SEP-01: this function NEVER calls the provider any more.
- * Cache misses return `[]`. Callers that need to trigger a hydration must use
- * the data-pipeline tools (`prepare_backtest`, `import_flat_files`,
- * `enrich_quotes`) explicitly — strict read/write separation.
- *
- * Plan 04-02 deletes this function entirely once `tools/replay.ts` is on the
- * `stores.spot` read path.
+ * This function NEVER calls the provider. Cache misses return `[]`. Callers
+ * that need to trigger a hydration must use the data-pipeline tools
+ * (`fetch_bars`, `fetch_quotes`, `import_flat_file`) explicitly — strict
+ * read/write separation.
  */
 export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promise<BarRow[]> {
-  const { ticker, from, to, assetClass, baseDir } = opts;
+  const { ticker, from, to, assetClass, baseDir, tickers } = opts;
 
   try {
     const conn = opts.conn ?? await getConnection(baseDir ?? '.');
@@ -394,7 +446,7 @@ export async function fetchBarsWithCache(opts: FetchBarsWithCacheOptions): Promi
     }));
 
     if (assetClass === "option" || rows.length === 0) {
-      const cachedQuotes = await readCachedQuotes(conn, ticker, from, to);
+      const cachedQuotes = await readCachedQuotes(conn, ticker, from, to, tickers);
       if (cachedQuotes.size > 0) {
         return mergeQuoteBars(bars, cachedQuotes, ticker);
       }
@@ -486,7 +538,7 @@ export async function fetchBarsForLegsBulk(
   legs: Array<{ ticker: string; expiration: string; entryDate?: string; activeUntilDate?: string }>,
   fromDate: string,
   conn: DuckDBConnection,
-  opts?: { dataDir?: string },
+  opts?: { dataDir?: string; tickers?: Pick<TickerRegistry, 'resolve'> },
 ): Promise<Map<string, BarRow[]>> {
   const result = new Map<string, BarRow[]>();
   if (legs.length === 0) return result;
@@ -497,6 +549,120 @@ export async function fetchBarsForLegsBulk(
   const uniqueTickers = [...new Set(legs.map(leg => leg.ticker))];
 
   try {
+    // Direct-parquet path — bypass the market.spot / market.option_quote_minutes
+    // views, which re-expand `**/*.parquet` globs (~430ms planning per call)
+    // and dominate runtime when called per-chunk across a multi-year backtest.
+    // Enumerate the exact (underlying=X/date=Y/data.parquet) files needed for
+    // quotes, and separately the (ticker=X/date=Y/data.parquet) files for spot
+    // when any leg happens to be a non-OCC ticker. OCC option tickers never
+    // have spot minute bars so we skip them on the spot side entirely.
+    const marketDir = resolveMarketDir(opts?.dataDir ?? '.');
+
+    // --- Spot (only for non-OCC legs — underlyings, indices, etc.)
+    const spotTickersByDate = new Map<string, Set<string>>();
+    const spotPaths = new Set<string>();
+    for (const [date, tickers] of activeTickerDates) {
+      for (const t of tickers) {
+        if (OCC_TICKER_RE.test(t)) continue;
+        const p = resolve(marketDir, 'spot', `ticker=${t}`, `date=${date}`, 'data.parquet');
+        if (!existsSync(p)) continue;
+        spotPaths.add(p);
+        let set = spotTickersByDate.get(date);
+        if (!set) { set = new Set(); spotTickersByDate.set(date, set); }
+        set.add(t);
+      }
+    }
+    if (spotPaths.size > 0) {
+      const fileList = [...spotPaths].map(p => `'${escapeSqlLiteral(p)}'`).join(', ');
+      const tickerSet = new Set<string>();
+      for (const set of spotTickersByDate.values()) for (const t of set) tickerSet.add(t);
+      const tickerList = [...tickerSet].map(t => `'${escapeSqlLiteral(t)}'`).join(', ');
+      const sql = `SELECT ticker, open, high, low, close, bid, ask, time, date
+                   FROM read_parquet([${fileList}], hive_partitioning=true)
+                   WHERE ticker IN (${tickerList})
+                   ORDER BY ticker, date, time`;
+      const cached = await conn.runAndReadAll(sql);
+      const spotRows = cached.getRows() as unknown[][];
+      for (const row of spotRows) {
+        const ticker = String(row[0]);
+        const bar: BarRow = {
+          ticker,
+          open: Number(row[1]),
+          high: Number(row[2]),
+          low: Number(row[3]),
+          close: Number(row[4]),
+          bid: row[5] != null ? Number(row[5]) : undefined,
+          ask: row[6] != null ? Number(row[6]) : undefined,
+          time: String(row[7]),
+          date: String(row[8]),
+          volume: 0,
+        };
+        const existing = result.get(ticker);
+        if (existing) existing.push(bar);
+        else result.set(ticker, [bar]);
+      }
+    }
+
+    // --- Option quotes (v3.0 layout: option_quote_minutes/underlying=X/date=Y/…)
+    const quotePaths = new Set<string>();
+    const quoteTickerUnion = new Set<string>();
+    for (const [date, tickers] of activeTickerDates) {
+      const underlyings = new Set<string>();
+      for (const t of tickers) {
+        if (!OCC_TICKER_RE.test(t)) continue;
+        underlyings.add(resolveQuoteUnderlying(t, opts?.tickers));
+        quoteTickerUnion.add(t);
+      }
+      for (const u of underlyings) {
+        const p = resolve(marketDir, 'option_quote_minutes', `underlying=${u}`, `date=${date}`, 'data.parquet');
+        if (existsSync(p)) quotePaths.add(p);
+      }
+    }
+    if (quotePaths.size > 0 && quoteTickerUnion.size > 0) {
+      const fileList = [...quotePaths].map(p => `'${escapeSqlLiteral(p)}'`).join(', ');
+      const tickerList = [...quoteTickerUnion].map(t => `'${escapeSqlLiteral(t)}'`).join(', ');
+      const sql = `SELECT ticker, date, time, bid, ask
+                   FROM read_parquet([${fileList}], hive_partitioning=true)
+                   WHERE ticker IN (${tickerList})
+                   ORDER BY ticker, date, time`;
+      const quotesByTicker = new Map<string, Map<string, { bid: number; ask: number }>>();
+      const quoteRows = await conn.runAndReadAll(sql);
+      const quoteData = quoteRows.getRows() as unknown[][];
+      for (const row of quoteData) {
+        const ticker = String(row[0]);
+        const date = String(row[1]);
+        const time = String(row[2]);
+        const bid = Number(row[3]);
+        const ask = Number(row[4]);
+        if (!time || (!Number.isFinite(bid) && !Number.isFinite(ask))) continue;
+
+        let quotes = quotesByTicker.get(ticker);
+        if (!quotes) {
+          quotes = new Map<string, { bid: number; ask: number }>();
+          quotesByTicker.set(ticker, quotes);
+        }
+        quotes.set(`${date} ${time}`, {
+          bid: Number.isFinite(bid) ? bid : 0,
+          ask: Number.isFinite(ask) ? ask : 0,
+        });
+      }
+
+      for (const ticker of uniqueTickers) {
+        const quotes = quotesByTicker.get(ticker);
+        if (!quotes || quotes.size === 0) continue;
+        const merged = mergeQuoteBars(result.get(ticker) ?? [], quotes, ticker);
+        if (merged.length > 0) result.set(ticker, merged);
+      }
+    }
+
+    // Direct-parquet path matched real data for this run — return.
+    if (spotPaths.size > 0 || quotePaths.size > 0) {
+      return result;
+    }
+
+    // Otherwise fall through to the legacy view-based UNION ALL query. This
+    // keeps fixtures that never lay down v3.0 parquet files on disk (unit
+    // tests, bare public-repo environments) on the existing code path.
     const tradeQuery = buildDateScopedTickerQuery({
       columns: 'ticker, open, high, low, close, bid, ask, time, date',
       source: (date) => intradayDateSourceLocal(date, opts?.dataDir),
@@ -582,7 +748,13 @@ export async function fetchBarsForLegsBulk(
   }
 
   await Promise.all([...fallbackRanges.entries()].map(async ([ticker, range]) => {
-    const bars = await readCachedBars({ ticker, from: range.from, to: range.to, conn });
+    const bars = await readCachedBars({
+      ticker,
+      from: range.from,
+      to: range.to,
+      conn,
+      tickers: opts?.tickers,
+    });
     if (bars.length > 0) result.set(ticker, bars);
   }));
 

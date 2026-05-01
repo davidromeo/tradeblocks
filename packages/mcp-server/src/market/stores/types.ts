@@ -42,6 +42,13 @@ export interface QuoteRow {
   ask: number;
   bid_size?: number;
   ask_size?: number;
+  delta?: number | null;
+  gamma?: number | null;
+  theta?: number | null;
+  vega?: number | null;
+  iv?: number | null;
+  greeks_source?: "massive" | "thetadata" | "computed" | null;
+  greeks_revision?: number | null;
 }
 
 /**
@@ -63,3 +70,49 @@ export interface CoverageReport {
 // stores) have a single import path: `./types.js`.
 export type { BarRow } from "../../utils/market-provider.js";
 export type { ContractRow } from "../../utils/chain-loader.js";
+
+/**
+ * Per-leg envelope for QuoteStore.readWindow. Compiled from the strategy's
+ * legs and the entry-window [minSpot, maxSpot] (P2). Strike bands are optional
+ * for legs whose method doesn't constrain strike (e.g. unknown-spot fallback).
+ */
+export interface LegEnvelope {
+  contractType: "call" | "put";
+  dteMin: number;
+  dteMax: number;
+  strikeMin?: number;
+  strikeMax?: number;
+}
+
+export interface ReadWindowParams {
+  underlying: string;
+  date: string;
+  timeStart: string;
+  timeEnd: string;
+  legEnvelopes: LegEnvelope[];
+}
+
+/**
+ * Output row of `QuoteStore.readWindow`. Phase-2 perf: `underlying`, `date`,
+ * and `mid` were removed from the SELECT projection — `underlying` and `date`
+ * are pinned by the call's `ReadWindowParams`, and `mid` is computed downstream
+ * as `(bid + ask) / 2` in `toMinuteQuoteRow`. Skipping these three columns
+ * cuts decode work for the 100K-row hot path on wide-envelope strategies.
+ */
+export interface WindowQuoteRow {
+  ticker: string;
+  time: string;
+  // Chain-derived (joined by the SQL):
+  contract_type: "call" | "put";
+  strike: number;
+  expiration: string;
+  dte: number;
+  // Quote-derived:
+  bid: number;
+  ask: number;
+  delta: number | null;
+  gamma: number | null;
+  theta: number | null;
+  vega: number | null;
+  iv: number | null;
+}

@@ -38,7 +38,7 @@ export class ParquetEnrichedStore extends EnrichedStore {
     await runEnrichment(
       this.ctx.conn,
       ticker,
-      { dataDir: this.ctx.dataDir },
+      { dataDir: this.ctx.dataDir, parquetMode: true },
       {
         spotStore: this.spotStore,
         watermarkStore: {
@@ -59,7 +59,7 @@ export class ParquetEnrichedStore extends EnrichedStore {
       await runEnrichment(
         this.ctx.conn,
         ticker,
-        { dataDir: this.ctx.dataDir },
+        { dataDir: this.ctx.dataDir, parquetMode: true },
         {
           spotStore: this.spotStore,
           watermarkStore: {
@@ -72,6 +72,34 @@ export class ParquetEnrichedStore extends EnrichedStore {
   }
 
   async read(opts: EnrichedReadOpts): Promise<Record<string, unknown>[]> {
+    // Fast path: when the caller doesn't need cross-ticker context or RTH
+    // OHLCV joins, read directly from the ticker's parquet file. Avoids
+    // the `market.enriched` view glob (~430ms) AND the extract_statements
+    // GC handle leak (see feedback_duckdb_extract_statements_leak memory
+    // and parquet-quote-store.ts:327). Hit on every entry-pipeline date
+    // when an RSI / vol-regime filter is configured.
+    const wantsJoins = !!opts.includeContext || !!opts.includeOhlcv;
+    if (!wantsJoins) {
+      const filePath = path.join(
+        resolveMarketDir(this.ctx.dataDir),
+        "enriched",
+        `ticker=${opts.ticker}`,
+        "data.parquet",
+      );
+      if (existsSync(filePath)) {
+        const escaped = filePath.replace(/'/g, "''");
+        const fromLit = opts.from.replace(/'/g, "''");
+        const toLit = opts.to.replace(/'/g, "''");
+        const sql = `SELECT * FROM read_parquet('${escaped}', hive_partitioning=true)
+                     WHERE date >= '${fromLit}' AND date <= '${toLit}'
+                     ORDER BY date`;
+        const reader = await this.ctx.conn.runAndReadAll(sql);
+        const names = reader.columnNames();
+        return reader
+          .getRows()
+          .map((row) => Object.fromEntries(names.map((n, i) => [n, row[i]])));
+      }
+    }
     const { sql, params } = buildReadEnrichedSQL({
       ticker: opts.ticker,
       from: opts.from,

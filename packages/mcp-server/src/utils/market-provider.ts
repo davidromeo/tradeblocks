@@ -198,6 +198,23 @@ export interface BulkQuoteRow {
   timestamp: string;
   bid: number;
   ask: number;
+  delta?: number | null;
+  gamma?: number | null;
+  theta?: number | null;
+  vega?: number | null;
+  iv?: number | null;
+  greeks_source?: "massive" | "thetadata" | "computed" | null;
+}
+
+export interface MinuteQuote {
+  bid: number;
+  ask: number;
+  delta?: number | null;
+  gamma?: number | null;
+  theta?: number | null;
+  vega?: number | null;
+  iv?: number | null;
+  greeks_source?: "massive" | "thetadata" | "computed" | null;
 }
 
 /** The contract every market data provider must implement. */
@@ -208,7 +225,7 @@ export interface MarketDataProvider {
   fetchBars(options: FetchBarsOptions): Promise<BarRow[]>;
   fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult>;
   /** Best-effort bid/ask quotes keyed by "YYYY-MM-DD HH:MM" ET. Optional — not all providers support this. */
-  fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>>;
+  fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, MinuteQuote>>;
   /**
    * Stream every contract's minute quotes for one underlying on one date via
    * the provider's wildcard/bulk endpoint. Yields one `BulkQuoteRow` per

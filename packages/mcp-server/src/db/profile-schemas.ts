@@ -59,15 +59,14 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
   await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS close_on_completion BOOLEAN`);
   await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS ignore_margin_req BOOLEAN`);
 
-  // Migration: add backtest-specific param columns (Phase 76)
-  // Per D-01: block_id stays NOT NULL in the PRIMARY KEY. Template profiles (backtest
-  // definitions without a live block) use block_id = '_template' sentinel value.
-  // DuckDB does not support ALTER COLUMN ... DROP NOT NULL (see RESEARCH.md Pitfall 1).
-  const backtestCols: Array<{ name: string; type: string }> = [
+  // Migration: add strategy execution param columns.
+  // block_id stays NOT NULL in the PRIMARY KEY. Template profiles
+  // (definitions without a live block) use block_id = '_template' sentinel value.
+  // DuckDB does not support ALTER COLUMN ... DROP NOT NULL.
+  const strategyCols: Array<{ name: string; type: string }> = [
     { name: "slippage_entry", type: "DOUBLE" },
     { name: "slippage_exit", type: "DOUBLE" },
     { name: "slippage_stop_exit", type: "DOUBLE" },
-    { name: "commission_per_contract", type: "DOUBLE" },
     { name: "opening_commission", type: "DOUBLE" },
     { name: "closing_commission", type: "DOUBLE" },
     { name: "starting_capital", type: "DOUBLE" },
@@ -76,7 +75,7 @@ export async function ensureProfilesSchema(conn: DuckDBConnection): Promise<void
     { name: "default_from_date", type: "VARCHAR" },
     { name: "default_to_date", type: "VARCHAR" },
   ];
-  for (const col of backtestCols) {
+  for (const col of strategyCols) {
     await conn.run(`ALTER TABLE profiles.strategy_profiles ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`);
   }
 

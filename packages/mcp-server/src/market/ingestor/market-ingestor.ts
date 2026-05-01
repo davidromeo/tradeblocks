@@ -16,11 +16,58 @@ import type {
   RefreshResult,
   BulkProgressReporter,
 } from "./types.js";
+import type { QuoteRow } from "../stores/types.js";
+import { applyQuoteGreeks } from "../../utils/option-quote-greeks.js";
 
 export interface MarketIngestorDeps {
   stores: MarketStores;
   dataRoot: string;
   providerFactory?: () => MarketDataProvider;
+}
+
+function providerErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Identify dates the US options market is closed. Currently weekends only —
+ * holiday list is intentional TODO. ThetaData (and likely other providers)
+ * return junk data on weekends (zero-priced "quotes" for every contract on
+ * Sundays in particular), so refresh() short-circuits these dates.
+ *
+ * Lower-level methods (ingestBars/ingestChain/ingestQuotes) are unchanged —
+ * callers needing forensic per-weekend fetches can call them directly.
+ */
+function isNonTradingDay(asOf: string): boolean {
+  // asOf is YYYY-MM-DD. Use UTC noon to avoid TZ drift across the date
+  // boundary on hosts in negative-offset timezones.
+  const d = new Date(`${asOf}T12:00:00Z`);
+  const dow = d.getUTCDay();
+  if (dow === 0 || dow === 6) return true;
+  // TODO: NYSE holiday calendar (MLK, Presidents, Good Friday, Memorial,
+  // Juneteenth, Independence, Labor, Thanksgiving, Christmas, New Year).
+  return false;
+}
+
+function unsupportedProviderResult(
+  provider: MarketDataProvider,
+  operation: "bars" | "quotes" | "chain",
+  target: string,
+  reason: string,
+  originalError: string,
+): IngestResult {
+  return {
+    status: "unsupported",
+    rowsWritten: 0,
+    error: `Provider ${provider.name} does not support ${operation} for ${target}: ${reason}`,
+    details: {
+      provider: provider.name,
+      operation,
+      target,
+      reason,
+      originalError,
+    },
+  };
 }
 
 export class MarketIngestor {
@@ -40,13 +87,23 @@ export class MarketIngestor {
 
     for (const ticker of opts.tickers) {
       const normalizedTicker = ticker.toUpperCase();
-      const bars = await provider.fetchBars({
-        ticker: normalizedTicker,
-        from: opts.from,
-        to: opts.to,
-        ...this.timespanToProviderArgs(timespan),
-        assetClass: this.detectAssetClass(normalizedTicker),
-      });
+      const assetClass = this.detectAssetClass(normalizedTicker);
+      const unsupported = this.preflightProviderSupport(provider, "bars", normalizedTicker, assetClass);
+      if (unsupported) return unsupported;
+      let bars: BarRow[];
+      try {
+        bars = await provider.fetchBars({
+          ticker: normalizedTicker,
+          from: opts.from,
+          to: opts.to,
+          ...this.timespanToProviderArgs(timespan),
+          assetClass,
+        });
+      } catch (error) {
+        const mapped = this.mapProviderFailure(provider, "bars", normalizedTicker, error, assetClass);
+        if (mapped) return mapped;
+        throw error;
+      }
 
       if (bars.length === 0) continue;
 
@@ -119,6 +176,156 @@ export class MarketIngestor {
     return { from, to };
   }
 
+  private mapProviderFailure(
+    provider: MarketDataProvider,
+    operation: "bars" | "quotes" | "chain",
+    target: string,
+    error: unknown,
+    assetClass?: "stock" | "index" | "option",
+  ): IngestResult | null {
+    const message = providerErrorMessage(error);
+    if (
+      provider.name === "massive" &&
+      assetClass === "index" &&
+      /(TimeoutError|aborted due to timeout|timed out)/i.test(message)
+    ) {
+      const reason = operation === "chain"
+        ? "current Massive provider path does not reliably support index option-chain refreshes"
+        : "current Massive provider path does not reliably support index data for this request";
+      return unsupportedProviderResult(provider, operation, target, reason, message);
+    }
+    if (provider.name === "massive" && /HTTP 403 Forbidden/.test(message)) {
+      const reason = assetClass === "index"
+        ? "current Massive account/tier does not permit index data for this request"
+        : "current Massive account/tier does not permit this request";
+      return unsupportedProviderResult(provider, operation, target, reason, message);
+    }
+    return null;
+  }
+
+  private preflightProviderSupport(
+    provider: MarketDataProvider,
+    operation: "bars" | "quotes" | "chain",
+    target: string,
+    assetClass?: "stock" | "index" | "option",
+  ): IngestResult | null {
+    if (provider.name === "massive" && assetClass === "index") {
+      if (operation === "bars") {
+        return unsupportedProviderResult(
+          provider,
+          operation,
+          target,
+          "current Massive provider path does not support index bar refreshes for this underlying",
+          "preflight: index bar refreshes are disabled for Massive",
+        );
+      }
+      if (operation === "chain") {
+        return unsupportedProviderResult(
+          provider,
+          operation,
+          target,
+          "current Massive provider path does not support index option-chain refreshes for this underlying",
+          "preflight: index option-chain refreshes are disabled for Massive",
+        );
+      }
+    }
+    return null;
+  }
+
+  private async applyCoverageFallback(
+    dataset: "spot" | "chain",
+    symbol: string,
+    asOf: string,
+    result: IngestResult,
+  ): Promise<IngestResult> {
+    if (result.status !== "unsupported" && result.status !== "error") {
+      return result;
+    }
+
+    try {
+      const coverage = dataset === "spot"
+        ? await this.deps.stores.spot.getCoverage(symbol.toUpperCase(), asOf, asOf)
+        : await this.deps.stores.chain.getCoverage(symbol.toUpperCase(), asOf, asOf);
+      if (coverage.totalDates <= 0) return result;
+
+      return {
+        status: "skipped",
+        rowsWritten: 0,
+        dateRange: { from: asOf, to: asOf },
+        details: {
+          ...(result.details ?? {}),
+          reason: "using_cached_coverage",
+          dataset,
+          symbol: symbol.toUpperCase(),
+          originalStatus: result.status,
+          cachedCoverage: {
+            totalDates: coverage.totalDates,
+            earliest: coverage.earliest,
+            latest: coverage.latest,
+          },
+        },
+      };
+    } catch {
+      return result;
+    }
+  }
+
+  private quoteGreeksSourceForProvider(
+    provider: MarketDataProvider,
+  ): "massive" | "thetadata" | undefined {
+    if (provider.name === "massive" || provider.name === "thetadata") {
+      return provider.name;
+    }
+    return undefined;
+  }
+
+  private async enrichQuoteRows(
+    underlying: string,
+    date: string,
+    rows: QuoteRow[],
+    defaultProviderSource?: "massive" | "thetadata",
+  ): Promise<QuoteRow[]> {
+    if (rows.length === 0) return rows;
+
+    const [contracts, underlyingBars] = await Promise.all([
+      this.deps.stores.chain.readChain(underlying, date).catch(() => []),
+      this.deps.stores.spot.readBars(underlying, date, date).catch(() => []),
+    ]);
+
+    const contractByTicker = new Map(
+      contracts.map((contract) => [contract.ticker, contract] as const),
+    );
+    const underlyingPriceByTime = new Map<string, number>();
+    for (const bar of underlyingBars) {
+      if (bar.date !== date || !bar.time || !(bar.open > 0)) continue;
+      const time = bar.time.slice(0, 5);
+      if (!underlyingPriceByTime.has(time)) {
+        underlyingPriceByTime.set(time, bar.open);
+      }
+    }
+
+    applyQuoteGreeks({
+      rows,
+      getDate: (row) => row.timestamp.slice(0, 10),
+      getTime: (row) => row.timestamp.slice(11, 16),
+      getMid: (row) => (row.bid + row.ask) / 2,
+      getContractMeta: (row) => {
+        const contract = contractByTicker.get(row.occ_ticker);
+        if (!contract) return undefined;
+        return {
+          contract_type: contract.contract_type,
+          strike: contract.strike,
+          expiration: contract.expiration,
+        };
+      },
+      getUnderlyingPrice: (_rowDate, time) => underlyingPriceByTime.get(time),
+      mode: "auto",
+      defaultProviderSource,
+    });
+
+    return rows;
+  }
+
   async ingestQuotes(opts: IngestQuotesOptions): Promise<IngestResult> {
     const hasTickers = opts.tickers && opts.tickers.length > 0;
     const hasUnderlyings = opts.underlyings && opts.underlyings.length > 0;
@@ -180,8 +387,19 @@ export class MarketIngestor {
     let maxDate: string | undefined;
 
     for (const ticker of tickers) {
-      const quotes = await provider.fetchQuotes(ticker, from, to);
-      const written = await this.writeQuotesForTicker(ticker, quotes);
+      let quotes: Awaited<ReturnType<NonNullable<MarketDataProvider["fetchQuotes"]>>>;
+      try {
+        quotes = await provider.fetchQuotes(ticker, from, to);
+      } catch (error) {
+        const mapped = this.mapProviderFailure(provider, "quotes", ticker, error, "option");
+        if (mapped) return mapped;
+        throw error;
+      }
+      const written = await this.writeQuotesForTicker(
+        provider,
+        ticker,
+        quotes,
+      );
       totalRows += written.rowsWritten;
       if (written.minDate && (!minDate || written.minDate < minDate)) minDate = written.minDate;
       if (written.maxDate && (!maxDate || written.maxDate > maxDate)) maxDate = written.maxDate;
@@ -288,8 +506,12 @@ export class MarketIngestor {
     // case is all contracts mapping to the same underlying (e.g. SPX + SPXW
     // → "SPX"), so the per-underlying bucket is almost always a single key.
     const tickerRegistry = this.deps.stores.quote.tickers;
+    // Resolve the request underlying through the same registry so rows are
+    // compared against the canonical target — lets callers pass a root like
+    // "SPXW" and still have rows resolving to "SPX" match correctly.
+    const expectedUnderlying = tickerRegistry.resolve(upperUnderlying);
     const resolvedCache = new Map<string, string>();
-    const bucket = new Map<string, Array<{ occ_ticker: string; timestamp: string; bid: number; ask: number }>>();
+    const bucket = new Map<string, QuoteRow[]>();
 
     // Build the per-(root,right) completion hook that fans provider-side
     // group completions out to the transport-aware reporter. The provider
@@ -321,38 +543,91 @@ export class MarketIngestor {
           resolvedUnderlying = tickerRegistry.resolve(root);
           resolvedCache.set(root, resolvedUnderlying);
         }
+        // Defense-in-depth: a row cannot silently land in a different underlying
+        // than the one we requested. This trips when extractRoot fails to parse
+        // a non-standard ticker format and the identity-fallback returns the raw
+        // ticker as a "root" that then identity-resolves to itself. Without this
+        // guard, 68 partitions on 2024-07-09 leaked into underlying=SPX<OCC>/
+        // folders (see resolver.ts OCC_RE for the regex that must stay in sync).
+        if (resolvedUnderlying !== expectedUnderlying) {
+          throw new Error(
+            `[drainBulkQuotes] root resolution mismatch: row.ticker="${row.ticker}" ` +
+              `extractedRoot="${root}" resolvedUnderlying="${resolvedUnderlying}" ` +
+              `expectedUnderlying="${expectedUnderlying}" (request underlying="${upperUnderlying}", date="${date}"). ` +
+              `A row must resolve to the same underlying as the ingest request. ` +
+              `If this ticker format is legitimate, extend OCC_RE in resolver.ts to parse it.`,
+          );
+        }
         let list = bucket.get(resolvedUnderlying);
         if (!list) {
           list = [];
           bucket.set(resolvedUnderlying, list);
         }
-        list.push({ occ_ticker: row.ticker, timestamp: row.timestamp, bid: row.bid, ask: row.ask });
+        list.push({
+          occ_ticker: row.ticker,
+          timestamp: row.timestamp,
+          bid: row.bid,
+          ask: row.ask,
+          delta: row.delta ?? null,
+          gamma: row.gamma ?? null,
+          theta: row.theta ?? null,
+          vega: row.vega ?? null,
+          iv: row.iv ?? null,
+          greeks_source: row.greeks_source ?? null,
+        });
       }
     }
 
     let totalRows = 0;
     for (const [resolvedUnderlying, rows] of bucket) {
       if (rows.length === 0) continue;
-      await this.deps.stores.quote.writeQuotes(resolvedUnderlying, date, rows);
+      const enriched = await this.enrichQuoteRows(
+        resolvedUnderlying,
+        date,
+        rows,
+        this.quoteGreeksSourceForProvider(provider),
+      );
+      await this.deps.stores.quote.writeQuotes(resolvedUnderlying, date, enriched);
       totalRows += rows.length;
     }
     return totalRows;
   }
 
   private async writeQuotesForTicker(
+    provider: MarketDataProvider,
     ticker: string,
-    quotes: Map<string, { bid: number; ask: number }>,
+    quotes: Map<string, {
+      bid: number;
+      ask: number;
+      delta?: number | null;
+      gamma?: number | null;
+      theta?: number | null;
+      vega?: number | null;
+      iv?: number | null;
+      greeks_source?: "massive" | "thetadata" | "computed" | null;
+    }>,
   ): Promise<{ rowsWritten: number; minDate?: string; maxDate?: string }> {
     const root = extractRoot(ticker);
     const underlying = this.deps.stores.quote.tickers.resolve(root);
 
-    const byDate = new Map<string, Array<{ occ_ticker: string; timestamp: string; bid: number; ask: number }>>();
-    for (const [key, { bid, ask }] of quotes) {
+    const byDate = new Map<string, QuoteRow[]>();
+    for (const [key, quote] of quotes) {
       const spaceIdx = key.indexOf(" ");
       if (spaceIdx === -1) continue;
       const date = key.slice(0, spaceIdx);
       const list = byDate.get(date) ?? [];
-      list.push({ occ_ticker: ticker, timestamp: key, bid, ask });
+      list.push({
+        occ_ticker: ticker,
+        timestamp: key,
+        bid: quote.bid,
+        ask: quote.ask,
+        delta: quote.delta ?? null,
+        gamma: quote.gamma ?? null,
+        theta: quote.theta ?? null,
+        vega: quote.vega ?? null,
+        iv: quote.iv ?? null,
+        greeks_source: quote.greeks_source ?? null,
+      });
       byDate.set(date, list);
     }
 
@@ -360,7 +635,13 @@ export class MarketIngestor {
     let minDate: string | undefined;
     let maxDate: string | undefined;
     for (const [date, rows] of byDate) {
-      await this.deps.stores.quote.writeQuotes(underlying, date, rows);
+      const enriched = await this.enrichQuoteRows(
+        underlying,
+        date,
+        rows,
+        this.quoteGreeksSourceForProvider(provider),
+      );
+      await this.deps.stores.quote.writeQuotes(underlying, date, enriched);
       rowsWritten += rows.length;
       if (!minDate || date < minDate) minDate = date;
       if (!maxDate || date > maxDate) maxDate = date;
@@ -387,14 +668,24 @@ export class MarketIngestor {
 
     for (const underlying of opts.underlyings) {
       const upperUnderlying = underlying.toUpperCase();
+      const assetClass = this.detectAssetClass(upperUnderlying);
+      const unsupported = this.preflightProviderSupport(provider, "chain", upperUnderlying, assetClass);
+      if (unsupported) return unsupported;
       // Enumerate trading dates in [from, to] and fetch the chain as-of each date.
       const dates = this.enumerateDates(opts.from, opts.to);
       for (const date of dates) {
-        const result = await provider.fetchContractList!({
-          underlying: upperUnderlying,
-          as_of: date,
-          expired: true,
-        });
+        let result: Awaited<ReturnType<NonNullable<MarketDataProvider["fetchContractList"]>>>;
+        try {
+          result = await provider.fetchContractList!({
+            underlying: upperUnderlying,
+            as_of: date,
+            expired: true,
+          });
+        } catch (error) {
+          const mapped = this.mapProviderFailure(provider, "chain", upperUnderlying, error, assetClass);
+          if (mapped) return mapped;
+          throw error;
+        }
 
         if (result.contracts.length === 0) continue;
 
@@ -529,6 +820,20 @@ export class MarketIngestor {
   }
 
   async refresh(opts: RefreshOptions): Promise<RefreshResult> {
+    // Short-circuit non-trading days. Provider behavior on weekends is
+    // inconsistent — Saturday returns nothing (good), Sunday returns the
+    // prior trading day's chain plus zero-priced quote rows (junk that
+    // pollutes the parquet store). Refuse to write anything when the date
+    // isn't a US trading day. See isNonTradingDay() above for scope.
+    if (isNonTradingDay(opts.asOf)) {
+      return {
+        status: "skipped",
+        perOperation: { spot: [], chain: [], quotes: [], vixContext: null },
+        coverage: {},
+        errors: [],
+      };
+    }
+
     const VIX_FAMILY = new Set(["VIX", "VIX9D", "VIX3M", "VXN"]);
     const computeCtxFlag = opts.computeVixContext ?? true;
     const errors: string[] = [];
@@ -536,13 +841,14 @@ export class MarketIngestor {
     // Step 1 — spot ingest per ticker (asOf = from = to).
     const spotResults: IngestResult[] = [];
     for (const ticker of opts.spotTickers) {
-      const result = await this.ingestBars({
+      const rawResult = await this.ingestBars({
         tickers: [ticker],
         from: opts.asOf,
         to: opts.asOf,
         timespan: "1d",
         provider: opts.provider,
       });
+      const result = await this.applyCoverageFallback("spot", ticker, opts.asOf, rawResult);
       spotResults.push(result);
       if (result.status === "error") errors.push(`spot ${ticker}: ${result.error}`);
     }
@@ -550,12 +856,13 @@ export class MarketIngestor {
     // Step 2 — chain ingest per underlying
     const chainResults: IngestResult[] = [];
     for (const underlying of opts.chainUnderlyings ?? []) {
-      const result = await this.ingestChain({
+      const rawResult = await this.ingestChain({
         underlyings: [underlying],
         from: opts.asOf,
         to: opts.asOf,
         provider: opts.provider,
       });
+      const result = await this.applyCoverageFallback("chain", underlying, opts.asOf, rawResult);
       chainResults.push(result);
       if (result.status === "error") errors.push(`chain ${underlying}: ${result.error}`);
     }
@@ -571,6 +878,17 @@ export class MarketIngestor {
       });
       quoteResults.push(result);
       if (result.status === "error") errors.push(`quotes: ${result.error}`);
+    }
+    if (opts.quoteUnderlyings && opts.quoteUnderlyings.length > 0) {
+      const result = await this.ingestQuotes({
+        underlyings: opts.quoteUnderlyings,
+        from: opts.asOf,
+        to: opts.asOf,
+        provider: opts.provider,
+        onProgress: opts.onProgress,
+      });
+      quoteResults.push(result);
+      if (result.status === "error") errors.push(`quotes (underlyings): ${result.error}`);
     }
 
     // Step 4 — VIX context (only if flag AND any VIX-family ticker in spot list)

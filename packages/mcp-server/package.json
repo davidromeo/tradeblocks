@@ -1,6 +1,6 @@
 {
   "name": "tradeblocks-mcp",
-  "version": "3.0.0-beta.2",
+  "version": "3.0.0-beta.3",
   "description": "MCP server for options trade analysis",
   "author": "David Romeo <davidmromeo@gmail.com>",
   "type": "module",
@@ -21,8 +21,9 @@
   "dependencies": {
     "@duckdb/node-api": "^1.4.4-r.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "csv-parse": "^6.2.1",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.3.2",
+    "express-rate-limit": "^8.4.1",
     "jose": "^6.2.2",
     "zod": "^4.3.6"
   },

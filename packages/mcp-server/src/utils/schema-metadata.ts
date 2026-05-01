@@ -209,7 +209,7 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
   },
   market: {
     description:
-      "Canonical market data for hypothesis testing (v3.0 layout). Normalized into six datasets: spot (raw minute bars, ticker-first), spot_daily (view-backed RTH-aggregated daily OHLCV derived from market.spot), enriched (per-ticker computed Tier 1 indicators + ivr/ivp for VIX-family tickers; NO OHLCV), enriched_context (cross-ticker derived fields like Vol_Regime), option_chain (contract universe by date), and option_quote_minutes (dense option quote cache by minute). OHLCV-using queries must LEFT JOIN market.spot_daily on ticker+date because market.enriched does not carry open/high/low/close. Source: market/ Parquet files and provider imports.",
+      "Canonical market data for hypothesis testing (v3.0 layout). Normalized into six datasets: spot (raw minute bars, ticker-first), spot_daily (view-backed RTH-aggregated daily OHLCV derived from market.spot), enriched (per-ticker computed Tier 1 indicators + ivr/ivp for VIX-family tickers; NO OHLCV), enriched_context (cross-ticker derived fields like Vol_Regime), option_chain (contract universe by date), and option_quote_minutes (dense option quote cache by minute, including persisted minute greeks when provider or computed fallback data is available). OHLCV-using queries must LEFT JOIN market.spot_daily on ticker+date because market.enriched does not carry open/high/low/close. Source: market/ Parquet files and provider imports.",
     tables: {
       enriched: {
         description:
@@ -584,6 +584,34 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
           },
           source: {
             description: "Quote source label used for debugging and provenance.",
+            hypothesis: false,
+          },
+          delta: {
+            description: "Option delta for the minute when available from provider data or computed fallback.",
+            hypothesis: true,
+          },
+          gamma: {
+            description: "Option gamma for the minute when available from provider data or computed fallback.",
+            hypothesis: false,
+          },
+          theta: {
+            description: "Option theta for the minute when available from provider data or computed fallback.",
+            hypothesis: false,
+          },
+          vega: {
+            description: "Option vega for the minute when available from provider data or computed fallback.",
+            hypothesis: false,
+          },
+          iv: {
+            description: "Implied volatility used for the stored minute greeks when available.",
+            hypothesis: true,
+          },
+          greeks_source: {
+            description: "Origin of the stored minute greeks: provider-native or computed fallback.",
+            hypothesis: false,
+          },
+          greeks_revision: {
+            description: "Computation revision for stored computed greeks; null for provider-native values.",
             hypothesis: false,
           },
         },

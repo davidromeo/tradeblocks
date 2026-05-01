@@ -44,6 +44,10 @@ export interface SyncResult {
   blocksDeleted: number;
   errors: Array<{ blockId: string; error: string }>;
   results: BlockSyncResult[];
+  /** True when the middleware could not acquire the RW lock and fell back to RO without running sync. */
+  syncSkipped?: boolean;
+  /** Machine-readable reason for skipping sync. Only populated when syncSkipped === true. */
+  skipReason?: "could_not_acquire_write_lock";
 }
 
 // --- Blocks Directory Override ---

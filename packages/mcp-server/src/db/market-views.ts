@@ -31,6 +31,11 @@ import {
   resolveCanonicalMarketPartitionDir,
   resolveMarketDir,
 } from "./market-datasets.js";
+import {
+  describeReadParquetColumns,
+  quoteParquetCanonicalProjection,
+  readParquetGlobSql,
+} from "../utils/quote-parquet-projection.js";
 
 export interface ViewCreationResult {
   viewsCreated: string[];
@@ -143,8 +148,13 @@ export async function createMarketParquetViews(
     if (hasNewLayout || hasLegacyLayout) {
       try { await conn.run(`DROP VIEW IF EXISTS market.${name}`); } catch { /* wrong type */ }
       try { await conn.run(`DROP TABLE IF EXISTS market.${name}`); } catch { /* wrong type */ }
+      // Glob on data.parquet (not *.parquet) so DuckDB's in-flight
+      // tmp_data.parquet files — created by concurrent COPY ... TO writers
+      // during atomic parquet replacement — never match. Matching a mid-write
+      // temp file causes "No magic bytes" in DESCRIBE / read_parquet and the
+      // error gets mis-reported upstream as analytics.duckdb corruption.
       await conn.run(
-        `CREATE OR REPLACE VIEW market.${name} AS SELECT * FROM read_parquet('${dirPath}/**/*.parquet', hive_partitioning=true)`,
+        `CREATE OR REPLACE VIEW market.${name} AS SELECT * FROM read_parquet('${dirPath}/**/data.parquet', hive_partitioning=true)`,
       );
       viewsCreated.push(name);
     } else {
@@ -157,9 +167,9 @@ export async function createMarketParquetViews(
   //
   // Accepts both the legacy date-only layout (`date=Y/...`) and the Market
   // Data 3.0 underlying-first layout (`underlying=X/date=Y/...`) produced by
-  // Plan 02-03 Parquet writers. When `underlying=X` is the top-level partition
-  // directory, `hive_partitioning=true` exposes it as a column that
-  // downstream reads (buildReadQuotesSQL `WHERE underlying = $1`) depend on.
+  // Plan 02-03 Parquet writers. The view projects the canonical quote schema
+  // explicitly so older partitions without greeks columns still read with null
+  // greeks instead of failing at bind time.
 
   const optionMinuteQuoteDir = resolveCanonicalMarketPartitionDir(dataDir, "option_quote_minutes");
   const optionQuoteHasNewLayout = hasParquetPartitions(optionMinuteQuoteDir, "underlying");
@@ -167,18 +177,34 @@ export async function createMarketParquetViews(
   if (optionQuoteHasNewLayout || optionQuoteHasLegacyLayout) {
     try { await conn.run("DROP VIEW IF EXISTS market.option_quote_minutes"); } catch { /* wrong type */ }
     try { await conn.run("DROP TABLE IF EXISTS market.option_quote_minutes"); } catch { /* wrong type */ }
-    // SELECT * preserves the `underlying` partition column when present,
-    // which buildReadQuotesSQL needs in its WHERE clause. Projection
-    // filtering happens at the SQL-builder layer, not here.
+    // See hive-views glob comment: scope to data.parquet so concurrent
+    // COPY ... TO writers' tmp_data.parquet never trips DESCRIBE.
+    const quoteSource = readParquetGlobSql(`${optionMinuteQuoteDir}/**/data.parquet`);
+    const quoteColumns = await describeReadParquetColumns(conn, quoteSource);
+    const quoteProjection = quoteParquetCanonicalProjection(quoteColumns, "q");
     await conn.run(
       `CREATE OR REPLACE VIEW market.option_quote_minutes AS
-       SELECT * FROM read_parquet('${optionMinuteQuoteDir}/**/*.parquet', hive_partitioning=true)`,
+       SELECT ${quoteProjection}
+         FROM ${quoteSource} AS q`,
     );
     viewsCreated.push("option_quote_minutes");
   } else {
     try { await conn.run("DROP VIEW IF EXISTS market.option_quote_minutes"); } catch { /* not a view */ }
     tablesKept.push("option_quote_minutes");
   }
+
+  // Remove the retired greeks dataset from the market schema if it exists from
+  // an older run. This keeps the public SQL surface aligned with the current
+  // architecture where quote greeks live inline on option_quote_minutes and
+  // missing values are computed in memory at query time.
+  try { await conn.run("DROP VIEW IF EXISTS market.option_greeks_minutes"); } catch { /* wrong type */ }
+  try { await conn.run("DROP TABLE IF EXISTS market.option_greeks_minutes"); } catch { /* wrong type */ }
+
+  // Remove the retired delta-index surface from the market schema if it exists
+  // from an older run. Delta selection now reads directly from
+  // market.option_quote_minutes greeks instead of a second persisted dataset.
+  try { await conn.run("DROP VIEW IF EXISTS market.option_delta_index"); } catch { /* wrong type */ }
+  try { await conn.run("DROP TABLE IF EXISTS market.option_delta_index"); } catch { /* wrong type */ }
 
   // ============================================================================
   // Market Data 3.0 — Phase 2 + Phase 6 new views (D-22 / Phase 6 D-01)
@@ -192,9 +218,10 @@ export async function createMarketParquetViews(
   if (hasParquetPartitions(spotDir, "ticker")) {
     try { await conn.run("DROP VIEW  IF EXISTS market.spot"); } catch { /* wrong type */ }
     try { await conn.run("DROP TABLE IF EXISTS market.spot"); } catch { /* wrong type */ }
+    // Scope glob to data.parquet (see tmp_data.parquet race note above).
     await conn.run(
       `CREATE OR REPLACE VIEW market.spot AS
-       SELECT * FROM read_parquet('${spotDir}/**/*.parquet', hive_partitioning=true)`,
+       SELECT * FROM read_parquet('${spotDir}/**/data.parquet', hive_partitioning=true)`,
     );
     viewsCreated.push("spot");
   } else {

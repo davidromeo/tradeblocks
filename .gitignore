@@ -1,6 +1,3 @@
-# Superpowers specs (local design docs)
-docs/superpowers/
-
 # MCP server config (contains local paths and API keys)
 .mcp.json
 
@@ -71,3 +68,7 @@ tests/data/strategy-trade-log.csv
 tests/data/tradelog.csv
 2025-Since-2017 (2).csv
 walk-forward-summary (2).json
+
+# Editor / tooling noise
+.windsurf/
+AGENTS.md

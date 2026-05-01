@@ -181,6 +181,53 @@ describe("selectByDelta", () => {
       expect(result.selected.strike).toBe(4230);
     }
   });
+
+  test("uses persisted per-ticker deltas when they are provided", () => {
+    const deltaByTicker = new Map<string, number>([
+      [callContracts[0].ticker, 0.42],
+      [callContracts[1].ticker, 0.28],
+      [callContracts[2].ticker, 0.16],
+      [callContracts[3].ticker, 0.11],
+      [callContracts[4].ticker, 0.07],
+    ]);
+
+    const result = selectByDelta(callContracts, 0.15, {
+      ...opts,
+      delta_by_ticker: deltaByTicker,
+    });
+
+    expect("selected" in result).toBe(true);
+    if ("selected" in result) {
+      expect(result.selected.ticker).toBe(callContracts[2].ticker);
+    }
+  });
+
+  test("prefers DTE closest to dte_target over a marginally better delta at the wrong DTE", () => {
+    // Same strike (5900) across two DTEs. 6DTE has delta 0.152 (distance 0.2
+    // from target 0.15); 7DTE has 0.149 (distance 0.1 — closer on delta but
+    // wrong DTE). DTE drives the trade's risk profile; delta is a strike-level
+    // refinement. Picking 7DTE would flip a 6/7 DC into a same-day position.
+    const multiDteCalls: ContractRow[] = [
+      { ...callContracts[2], dte: 6, ticker: "O:SPXTEST-6D-C05900000", expiration: "2025-01-21" },
+      { ...callContracts[2], dte: 7, ticker: "O:SPXTEST-7D-C05900000", expiration: "2025-01-22" },
+    ];
+    const deltaByTicker = new Map<string, number>([
+      [multiDteCalls[0].ticker, 0.152],
+      [multiDteCalls[1].ticker, 0.149],
+    ]);
+
+    const result = selectByDelta(multiDteCalls, 0.15, {
+      ...opts,
+      dte_target: 6,
+      delta_by_ticker: deltaByTicker,
+    });
+
+    expect("selected" in result).toBe(true);
+    if ("selected" in result) {
+      expect(result.selected.dte).toBe(6);
+      expect(result.selected.ticker).toBe(multiDteCalls[0].ticker);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,10 @@ import { getDataRoot } from "./data-root.js";
 import { writeParquetAtomic, writeParquetPartition } from "./parquet-writer.js";
 
 export type CanonicalSingleFileDataset = "daily" | "date_context";
-export type CanonicalPartitionedDataset = "intraday" | "option_chain" | "option_quote_minutes";
+export type CanonicalPartitionedDataset =
+  | "intraday"
+  | "option_chain"
+  | "option_quote_minutes";
 export type CanonicalMarketDataset = CanonicalSingleFileDataset | CanonicalPartitionedDataset;
 
 const SINGLE_FILE_DATASETS: Record<CanonicalSingleFileDataset, string> = {
@@ -65,7 +68,6 @@ export function canonicalMarketTableName(dataset: CanonicalMarketDataset): strin
 //   enriched_context:     enriched/context/data.parquet
 //   option_chain:         option_chain/underlying=X/date=Y/data.parquet
 //   option_quote_minutes: option_quote_minutes/underlying=X/date=Y/data.parquet
-//
 // This registry is SEPARATE from the legacy CanonicalPartitionedDataset enum
 // and PARTITIONED_DATASETS map above. Both coexist per CONTEXT.md D-15:
 // legacy resolvers serve existing callers (date-only paths) until Phase 3/5
@@ -131,10 +133,18 @@ export async function writeQuoteMinutesPartition(
   args: { dataDir: string; underlying: string; date: string; selectQuery: string; compression?: string },
 ): Promise<{ rowCount: number }> {
   const def = DATASETS_V3.option_quote_minutes;
+  // Sort rows by (time, ticker) before writing so DuckDB row groups in the
+  // resulting parquet have tight min/max statistics on `time`. Backtester
+  // candidate-snapshot reads target a narrow time window (typically a single
+  // minute), and time-sorted row groups let DuckDB's parquet reader prune
+  // ~98% of row groups for those queries via column-statistics filtering.
+  // Wrapping the caller's selectQuery is safer than asking every caller to
+  // remember to ORDER BY: writes go through one funnel.
+  const sortedSelect = `SELECT * FROM (${args.selectQuery}) AS q ORDER BY q.time, q.ticker`;
   return writeParquetPartition(conn, {
     baseDir: path.join(resolveMarketDir(args.dataDir), def.subdir),
     partitions: { underlying: args.underlying, date: args.date },
-    selectQuery: args.selectQuery,
+    selectQuery: sortedSelect,
     compression: args.compression,
     filename: def.filename,
   });

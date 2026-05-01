@@ -1,12 +1,185 @@
-import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, jest } from "@jest/globals";
 import { mkdirSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { MarketIngestor } from "../../../../src/market/ingestor/index.js";
+import {
+  MarketIngestor,
+} from "../../../../src/market/ingestor/index.js";
 import { createMarketStores } from "../../../../src/market/stores/index.js";
 import { ensureMarketDataTables } from "../../../../src/db/market-schemas.js";
+import { TickerRegistry } from "../../../../src/market/tickers/registry.js";
 import type { MarketDataProvider, BarRow } from "../../../../src/utils/market-provider.js";
+
+// ---------------------------------------------------------------------------
+// Non-trading day short-circuit (weekend skip)
+// ---------------------------------------------------------------------------
+describe("MarketIngestor.refresh — weekend short-circuit", () => {
+  let dataDir: string;
+  let instance: DuckDBInstance;
+  let conn: Awaited<ReturnType<DuckDBInstance["connect"]>>;
+  let tickers: TickerRegistry;
+
+  beforeEach(async () => {
+    dataDir = join(tmpdir(), `ingestor-weekend-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dataDir, { recursive: true });
+    instance = await DuckDBInstance.create(":memory:");
+    conn = await instance.connect();
+    await conn.run(`ATTACH ':memory:' AS market`);
+    await ensureMarketDataTables(conn);
+    await conn.run(`
+      CREATE TABLE IF NOT EXISTS market.option_chain (
+        underlying      VARCHAR NOT NULL,
+        date            VARCHAR NOT NULL,
+        ticker          VARCHAR NOT NULL,
+        contract_type   VARCHAR NOT NULL,
+        strike          DOUBLE NOT NULL,
+        expiration      VARCHAR NOT NULL,
+        dte             INTEGER NOT NULL,
+        exercise_style  VARCHAR,
+        PRIMARY KEY (underlying, date, ticker)
+      )
+    `);
+    await conn.run(`
+      CREATE TABLE IF NOT EXISTS market.option_quote_minutes (
+        underlying      VARCHAR NOT NULL,
+        date            VARCHAR NOT NULL,
+        ticker          VARCHAR NOT NULL,
+        time            VARCHAR NOT NULL,
+        bid             DOUBLE,
+        ask             DOUBLE,
+        mid             DOUBLE,
+        last_updated_ns BIGINT,
+        source          VARCHAR,
+        delta           DOUBLE,
+        gamma           DOUBLE,
+        theta           DOUBLE,
+        vega            DOUBLE,
+        iv              DOUBLE,
+        greeks_source   VARCHAR,
+        greeks_revision INTEGER,
+        PRIMARY KEY (underlying, date, ticker, time)
+      )
+    `);
+    tickers = new TickerRegistry([{ underlying: "SPX", roots: ["SPX", "SPXW"] }]);
+  });
+
+  afterEach(() => {
+    try { instance.closeSync(); } catch { /* ignore */ }
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  function makeSpyProvider(): { provider: MarketDataProvider; fetchBarsCalls: number; fetchSnapshotCalls: number } {
+    const counts = { fetchBarsCalls: 0, fetchSnapshotCalls: 0 };
+    const provider: MarketDataProvider = {
+      name: "spy",
+      capabilities: () => ({
+        tradeBars: true, quotes: true, greeks: false,
+        flatFiles: false, bulkByRoot: false, perTicker: true,
+        minuteBars: true, dailyBars: true,
+      }),
+      fetchBars: async () => { counts.fetchBarsCalls++; return []; },
+      fetchOptionSnapshot: async () => { counts.fetchSnapshotCalls++; return { contracts: [] }; },
+    };
+    return { provider, ...counts };
+  }
+
+  it("returns status=skipped with empty arrays for Sunday (2026-04-26)", async () => {
+    const { provider } = makeSpyProvider();
+    let fetchBarsCalled = false;
+    const spyProvider: MarketDataProvider = {
+      ...provider,
+      fetchBars: async () => { fetchBarsCalled = true; return []; },
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => spyProvider,
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-04-26",  // Sunday
+      spotTickers: ["SPX", "VIX"],
+      chainUnderlyings: ["SPX"],
+      quoteUnderlyings: ["SPX"],
+      computeVixContext: true,
+    });
+
+    expect(result.status).toBe("skipped");
+    expect(result.perOperation.spot).toHaveLength(0);
+    expect(result.perOperation.chain).toHaveLength(0);
+    expect(result.perOperation.quotes).toHaveLength(0);
+    expect(result.perOperation.vixContext).toBeNull();
+    expect(result.errors).toHaveLength(0);
+    expect(fetchBarsCalled).toBe(false);
+  });
+
+  it("returns status=skipped with empty arrays for Saturday (2026-04-25)", async () => {
+    let fetchBarsCalled = false;
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => ({
+        name: "spy",
+        capabilities: () => ({
+          tradeBars: true, quotes: false, greeks: false,
+          flatFiles: false, bulkByRoot: false, perTicker: true,
+          minuteBars: true, dailyBars: true,
+        }),
+        fetchBars: async () => { fetchBarsCalled = true; return []; },
+        fetchOptionSnapshot: async () => ({ contracts: [] }),
+      }),
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-04-25",  // Saturday
+      spotTickers: ["SPX"],
+      computeVixContext: false,
+    });
+
+    expect(result.status).toBe("skipped");
+    expect(result.perOperation.spot).toHaveLength(0);
+    expect(result.perOperation.chain).toHaveLength(0);
+    expect(result.perOperation.quotes).toHaveLength(0);
+    expect(result.perOperation.vixContext).toBeNull();
+    expect(result.errors).toHaveLength(0);
+    expect(fetchBarsCalled).toBe(false);
+  });
+
+  it("does NOT short-circuit on Monday (2026-04-27) — inner fan-out executes", async () => {
+    const bars: BarRow[] = [
+      { ticker: "SPX", date: "2026-04-27", open: 5000, high: 5020, low: 4990, close: 5010, volume: 0 },
+    ];
+    let fetchBarsCalled = false;
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => ({
+        name: "spy",
+        capabilities: () => ({
+          tradeBars: true, quotes: false, greeks: false,
+          flatFiles: false, bulkByRoot: false, perTicker: true,
+          minuteBars: true, dailyBars: true,
+        }),
+        fetchBars: async () => { fetchBarsCalled = true; return bars; },
+        fetchOptionSnapshot: async () => ({ contracts: [] }),
+      }),
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-04-27",  // Monday — must NOT skip
+      spotTickers: ["SPX"],
+      computeVixContext: false,
+    });
+
+    expect(result.status).not.toBe("skipped");
+    expect(fetchBarsCalled).toBe(true);
+    expect(result.perOperation.spot).toHaveLength(1);
+  });
+});
 
 function makeBarsProvider(bars: BarRow[]): MarketDataProvider {
   return {
@@ -25,6 +198,7 @@ describe("MarketIngestor.refresh", () => {
   let dataDir: string;
   let instance: DuckDBInstance;
   let conn: Awaited<ReturnType<DuckDBInstance["connect"]>>;
+  let tickers: TickerRegistry;
 
   beforeEach(async () => {
     dataDir = join(tmpdir(), `ingestor-refresh-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -33,6 +207,41 @@ describe("MarketIngestor.refresh", () => {
     conn = await instance.connect();
     await conn.run(`ATTACH ':memory:' AS market`);
     await ensureMarketDataTables(conn);
+    await conn.run(`
+      CREATE TABLE IF NOT EXISTS market.option_chain (
+        underlying      VARCHAR NOT NULL,
+        date            VARCHAR NOT NULL,
+        ticker          VARCHAR NOT NULL,
+        contract_type   VARCHAR NOT NULL,
+        strike          DOUBLE NOT NULL,
+        expiration      VARCHAR NOT NULL,
+        dte             INTEGER NOT NULL,
+        exercise_style  VARCHAR,
+        PRIMARY KEY (underlying, date, ticker)
+      )
+    `);
+    await conn.run(`
+      CREATE TABLE IF NOT EXISTS market.option_quote_minutes (
+        underlying      VARCHAR NOT NULL,
+        date            VARCHAR NOT NULL,
+        ticker          VARCHAR NOT NULL,
+        time            VARCHAR NOT NULL,
+        bid             DOUBLE,
+        ask             DOUBLE,
+        mid             DOUBLE,
+        last_updated_ns BIGINT,
+        source          VARCHAR,
+        delta           DOUBLE,
+        gamma           DOUBLE,
+        theta           DOUBLE,
+        vega            DOUBLE,
+        iv              DOUBLE,
+        greeks_source   VARCHAR,
+        greeks_revision INTEGER,
+        PRIMARY KEY (underlying, date, ticker, time)
+      )
+    `);
+    tickers = new TickerRegistry([{ underlying: "SPX", roots: ["SPX", "SPXW"] }]);
   });
 
   afterEach(() => {
@@ -44,7 +253,7 @@ describe("MarketIngestor.refresh", () => {
     const bars: BarRow[] = [
       { ticker: "SPX", date: "2026-01-05", open: 4800, high: 4820, low: 4790, close: 4810, volume: 0 },
     ];
-    const stores = createMarketStores({ conn, dataDir, parquetMode: false });
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
     const ingestor = new MarketIngestor({
       stores,
       dataRoot: dataDir,
@@ -59,6 +268,7 @@ describe("MarketIngestor.refresh", () => {
 
     expect(result.status).toBe("ok");
     expect(result.perOperation.spot).toHaveLength(2);
+    expect(result.perOperation).not.toHaveProperty("optionDerived");
     expect(result.perOperation.vixContext).toBeNull();
   });
 
@@ -67,7 +277,7 @@ describe("MarketIngestor.refresh", () => {
       { ticker: "VIX", date: "2026-01-05", open: 15, high: 16, low: 14, close: 15.5, volume: 0 },
     ];
     let contextCalled = false;
-    const stores = createMarketStores({ conn, dataDir, parquetMode: false });
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
     stores.enriched.computeContext = async () => {
       contextCalled = true;
     };
@@ -84,6 +294,7 @@ describe("MarketIngestor.refresh", () => {
     });
 
     expect(contextCalled).toBe(true);
+    expect(result.perOperation).not.toHaveProperty("optionDerived");
     expect(result.perOperation.vixContext).not.toBeNull();
   });
 
@@ -92,7 +303,7 @@ describe("MarketIngestor.refresh", () => {
       { ticker: "QQQ", date: "2026-01-05", open: 400, high: 402, low: 399, close: 401, volume: 0 },
     ];
     let contextCalled = false;
-    const stores = createMarketStores({ conn, dataDir, parquetMode: false });
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
     stores.enriched.computeContext = async () => {
       contextCalled = true;
     };
@@ -109,5 +320,288 @@ describe("MarketIngestor.refresh", () => {
     });
 
     expect(contextCalled).toBe(false);
+  });
+
+  it("computes and persists minute greeks inline during bulk quote refresh when provider greeks are absent", async () => {
+    const provider: MarketDataProvider = {
+      name: "bulk",
+      capabilities: () => ({
+        tradeBars: true,
+        quotes: true,
+        greeks: false,
+        flatFiles: false,
+        bulkByRoot: true,
+        perTicker: false,
+        minuteBars: true,
+        dailyBars: true,
+      }),
+      fetchBars: async (options) => {
+        if (options.timespan === "minute") {
+          return [
+            { ticker: "SPX", date: "2026-01-05", time: "09:30", open: 4800, high: 4802, low: 4799, close: 4801, volume: 0 },
+            { ticker: "SPX", date: "2026-01-05", time: "09:31", open: 4801, high: 4803, low: 4800, close: 4802, volume: 0 },
+          ];
+        }
+        return [
+          { ticker: "SPX", date: "2026-01-05", open: 4800, high: 4820, low: 4790, close: 4810, volume: 0 },
+        ];
+      },
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+      fetchContractList: async () => ({
+        underlying: "SPX",
+        contracts: [
+          {
+            ticker: "SPXW260107C04800000",
+            contract_type: "call",
+            strike: 4800,
+            expiration: "2026-01-07",
+            exercise_style: "european",
+          },
+        ],
+      }),
+      fetchBulkQuotes: async function* () {
+        yield [
+          { ticker: "SPXW260107C04800000", timestamp: "2026-01-05 09:30", bid: 10.0, ask: 10.5 },
+        ];
+      },
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => provider,
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-01-05",
+      spotTickers: ["SPX"],
+      chainUnderlyings: ["SPX"],
+      quoteUnderlyings: ["SPX"],
+      computeVixContext: false,
+    });
+
+    expect(result.status).toBe("ok");
+    const quotes = await stores.quote.readQuotes(["SPXW260107C04800000"], "2026-01-05", "2026-01-05");
+    const row = quotes.get("SPXW260107C04800000")?.[0];
+    expect(row).toEqual(expect.objectContaining({
+      greeks_source: "computed",
+      greeks_revision: 1,
+    }));
+    expect(row?.delta).not.toBeNull();
+    expect(row?.gamma).not.toBeNull();
+    expect(row?.theta).not.toBeNull();
+    expect(row?.vega).not.toBeNull();
+    expect(row?.iv).not.toBeNull();
+  });
+
+  it("persists provider minute greeks inline when bulk quotes already carry them", async () => {
+    const provider: MarketDataProvider = {
+      name: "thetadata",
+      capabilities: () => ({
+        tradeBars: true,
+        quotes: true,
+        greeks: true,
+        flatFiles: false,
+        bulkByRoot: true,
+        perTicker: false,
+        minuteBars: true,
+        dailyBars: true,
+      }),
+      fetchBars: async (options) => options.timespan === "minute"
+        ? [
+            { ticker: "SPX", date: "2026-01-05", time: "09:30", open: 4800, high: 4802, low: 4799, close: 4801, volume: 0 },
+          ]
+        : [
+            { ticker: "SPX", date: "2026-01-05", open: 4800, high: 4820, low: 4790, close: 4810, volume: 0 },
+          ],
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+      fetchContractList: async () => ({
+        underlying: "SPX",
+        contracts: [
+          {
+            ticker: "SPXW260107C04800000",
+            contract_type: "call",
+            strike: 4800,
+            expiration: "2026-01-07",
+            exercise_style: "european",
+          },
+        ],
+      }),
+      fetchBulkQuotes: async function* () {
+        yield [
+          {
+            ticker: "SPXW260107C04800000",
+            timestamp: "2026-01-05 09:30",
+            bid: 10.0,
+            ask: 10.5,
+            delta: 0.22,
+            gamma: 0.05,
+            theta: -0.12,
+            vega: 0.31,
+            iv: 0.19,
+            greeks_source: "thetadata",
+          },
+        ];
+      },
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => provider,
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-01-05",
+      spotTickers: ["SPX"],
+      chainUnderlyings: ["SPX"],
+      quoteUnderlyings: ["SPX"],
+      computeVixContext: false,
+    });
+
+    expect(result.status).toBe("ok");
+    const quotes = await stores.quote.readQuotes(["SPXW260107C04800000"], "2026-01-05", "2026-01-05");
+    expect(quotes.get("SPXW260107C04800000")).toEqual([
+      expect.objectContaining({
+        delta: 0.22,
+        gamma: 0.05,
+        theta: -0.12,
+        vega: 0.31,
+        iv: 0.19,
+        greeks_source: "thetadata",
+        greeks_revision: null,
+      }),
+    ]);
+  });
+
+  it("degrades Massive 403 spot failures to cached-coverage skips instead of failing refresh", async () => {
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    await stores.spot.writeBars("SPX", "2026-01-05", [
+      { ticker: "SPX", date: "2026-01-05", time: "09:30", open: 4800, high: 4820, low: 4790, close: 4810, volume: 0 },
+    ]);
+    const provider: MarketDataProvider = {
+      name: "massive",
+      capabilities: () => ({
+        tradeBars: true,
+        quotes: true,
+        greeks: false,
+        flatFiles: false,
+        bulkByRoot: false,
+        perTicker: true,
+        minuteBars: true,
+        dailyBars: true,
+      }),
+      fetchBars: async () => {
+        throw new Error("Massive.com API error: HTTP 403 Forbidden");
+      },
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+    };
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => provider,
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-01-05",
+      spotTickers: ["SPX"],
+      computeVixContext: false,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.errors).toEqual([]);
+    expect(result.perOperation.spot).toEqual([
+      expect.objectContaining({
+        status: "skipped",
+        details: expect.objectContaining({
+          reason: "using_cached_coverage",
+          dataset: "spot",
+          symbol: "SPX",
+          originalStatus: "unsupported",
+        }),
+      }),
+    ]);
+    expect(result.coverage.SPX?.totalDates).toBe(1);
+  });
+
+  it("preflights Massive SPX refreshes to unsupported instead of attempting index spot or chain calls", async () => {
+    const fetchBars = jest.fn(async () => {
+      throw new Error("fetchBars should not be called");
+    });
+    const fetchContractList = jest.fn(async () => {
+      throw new Error("fetchContractList should not be called");
+    });
+    const provider: MarketDataProvider = {
+      name: "massive",
+      capabilities: () => ({
+        tradeBars: true,
+        quotes: true,
+        greeks: false,
+        flatFiles: false,
+        bulkByRoot: false,
+        perTicker: true,
+        minuteBars: true,
+        dailyBars: true,
+      }),
+      fetchBars,
+      fetchContractList,
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => provider,
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-01-05",
+      spotTickers: ["SPX"],
+      chainUnderlyings: ["SPX"],
+      quoteUnderlyings: ["SPX"],
+      computeVixContext: false,
+    });
+
+    expect(fetchBars).not.toHaveBeenCalled();
+    expect(fetchContractList).not.toHaveBeenCalled();
+    expect(result.status).toBe("ok");
+    expect(result.perOperation.spot).toEqual([
+      expect.objectContaining({ status: "unsupported" }),
+    ]);
+    expect(result.perOperation.chain).toEqual([
+      expect.objectContaining({ status: "unsupported" }),
+    ]);
+    expect(result.perOperation.quotes).toEqual([
+      expect.objectContaining({ status: "unsupported" }),
+    ]);
+    expect(result.perOperation).not.toHaveProperty("optionDerived");
+  });
+
+  it("reports unsupported bulk quote refreshes cleanly when the provider lacks bulk mode", async () => {
+    const bars: BarRow[] = [
+      { ticker: "SPX", date: "2026-01-05", open: 4800, high: 4820, low: 4790, close: 4810, volume: 0 },
+    ];
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({
+      stores,
+      dataRoot: dataDir,
+      providerFactory: () => makeBarsProvider(bars),
+    });
+
+    const result = await ingestor.refresh({
+      asOf: "2026-01-05",
+      spotTickers: ["SPX"],
+      quoteUnderlyings: ["SPX"],
+      computeVixContext: false,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.perOperation.quotes).toEqual([
+      expect.objectContaining({
+        status: "unsupported",
+      }),
+    ]);
+    expect(result.perOperation).not.toHaveProperty("optionDerived");
+    expect(result.errors).toEqual([]);
   });
 });
