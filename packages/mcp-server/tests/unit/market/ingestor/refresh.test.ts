@@ -366,6 +366,17 @@ describe("MarketIngestor.refresh", () => {
       },
     };
     const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    // Pre-seed an explicit minute bar at 09:30. Without this, the test relies
+    // on refresh's daily-bar ingest writing a row with the spot store's
+    // implicit time="09:30" default; that path is correct but more fragile
+    // (any swallowed read error in enrichQuoteRows leaves the underlying
+    // price map empty and silently produces null greeks). Pre-seeding the
+    // exact minute the quote needs makes the underlying-price lookup
+    // unambiguous so the test exercises the inline-greeks logic, not the
+    // daily-bar fallback.
+    await stores.spot.writeBars("SPX", "2026-01-05", [
+      { ticker: "SPX", date: "2026-01-05", time: "09:30", open: 4800, high: 4802, low: 4799, close: 4801, volume: 0 },
+    ]);
     const ingestor = new MarketIngestor({
       stores,
       dataRoot: dataDir,
