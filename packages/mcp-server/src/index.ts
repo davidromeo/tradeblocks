@@ -272,7 +272,10 @@ async function main(): Promise<void> {
     tickers: tickerRegistry,
   };
   const marketStores: MarketStores = createMarketStores(storeContext);
-  console.log(
+  // stdio transport reserves stdout for the MCP JSON protocol — anything else
+  // on stdout (even diagnostics) makes the client throw "not valid JSON".
+  // Diagnostic output must go to stderr.
+  console.error(
     `[market-stores] Constructed: ${parquetMode ? "parquet" : "duckdb"} backend`,
   );
 
