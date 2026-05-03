@@ -90,10 +90,11 @@ export function registerMarketFetchTools(
     "fetch_quotes",
     {
       description:
-        "Fetch NBBO minute-level option quotes. Two modes — pass EITHER 'tickers' (specific OCC contracts, per-ticker provider calls) OR 'underlyings' (every contract under a symbol, one wildcard call per (root, right) per date — ThetaData only). " +
+        "Fetch minute-level option quotes. Two modes — pass EITHER 'tickers' (specific OCC contracts, per-ticker provider calls) OR 'underlyings' (every contract under a symbol, one wildcard call per (root, right) per date — ThetaData only). " +
         "Bulk mode collapses thousands of per-contract fetches to ~4 wire requests per SPX day; use it whenever you want full-chain coverage. " +
-        "Writes to market.option_quote_minutes. Capability-gated: ThetaData supports both modes; Massive requires MASSIVE_DATA_TIER=quotes for the per-ticker mode and does not support bulk mode. " +
-        "Returns status='unsupported' with a clear error when the active provider lacks the requested mode.",
+        "Writes to market.option_quote_minutes. The 'source' column tags Massive provider rows: 'nbbo' (real bid/ask via /v3/quotes when MASSIVE_DATA_TIER=quotes) or 'synth_close' (synthesized from /v2/aggs OHLCV close when the user's plan lacks /v3/quotes; bid=ask=close). ThetaData rows currently leave 'source' as NULL pending a follow-up — its data is true NBBO regardless. " +
+        "Massive falls back automatically on Developer/lower plans; ThetaData (both modes) returns true NBBO. " +
+        "Returns status='unsupported' with a clear error only when the active provider lacks the requested mode (e.g., bulk-by-underlying on Massive).",
       inputSchema: z.object({
         tickers: z.array(z.string()).min(1).optional()
           .describe("Option tickers in OCC format (e.g., 'SPXW260321C05800000'). No O: prefix. Mutually exclusive with 'underlyings'."),
