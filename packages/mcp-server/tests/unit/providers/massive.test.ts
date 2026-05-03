@@ -850,17 +850,28 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
     jest.restoreAllMocks();
   });
 
-  it("uses /v3/quotes endpoint when MASSIVE_DATA_TIER=quotes", async () => {
+  it("uses /v3/quotes endpoint when MASSIVE_DATA_TIER=quotes and tags rows as nbbo", async () => {
     process.env.MASSIVE_DATA_TIER = "quotes";
-    fetchSpy.mockResolvedValue(mockResponse({ status: "OK", request_id: "r1", results: [] }));
+    // 09:30 ET = 14:30 UTC = 1736260200000 ms; nanos = ms * 1_000_000
+    const nanos = 1736260200000 * 1_000_000;
+    fetchSpy.mockResolvedValue(mockResponse({
+      status: "OK",
+      request_id: "r1",
+      results: [{ bid_price: 12.5, ask_price: 13.5, sip_timestamp: nanos, bid_size: 10, ask_size: 15, sequence_number: 1 }],
+    }));
 
     const provider = new MassiveProvider();
-    await provider.fetchQuotes("SPX250107C05000000", "2025-01-07", "2025-01-07");
+    const quotes = await provider.fetchQuotes("SPX250107C05000000", "2025-01-07", "2025-01-07");
 
-    expect(fetchSpy).toHaveBeenCalled();
     const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toContain("/v3/quotes/");
     expect(url).toContain("O%3ASPX250107C05000000");
+
+    const entry = quotes.get("2025-01-07 09:30");
+    expect(entry).toBeDefined();
+    expect(entry!.bid).toBe(12.5);
+    expect(entry!.ask).toBe(13.5);
+    expect(entry!.source).toBe("nbbo");
   });
 
   it("uses /v2/aggs minute-bars endpoint when MASSIVE_DATA_TIER is unset (Developer plan fallback)", async () => {
@@ -893,6 +904,7 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
     expect(entry).toBeDefined();
     expect(entry!.bid).toBe(13.2);
     expect(entry!.ask).toBe(13.2);
+    expect(entry!.source).toBe("synth_close");
   });
 
   it("uses /v2/aggs minute-bars endpoint when MASSIVE_DATA_TIER=ohlc", async () => {
@@ -937,6 +949,7 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
     expect(quotes.size).toBe(2);
     for (const [, q] of quotes) {
       expect(q.bid).toBe(q.ask);
+      expect(q.source).toBe("synth_close");
     }
     expect(quotes.get("2025-01-07 09:30")!.bid).toBe(13.20);
     expect(quotes.get("2025-01-07 09:31")!.bid).toBe(13.50);

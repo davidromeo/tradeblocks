@@ -1,5 +1,5 @@
 import type { MarketStores } from "../stores/index.js";
-import type { MarketDataProvider, BarRow } from "../../utils/market-provider.js";
+import type { MarketDataProvider, BarRow, MinuteQuote } from "../../utils/market-provider.js";
 import { getProvider } from "../../utils/market-provider.js";
 import { MassiveProvider } from "../../utils/providers/massive.js";
 import { ThetaDataProvider } from "../../utils/providers/thetadata.js";
@@ -596,16 +596,7 @@ export class MarketIngestor {
   private async writeQuotesForTicker(
     provider: MarketDataProvider,
     ticker: string,
-    quotes: Map<string, {
-      bid: number;
-      ask: number;
-      delta?: number | null;
-      gamma?: number | null;
-      theta?: number | null;
-      vega?: number | null;
-      iv?: number | null;
-      greeks_source?: "massive" | "thetadata" | "computed" | null;
-    }>,
+    quotes: Map<string, MinuteQuote>,
   ): Promise<{ rowsWritten: number; minDate?: string; maxDate?: string }> {
     const root = extractRoot(ticker);
     const underlying = this.deps.stores.quote.tickers.resolve(root);
@@ -621,6 +612,7 @@ export class MarketIngestor {
         timestamp: key,
         bid: quote.bid,
         ask: quote.ask,
+        source: quote.source ?? null,
         delta: quote.delta ?? null,
         gamma: quote.gamma ?? null,
         theta: quote.theta ?? null,

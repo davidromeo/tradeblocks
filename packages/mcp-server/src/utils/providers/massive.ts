@@ -29,6 +29,7 @@ import type {
   ContractReference,
   BulkDownloadOptions,
   BulkDownloadResult,
+  MinuteQuote,
 } from "../market-provider.js";
 import { computeLegGreeks } from "../black-scholes.js";
 import { resolveMassiveDataTier } from "../massive-tier.js";
@@ -554,8 +555,8 @@ export class MassiveProvider implements MarketDataProvider {
     headers: Record<string, string>,
     from: string,
     to: string,
-  ): Promise<Map<string, { bid: number; ask: number }>> {
-    const result = new Map<string, { bid: number; ask: number }>();
+  ): Promise<Map<string, MinuteQuote>> {
+    const result = new Map<string, MinuteQuote>();
 
     // Iterate trading days in the range
     const startDate = new Date(from + 'T00:00:00');
@@ -595,13 +596,13 @@ export class MassiveProvider implements MarketDataProvider {
       }
 
       // Aggregate tick quotes to minute-level NBBO (last quote per minute wins)
-      const byMinute = new Map<string, { bid: number; ask: number }>();
+      const byMinute = new Map<string, MinuteQuote>();
       for (const q of dayQuotes) {
         const key = nanosToETMinuteKey(q.sip_timestamp);
         const [keyDate, keyTime] = key.split(" ");
         if (keyDate !== dateStr || !keyTime) continue;
         if (keyTime < "09:30" || keyTime > "16:00") continue;
-        byMinute.set(key, { bid: q.bid_price, ask: q.ask_price });
+        byMinute.set(key, { bid: q.bid_price, ask: q.ask_price, source: "nbbo" });
       }
 
       for (const [key, val] of byMinute) {
@@ -627,7 +628,7 @@ export class MassiveProvider implements MarketDataProvider {
     ticker: string,
     from: string,
     to: string,
-  ): Promise<Map<string, { bid: number; ask: number }>> {
+  ): Promise<Map<string, MinuteQuote>> {
     const bars = await this.fetchBars({
       ticker,
       from,
@@ -637,19 +638,19 @@ export class MassiveProvider implements MarketDataProvider {
       assetClass: "option",
     });
 
-    const out = new Map<string, { bid: number; ask: number }>();
+    const out = new Map<string, MinuteQuote>();
     for (const bar of bars) {
       if (!bar.time) continue;
       const time = bar.time.slice(0, 5); // "HH:MM"
       // RTH window only — match the /v3/quotes path's behavior
       if (time < "09:30" || time > "16:00") continue;
       const key = `${bar.date} ${time}`;
-      out.set(key, { bid: bar.close, ask: bar.close });
+      out.set(key, { bid: bar.close, ask: bar.close, source: "synth_close" });
     }
     return out;
   }
 
-  async fetchQuotes(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>> {
+  async fetchQuotes(ticker: string, from: string, to: string): Promise<Map<string, MinuteQuote>> {
     const tier = resolveMassiveDataTier();
     if (tier !== "quotes") {
       // Developer / OHLC / trades tiers: /v3/quotes is gated. Fall back to
