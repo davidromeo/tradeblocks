@@ -42,6 +42,8 @@ export interface QuoteRow {
   ask: number;
   bid_size?: number;
   ask_size?: number;
+  /** See MinuteQuote.source for semantics. Persisted to option_quote_minutes.source. */
+  source?: "nbbo" | "synth_close" | null;
   delta?: number | null;
   gamma?: number | null;
   theta?: number | null;

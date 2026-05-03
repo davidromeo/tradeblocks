@@ -47,6 +47,7 @@ function parseQuoteRow(row: unknown[]): QuoteRow {
     timestamp: `${date} ${time}`,
     bid: Number(row[4]),
     ask: Number(row[5]),
+    source: row[8] == null ? null : (String(row[8]) as QuoteRow["source"]),
     delta: row[9] == null ? null : Number(row[9]),
     gamma: row[10] == null ? null : Number(row[10]),
     theta: row[11] == null ? null : Number(row[11]),
@@ -99,7 +100,8 @@ export class ParquetQuoteStore extends QuoteStore {
           appender.appendDouble(q.ask);
           appender.appendDouble((q.bid + q.ask) / 2);
           appender.appendNull(); // last_updated_ns — not tracked in QuoteRow
-          appender.appendNull(); // source — not tracked
+          if (q.source == null) appender.appendNull();
+          else appender.appendVarchar(q.source);
           if (q.delta == null) appender.appendNull();
           else appender.appendFloat(q.delta);
           if (q.gamma == null) appender.appendNull();

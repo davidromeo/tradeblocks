@@ -37,6 +37,7 @@ function parseQuoteRow(row: unknown[]): QuoteRow {
     timestamp: `${date} ${time}`,
     bid: Number(row[4]),
     ask: Number(row[5]),
+    source: row[8] == null ? null : (String(row[8]) as QuoteRow["source"]),
     delta: row[9] == null ? null : Number(row[9]),
     gamma: row[10] == null ? null : Number(row[10]),
     theta: row[11] == null ? null : Number(row[11]),
@@ -102,8 +103,8 @@ export class DuckdbQuoteStore extends QuoteStore {
         q.bid,
         q.ask,
         mid,
-        null,
-        null,
+        null,                 // last_updated_ns — not tracked in QuoteRow
+        q.source ?? null,     // source — populated when provider tags rows (Task 6)
         q.delta ?? null,
         q.gamma ?? null,
         q.theta ?? null,

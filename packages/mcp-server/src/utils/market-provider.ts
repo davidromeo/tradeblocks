@@ -209,6 +209,15 @@ export interface BulkQuoteRow {
 export interface MinuteQuote {
   bid: number;
   ask: number;
+  /**
+   * Provenance tag for the quote.
+   *  - "nbbo": true bid/ask from a quotes-tier endpoint (Massive /v3/quotes,
+   *    ThetaData NBBO).
+   *  - "synth_close": synthesized from option minute OHLCV when the provider's
+   *    NBBO endpoint isn't available; bid === ask === close.
+   *  - null/undefined: legacy / unknown provenance.
+   */
+  source?: "nbbo" | "synth_close" | null;
   delta?: number | null;
   gamma?: number | null;
   theta?: number | null;

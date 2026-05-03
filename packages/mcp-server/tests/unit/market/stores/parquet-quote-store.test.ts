@@ -157,6 +157,40 @@ async function setUpParquetAndDuckdbWithFixtures(): Promise<{
   };
 }
 
+describe("ParquetQuoteStore source round-trip", () => {
+  it("persists and reads back QuoteRow.source verbatim", async () => {
+    const { store, conn } = await setUpParquetStoreWithFixtures();
+    const rows: QuoteRow[] = [
+      {
+        occ_ticker: "SPX250107C05000000",
+        timestamp: "2025-01-07 09:30",
+        bid: 13.20,
+        ask: 13.20,
+        source: "synth_close",
+      },
+      {
+        occ_ticker: "SPX250107C05000000",
+        timestamp: "2025-01-07 09:31",
+        bid: 13.10,
+        ask: 13.30,
+        source: "nbbo",
+      },
+    ];
+    await store.writeQuotes("SPX", "2025-01-07", rows);
+
+    const readBack = await store.readQuotes(
+      ["SPX250107C05000000"],
+      "2025-01-07",
+      "2025-01-07",
+    );
+    const persisted = readBack.get("SPX250107C05000000")!;
+    expect(persisted).toHaveLength(2);
+    expect(persisted[0].source).toBe("synth_close");
+    expect(persisted[1].source).toBe("nbbo");
+    await conn.close();
+  });
+});
+
 describe("ParquetQuoteStore.readWindow", () => {
   it("returns chain-joined rows for each minute matching the leg envelopes", async () => {
     const { store, conn } = await setUpParquetStoreWithFixtures();
