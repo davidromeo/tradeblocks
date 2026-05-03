@@ -837,11 +837,11 @@ describe("Quotes enrichment", () => {
 // ===========================================================================
 
 describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => {
-  let fetchSpy2: jest.SpiedFunction<typeof globalThis.fetch>;
+  let fetchSpy: jest.SpiedFunction<typeof globalThis.fetch>;
 
   beforeEach(() => {
     process.env.MASSIVE_API_KEY = "test-key";
-    fetchSpy2 = jest.spyOn(globalThis, "fetch");
+    fetchSpy = jest.spyOn(globalThis, "fetch");
   });
 
   afterEach(() => {
@@ -852,13 +852,13 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
 
   it("uses /v3/quotes endpoint when MASSIVE_DATA_TIER=quotes", async () => {
     process.env.MASSIVE_DATA_TIER = "quotes";
-    fetchSpy2.mockResolvedValue(mockResponse({ status: "OK", request_id: "r1", results: [] }));
+    fetchSpy.mockResolvedValue(mockResponse({ status: "OK", request_id: "r1", results: [] }));
 
     const provider = new MassiveProvider();
     await provider.fetchQuotes("SPX250107C05000000", "2025-01-07", "2025-01-07");
 
-    expect(fetchSpy2).toHaveBeenCalled();
-    const url = fetchSpy2.mock.calls[0][0] as string;
+    expect(fetchSpy).toHaveBeenCalled();
+    const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toContain("/v3/quotes/");
     expect(url).toContain("O%3ASPX250107C05000000");
   });
@@ -876,13 +876,13 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
       status: "OK",
       request_id: "req-aggs-001",
     };
-    fetchSpy2.mockResolvedValueOnce(mockResponse(barResponse));
+    fetchSpy.mockResolvedValueOnce(mockResponse(barResponse));
 
     const provider = new MassiveProvider();
     const quotes = await provider.fetchQuotes("SPX250107C05000000", "2025-01-07", "2025-01-07");
 
-    expect(fetchSpy2).toHaveBeenCalledTimes(1);
-    const url = fetchSpy2.mock.calls[0][0] as string;
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toContain("/v2/aggs/ticker/");
     expect(url).toContain("O%3ASPX250107C05000000");
     expect(url).toContain("/range/1/minute/2025-01-07/2025-01-07");
@@ -897,7 +897,7 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
 
   it("uses /v2/aggs minute-bars endpoint when MASSIVE_DATA_TIER=ohlc", async () => {
     process.env.MASSIVE_DATA_TIER = "ohlc";
-    fetchSpy2.mockResolvedValueOnce(mockResponse({
+    fetchSpy.mockResolvedValueOnce(mockResponse({
       ticker: "O:SPX250107C05000000",
       queryCount: 0,
       resultsCount: 0,
@@ -910,7 +910,7 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
     const provider = new MassiveProvider();
     await provider.fetchQuotes("SPX250107C05000000", "2025-01-07", "2025-01-07");
 
-    const url = fetchSpy2.mock.calls[0][0] as string;
+    const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toContain("/v2/aggs/ticker/");
     expect(url).not.toContain("/v3/quotes/");
   });
@@ -918,7 +918,7 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
   it("synthesizes bid=ask=close for every minute returned by /v2/aggs", async () => {
     delete process.env.MASSIVE_DATA_TIER;
     // 09:30 ET = 1736260200000, 09:31 ET = +60_000 ms.
-    fetchSpy2.mockResolvedValueOnce(mockResponse({
+    fetchSpy.mockResolvedValueOnce(mockResponse({
       ticker: "O:SPX250107C05000000",
       queryCount: 1,
       resultsCount: 2,
@@ -946,7 +946,7 @@ describe("MassiveProvider.fetchQuotes — tier-aware endpoint selection", () => 
     delete process.env.MASSIVE_DATA_TIER;
     // 09:29 ET = 1736260140000 (in pre-market), 09:30 ET = 1736260200000 (in RTH),
     // 16:01 ET = 1736283660000 (after close).
-    fetchSpy2.mockResolvedValueOnce(mockResponse({
+    fetchSpy.mockResolvedValueOnce(mockResponse({
       ticker: "O:SPX250107C05000000",
       queryCount: 1,
       resultsCount: 3,

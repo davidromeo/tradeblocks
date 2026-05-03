@@ -612,7 +612,51 @@ export class MassiveProvider implements MarketDataProvider {
     return result;
   }
 
+  /**
+   * Developer-tier fallback. When MASSIVE_DATA_TIER ≠ 'quotes' the user
+   * doesn't have access to /v3/quotes, but /v2/aggs minute bars are included
+   * in lower tiers (Developer plan). We fetch option minute OHLCV via the
+   * shared bar-aggregates path and synthesize {bid: close, ask: close} per
+   * minute. Downstream `enrichQuoteRows` averages bid+ask, so this surfaces
+   * `close` as the mid — a reasonable proxy when true NBBO is unavailable.
+   * Tagged source='synth_close' in Task 6 so consumers can distinguish from
+   * true NBBO (locked-spread NBBO can also have bid==ask, so the source
+   * column is the authoritative signal — not the bid/ask equality).
+   */
+  private async fetchQuotesViaMinuteBars(
+    ticker: string,
+    from: string,
+    to: string,
+  ): Promise<Map<string, { bid: number; ask: number }>> {
+    const bars = await this.fetchBars({
+      ticker,
+      from,
+      to,
+      timespan: "minute",
+      multiplier: 1,
+      assetClass: "option",
+    });
+
+    const out = new Map<string, { bid: number; ask: number }>();
+    for (const bar of bars) {
+      if (!bar.time) continue;
+      const time = bar.time.slice(0, 5); // "HH:MM"
+      // RTH window only — match the /v3/quotes path's behavior
+      if (time < "09:30" || time > "16:00") continue;
+      const key = `${bar.date} ${time}`;
+      out.set(key, { bid: bar.close, ask: bar.close });
+    }
+    return out;
+  }
+
   async fetchQuotes(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>> {
+    const tier = resolveMassiveDataTier();
+    if (tier !== "quotes") {
+      // Developer / OHLC / trades tiers: /v3/quotes is gated. Fall back to
+      // /v2/aggs minute bars and synthesize bid=ask=close. See
+      // fetchQuotesViaMinuteBars JSDoc for the trade-off.
+      return this.fetchQuotesViaMinuteBars(ticker, from, to);
+    }
     const apiKey = getApiKey();
     const apiTicker = toMassiveTicker(ticker, "option");
     const headers = { Authorization: `Bearer ${apiKey}` };
