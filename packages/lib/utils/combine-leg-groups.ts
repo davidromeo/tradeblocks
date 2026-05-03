@@ -281,8 +281,7 @@ export function combineAllLegGroups(trades: Trade[]): CombinedTrade[] {
   const groups = groupTradesByEntry(trades)
   const combinedTrades: CombinedTrade[] = []
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  for (const [_, groupTrades] of groups) {
+  for (const [, groupTrades] of groups) {
     combinedTrades.push(combineLegGroup(groupTrades))
   }
 
@@ -322,8 +321,7 @@ export async function combineAllLegGroupsAsync(
   checkCancelled(signal)
   onProgress?.({ step: 'Combining leg groups', percent: 10 })
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  for (const [_, groupTrades] of groups) {
+  for (const [, groupTrades] of groups) {
     combinedTrades.push(combineLegGroup(groupTrades))
     processedGroups++
 
@@ -506,8 +504,7 @@ export function combineAllReportingLegGroups(trades: ReportingTrade[]): Combined
   const groups = groupReportingTradesByEntry(trades)
   const combinedTrades: CombinedReportingTrade[] = []
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  for (const [_, groupTrades] of groups) {
+  for (const [, groupTrades] of groups) {
     combinedTrades.push(combineReportingLegGroup(groupTrades))
   }
 

@@ -128,7 +128,7 @@ export function buildFilterPredicate(filter: EntryFilter): FilterPredicate {
       return value.some((v) => {
         const dayNum = resolveDayName(v);
         if (dayNum !== null) return Number(raw) === dayNum;
-        return v == raw; // eslint-disable-line eqeqeq
+        return v == raw;
       });
     }
 
@@ -144,7 +144,7 @@ export function buildFilterPredicate(filter: EntryFilter): FilterPredicate {
         if (isNaN(refVal)) return false;
         return Number(raw) === refVal;
       }
-      return value == raw; // eslint-disable-line eqeqeq
+      return value == raw;
     }
 
     // Numeric operators: >, <, >=, <=, between

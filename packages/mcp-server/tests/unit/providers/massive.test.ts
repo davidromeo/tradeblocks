@@ -561,7 +561,6 @@ describe("MassiveQuoteSchema", () => {
   });
 
   it("rejects a quote missing bid_price", () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { bid_price: _bid, ...rest } = VALID_QUOTE;
     expect(MassiveQuoteSchema.safeParse(rest).success).toBe(false);
   });
@@ -571,7 +570,6 @@ describe("MassiveQuoteSchema", () => {
   });
 
   it("rejects a quote missing sequence_number", () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { sequence_number: _seq, ...rest } = VALID_QUOTE;
     expect(MassiveQuoteSchema.safeParse(rest).success).toBe(false);
   });

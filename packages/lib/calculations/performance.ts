@@ -17,7 +17,6 @@ export class PerformanceCalculator {
   /**
    * Calculate comprehensive performance metrics
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   static calculatePerformanceMetrics(trades: Trade[], _dailyLogEntries?: DailyLogEntry[]): PerformanceMetrics {
     if (trades.length === 0) {
       return {

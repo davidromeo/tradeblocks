@@ -172,7 +172,7 @@ function adjustLegDeltaForPosition(rawDelta: number, leg?: ReplayLeg): number {
 export function evaluateProfitAction(
   trigger: ExitTriggerConfig,
   pnlPath: PnlPoint[],
-  _legs: ReplayLeg[], // eslint-disable-line @typescript-eslint/no-unused-vars
+  _legs: ReplayLeg[],
 ): { fireEvent: TriggerFireEvent | null; partialCloses: PartialClose[] } {
   const partialCloses: PartialClose[] = [];
 
