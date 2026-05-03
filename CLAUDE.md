@@ -130,7 +130,7 @@ Frame effort as **complexity weighted to value/outcome**:
 **Bad:** "multi-day rewrite", "an afternoon's work", "~2 hours"
 **Good:** "large rewrite — every Theta call site remaps + new auth model + native binary in distribution — for marginal value over the 30-line transpose fix already in place"
 **Good:** "small mechanical change in one file, no consumer impact, fixes the immediate breakage Amy reported"
-**Good:** "medium refactor across 3 files, blast radius limited to backtester scoring path, unblocks the autonomous-iteration agent work"
+**Good:** "medium refactor across 3 files, blast radius limited to <feature> scoring path, unblocks the autonomous-iteration agent work"
 
 When recommending between options, lead with the value delta and the blast radius — those are what David is actually weighing.
 <!-- GSD:conventions-end -->
