@@ -148,7 +148,18 @@ export interface DataAvailability {
 /** Declares what data endpoints a provider supports. Used by the pipeline to build fetch plans. */
 export interface ProviderCapabilities {
   tradeBars: boolean;       // minute OHLC from trade aggregates
-  quotes: boolean;          // NBBO bid/ask (tick or minute level)
+  /**
+   * Strictly: "true NBBO bid/ask is available via this provider's dedicated
+   * quotes endpoint". Use this when you specifically need real bid/ask spreads.
+   *
+   * NOTE: this is NOT the right gate for "should I call fetchQuotes()". A
+   * provider may implement `fetchQuotes` and return useful per-minute data
+   * (e.g. synthesized from OHLCV) even when `quotes === false`. Dispatch on
+   * `typeof provider.fetchQuotes === 'function'` instead, and use the
+   * persisted `source` column on `option_quote_minutes` ('nbbo' vs
+   * 'synth_close') for per-row provenance.
+   */
+  quotes: boolean;
   greeks: boolean;          // provider-computed greeks on contracts
   flatFiles: boolean;       // bulk S3/file download of historical data
   bulkByRoot: boolean;      // one call returns all strikes for a root (ThetaData pattern)
