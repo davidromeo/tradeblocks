@@ -611,6 +611,36 @@ describe("MassiveQuotesResponseSchema", () => {
 });
 
 // ===========================================================================
+// MassiveProvider.capabilities — strictly NBBO availability
+// ===========================================================================
+
+describe("MassiveProvider.capabilities.quotes — strictly NBBO availability", () => {
+  afterEach(() => {
+    delete process.env.MASSIVE_DATA_TIER;
+  });
+
+  it("reports quotes=false when MASSIVE_DATA_TIER is unset (Developer/Starter plan, no /v3/quotes access)", () => {
+    delete process.env.MASSIVE_DATA_TIER;
+    expect(new MassiveProvider().capabilities().quotes).toBe(false);
+  });
+
+  it("reports quotes=false when MASSIVE_DATA_TIER=ohlc", () => {
+    process.env.MASSIVE_DATA_TIER = "ohlc";
+    expect(new MassiveProvider().capabilities().quotes).toBe(false);
+  });
+
+  it("reports quotes=false when MASSIVE_DATA_TIER=trades", () => {
+    process.env.MASSIVE_DATA_TIER = "trades";
+    expect(new MassiveProvider().capabilities().quotes).toBe(false);
+  });
+
+  it("reports quotes=true ONLY when MASSIVE_DATA_TIER=quotes (true NBBO via /v3/quotes)", () => {
+    process.env.MASSIVE_DATA_TIER = "quotes";
+    expect(new MassiveProvider().capabilities().quotes).toBe(true);
+  });
+});
+
+// ===========================================================================
 // nanosToETMinuteKey
 // ===========================================================================
 
