@@ -418,6 +418,41 @@ async function* streamThetaNdjson(
   throw lastError ?? new Error(`ThetaData stream failed for ${endpointPath}`);
 }
 
+/**
+ * Transpose ThetaTerminal's columnar response shape (`{key1: [...], key2: [...]}`
+ * with all values being arrays of equal length) into row objects
+ * (`[{key1, key2}, ...]`). Returns `null` when `obj` does not match the columnar
+ * pattern — caller falls through to other shape detectors or the error path.
+ *
+ * The Jetty 12.x Terminal (replacing the v2-style row-array shape requestThetaJson
+ * was originally built for) returns columnar JSON for endpoints like
+ * `/v3/index/history/eod`. Transposing here means all downstream mappers
+ * (mapEodRow, mapIntradayRow, fetchContractList row loop, snapshot loops) keep
+ * working unchanged.
+ */
+function transposeColumnarObject(obj: ThetaJsonObject): ThetaJsonArray | null {
+  const entries = Object.entries(obj);
+  if (entries.length === 0) return null;
+
+  let length: number | null = null;
+  for (const [, value] of entries) {
+    if (!Array.isArray(value)) return null;
+    if (length === null) length = value.length;
+    else if (value.length !== length) return null;
+  }
+  if (length === null) return null;
+
+  const rows: ThetaJsonArray = [];
+  for (let i = 0; i < length; i++) {
+    const row: ThetaJsonObject = {};
+    for (const [key, value] of entries) {
+      row[key] = (value as unknown[])[i];
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
 async function requestThetaJson(
   endpointPath: string,
   params: Record<string, string | number | boolean | undefined>,
@@ -477,11 +512,26 @@ async function requestThetaJson(
       if (Array.isArray(parsed)) return parsed;
       if (parsed && typeof parsed === "object") {
         const object = parsed as {
-          data?: unknown[];
-          response?: unknown[];
+          data?: unknown;
+          response?: unknown;
         };
         if (Array.isArray(object.data)) return object.data;
         if (Array.isArray(object.response)) return object.response;
+
+        // ThetaTerminal Jetty 12 returns columnar JSON: `{open: [...], close: [...]}`
+        // instead of `[{open, close}, ...]`. Transpose into row objects so all
+        // downstream mappers (mapEodRow, mapIntradayRow, etc.) keep working.
+        const columnar = transposeColumnarObject(parsed as ThetaJsonObject);
+        if (columnar) return columnar;
+
+        if (object.data && typeof object.data === "object" && !Array.isArray(object.data)) {
+          const inner = transposeColumnarObject(object.data as ThetaJsonObject);
+          if (inner) return inner;
+        }
+        if (object.response && typeof object.response === "object" && !Array.isArray(object.response)) {
+          const inner = transposeColumnarObject(object.response as ThetaJsonObject);
+          if (inner) return inner;
+        }
       }
 
       throw new Error(`ThetaData ${endpointPath} returned unexpected JSON shape`);

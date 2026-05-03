@@ -408,6 +408,50 @@ describe("ThetaDataProvider.fetchBars", () => {
     ]);
   });
 
+  it("transposes columnar EOD response (Jetty 12 shape) into rows", async () => {
+    // ThetaTerminal Jetty 12.x returns columnar JSON instead of row arrays.
+    fetchSpy.mockResolvedValueOnce(mockJsonResponse({
+      date: ["2024-03-01", "2024-03-04"],
+      open: [5100, 5106],
+      high: [5110, 5120],
+      low: [5090, 5100],
+      close: [5105, 5118],
+      volume: [0, 0],
+    }));
+
+    const rows = await provider.fetchBars({
+      ticker: "SPX",
+      from: "2024-03-01",
+      to: "2024-03-04",
+      assetClass: "index",
+    });
+
+    expect(rows).toEqual([
+      {
+        date: "2024-03-01",
+        open: 5100,
+        high: 5110,
+        low: 5090,
+        close: 5105,
+        volume: 0,
+        ticker: "SPX",
+        bid: undefined,
+        ask: undefined,
+      },
+      {
+        date: "2024-03-04",
+        open: 5106,
+        high: 5120,
+        low: 5100,
+        close: 5118,
+        volume: 0,
+        ticker: "SPX",
+        bid: undefined,
+        ask: undefined,
+      },
+    ]);
+  });
+
   it("returns empty bars when ThetaData responds with 472 no-data", async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response("No data found for your request", {
