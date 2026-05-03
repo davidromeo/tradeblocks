@@ -1043,6 +1043,10 @@ async function runTier2(
       for (const bar of vixBars) {
         const timeStr = bar.time;
         if (timeStr == null || timeStr < "09:30" || timeStr > "09:32") continue;
+        // Defense-in-depth: skip 09:30-09:32 bars with zero/null open. A
+        // 09:30 provider gap would otherwise cache as the day's VIX_RTH_Open.
+        // The first non-zero bar in the window wins.
+        if (!Number.isFinite(bar.open) || bar.open <= 0) continue;
         const dateStr = bar.date;
         if (!rthOpenByDate.has(dateStr)) {
           const openVal = bar.open;
@@ -1056,14 +1060,20 @@ async function runTier2(
     try {
       // Phase 6 Wave D: legacy minute-bar view rewritten to market.spot
       // (v3.0 canonical minute-bar view; schema preserves ticker/time/open).
+      // Defense-in-depth: skip zero/null open bars so a 09:30 provider gap
+      // doesn't get cached as the day's VIX_RTH_Open. The first non-zero
+      // bar in 09:30-09:32 wins.
       const rthReader = await conn.runAndReadAll(
-        `SELECT date, open FROM market.spot WHERE ticker = 'VIX' AND time >= '09:30' AND time <= '09:32' ORDER BY date, time ASC`
+        `SELECT date, open FROM market.spot
+         WHERE ticker = 'VIX' AND time >= '09:30' AND time <= '09:32'
+           AND open IS NOT NULL AND open > 0
+         ORDER BY date, time ASC`
       );
       for (const r of rthReader.getRows()) {
         const dateStr = r[0] as string;
         if (!rthOpenByDate.has(dateStr)) {
           const openVal = r[1] as number | null;
-          if (openVal != null) rthOpenByDate.set(dateStr, openVal);
+          if (openVal != null && openVal > 0) rthOpenByDate.set(dateStr, openVal);
         }
       }
     } catch {
@@ -1370,8 +1380,16 @@ export async function runEnrichment(
       priorClose !== null && priorClose > 0
         ? ((opens[i] - priorClose) / priorClose) * 100
         : null;
+    // Intraday_Range_Pct: high-low range as % of close.
+    // Use close (not open) for consistency with every other "_Pct" column in
+    // this file (ATR_Pct, Price_vs_EMA21_Pct, Return_5D, etc. all divide by
+    // close). Also guards against zero-low contamination: if the day's low
+    // came in as 0 from a bad minute bar, (high - 0) inflates to ~100% of
+    // close — meaningless. Requiring lows[i] > 0 forces such rows to null.
     const intradayRangePct =
-      opens[i] > 0 ? ((highs[i] - lows[i]) / opens[i]) * 100 : null;
+      closes[i] > 0 && highs[i] > 0 && lows[i] > 0
+        ? ((highs[i] - lows[i]) / closes[i]) * 100
+        : null;
     const intradayReturnPct =
       opens[i] > 0 ? ((closes[i] - opens[i]) / opens[i]) * 100 : null;
     const hiLoRange = highs[i] - lows[i];
@@ -1403,14 +1421,33 @@ export async function runEnrichment(
         : null;
     const rsi14val = rsi14[i];
 
-    // Prior_Range_vs_ATR: prior day's (high - low) / ATR[i-1]
-    // Known at market open (prior day range and ATR are available before trading begins).
-    // First bar (i=0) has no prior day, so null. ATR[i-1] must be valid (non-NaN).
+    // Prior_Range_vs_ATR: ratio of prior day's intraday range (% of close) to
+    // prior day's ATR (% of close). Known at market open — prior day range
+    // and ATR are both available before today's trading begins.
+    //
+    // Algebraically (range_pct / atr_pct) = (range / atr) since the close
+    // cancels, but writing it as a ratio of percents makes the intent
+    // explicit and matches how downstream analysis reads the column.
+    //
+    // Sanity guards: prior close > 0 (otherwise the percent denominators
+    // explode), prior high/low > 0 (catches zero-bar contamination from the
+    // upstream spot ingester), and priorATR > 0 (avoid div-by-zero).
+    // First bar (i=0) has no prior day → null.
     let priorRangeVsATR: number | null = null;
     if (i > 0) {
-      const priorATR = atrArr[i - 1];
-      if (!isNaN(priorATR) && priorATR > 0) {
-        priorRangeVsATR = (highs[i - 1] - lows[i - 1]) / priorATR;
+      const priorClose = closes[i - 1];
+      const priorHigh  = highs[i - 1];
+      const priorLow   = lows[i - 1];
+      const priorATR   = atrArr[i - 1];
+      if (
+        priorClose > 0 &&
+        priorHigh > 0 &&
+        priorLow > 0 &&
+        !isNaN(priorATR) && priorATR > 0
+      ) {
+        const priorRangePct = ((priorHigh - priorLow) / priorClose) * 100;
+        const priorAtrPct = (priorATR / priorClose) * 100;
+        priorRangeVsATR = priorRangePct / priorAtrPct;
       }
     }
 
@@ -1557,6 +1594,19 @@ export function computeIntradayTimingFields(
   openingDriveStrength: number;
   intradayRealizedVol: number;
 } | null {
+  // Defense-in-depth: drop zero/non-finite OHLC bars before any min/max
+  // scan. A single zero-low bar from a provider gap (see ParquetSpotStore
+  // writer guard) would make minLow=0 and lowTimeStr point to the gap's
+  // timestamp, producing a meaningless Low_Time field. The writer + SQL
+  // filters in the spot read paths catch most of these upstream; this
+  // makes the pure function safe regardless of caller.
+  bars = bars.filter(
+    (b) =>
+      Number.isFinite(b.open) && b.open > 0 &&
+      Number.isFinite(b.high) && b.high > 0 &&
+      Number.isFinite(b.low)  && b.low  > 0 &&
+      Number.isFinite(b.close)&& b.close> 0,
+  );
   if (bars.length === 0) return null;
 
   let maxHigh = -Infinity;
@@ -1667,10 +1717,17 @@ async function runTier3(
   } else {
     // Phase 6 Wave D: legacy minute-bar view rewritten to market.spot
     // (v3.0 canonical minute-bar view; schema unchanged for ticker/date/time/ohlcv).
+    // Defense-in-depth: filter out zero/null minute bars at the SQL layer so
+    // Tier 3 timing fields (High_Time, Low_Time, Opening_Drive_Strength) are
+    // never seeded with provider-gap timestamps.
     const result = await conn.runAndReadAll(
       `SELECT date, time, open, high, low, close
        FROM market.spot
        WHERE ticker = $1 AND date >= $2 AND date <= $3
+         AND open  IS NOT NULL AND open  > 0
+         AND high  IS NOT NULL AND high  > 0
+         AND low   IS NOT NULL AND low   > 0
+         AND close IS NOT NULL AND close > 0
        ORDER BY date, time`,
       [ticker, dates[0], dates[dates.length - 1]]
     );

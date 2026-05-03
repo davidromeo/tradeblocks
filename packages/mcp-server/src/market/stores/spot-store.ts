@@ -54,6 +54,16 @@ export abstract class SpotStore {
                    last(ask    ORDER BY time) AS ask
               FROM read_parquet([${fileList}], hive_partitioning=true)
               WHERE time >= '09:30' AND time <= '16:00'
+                -- Defense-in-depth: drop minute bars with zero/null OHLC
+                -- before aggregating. Mirrors the same guard on the public
+                -- market.spot_daily view (db/market-views.ts). Without this,
+                -- a bad-data minute (close=0 or low=0) collapses the daily
+                -- aggregate's min(low) to 0, which propagates into every
+                -- enriched indicator that uses (high - low) as range.
+                AND open  IS NOT NULL AND open  > 0
+                AND high  IS NOT NULL AND high  > 0
+                AND low   IS NOT NULL AND low   > 0
+                AND close IS NOT NULL AND close > 0
               GROUP BY date
               ORDER BY date`,
         params: [],

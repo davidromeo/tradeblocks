@@ -28,22 +28,53 @@ export class ParquetSpotStore extends SpotStore {
     bars: BarRow[],
   ): Promise<void> {
     if (bars.length === 0) return;
-    // quick-260421-l63: defense-in-depth write-side guard.
-    // Reject batches where every row is all-zero OHLC — typically a provider
-    // outage or holiday response that would poison downstream indicator math
-    // (RSI/ATR/EMA/SMA/RealizedVol). Mixed batches (some zero rows, some valid
-    // rows) are permitted — the caller owns that shape and the enricher's
-    // read-side filter strips zero rows before indicator math.
-    const allZero = bars.every(
-      (b) => b.open === 0 && b.high === 0 && b.low === 0 && b.close === 0,
+
+    // Defense-in-depth write-side filter (per-bar).
+    //
+    // Reject any bar whose OHLC contains a zero or non-finite price. These
+    // come from provider outages, holiday responses, or partial sessions and
+    // poison every downstream aggregate that touches them: market.spot_daily
+    // (min(low) → 0), enriched indicators (RSI/ATR/EMA gradient blowups),
+    // and Prior_Range_vs_ATR (Intraday_Range_Pct → ~100% when low=0). The
+    // earlier guard rejected only ALL-zero batches, but real-world bad data
+    // tends to be partial — a few zero rows mixed into an otherwise valid
+    // session. We filter those rows here so the staging table never sees them.
+    //
+    // Weekend dates (Sat/Sun) carry no real market activity; if the provider
+    // returns rows for them, they're junk regardless of price values. Reject
+    // the entire write rather than persisting a partition that downstream
+    // logic will never use legitimately.
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    if (weekday === 0 || weekday === 6) {
+      console.warn(
+        `ParquetSpotStore.writeBars: skipping weekend write ` +
+          `(ticker=${ticker} date=${date} rows=${bars.length})`,
+      );
+      return;
+    }
+
+    const cleanBars = bars.filter(
+      (b) =>
+        Number.isFinite(b.open) && b.open > 0 &&
+        Number.isFinite(b.high) && b.high > 0 &&
+        Number.isFinite(b.low)  && b.low  > 0 &&
+        Number.isFinite(b.close)&& b.close> 0,
     );
-    if (allZero) {
-      throw new Error(
-        `ParquetSpotStore.writeBars: refusing to write all-zero OHLC batch ` +
-          `(ticker=${ticker} date=${date} rows=${bars.length}). This indicates a ` +
-          `provider outage or holiday response that should be dropped upstream.`,
+    const dropped = bars.length - cleanBars.length;
+    if (dropped > 0) {
+      console.warn(
+        `ParquetSpotStore.writeBars: dropped ${dropped}/${bars.length} bars ` +
+          `with zero/null/non-finite prices (ticker=${ticker} date=${date})`,
       );
     }
+    if (cleanBars.length === 0) {
+      console.warn(
+        `ParquetSpotStore.writeBars: skipping write — all ${bars.length} bars ` +
+          `filtered (ticker=${ticker} date=${date})`,
+      );
+      return;
+    }
+    bars = cleanBars;
     const staging = `_spot_write_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     await this.ctx.conn.run(
       `CREATE TEMP TABLE "${staging}" (
