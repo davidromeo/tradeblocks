@@ -176,7 +176,19 @@ async function fetchPriceMap(
         // No daily fallback available — return empty map
       }
     }
+    // Defense-in-depth: skip any underlying bar with a zero/null OHLC value.
+    // The underlying ticker (SPX/QQQ/etc.) always has a real price — a zero
+    // is a provider gap that would corrupt the price map and downstream
+    // trigger comparisons. bar-cache.ts leaves bars raw so option tickers
+    // can keep legitimate "no trade" zero rows; this filter is applied at
+    // the underlying-consumer site.
     for (const b of bars) {
+      if (
+        !Number.isFinite(b.open)  || b.open  <= 0 ||
+        !Number.isFinite(b.high)  || b.high  <= 0 ||
+        !Number.isFinite(b.low)   || b.low   <= 0 ||
+        !Number.isFinite(b.close) || b.close <= 0
+      ) continue;
       const ts = `${b.date} ${b.time ?? ''}`.trim();
       map.set(ts, markPrice(b));
     }

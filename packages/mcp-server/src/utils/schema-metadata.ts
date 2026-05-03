@@ -745,6 +745,13 @@ ORDER BY t.date_opened DESC`,
   FROM market.spot
   WHERE ticker = 'SPX'
     AND time >= '09:30' AND time <= '09:45'
+    -- Drop minute bars with zero/null OHLC (occasional provider gaps).
+    -- Without this, MIN(low) collapses to 0 on contaminated minutes
+    -- and ORB_Range balloons to ~100% of price.
+    AND open IS NOT NULL AND open > 0
+    AND high IS NOT NULL AND high > 0
+    AND low  IS NOT NULL AND low  > 0
+    AND close IS NOT NULL AND close > 0
   GROUP BY ticker, date
 )
 SELECT

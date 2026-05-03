@@ -990,6 +990,17 @@ export function registerMarketDataTools(
             const mapKey = marketTickerDateKey(key.ticker, key.date);
             const list = intradayBarsByKey.get(mapKey) ?? [];
             for (const bar of bars) {
+              // Defense-in-depth: skip underlying bars with zero/null OHLC
+              // (provider gaps from the spot ingest). bar-cache leaves these
+              // raw so option tickers can keep legitimate "no trade" zeros;
+              // underlyings always have a real price, so a zero is a bug
+              // that would corrupt downstream high/low/range computations.
+              if (
+                !Number.isFinite(bar.open)  || bar.open  <= 0 ||
+                !Number.isFinite(bar.high)  || bar.high  <= 0 ||
+                !Number.isFinite(bar.low)   || bar.low   <= 0 ||
+                !Number.isFinite(bar.close) || bar.close <= 0
+              ) continue;
               list.push({
                 time: String(bar.time),
                 open: Number(bar.open),
@@ -1248,8 +1259,17 @@ export function registerMarketDataTools(
         const allBars = await stores.spot.readBars(normalizedTicker, startDate, end);
 
         // Group by date, preserving (time)-ascending order from readBars.
+        // Defense-in-depth: skip underlying bars with zero/null OHLC (provider
+        // gaps from the spot ingest). Without this, a zero-low minute in the
+        // opening window would corrupt ORB_Low and the breakout/range output.
         const barsByDate = new Map<string, typeof allBars>();
         for (const bar of allBars) {
+          if (
+            !Number.isFinite(bar.open)  || bar.open  <= 0 ||
+            !Number.isFinite(bar.high)  || bar.high  <= 0 ||
+            !Number.isFinite(bar.low)   || bar.low   <= 0 ||
+            !Number.isFinite(bar.close) || bar.close <= 0
+          ) continue;
           const arr = barsByDate.get(bar.date);
           if (arr) arr.push(bar);
           else barsByDate.set(bar.date, [bar]);

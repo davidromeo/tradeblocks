@@ -294,6 +294,15 @@ export async function createMarketParquetViews(
                last(ask    ORDER BY time) AS ask
         FROM market.spot
         WHERE time >= '09:30' AND time <= '16:00'
+          -- Defense-in-depth: drop any minute bar with a zero/null OHLC value
+          -- before aggregation. These come from provider outages, partial
+          -- sessions, or weekend rows that slipped past the writer guard;
+          -- without this filter min(low) collapses to 0 and propagates into
+          -- every downstream indicator (Intraday_Range_Pct, ATR, etc.).
+          AND open  IS NOT NULL AND open  > 0
+          AND high  IS NOT NULL AND high  > 0
+          AND low   IS NOT NULL AND low   > 0
+          AND close IS NOT NULL AND close > 0
         GROUP BY ticker, date
     `);
     viewsCreated.push("spot_daily");

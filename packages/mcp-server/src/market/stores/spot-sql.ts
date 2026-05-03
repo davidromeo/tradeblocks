@@ -70,6 +70,14 @@ export function buildReadDailyBarsSQL(
           WHERE ticker = $1
             AND date >= $2 AND date <= $3
             AND time >= '09:30' AND time <= '16:00'
+            -- Defense-in-depth: drop minute bars with zero/null OHLC
+            -- before aggregating. Mirrors market.spot_daily and the direct-
+            -- parquet daily-agg path. Without it, min(low) collapses to 0
+            -- on contaminated minutes and propagates into enriched indicators.
+            AND open  IS NOT NULL AND open  > 0
+            AND high  IS NOT NULL AND high  > 0
+            AND low   IS NOT NULL AND low   > 0
+            AND close IS NOT NULL AND close > 0
           GROUP BY ticker, date
           ORDER BY date`,
     params: [ticker, from, to],
@@ -94,6 +102,10 @@ export function buildReadRthOpensSQL(
           WHERE ticker = $1
             AND date >= $2 AND date <= $3
             AND time >= '09:30' AND time <= '16:00'
+            -- Defense-in-depth: drop bars with zero/null open before
+            -- aggregating; first(open) could otherwise return 0 if a bad
+            -- minute bar is the earliest in the session.
+            AND open IS NOT NULL AND open > 0
           GROUP BY date
           ORDER BY date`,
     params: [ticker, from, to],

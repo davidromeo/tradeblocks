@@ -366,6 +366,22 @@ export async function handleReplayTrade(
       // No fallback available — greeks will be omitted
     }
   }
+  // Defense-in-depth: drop any underlying bar with a zero/null OHLC value.
+  // SPX/QQQ/etc. always have a real price — a zero in spot is a provider
+  // gap (see ParquetSpotStore writer guard), and feeding it into Black-
+  // Scholes greeks computation produces nonsense (S=0 → infinite delta etc.).
+  // bar-cache.ts deliberately leaves bars raw so option tickers can keep
+  // legitimate "no trade" zero rows; the filtering responsibility lives
+  // here at the underlying-consumer site.
+  if (underlyingBars.length > 0) {
+    underlyingBars = underlyingBars.filter(
+      (b) =>
+        Number.isFinite(b.open) && b.open > 0 &&
+        Number.isFinite(b.high) && b.high > 0 &&
+        Number.isFinite(b.low)  && b.low  > 0 &&
+        Number.isFinite(b.close)&& b.close> 0,
+    );
+  }
 
   // Build underlying price map for greeks config
   const underlyingPrices = new Map<string, number>();

@@ -1,12 +1,26 @@
 /**
- * ParquetSpotStore writeBars zero-batch guard (quick-260421-l63 Task 3).
+ * ParquetSpotStore writeBars zero/weekend guard.
  *
- * Tests the defense-in-depth write-side guard that rejects all-zero-OHLC
- * batches. Mixed batches (some zero rows, some valid rows) are allowed —
- * upstream cleanup and the enricher's read-side filter handle those.
+ * Tests the defense-in-depth write-side filter that drops any bar with a
+ * zero/null/non-finite OHLC value, and skips weekend (Sat/Sun) writes
+ * entirely. Provider outages, holiday responses, and partial-session
+ * artifacts come in as zero-priced rows; persisting them poisons every
+ * downstream aggregate (spot_daily.low → 0 → Intraday_Range_Pct ~ 100%,
+ * RSI/ATR/EMA gradient blowups, Prior_Range_vs_ATR sentinel zeros).
+ *
+ * Behavior contract (current):
+ *   - All-zero batch → skipped silently (no throw, no write).
+ *   - Mixed batch (some zero rows, some valid rows) → only valid rows are
+ *     written. The earlier guard let mixed batches through; that turned
+ *     out to be wrong because the enricher does NOT strip zero-rows on
+ *     read (see src/utils/market-enricher.ts).
+ *   - Weekend date → skipped silently (no real market activity should
+ *     ever land in market.spot for Sat/Sun).
+ *   - Empty batch → no-op (early return).
+ *   - All-valid batch → writes all rows (no regression).
  *
  * Uses the shared build-fixture helper so the test exercises the real
- * Parquet write path (writeSpotPartition) end-to-end for the success cases.
+ * Parquet write path (writeSpotPartition) end-to-end.
  */
 import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 import { ParquetSpotStore } from "../../src/test-exports.js";
@@ -45,7 +59,7 @@ function validBar(time: string, basePrice: number): BarRow {
   };
 }
 
-describe("ParquetSpotStore writeBars zero-batch guard (quick-260421-l63)", () => {
+describe("ParquetSpotStore writeBars zero/weekend guard", () => {
   let fixture: FixtureHandle;
   let store: ParquetSpotStore;
 
@@ -58,29 +72,62 @@ describe("ParquetSpotStore writeBars zero-batch guard (quick-260421-l63)", () =>
     fixture.cleanup();
   });
 
-  it("rejects all-zero OHLC batch with descriptive error including ticker + date", async () => {
+  it("skips silently when every bar is all-zero (no throw, no rows written)", async () => {
     const bars = ["09:30", "10:30", "15:45"].map(zeroBar);
-    await expect(store.writeBars("SPX", "2025-01-06", bars)).rejects.toThrow(
-      /all-zero OHLC/,
-    );
-    await expect(store.writeBars("SPX", "2025-01-06", bars)).rejects.toThrow(
-      /ticker=SPX/,
-    );
-    await expect(store.writeBars("SPX", "2025-01-06", bars)).rejects.toThrow(
-      /date=2025-01-06/,
-    );
+    await expect(
+      store.writeBars("SPX", "2025-01-06", bars),
+    ).resolves.toBeUndefined();
+    await createMarketParquetViews(fixture.ctx.conn, fixture.ctx.dataDir);
+    const read = await store.readBars("SPX", "2025-01-06", "2025-01-06");
+    expect(read).toEqual([]);
   });
 
-  it("allows a mixed batch (one zero row, two valid rows) — caller owns mixed semantics", async () => {
+  it("filters zero rows out of a mixed batch and writes only the valid ones", async () => {
+    // Mixed batch: 1 zero bar + 2 valid bars. Earlier behavior allowed all
+    // 3 rows through; new behavior drops the zero row to prevent it from
+    // contaminating spot_daily aggregates (min(low) → 0).
     const bars = [zeroBar("09:30"), validBar("10:30", 105), validBar("15:45", 99)];
     await expect(
       store.writeBars("SPX", "2025-01-06", bars),
     ).resolves.toBeUndefined();
     await createMarketParquetViews(fixture.ctx.conn, fixture.ctx.dataDir);
     const read = await store.readBars("SPX", "2025-01-06", "2025-01-06");
-    // All 3 rows written, including the zero row. The guard does NOT filter
-    // mixed batches — that's the enricher's job on read.
-    expect(read.length).toBe(3);
+    expect(read.length).toBe(2);
+    // Confirm the zero row is gone — every persisted bar has positive prices
+    for (const r of read) {
+      expect(r.open).toBeGreaterThan(0);
+      expect(r.high).toBeGreaterThan(0);
+      expect(r.low).toBeGreaterThan(0);
+      expect(r.close).toBeGreaterThan(0);
+    }
+  });
+
+  it("skips weekend dates (Saturday) silently — no rows written", async () => {
+    // 2025-01-04 is a Saturday. Even with valid-looking prices the entire
+    // batch is dropped because no real market activity should land for Sat/Sun.
+    const bars = [validBar("09:30", 100), validBar("10:30", 105)].map((b) => ({
+      ...b,
+      date: "2025-01-04",
+    }));
+    await expect(
+      store.writeBars("SPX", "2025-01-04", bars),
+    ).resolves.toBeUndefined();
+    await createMarketParquetViews(fixture.ctx.conn, fixture.ctx.dataDir);
+    const read = await store.readBars("SPX", "2025-01-04", "2025-01-04");
+    expect(read).toEqual([]);
+  });
+
+  it("skips weekend dates (Sunday) silently — no rows written", async () => {
+    const bars = [validBar("09:30", 100)].map((b) => ({
+      ...b,
+      date: "2025-01-05",
+    }));
+    await expect(
+      store.writeBars("SPX", "2025-01-05", bars),
+    ).resolves.toBeUndefined();
+    await createMarketParquetViews(fixture.ctx.conn, fixture.ctx.dataDir);
+    const read = await store.readBars("SPX", "2025-01-05", "2025-01-05");
+    expect(read).toEqual([]);
   });
 
   it("preserves the empty-array early-return contract (no error, no write)", async () => {
