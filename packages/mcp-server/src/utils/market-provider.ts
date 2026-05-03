@@ -248,14 +248,16 @@ export interface MarketDataProvider {
   fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, MinuteQuote>>;
   /**
    * Stream every contract's minute quotes for one underlying on one date via
-   * the provider's wildcard/bulk endpoint. Yields one `BulkQuoteRow` per
-   * (OCC ticker, minute) so the ingestor can batch-write in bounded chunks —
-   * materializing a full SPX day overflows V8's default 4 GB heap.
+   * the provider's wildcard/bulk endpoint. Yields chunks of `BulkQuoteRow[]`
+   * (typically ~50k rows each) so the ingestor can batch-write in bounded
+   * chunks — materializing a full SPX day as individual yields would dominate
+   * runtime in per-row await/yield overhead, and as a flat array would
+   * overflow V8's default 4 GB heap.
    *
    * Capability-gated behind `capabilities().bulkByRoot` — providers that are
    * per-ticker-only (Massive, Polygon) do NOT implement this.
    */
-  fetchBulkQuotes?(options: BulkQuotesOptions): AsyncIterable<BulkQuoteRow>;
+  fetchBulkQuotes?(options: BulkQuotesOptions): AsyncIterable<BulkQuoteRow[]>;
   /** Historical option contract list from reference endpoint. Optional — not all providers support this. */
   fetchContractList?(options: FetchContractListOptions): Promise<FetchContractListResult>;
   /**
