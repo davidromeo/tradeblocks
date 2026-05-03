@@ -338,15 +338,15 @@ export class MarketIngestor {
     }
 
     const provider = this.resolveProvider(opts.provider);
-    const caps = provider.capabilities();
 
-    if (!caps.quotes) {
-      return {
-        status: "unsupported",
-        rowsWritten: 0,
-        error: `Provider ${provider.name} does not support quote fetch (capability.quotes=${caps.quotes})`,
-      };
-    }
+    // Dispatch decisions live on the per-mode paths below — the per-ticker
+    // path gates on `typeof provider.fetchQuotes === "function"` (line ~377);
+    // the bulk-by-underlying path gates on `caps.bulkByRoot` + `fetchBulkQuotes`
+    // (line ~429). A unified `caps.quotes` gate would (a) reject Massive on
+    // Developer plan even though its fetchQuotes has tier-aware fallback, and
+    // (b) reject any future bulk-only provider that doesn't implement the
+    // per-ticker fetchQuotes method. Provenance — "is this NBBO-grade?" — is
+    // captured per-row via the QuoteRow.source column.
 
     if (opts.dryRun) {
       return { status: "skipped", rowsWritten: 0, details: { reason: "dry_run" } };

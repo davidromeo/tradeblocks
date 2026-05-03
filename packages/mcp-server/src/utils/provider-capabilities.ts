@@ -22,10 +22,12 @@ export function resolveProviderCapabilities(
 ): ResolvedProviderCapabilities {
   const base = provider.capabilities();
   const massiveDataTier = provider.name === "massive" ? resolveMassiveDataTier(env) : null;
-  const quoteHydration =
-    provider.name === "massive"
-      ? massiveDataTier === "quotes" && typeof provider.fetchQuotes === "function"
-      : base.quotes && typeof provider.fetchQuotes === "function";
+  // The right question for hydration dispatch is "can I call fetchQuotes?",
+  // not "is the data NBBO-grade?" — provenance is captured per-row via
+  // QuoteRow.source. Massive's fetchQuotes branches internally on
+  // MASSIVE_DATA_TIER (true NBBO via /v3/quotes vs synthesized from /v2/aggs);
+  // either path returns useful per-minute data.
+  const quoteHydration = typeof provider.fetchQuotes === "function";
 
   return {
     ...base,

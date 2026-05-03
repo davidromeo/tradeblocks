@@ -32,7 +32,7 @@ describe('resolveMassiveDataTier', () => {
 });
 
 describe('resolveProviderCapabilities', () => {
-  test('Massive defaults to ohlc tier and no quote hydration', () => {
+  test('Massive defaults to ohlc tier with correct base capabilities', () => {
     const capabilities = resolveProviderCapabilities(
       new MassiveProvider(),
       {} as NodeJS.ProcessEnv,
@@ -40,29 +40,16 @@ describe('resolveProviderCapabilities', () => {
 
     expect(capabilities.providerName).toBe('massive');
     expect(capabilities.massiveDataTier).toBe('ohlc');
-    expect(capabilities.quoteHydration).toBe(false);
     expect(capabilities.flatFiles).toBe(true);
     expect(capabilities.contractList).toBe(true);
   });
 
-  test('Massive trades tier preserves tier but still disables quote hydration', () => {
-    const capabilities = resolveProviderCapabilities(
-      new MassiveProvider(),
-      { MASSIVE_DATA_TIER: 'trades' },
-    );
-
-    expect(capabilities.massiveDataTier).toBe('trades');
-    expect(capabilities.quoteHydration).toBe(false);
-  });
-
-  test('Massive quotes tier enables quote hydration', () => {
-    const capabilities = resolveProviderCapabilities(
-      new MassiveProvider(),
-      { MASSIVE_DATA_TIER: 'quotes' },
-    );
-
-    expect(capabilities.massiveDataTier).toBe('quotes');
-    expect(capabilities.quoteHydration).toBe(true);
+  test('quoteHydration is true for Massive whenever fetchQuotes exists, regardless of tier', () => {
+    const provider = new MassiveProvider();
+    expect(resolveProviderCapabilities(provider, { MASSIVE_DATA_TIER: 'ohlc' }).quoteHydration).toBe(true);
+    expect(resolveProviderCapabilities(provider, { MASSIVE_DATA_TIER: 'trades' }).quoteHydration).toBe(true);
+    expect(resolveProviderCapabilities(provider, { MASSIVE_DATA_TIER: 'quotes' }).quoteHydration).toBe(true);
+    expect(resolveProviderCapabilities(provider, {}).quoteHydration).toBe(true);
   });
 
   test('ThetaData passes through provider capabilities and has no Massive tier', () => {

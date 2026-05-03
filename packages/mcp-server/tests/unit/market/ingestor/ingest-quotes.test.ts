@@ -72,7 +72,7 @@ describe("MarketIngestor.ingestQuotes", () => {
     });
 
     expect(result.status).toBe("unsupported");
-    expect(result.error).toMatch(/does not support/i);
+    expect(result.error).toMatch(/fetchQuotes|per-ticker/i);
   });
 
   it("writes quotes when provider supports fetchQuotes", async () => {
@@ -294,5 +294,59 @@ describe("MarketIngestor.ingestQuotes", () => {
         to: "2024-12-20",
       }),
     ).rejects.toThrow(/root resolution mismatch/);
+  });
+
+  it("ingestQuotes per-ticker mode dispatches to provider.fetchQuotes even when caps.quotes=false", async () => {
+    // Massive's Developer-tier shape: capability strict-NBBO=false, but the
+    // provider has its own internal tier-aware fallback in fetchQuotes.
+    const provider: MarketDataProvider = {
+      name: "test-provider",
+      capabilities: () => ({
+        tradeBars: true, quotes: false, greeks: false, flatFiles: false,
+        bulkByRoot: false, perTicker: true, minuteBars: true, dailyBars: true,
+      }),
+      fetchBars: async () => [],
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+      fetchQuotes: async () => {
+        const m = new Map<string, { bid: number; ask: number }>();
+        m.set("2026-01-05 09:30", { bid: 10.0, ask: 10.5 });
+        return m;
+      },
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({ stores, dataRoot: dataDir, providerFactory: () => provider });
+
+    const result = await ingestor.ingestQuotes({
+      tickers: ["SPXW260319C04800000"],
+      from: "2026-01-05",
+      to: "2026-01-05",
+    });
+
+    expect(result.status).toBe("ok");          // not "unsupported"
+    expect(result.rowsWritten).toBe(1);
+  });
+
+  it("ingestQuotes per-ticker mode returns unsupported when provider has no fetchQuotes method", async () => {
+    const provider: MarketDataProvider = {
+      name: "no-quotes-provider",
+      capabilities: () => ({
+        tradeBars: true, quotes: false, greeks: false, flatFiles: false,
+        bulkByRoot: false, perTicker: true, minuteBars: true, dailyBars: true,
+      }),
+      fetchBars: async () => [],
+      fetchOptionSnapshot: async () => ({ contracts: [] }),
+      // fetchQuotes intentionally omitted
+    };
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({ stores, dataRoot: dataDir, providerFactory: () => provider });
+
+    const result = await ingestor.ingestQuotes({
+      tickers: ["SPXW260319C04800000"],
+      from: "2026-01-05",
+      to: "2026-01-05",
+    });
+
+    expect(result.status).toBe("unsupported");
+    expect(result.error).toMatch(/fetchQuotes|per-ticker/i);
   });
 });
