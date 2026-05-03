@@ -15,6 +15,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import { registerBlockTools } from "./tools/blocks.js";
 import { registerAnalysisTools } from "./tools/analysis.js";
 import { registerPerformanceTools } from "./tools/performance.js";
@@ -38,11 +39,15 @@ import { registerGreeksAttributionTools } from "./tools/greeks-attribution.js";
 import { registerMarketFetchTools } from "./tools/market-fetch.js";
 import { registerTickerTools } from "./tools/tickers.js";
 import { loadRegistry } from "./market/tickers/loader.js";
-import { extraToolRegistrations } from './index.ext.js';
 import { closeConnection, getConnection, getCurrentConnection } from "./db/index.js";
 import { setDataRoot } from "./db/data-root.js";
 import { createMarketStores } from "./market/stores/index.js";
 import type { StoreContext, MarketStores } from "./market/stores/index.js";
+import type { TradeBlocksPlugin, TradeBlocksPluginContext } from "./plugins.js";
+
+export interface StartTradeBlocksMcpOptions {
+  plugins?: TradeBlocksPlugin[];
+}
 
 // CLI usage help
 function printUsage(): void {
@@ -173,8 +178,41 @@ async function handleSkillCommand(command: string): Promise<void> {
   }
 }
 
+export function registerTradeBlocksCoreTools(
+  server: McpServer,
+  context: TradeBlocksPluginContext,
+): void {
+  const { baseDir, marketStores, tickerRegistry } = context;
+
+  registerBlockTools(server, baseDir);
+  registerAnalysisTools(server, baseDir);
+  registerPerformanceTools(server, baseDir);
+  registerReportTools(server, baseDir);
+  registerImportTools(server, baseDir);
+  registerMarketImportTools(server, baseDir, marketStores);
+  registerMarketEnrichmentTools(server, baseDir, marketStores);
+  registerMarketDataTools(server, baseDir, marketStores);
+  registerSQLTools(server, baseDir);
+  registerSchemaTools(server, baseDir);
+  registerEdgeDecayTools(server, baseDir);
+  registerGuideTools(server);
+  registerProfileTools(server, baseDir);
+  registerTickerTools(server, tickerRegistry, baseDir);
+  registerProfileAnalysisTools(server, baseDir);
+  registerRegimeAdvisorTools(server, baseDir);
+  registerReplayTools(server, baseDir, marketStores);
+  registerSnapshotTools(server);
+  registerExitAnalysisTools(server, baseDir, marketStores);
+  registerBatchExitAnalysisTools(server, baseDir, marketStores);
+  registerGreeksAttributionTools(server, baseDir, marketStores);
+  registerMarketFetchTools(server, baseDir, marketStores);
+}
+
 // Main entry point - handles both skill CLI commands and MCP server mode
-async function main(): Promise<void> {
+export async function startTradeBlocksMcp(
+  options: StartTradeBlocksMcpOptions = {}
+): Promise<void> {
+  const plugins = options.plugins ?? [];
   const command = process.argv[2];
 
   // Handle skill commands (exit after handling)
@@ -272,6 +310,14 @@ async function main(): Promise<void> {
     tickers: tickerRegistry,
   };
   const marketStores: MarketStores = createMarketStores(storeContext);
+  const pluginContext: TradeBlocksPluginContext = {
+    baseDir: resolvedDir,
+    marketStores,
+    tickerRegistry,
+    parquetMode,
+    getCurrentConnection,
+  };
+
   // stdio transport reserves stdout for the MCP JSON protocol — anything else
   // on stdout (even diagnostics) makes the client throw "not valid JSON".
   // Diagnostic output must go to stderr.
@@ -289,29 +335,10 @@ async function main(): Promise<void> {
         instructions: "Call list_blocks first to discover available block IDs. All other block tools require a blockId returned by list_blocks. For SQL queries, call describe_database first to discover block_ids and column names, then filter trades with WHERE block_id = '...'.",
       }
     );
-    registerBlockTools(server, resolvedDir);
-    registerAnalysisTools(server, resolvedDir);
-    registerPerformanceTools(server, resolvedDir);
-    registerReportTools(server, resolvedDir);
-    registerImportTools(server, resolvedDir);
-    registerMarketImportTools(server, resolvedDir, marketStores);
-    registerMarketEnrichmentTools(server, resolvedDir, marketStores);
-    registerMarketDataTools(server, resolvedDir, marketStores);
-    registerSQLTools(server, resolvedDir);
-    registerSchemaTools(server, resolvedDir);
-    registerEdgeDecayTools(server, resolvedDir);
-    registerGuideTools(server);
-    registerProfileTools(server, resolvedDir);
-    registerTickerTools(server, tickerRegistry, resolvedDir);
-    registerProfileAnalysisTools(server, resolvedDir);
-    registerRegimeAdvisorTools(server, resolvedDir);
-    registerReplayTools(server, resolvedDir, marketStores);
-    registerSnapshotTools(server);
-    registerExitAnalysisTools(server, resolvedDir, marketStores);
-    registerBatchExitAnalysisTools(server, resolvedDir, marketStores);
-    registerGreeksAttributionTools(server, resolvedDir, marketStores);
-    registerMarketFetchTools(server, resolvedDir, marketStores);
-    for (const register of extraToolRegistrations) register(server, resolvedDir, marketStores);
+    registerTradeBlocksCoreTools(server, pluginContext);
+    for (const plugin of plugins) {
+      plugin.registerTools?.(server, pluginContext);
+    }
     return server;
   };
 
@@ -357,7 +384,12 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown);
 }
 
-main().catch((error) => {
-  console.error("Error:", error.message || error);
-  process.exit(1);
-});
+const entrypoint = process.argv[1] ? path.resolve(process.argv[1]) : "";
+const currentFile = fileURLToPath(import.meta.url);
+
+if (entrypoint === currentFile) {
+  startTradeBlocksMcp().catch((error) => {
+    console.error("Error:", error.message || error);
+    process.exit(1);
+  });
+}

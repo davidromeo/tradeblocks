@@ -19,6 +19,7 @@ import type { TickerRegistry } from '../market/tickers/registry.js';
 import type { DuckDBConnection } from '@duckdb/node-api';
 import { getConnection } from '../db/connection.js';
 import { resolveMassiveDataTier, type MassiveDataTier } from './provider-capabilities.js';
+import { isAnomalousQuote } from './quote-anomaly.js';
 
 const OCC_TICKER_RE = /^[A-Z]+\d{6}[CP]\d{8}$/;
 
@@ -170,6 +171,9 @@ export function mergeQuoteBars(
     // deep-OTM options near expiry (no bidders, but still quoted to close).
     // Drop only when there's genuinely no market.
     if (quote.ask <= 0 || quote.bid < 0) continue;
+    // Drop crossed or blown-spread quotes. For synthetic bars there is no
+    // underlying trade to anchor sanity, so a bad quote becomes a bad mark.
+    if (isAnomalousQuote(quote.bid, quote.ask)) continue;
     const mid = (quote.bid + quote.ask) / 2;
     const [date, time] = key.split(' ');
     if (!date || !time) continue;
@@ -255,6 +259,7 @@ async function readCachedQuotes(
   ticker: string,
   from: string,
   to: string,
+  dataDir?: string,
   tickers?: Pick<TickerRegistry, 'resolve'>,
 ): Promise<Map<string, { bid: number; ask: number }>> {
   const quotes = new Map<string, { bid: number; ask: number }>();
@@ -266,7 +271,7 @@ async function readCachedQuotes(
     // walk. OCC tickers resolve to their underlying root for directory lookup.
     let sql: string;
     if (OCC_TICKER_RE.test(ticker)) {
-      const marketDir = resolveMarketDir('.');
+      const marketDir = resolveMarketDir(dataDir ?? '.');
       const parent = resolve(
         marketDir,
         'option_quote_minutes',
@@ -338,6 +343,8 @@ export interface ReadCachedBarsOptions {
   from: string;
   to: string;
   conn: DuckDBConnection;
+  /** Data root for direct Parquet reads; avoids falling back to market views. */
+  dataDir?: string;
   tickers?: Pick<TickerRegistry, 'resolve'>;
 }
 
@@ -348,13 +355,13 @@ export interface ReadCachedBarsOptions {
  * data is prepared in advance.
  */
 export async function readCachedBars(opts: ReadCachedBarsOptions): Promise<BarRow[]> {
-  const { ticker, from, to, conn, tickers } = opts;
+  const { ticker, from, to, conn, dataDir, tickers } = opts;
   try {
     const escaped = ticker.replace(/'/g, "''");
     // Direct-parquet fast path (v3.0 layout: spot/ticker=X/date=Y/data.parquet).
     // Avoids the market.spot view glob walk, which is ~430ms planning per call
     // and dominates runtime for multi-year index reads (VIX/VIX9D/underlying).
-    const marketDir = resolveMarketDir('.');
+    const marketDir = resolveMarketDir(dataDir ?? '.');
     const tickerDir = resolve(marketDir, 'spot', `ticker=${ticker}`);
     const directPaths = listExistingDateParquets(tickerDir, from, to);
     let sql: string;
@@ -390,7 +397,7 @@ export async function readCachedBars(opts: ReadCachedBarsOptions): Promise<BarRo
 
     // Enrich with backfilled quotes from option_quote_minutes (Parquet cache).
     // This fills gaps in sparse trade-bar data with dense NBBO minute bars.
-    const cachedQuotes = await readCachedQuotes(conn, ticker, from, to, tickers);
+    const cachedQuotes = await readCachedQuotes(conn, ticker, from, to, dataDir, tickers);
     if (cachedQuotes.size > 0) {
       bars = mergeQuoteBars(bars, cachedQuotes, ticker);
     }
