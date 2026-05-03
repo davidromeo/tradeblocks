@@ -383,7 +383,7 @@ export function registerSimilarityBlockTools(
           ): Promise<{ profile: StrategyProfile | null; status: "found" | "not_found" | "error" }> {
             try {
               const conn = await getConnection(baseDir);
-              const profile = await getProfile(conn, strategyBlockId, strategyName);
+              const profile = await getProfile(conn, strategyBlockId, strategyName, baseDir);
               return profile
                 ? { profile, status: "found" }
                 : { profile: null, status: "not_found" };

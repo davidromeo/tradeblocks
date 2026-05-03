@@ -944,7 +944,7 @@ export function registerHealthBlockTools(
         let profiles: StrategyProfile[] = [];
         try {
           const conn = await getConnection(baseDir);
-          profiles = await listProfiles(conn, blockId);
+          profiles = await listProfiles(conn, blockId, baseDir);
           useNormalization = profiles.some(
             (p) => p.positionSizing?.method === "pct_of_portfolio"
           );

@@ -298,7 +298,7 @@ export async function handleAnalyzeStructureFit(
 
   // Load profile
   const conn = await getConnection(baseDir);
-  const profile = await getProfile(conn, blockId, strategyName);
+  const profile = await getProfile(conn, blockId, strategyName, baseDir);
   if (!profile) {
     return createToolOutput(
       `No profile found for strategy '${strategyName}' in block '${blockId}'. Create one with profile_strategy first.`,
@@ -533,7 +533,7 @@ export async function handleValidateEntryFilters(
 
   // Load profile
   const conn = await getConnection(baseDir);
-  const profile = await getProfile(conn, blockId, strategyName);
+  const profile = await getProfile(conn, blockId, strategyName, baseDir);
   if (!profile) {
     return createToolOutput(
       `No profile found for strategy '${strategyName}' in block '${blockId}'. Create one with profile_strategy first.`,
@@ -829,7 +829,7 @@ export async function handlePortfolioStructureMap(
     const conn = await getConnection(baseDir);
 
     // Load profiles
-    const profiles = await listProfiles(conn, blockId);
+    const profiles = await listProfiles(conn, blockId, baseDir);
     if (profiles.length === 0) {
       return {
         content: [

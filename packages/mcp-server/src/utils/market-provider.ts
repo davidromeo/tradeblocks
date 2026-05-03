@@ -148,7 +148,18 @@ export interface DataAvailability {
 /** Declares what data endpoints a provider supports. Used by the pipeline to build fetch plans. */
 export interface ProviderCapabilities {
   tradeBars: boolean;       // minute OHLC from trade aggregates
-  quotes: boolean;          // NBBO bid/ask (tick or minute level)
+  /**
+   * Strictly: "true NBBO bid/ask is available via this provider's dedicated
+   * quotes endpoint". Use this when you specifically need real bid/ask spreads.
+   *
+   * NOTE: this is NOT the right gate for "should I call fetchQuotes()". A
+   * provider may implement `fetchQuotes` and return useful per-minute data
+   * (e.g. synthesized from OHLCV) even when `quotes === false`. Dispatch on
+   * `typeof provider.fetchQuotes === 'function'` instead, and use the
+   * persisted `source` column on `option_quote_minutes` ('nbbo' vs
+   * 'synth_close') for per-row provenance.
+   */
+  quotes: boolean;
   greeks: boolean;          // provider-computed greeks on contracts
   flatFiles: boolean;       // bulk S3/file download of historical data
   bulkByRoot: boolean;      // one call returns all strikes for a root (ThetaData pattern)
@@ -163,6 +174,69 @@ export interface ProviderCapabilities {
   };
 }
 
+/** Options for fetching every contract's minute quotes under an underlying for a single date. */
+export interface BulkQuotesOptions {
+  /** Canonical underlying (e.g. "SPX"). Provider expands to its wire-level roots (e.g. SPX monthlies + SPXW dailies). */
+  underlying: string;
+  /** Trading date "YYYY-MM-DD" ET. */
+  date: string;
+  /**
+   * Optional per-(root,right) completion hook. Invoked once per wire-level
+   * group as soon as its producer stream finishes — ok or error. Used by the
+   * ingestor to drive long-running-call progress notifications. Pure-data
+   * callback: MUST NOT throw, providers are expected to wrap invocations in
+   * their own try/catch so an unhandled exception in a caller's reporter
+   * never propagates into the stream machinery.
+   */
+  onGroupComplete?: (info: {
+    root: string;
+    right: "call" | "put";
+    date: string;
+    status: "ok" | "error";
+  }) => void;
+}
+
+/**
+ * One minute-level bid/ask tick emitted by the bulk-quote stream. The provider
+ * MUST emit rows as they arrive (async iterable) — a full SPX/SPXW day can be
+ * hundreds of MB when materialized, which OOMs node even at 8 GB heap. Consumers
+ * batch and write in bounded chunks.
+ */
+export interface BulkQuoteRow {
+  /** OCC ticker (e.g. "SPXW260417C04800000"). */
+  ticker: string;
+  /** "YYYY-MM-DD HH:MM" ET. */
+  timestamp: string;
+  bid: number;
+  ask: number;
+  delta?: number | null;
+  gamma?: number | null;
+  theta?: number | null;
+  vega?: number | null;
+  iv?: number | null;
+  greeks_source?: "massive" | "thetadata" | "computed" | null;
+}
+
+export interface MinuteQuote {
+  bid: number;
+  ask: number;
+  /**
+   * Provenance tag for the quote.
+   *  - "nbbo": true bid/ask from a quotes-tier endpoint (Massive /v3/quotes,
+   *    ThetaData NBBO).
+   *  - "synth_close": synthesized from option minute OHLCV when the provider's
+   *    NBBO endpoint isn't available; bid === ask === close.
+   *  - null/undefined: legacy / unknown provenance.
+   */
+  source?: "nbbo" | "synth_close" | null;
+  delta?: number | null;
+  gamma?: number | null;
+  theta?: number | null;
+  vega?: number | null;
+  iv?: number | null;
+  greeks_source?: "massive" | "thetadata" | "computed" | null;
+}
+
 /** The contract every market data provider must implement. */
 export interface MarketDataProvider {
   readonly name: string;
@@ -171,7 +245,19 @@ export interface MarketDataProvider {
   fetchBars(options: FetchBarsOptions): Promise<BarRow[]>;
   fetchOptionSnapshot(options: FetchSnapshotOptions): Promise<FetchSnapshotResult>;
   /** Best-effort bid/ask quotes keyed by "YYYY-MM-DD HH:MM" ET. Optional — not all providers support this. */
-  fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>>;
+  fetchQuotes?(ticker: string, from: string, to: string): Promise<Map<string, MinuteQuote>>;
+  /**
+   * Stream every contract's minute quotes for one underlying on one date via
+   * the provider's wildcard/bulk endpoint. Yields chunks of `BulkQuoteRow[]`
+   * (typically ~50k rows each) so the ingestor can batch-write in bounded
+   * chunks — materializing a full SPX day as individual yields would dominate
+   * runtime in per-row await/yield overhead, and as a flat array would
+   * overflow V8's default 4 GB heap.
+   *
+   * Capability-gated behind `capabilities().bulkByRoot` — providers that are
+   * per-ticker-only (Massive, Polygon) do NOT implement this.
+   */
+  fetchBulkQuotes?(options: BulkQuotesOptions): AsyncIterable<BulkQuoteRow[]>;
   /** Historical option contract list from reference endpoint. Optional — not all providers support this. */
   fetchContractList?(options: FetchContractListOptions): Promise<FetchContractListResult>;
   /**

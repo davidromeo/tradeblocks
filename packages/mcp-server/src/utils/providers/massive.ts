@@ -29,8 +29,10 @@ import type {
   ContractReference,
   BulkDownloadOptions,
   BulkDownloadResult,
+  MinuteQuote,
 } from "../market-provider.js";
 import { computeLegGreeks } from "../black-scholes.js";
+import { resolveMassiveDataTier } from "../massive-tier.js";
 
 // ===========================================================================
 // Zod Schemas — Aggregates (OHLCV Bars)
@@ -420,7 +422,7 @@ export class MassiveProvider implements MarketDataProvider {
   readonly name = "massive";
 
   capabilities(): ProviderCapabilities {
-    const tier = (process.env.MASSIVE_DATA_TIER ?? '').toLowerCase();
+    const tier = resolveMassiveDataTier();
     return {
       tradeBars: true,
       quotes: tier === 'quotes',
@@ -525,9 +527,11 @@ export class MassiveProvider implements MarketDataProvider {
       }
     }
 
-    // Quote enrichment (bid/ask backfill + synthetic gap bars) is now handled
-    // by fetchBarsWithCache → enrichWithQuotes in bar-cache.ts.
-    // This avoids double-fetching quotes when bars flow through the cache layer.
+    // Quote enrichment (bid/ask backfill + synthetic gap bars) used to be
+    // handled by `fetchBarsWithCache → enrichWithQuotes` in bar-cache.ts.
+    // Phase 4 / D-05 / SEP-01 removed `enrichWithQuotes` (reads no longer
+    // trigger provider writes); the equivalent backfill now lives in the
+    // pipeline-side `enrich_quotes` MCP tool / quote-minute-cache.
 
     return allRows;
   }
@@ -551,8 +555,8 @@ export class MassiveProvider implements MarketDataProvider {
     headers: Record<string, string>,
     from: string,
     to: string,
-  ): Promise<Map<string, { bid: number; ask: number }>> {
-    const result = new Map<string, { bid: number; ask: number }>();
+  ): Promise<Map<string, MinuteQuote>> {
+    const result = new Map<string, MinuteQuote>();
 
     // Iterate trading days in the range
     const startDate = new Date(from + 'T00:00:00');
@@ -592,13 +596,13 @@ export class MassiveProvider implements MarketDataProvider {
       }
 
       // Aggregate tick quotes to minute-level NBBO (last quote per minute wins)
-      const byMinute = new Map<string, { bid: number; ask: number }>();
+      const byMinute = new Map<string, MinuteQuote>();
       for (const q of dayQuotes) {
         const key = nanosToETMinuteKey(q.sip_timestamp);
         const [keyDate, keyTime] = key.split(" ");
         if (keyDate !== dateStr || !keyTime) continue;
         if (keyTime < "09:30" || keyTime > "16:00") continue;
-        byMinute.set(key, { bid: q.bid_price, ask: q.ask_price });
+        byMinute.set(key, { bid: q.bid_price, ask: q.ask_price, source: "nbbo" });
       }
 
       for (const [key, val] of byMinute) {
@@ -609,7 +613,51 @@ export class MassiveProvider implements MarketDataProvider {
     return result;
   }
 
-  async fetchQuotes(ticker: string, from: string, to: string): Promise<Map<string, { bid: number; ask: number }>> {
+  /**
+   * Developer-tier fallback. When MASSIVE_DATA_TIER ≠ 'quotes' the user
+   * doesn't have access to /v3/quotes, but /v2/aggs minute bars are included
+   * in lower tiers (Developer plan). We fetch option minute OHLCV via the
+   * shared bar-aggregates path and synthesize {bid: close, ask: close} per
+   * minute. Downstream `enrichQuoteRows` averages bid+ask, so this surfaces
+   * `close` as the mid — a reasonable proxy when true NBBO is unavailable.
+   * Tagged source='synth_close' in Task 6 so consumers can distinguish from
+   * true NBBO (locked-spread NBBO can also have bid==ask, so the source
+   * column is the authoritative signal — not the bid/ask equality).
+   */
+  private async fetchQuotesViaMinuteBars(
+    ticker: string,
+    from: string,
+    to: string,
+  ): Promise<Map<string, MinuteQuote>> {
+    const bars = await this.fetchBars({
+      ticker,
+      from,
+      to,
+      timespan: "minute",
+      multiplier: 1,
+      assetClass: "option",
+    });
+
+    const out = new Map<string, MinuteQuote>();
+    for (const bar of bars) {
+      if (!bar.time) continue;
+      const time = bar.time.slice(0, 5); // "HH:MM"
+      // RTH window only — match the /v3/quotes path's behavior
+      if (time < "09:30" || time > "16:00") continue;
+      const key = `${bar.date} ${time}`;
+      out.set(key, { bid: bar.close, ask: bar.close, source: "synth_close" });
+    }
+    return out;
+  }
+
+  async fetchQuotes(ticker: string, from: string, to: string): Promise<Map<string, MinuteQuote>> {
+    const tier = resolveMassiveDataTier();
+    if (tier !== "quotes") {
+      // Developer / OHLC / trades tiers: /v3/quotes is gated. Fall back to
+      // /v2/aggs minute bars and synthesize bid=ask=close. See
+      // fetchQuotesViaMinuteBars JSDoc for the trade-off.
+      return this.fetchQuotesViaMinuteBars(ticker, from, to);
+    }
     const apiKey = getApiKey();
     const apiTicker = toMassiveTicker(ticker, "option");
     const headers = { Authorization: `Bearer ${apiKey}` };

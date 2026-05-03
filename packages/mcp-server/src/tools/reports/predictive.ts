@@ -254,7 +254,7 @@ export function registerPredictiveTools(
           if (strategyName) {
             try {
               const conn = await getConnection(baseDir);
-              const profile = await getProfile(conn, blockId, strategyName);
+              const profile = await getProfile(conn, blockId, strategyName, baseDir);
               if (profile && profile.entryFilters.length > 0) {
                 const profileFilterFields = new Set(
                   profile.entryFilters.map((f) => f.field)

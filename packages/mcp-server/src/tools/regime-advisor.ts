@@ -170,7 +170,7 @@ export async function handleRegimeAllocationAdvisor(
 
   // Load all profiles, optionally filtered by blockId
   const conn = await getConnection(baseDir);
-  const profiles = await listProfiles(conn, input.blockId);
+  const profiles = await listProfiles(conn, input.blockId, baseDir);
 
   if (profiles.length === 0) {
     return createToolOutput(

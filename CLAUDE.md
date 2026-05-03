@@ -117,7 +117,22 @@ A Next.js 15 application for analyzing options trading performance. Processes CS
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+### Communicating effort
+
+Never estimate effort in time units (hours, days, weeks, sprints). Time estimates are uncalibrated to David's actual workflow and create false precision.
+
+Frame effort as **complexity weighted to value/outcome**:
+- **Scope**: how many files / call sites / systems are affected
+- **Complexity**: mechanical edit vs. design change vs. cross-cutting rewrite
+- **Blast radius**: what breaks if it goes wrong (tests, public repo users, live trading)
+- **Value delivered**: what problem this actually solves and how big that problem is
+
+**Bad:** "multi-day rewrite", "an afternoon's work", "~2 hours"
+**Good:** "large rewrite — every Theta call site remaps + new auth model + native binary in distribution — for marginal value over the 30-line transpose fix already in place"
+**Good:** "small mechanical change in one file, no consumer impact, fixes the immediate breakage Amy reported"
+**Good:** "medium refactor across 3 files, blast radius limited to <feature> scoring path, unblocks the autonomous-iteration agent work"
+
+When recommending between options, lead with the value delta and the blast radius — those are what David is actually weighing.
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->

@@ -15,6 +15,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import { registerBlockTools } from "./tools/blocks.js";
 import { registerAnalysisTools } from "./tools/analysis.js";
 import { registerPerformanceTools } from "./tools/performance.js";
@@ -35,9 +36,18 @@ import { registerSnapshotTools } from "./tools/snapshot.js";
 import { registerExitAnalysisTools } from "./tools/exit-analysis.js";
 import { registerBatchExitAnalysisTools } from "./tools/batch-exit-analysis.js";
 import { registerGreeksAttributionTools } from "./tools/greeks-attribution.js";
-import { extraToolRegistrations } from './index.ext.js';
-import { handleDirectCall } from "./cli-handler.js";
-import { closeConnection } from "./db/index.js";
+import { registerMarketFetchTools } from "./tools/market-fetch.js";
+import { registerTickerTools } from "./tools/tickers.js";
+import { loadRegistry } from "./market/tickers/loader.js";
+import { closeConnection, getConnection, getCurrentConnection } from "./db/index.js";
+import { setDataRoot } from "./db/data-root.js";
+import { createMarketStores } from "./market/stores/index.js";
+import type { StoreContext, MarketStores } from "./market/stores/index.js";
+import type { TradeBlocksPlugin, TradeBlocksPluginContext } from "./plugins.js";
+
+export interface StartTradeBlocksMcpOptions {
+  plugins?: TradeBlocksPlugin[];
+}
 
 // CLI usage help
 function printUsage(): void {
@@ -55,26 +65,24 @@ Options:
   --http             Start HTTP server instead of stdio (for web platforms)
   --port <number>    HTTP server port (default: 3100, requires --http)
   --blocks-dir <path> Directory containing CSV block folders (default: same as <folder>)
+  --data-root <path> Root directory for shared data (market/, market-meta/, strategies/, blocks/).
+                     Default: same as <folder>. Use when DuckDB is local but data is shared (e.g. Syncthing).
   --market-db <path> Path to market.duckdb (default: <folder>/market.duckdb)
   --no-auth          Disable authentication (only use behind an auth proxy)
 
 Environment:
   BLOCKS_DIRECTORY    Default backtests folder if not specified
   TRADEBLOCKS_BLOCKS_DIR  Directory for CSV block folders (overrides default, overridden by --blocks-dir)
+  TRADEBLOCKS_DATA_ROOT   Root directory for shared data (overrides default, overridden by --data-root)
   MARKET_DB_PATH      Path to market.duckdb (overrides default, overridden by --market-db)
 
 Commands:
   install-skills    Install TradeBlocks skills to AI platform
   uninstall-skills  Remove TradeBlocks skills from AI platform
   check-skills      Check skill installation status
-  --call <tool> '<args>'  Directly invoke an MCP tool (for testing)
-
 Skill Command Options:
   --platform <name>  Target platform: claude, codex, gemini (default: claude)
   --force            Reinstall even if skills exist (install only)
-
-Direct Tool Invocation:
-  TRADEBLOCKS_DATA_DIR=~/backtests tradeblocks-mcp --call list_blocks '{}'
 
 Examples:
   tradeblocks-mcp ~/backtests
@@ -91,6 +99,7 @@ function parseServerArgs(): {
   noAuth: boolean;
   directory: string | undefined;
   blocksDir: string | undefined;
+  dataRoot: string | undefined;
   marketDb: string | undefined;
 } {
   const args = process.argv.slice(2);
@@ -99,6 +108,7 @@ function parseServerArgs(): {
   let noAuth = false;
   let directory: string | undefined;
   let blocksDir: string | undefined;
+  let dataRoot: string | undefined;
   let marketDb: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
@@ -114,6 +124,9 @@ function parseServerArgs(): {
       i++; // Skip next arg (the port value)
     } else if (arg === "--blocks-dir" && args[i + 1]) {
       blocksDir = args[i + 1];
+      i++; // Skip next arg (the path value)
+    } else if (arg === "--data-root" && args[i + 1]) {
+      dataRoot = args[i + 1];
       i++; // Skip next arg (the path value)
     } else if (arg === "--market-db" && args[i + 1]) {
       marketDb = args[i + 1];
@@ -133,11 +146,14 @@ function parseServerArgs(): {
   if (!blocksDir) {
     blocksDir = process.env.TRADEBLOCKS_BLOCKS_DIR;
   }
+  if (!dataRoot) {
+    dataRoot = process.env.TRADEBLOCKS_DATA_ROOT;
+  }
   if (!marketDb) {
     marketDb = process.env.MARKET_DB_PATH;
   }
 
-  return { http, port, noAuth, directory, blocksDir, marketDb };
+  return { http, port, noAuth, directory, blocksDir, dataRoot, marketDb };
 }
 
 // Handle skill CLI commands (deprecated — now use plugin)
@@ -162,15 +178,42 @@ async function handleSkillCommand(command: string): Promise<void> {
   }
 }
 
-// Main entry point - handles both skill CLI commands and MCP server mode
-async function main(): Promise<void> {
-  const command = process.argv[2];
+export function registerTradeBlocksCoreTools(
+  server: McpServer,
+  context: TradeBlocksPluginContext,
+): void {
+  const { baseDir, marketStores, tickerRegistry } = context;
 
-  // Handle --call mode for direct tool invocation
-  if (command === "--call") {
-    await handleDirectCall(process.argv.slice(3));
-    return;
-  }
+  registerBlockTools(server, baseDir);
+  registerAnalysisTools(server, baseDir);
+  registerPerformanceTools(server, baseDir);
+  registerReportTools(server, baseDir);
+  registerImportTools(server, baseDir);
+  registerMarketImportTools(server, baseDir, marketStores);
+  registerMarketEnrichmentTools(server, baseDir, marketStores);
+  registerMarketDataTools(server, baseDir, marketStores);
+  registerSQLTools(server, baseDir);
+  registerSchemaTools(server, baseDir);
+  registerEdgeDecayTools(server, baseDir);
+  registerGuideTools(server);
+  registerProfileTools(server, baseDir);
+  registerTickerTools(server, tickerRegistry, baseDir);
+  registerProfileAnalysisTools(server, baseDir);
+  registerRegimeAdvisorTools(server, baseDir);
+  registerReplayTools(server, baseDir, marketStores);
+  registerSnapshotTools(server);
+  registerExitAnalysisTools(server, baseDir, marketStores);
+  registerBatchExitAnalysisTools(server, baseDir, marketStores);
+  registerGreeksAttributionTools(server, baseDir, marketStores);
+  registerMarketFetchTools(server, baseDir, marketStores);
+}
+
+// Main entry point - handles both skill CLI commands and MCP server mode
+export async function startTradeBlocksMcp(
+  options: StartTradeBlocksMcpOptions = {}
+): Promise<void> {
+  const plugins = options.plugins ?? [];
+  const command = process.argv[2];
 
   // Handle skill commands (exit after handling)
   if (
@@ -189,7 +232,7 @@ async function main(): Promise<void> {
   }
 
   // MCP Server mode - parse arguments
-  const { http, port, noAuth, directory: backtestDir, blocksDir } = parseServerArgs();
+  const { http, port, noAuth, directory: backtestDir, blocksDir, dataRoot } = parseServerArgs();
 
   if (!backtestDir) {
     printUsage();
@@ -206,6 +249,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Configure separate data root directory if specified
+  if (dataRoot) {
+    const resolvedDataRoot = path.resolve(dataRoot);
+    try {
+      await fs.access(resolvedDataRoot);
+    } catch {
+      console.error(`Error: Data root directory does not exist: ${resolvedDataRoot}`);
+      process.exit(1);
+    }
+    setDataRoot(resolvedDataRoot);
+  }
+
   // Configure separate blocks directory if specified
   if (blocksDir) {
     const resolvedBlocksDir = path.resolve(blocksDir);
@@ -219,6 +274,57 @@ async function main(): Promise<void> {
     setBlocksDir(resolvedBlocksDir);
   }
 
+  // Ticker registry singleton (Market Data 3.0 — Plan 01-05).
+  // Pitfall 5 / T-1-07 mitigation: ONE TickerRegistry instance per MCP process.
+  // The SAME reference is passed to registerTickerTools(server, ...) below AND
+  // (Phase 2) to StoreContext.tickers inside createMarketStores. Constructing
+  // it once here — never inside createServer — keeps state coherent across the
+  // HTTP transport's stateless per-request server instances.
+  const tickerRegistry = await loadRegistry({ dataDir: resolvedDir });
+
+  // ============================================================================
+  // Market Data 3.0 — Phase 2 (Plan 02-05): StoreContext + createMarketStores
+  //
+  // D-03: construct ONE StoreContext per MCP process and call the factory once.
+  // `parquetMode` is snapshotted at startup (Pitfall 8) — downstream stores
+  // never re-read `process.env.TRADEBLOCKS_PARQUET`. `conn` is the shared
+  // singleton DuckDB connection (idempotent to call getConnection here: first
+  // call wires schemas/views, subsequent getConnection() calls from tool
+  // handlers return the same instance).
+  //
+  // `marketStores` is held in process scope but NOT yet threaded into tool
+  // registrations — that is Phase 4's CONSUMER-01 scope (reordered on
+  // 2026-04-17 from Phase 3 — see ROADMAP.md). The `void` line below
+  // suppresses the unused-variable warning until then.
+  // ============================================================================
+  await getConnection(resolvedDir);
+  const parquetMode = process.env.TRADEBLOCKS_PARQUET === "true";
+  // `conn` is a getter that resolves the *current* connection on every access.
+  // Required because upgradeToReadWrite / downgradeToReadOnly close-and-reopen
+  // the module-level handle — a captured reference would go stale the moment a
+  // tool upgrades for a write, surfacing as "connection disconnected".
+  const storeContext: StoreContext = {
+    get conn() { return getCurrentConnection(); },
+    dataDir: resolvedDir,
+    parquetMode,
+    tickers: tickerRegistry,
+  };
+  const marketStores: MarketStores = createMarketStores(storeContext);
+  const pluginContext: TradeBlocksPluginContext = {
+    baseDir: resolvedDir,
+    marketStores,
+    tickerRegistry,
+    parquetMode,
+    getCurrentConnection,
+  };
+
+  // stdio transport reserves stdout for the MCP JSON protocol — anything else
+  // on stdout (even diagnostics) makes the client throw "not valid JSON".
+  // Diagnostic output must go to stderr.
+  console.error(
+    `[market-stores] Constructed: ${parquetMode ? "parquet" : "duckdb"} backend`,
+  );
+
   // Factory function to create configured MCP server instances
   // Used by HTTP transport which needs fresh instances per request (stateless mode)
   const createServer = (): McpServer => {
@@ -229,27 +335,10 @@ async function main(): Promise<void> {
         instructions: "Call list_blocks first to discover available block IDs. All other block tools require a blockId returned by list_blocks. For SQL queries, call describe_database first to discover block_ids and column names, then filter trades with WHERE block_id = '...'.",
       }
     );
-    registerBlockTools(server, resolvedDir);
-    registerAnalysisTools(server, resolvedDir);
-    registerPerformanceTools(server, resolvedDir);
-    registerReportTools(server, resolvedDir);
-    registerImportTools(server, resolvedDir);
-    registerMarketImportTools(server, resolvedDir);
-    registerMarketEnrichmentTools(server, resolvedDir);
-    registerMarketDataTools(server, resolvedDir);
-    registerSQLTools(server, resolvedDir);
-    registerSchemaTools(server, resolvedDir);
-    registerEdgeDecayTools(server, resolvedDir);
-    registerGuideTools(server);
-    registerProfileTools(server, resolvedDir);
-    registerProfileAnalysisTools(server, resolvedDir);
-    registerRegimeAdvisorTools(server, resolvedDir);
-    registerReplayTools(server, resolvedDir);
-    registerSnapshotTools(server);
-    registerExitAnalysisTools(server, resolvedDir);
-    registerBatchExitAnalysisTools(server, resolvedDir);
-    registerGreeksAttributionTools(server, resolvedDir);
-    for (const register of extraToolRegistrations) register(server, resolvedDir);
+    registerTradeBlocksCoreTools(server, pluginContext);
+    for (const plugin of plugins) {
+      plugin.registerTools?.(server, pluginContext);
+    }
     return server;
   };
 
@@ -295,7 +384,12 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown);
 }
 
-main().catch((error) => {
-  console.error("Error:", error.message || error);
-  process.exit(1);
-});
+const entrypoint = process.argv[1] ? path.resolve(process.argv[1]) : "";
+const currentFile = fileURLToPath(import.meta.url);
+
+if (entrypoint === currentFile) {
+  startTradeBlocksMcp().catch((error) => {
+    console.error("Error:", error.message || error);
+    process.exit(1);
+  });
+}
