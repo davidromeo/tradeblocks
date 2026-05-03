@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, jest } from "@jest/globals";
 import { mkdirSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -8,6 +8,7 @@ import { createMarketStores } from "../../../../src/market/stores/index.js";
 import { ensureMarketDataTables } from "../../../../src/db/market-schemas.js";
 import { TickerRegistry } from "../../../../src/market/tickers/registry.js";
 import type { MarketDataProvider } from "../../../../src/utils/market-provider.js";
+import { MassiveProvider } from "../../../../src/utils/providers/massive.js";
 
 describe("MarketIngestor.ingestQuotes", () => {
   let dataDir: string;
@@ -348,5 +349,49 @@ describe("MarketIngestor.ingestQuotes", () => {
 
     expect(result.status).toBe("unsupported");
     expect(result.error).toMatch(/fetchQuotes|per-ticker/i);
+  });
+
+  it("ingestQuotes uses fetchBars fallback synthesis when MASSIVE_DATA_TIER is unset", async () => {
+    delete process.env.MASSIVE_DATA_TIER;
+    process.env.MASSIVE_API_KEY = "test-key";
+
+    const fetchSpy = jest.spyOn(globalThis, "fetch") as unknown as jest.SpiedFunction<typeof fetch>;
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({
+      ticker: "O:SPX250107C05000000",
+      queryCount: 1,
+      resultsCount: 1,
+      adjusted: false,
+      results: [{ v: 50, vw: 13.0, o: 12.8, c: 13.20, h: 13.5, l: 12.5, t: 1736260200000, n: 10 }],
+      status: "OK",
+      request_id: "req-001",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const provider = new MassiveProvider();
+    const stores = createMarketStores({ conn, dataDir, parquetMode: false, tickers });
+    const ingestor = new MarketIngestor({ stores, dataRoot: dataDir, providerFactory: () => provider });
+
+    const result = await ingestor.ingestQuotes({
+      tickers: ["SPX250107C05000000"],
+      from: "2025-01-07",
+      to: "2025-01-07",
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.rowsWritten).toBe(1);
+
+    // Read back via the store reader. parquetMode: false → DuckdbQuoteStore.
+    // Both backends now persist `source` (Task 5).
+    const persisted = await stores.quote.readQuotes(
+      ["SPX250107C05000000"], "2025-01-07", "2025-01-07"
+    );
+    const rows = persisted.get("SPX250107C05000000")!;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].bid).toBe(13.20);
+    expect(rows[0].ask).toBe(13.20);
+    expect(rows[0].source).toBe("synth_close");
+    expect(rows[0].occ_ticker).toBe("SPX250107C05000000");
+
+    fetchSpy.mockRestore();
+    delete process.env.MASSIVE_API_KEY;
   });
 });
