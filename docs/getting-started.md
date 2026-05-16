@@ -25,8 +25,8 @@ See [packages/mcp-server/README.md](../packages/mcp-server/README.md) for platfo
 ### Docker
 
 ```bash
-docker pull ghcr.io/davidromeo/tradeblocks-mcp:latest
-docker run -v ~/Trading/backtests:/data ghcr.io/davidromeo/tradeblocks-mcp /data
+docker pull ghcr.io/tradeblocks-org/tradeblocks-mcp:latest
+docker run -v ~/Trading/backtests:/data ghcr.io/tradeblocks-org/tradeblocks-mcp /data
 ```
 
 ### Environment Variables
@@ -80,7 +80,7 @@ The web dashboard is a Next.js app for visual portfolio exploration — equity c
 ### Setup
 
 ```bash
-git clone https://github.com/davidromeo/tradeblocks.git
+git clone https://github.com/tradeblocks-org/tradeblocks.git
 cd tradeblocks
 npm install
 npm run dev

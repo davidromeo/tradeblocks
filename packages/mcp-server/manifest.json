@@ -11,11 +11,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/davidromeo/tradeblocks"
+    "url": "https://github.com/tradeblocks-org/tradeblocks"
   },
-  "homepage": "https://github.com/davidromeo/tradeblocks",
-  "documentation": "https://github.com/davidromeo/tradeblocks/tree/master/packages/mcp-server",
-  "support": "https://github.com/davidromeo/tradeblocks/issues",
+  "homepage": "https://github.com/tradeblocks-org/tradeblocks",
+  "documentation": "https://github.com/tradeblocks-org/tradeblocks/tree/master/packages/mcp-server",
+  "support": "https://github.com/tradeblocks-org/tradeblocks/issues",
   "server": {
     "type": "node",
     "entry_point": "server/index.js",
