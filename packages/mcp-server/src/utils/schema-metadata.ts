@@ -614,6 +614,18 @@ export const SCHEMA_DESCRIPTIONS: SchemaMetadata = {
             description: "Computation revision for stored computed greeks; null for provider-native values.",
             hypothesis: false,
           },
+          rate_type: {
+            description: "Interest-rate curve or rate label used by the provider or computed-greeks path.",
+            hypothesis: false,
+          },
+          rate_value: {
+            description: "Interest-rate value used by the provider or computed-greeks path.",
+            hypothesis: false,
+          },
+          gamma_source: {
+            description: "Provenance label for the stored gamma value when it differs from the broader greeks source.",
+            hypothesis: false,
+          },
         },
       },
     },

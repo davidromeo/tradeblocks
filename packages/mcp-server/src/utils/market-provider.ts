@@ -162,7 +162,7 @@ export interface ProviderCapabilities {
   quotes: boolean;
   greeks: boolean;          // provider-computed greeks on contracts
   flatFiles: boolean;       // bulk S3/file download of historical data
-  bulkByRoot: boolean;      // one call returns all strikes for a root (ThetaData pattern)
+  bulkByRoot: boolean;      // provider has an every-contract path for an underlying/root
   perTicker: boolean;       // one call per OCC ticker (Massive/Polygon pattern)
   minuteBars: boolean;      // minute-level resolution available
   dailyBars: boolean;       // daily-level resolution available
@@ -181,18 +181,21 @@ export interface BulkQuotesOptions {
   /** Trading date "YYYY-MM-DD" ET. */
   date: string;
   /**
-   * Optional per-(root,right) completion hook. Invoked once per wire-level
-   * group as soon as its producer stream finishes — ok or error. Used by the
-   * ingestor to drive long-running-call progress notifications. Pure-data
-   * callback: MUST NOT throw, providers are expected to wrap invocations in
-   * their own try/catch so an unhandled exception in a caller's reporter
-   * never propagates into the stream machinery.
+   * Optional progress hook for bulk-by-root providers. Providers may invoke it
+   * for intra-group checkpoints and final root/right completion; callers must
+   * treat duplicate root/right/date tuples as progress heartbeats rather than
+   * exactly-once completion records. Pure-data callback: MUST NOT throw,
+   * providers are expected to wrap invocations in their own try/catch so an
+   * unhandled reporter exception never propagates into stream machinery.
    */
   onGroupComplete?: (info: {
     root: string;
     right: "call" | "put";
     date: string;
     status: "ok" | "error";
+    phase?: "checkpoint" | "complete";
+    completedContracts?: number;
+    totalContracts?: number;
   }) => void;
 }
 
@@ -215,6 +218,10 @@ export interface BulkQuoteRow {
   vega?: number | null;
   iv?: number | null;
   greeks_source?: "massive" | "thetadata" | "computed" | null;
+  greeks_revision?: number | null;
+  rate_type?: string | null;
+  rate_value?: number | null;
+  gamma_source?: string | null;
 }
 
 export interface MinuteQuote {
@@ -235,6 +242,10 @@ export interface MinuteQuote {
   vega?: number | null;
   iv?: number | null;
   greeks_source?: "massive" | "thetadata" | "computed" | null;
+  greeks_revision?: number | null;
+  rate_type?: string | null;
+  rate_value?: number | null;
+  gamma_source?: string | null;
 }
 
 /** The contract every market data provider must implement. */

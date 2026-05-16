@@ -31,8 +31,9 @@ export interface IngestQuotesOptions {
   tickers?: string[];
   /**
    * Underlyings to fetch every-contract-every-minute for. Routes through
-   * `provider.fetchBulkQuotes` — one wildcard wire call per (root, right)
-   * per date (e.g. 4 calls/day for SPX covering SPX-C, SPX-P, SPXW-C, SPXW-P).
+   * `provider.fetchBulkQuotes`; providers choose their own bounded bulk
+   * strategy (ThetaData MDDS fetches concrete quote contracts and greeks
+   * bands).
    * Capability-gated on `capabilities().bulkByRoot` — returns status=unsupported
    * on per-ticker-only providers.
    *
@@ -45,9 +46,8 @@ export interface IngestQuotesOptions {
   dryRun?: boolean;
   /**
    * Optional progress callback for the bulk (`underlyings`) branch. The
-   * ingestor invokes it once per (root, right, date) producer completion AND
-   * once per (underlying, date) flush. The per-ticker branch ignores this —
-   * per-ticker calls are fast enough to not need progress events.
+   * ingestor forwards provider root/right checkpoints/completions and emits
+   * once per (underlying, date) flush. The per-ticker branch ignores this.
    *
    * Reporter exceptions are caught and swallowed — progress is best-effort
    * and MUST NOT fail the ingest.
@@ -58,8 +58,9 @@ export interface IngestQuotesOptions {
 /**
  * Event shape surfaced to callers that opt in to long-running-ingest progress
  * via `IngestQuotesOptions.onProgress`. Two kinds:
- *   - `"group"`        — fired after each (root, right, date) wildcard stream
- *                        producer finishes (ok or error). One per group.
+ *   - `"group"`        — provider-side root/right checkpoint or completion.
+ *                        Providers may emit multiple events for the same
+ *                        root/right/date during bounded batch processing.
  *   - `"date-flushed"` — fired after the ingestor flushes the per-date
  *                        writeQuotes buckets to disk. One per (underlying,
  *                        date) pair.
@@ -72,6 +73,9 @@ export type BulkProgressEvent =
       right: "call" | "put";
       date: string;
       status: "ok" | "error";
+      phase?: "checkpoint" | "complete";
+      completedContracts?: number;
+      totalContracts?: number;
     }
   | {
       kind: "date-flushed";

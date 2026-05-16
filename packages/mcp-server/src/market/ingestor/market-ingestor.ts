@@ -84,11 +84,18 @@ export class MarketIngestor {
     let totalRows = 0;
     let minDate: string | undefined;
     let maxDate: string | undefined;
+    const providerTimespan = this.timespanToProviderArgs(timespan);
 
     for (const ticker of opts.tickers) {
       const normalizedTicker = ticker.toUpperCase();
       const assetClass = this.detectAssetClass(normalizedTicker);
-      const unsupported = this.preflightProviderSupport(provider, "bars", normalizedTicker, assetClass);
+      const unsupported = this.preflightProviderSupport(
+        provider,
+        "bars",
+        normalizedTicker,
+        assetClass,
+        providerTimespan,
+      );
       if (unsupported) return unsupported;
       let bars: BarRow[];
       try {
@@ -96,7 +103,7 @@ export class MarketIngestor {
           ticker: normalizedTicker,
           from: opts.from,
           to: opts.to,
-          ...this.timespanToProviderArgs(timespan),
+          ...providerTimespan,
           assetClass,
         });
       } catch (error) {
@@ -208,7 +215,30 @@ export class MarketIngestor {
     operation: "bars" | "quotes" | "chain",
     target: string,
     assetClass?: "stock" | "index" | "option",
+    barRequest?: { timespan: "day" | "minute" | "hour"; multiplier: number },
   ): IngestResult | null {
+    if (operation === "bars" && barRequest) {
+      const caps = provider.capabilities();
+      if (barRequest.timespan === "day" && !caps.dailyBars) {
+        return unsupportedProviderResult(
+          provider,
+          operation,
+          target,
+          "provider capabilities report it does not support daily bars",
+          "preflight: dailyBars=false",
+        );
+      }
+      if (barRequest.timespan !== "day" && (!caps.tradeBars || !caps.minuteBars)) {
+        return unsupportedProviderResult(
+          provider,
+          operation,
+          target,
+          "provider capabilities report it does not support minute bars",
+          `preflight: tradeBars=${String(caps.tradeBars)} minuteBars=${String(caps.minuteBars)}`,
+        );
+      }
+    }
+
     if (provider.name === "massive" && assetClass === "index") {
       if (operation === "bars") {
         return unsupportedProviderResult(
@@ -413,10 +443,10 @@ export class MarketIngestor {
   }
 
   /**
-   * Bulk path: one wildcard call per (underlying, date) returning every
-   * contract's minute quotes in a single response. Capability-gated on
-   * `bulkByRoot` + presence of `fetchBulkQuotes` — returns `unsupported` on
-   * per-ticker-only providers (Massive).
+   * Bulk path: provider-specific full-chain quote fetch for each
+   * (underlying, date). ThetaData MDDS uses bounded per-contract batches;
+   * other providers may use different bulk shapes. Capability-gated on
+   * `bulkByRoot` + presence of `fetchBulkQuotes`.
    */
   private async ingestQuotesByUnderlying(
     provider: MarketDataProvider,
@@ -519,7 +549,15 @@ export class MarketIngestor {
     // throw can't corrupt the stream — we still wrap here as a second
     // safety net (in case the provider forgets).
     const onGroupComplete = onProgress
-      ? (info: { root: string; right: "call" | "put"; date: string; status: "ok" | "error" }) => {
+      ? (info: {
+          root: string;
+          right: "call" | "put";
+          date: string;
+          status: "ok" | "error";
+          phase?: "checkpoint" | "complete";
+          completedContracts?: number;
+          totalContracts?: number;
+        }) => {
           // Fire-and-forget — provider callsite is synchronous; async work
           // is scheduled on the next microtask. Any failure is swallowed by
           // safeEmit so progress remains best-effort.
@@ -530,6 +568,9 @@ export class MarketIngestor {
             right: info.right,
             date: info.date,
             status: info.status,
+            phase: info.phase,
+            completedContracts: info.completedContracts,
+            totalContracts: info.totalContracts,
           });
         }
       : undefined;
@@ -574,6 +615,10 @@ export class MarketIngestor {
           vega: row.vega ?? null,
           iv: row.iv ?? null,
           greeks_source: row.greeks_source ?? null,
+          greeks_revision: row.greeks_revision ?? null,
+          rate_type: row.rate_type ?? null,
+          rate_value: row.rate_value ?? null,
+          gamma_source: row.gamma_source ?? null,
         });
       }
     }
@@ -619,6 +664,10 @@ export class MarketIngestor {
         vega: quote.vega ?? null,
         iv: quote.iv ?? null,
         greeks_source: quote.greeks_source ?? null,
+        greeks_revision: quote.greeks_revision ?? null,
+        rate_type: quote.rate_type ?? null,
+        rate_value: quote.rate_value ?? null,
+        gamma_source: quote.gamma_source ?? null,
       });
       byDate.set(date, list);
     }

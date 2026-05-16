@@ -396,7 +396,7 @@ describe("MarketIngestor.refresh", () => {
     const row = quotes.get("SPXW260107C04800000")?.[0];
     expect(row).toEqual(expect.objectContaining({
       greeks_source: "computed",
-      greeks_revision: 2,
+      greeks_revision: 3,
     }));
     expect(row?.delta).not.toBeNull();
     expect(row?.gamma).not.toBeNull();

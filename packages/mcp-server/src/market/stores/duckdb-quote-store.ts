@@ -45,6 +45,9 @@ function parseQuoteRow(row: unknown[]): QuoteRow {
     iv: row[13] == null ? null : Number(row[13]),
     greeks_source: row[14] == null ? null : String(row[14]) as QuoteRow["greeks_source"],
     greeks_revision: row[15] == null ? null : Number(row[15]),
+    rate_type: row[16] == null ? null : String(row[16]),
+    rate_value: row[17] == null ? null : Number(row[17]),
+    gamma_source: row[18] == null ? null : String(row[18]),
   };
 }
 
@@ -70,6 +73,9 @@ export class DuckdbQuoteStore extends QuoteStore {
       "iv DOUBLE",
       "greeks_source VARCHAR",
       "greeks_revision INTEGER",
+      "rate_type VARCHAR",
+      "rate_value DOUBLE",
+      "gamma_source VARCHAR",
     ];
     for (const addition of additions) {
       await this.ctx.conn.run(
@@ -88,8 +94,8 @@ export class DuckdbQuoteStore extends QuoteStore {
     await this.ensureWritableQuoteSchema();
     const placeholders = quotes
       .map((_, i) => {
-        const b = i * 16;
-        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},$${b + 16})`;
+        const b = i * 19;
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},$${b + 16},$${b + 17},$${b + 18},$${b + 19})`;
       })
       .join(", ");
     const params: unknown[] = quotes.flatMap((q) => {
@@ -112,12 +118,16 @@ export class DuckdbQuoteStore extends QuoteStore {
         q.iv ?? null,
         q.greeks_source ?? null,
         q.greeks_revision ?? null,
+        q.rate_type ?? null,
+        q.rate_value ?? null,
+        q.gamma_source ?? null,
       ];
     });
     await this.ctx.conn.run(
       `INSERT OR REPLACE INTO market.option_quote_minutes
          (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source,
-          delta, gamma, theta, vega, iv, greeks_source, greeks_revision)
+          delta, gamma, theta, vega, iv, greeks_source, greeks_revision,
+          rate_type, rate_value, gamma_source)
        VALUES ${placeholders}`,
       params as (string | number | boolean | null | bigint)[],
     );
@@ -133,7 +143,8 @@ export class DuckdbQuoteStore extends QuoteStore {
     const result = await this.ctx.conn.run(
       `INSERT OR REPLACE INTO market.option_quote_minutes
          (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source,
-          delta, gamma, theta, vega, iv, greeks_source, greeks_revision)
+          delta, gamma, theta, vega, iv, greeks_source, greeks_revision,
+          rate_type, rate_value, gamma_source)
        SELECT ${projection}
          FROM (${selectSql}) AS q`,
     );
@@ -317,7 +328,7 @@ export class DuckdbQuoteStore extends QuoteStore {
       SELECT q.ticker, q.time,
              b.contract_type, b.strike, b.expiration, b.dte,
              q.bid, q.ask,
-             q.delta, q.gamma, q.theta, q.vega, q.iv
+             q.delta, q.gamma, q.theta, q.vega, q.iv, q.greeks_source
         FROM market.option_quote_minutes q
         JOIN band b ON q.ticker = b.ticker
        WHERE q.underlying = ${pUnderlying}
@@ -343,6 +354,7 @@ export class DuckdbQuoteStore extends QuoteStore {
       theta: r[10] == null ? null : Number(r[10]),
       vega: r[11] == null ? null : Number(r[11]),
       iv: r[12] == null ? null : Number(r[12]),
+      greeks_source: r[13] == null ? null : String(r[13]) as WindowQuoteRow["greeks_source"],
     }));
   }
 

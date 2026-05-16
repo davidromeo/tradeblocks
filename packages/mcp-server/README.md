@@ -170,6 +170,26 @@ tradeblocks-mcp --directory ./data --blocks-dir ~/backtests
 | `TRADEBLOCKS_BLOCKS_DIR` | Directory for CSV block folders (overridden by `--blocks-dir`) |
 | `MARKET_DB_PATH` | Path to market.duckdb (overridden by `--market-db`) |
 
+### ThetaData MDDS Credentials
+
+Set `MARKET_DATA_PROVIDER=thetadata` to use the direct ThetaData MDDS/gRPC provider. It connects to MDDS directly; ThetaTerminal, a local JVM, and terminal auto-start settings are not used.
+
+Configure credentials with either:
+
+```bash
+THETADATA_EMAIL=you@example.com
+THETADATA_PASSWORD=your-password
+```
+
+Or use `THETADATA_CREDENTIALS_FILE` with the email on line 1 and password on line 2:
+
+```text
+you@example.com
+your-password
+```
+
+Optional advanced MDDS settings include `THETADATA_MDDS_HOST`, `THETADATA_MDDS_PORT`, `THETADATA_MDDS_MAX_CONCURRENCY`, and retry tuning env vars. Do not commit credentials or put secrets directly in checked-in service files.
+
 ## Docker Deployment
 
 Run the MCP server in a container for remote/server deployments.

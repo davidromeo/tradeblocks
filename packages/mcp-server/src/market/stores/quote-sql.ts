@@ -54,7 +54,8 @@ export function buildReadQuotesSQL(
     : "";
   return {
     sql: `SELECT ticker, date, time, bid, ask, mid, last_updated_ns,
-                 delta, gamma, theta, vega, iv, greeks_source, greeks_revision
+                 delta, gamma, theta, vega, iv, greeks_source, greeks_revision,
+                 rate_type, rate_value, gamma_source
           FROM market.option_quote_minutes
           WHERE underlying = $1
             AND date >= $2

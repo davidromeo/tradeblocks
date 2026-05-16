@@ -14,6 +14,9 @@ export interface QuoteGreekFields {
   iv?: number | null;
   greeks_source?: QuoteGreeksSource | null;
   greeks_revision?: number | null;
+  rate_type?: string | null;
+  rate_value?: number | null;
+  gamma_source?: string | null;
 }
 
 export interface QuoteGreeksContractMeta {
@@ -31,7 +34,12 @@ export interface QuoteGreeksStats {
   unresolvedRows: number;
 }
 
-export const OPTION_QUOTE_GREEKS_REVISION = 2;
+export const OPTION_QUOTE_GREEKS_REVISION = 3;
+// Convention: SOFR overnight rate + zero dividend yield. Stored alongside each
+// computed greek row via `rate_type`, `rate_value`, and `gamma_source` so older
+// partitions remain distinguishable from revision-3 writes.
+export const OPTION_QUOTE_GREEKS_RATE_TYPE = "sofr";
+export const OPTION_QUOTE_GREEKS_GAMMA_SOURCE = "computed_sofr_q0";
 export const OPTION_QUOTE_GREEKS_DIVIDEND_YIELD = 0;
 
 function isFiniteNumber(value: unknown): value is number {
@@ -46,15 +54,38 @@ export function hasQuoteGreeks(row: QuoteGreekFields): boolean {
     && isFiniteNumber(row.iv ?? null);
 }
 
+function hasProviderFirstOrderGreeks(row: QuoteGreekFields): boolean {
+  return row.greeks_source === "thetadata"
+    && isFiniteNumber(row.delta ?? null)
+    && (row.gamma == null || isFiniteNumber(row.gamma))
+    && isFiniteNumber(row.theta ?? null)
+    && isFiniteNumber(row.vega ?? null)
+    && isFiniteNumber(row.iv ?? null);
+}
+
+function hasExistingQuoteGreeks(row: QuoteGreekFields): boolean {
+  return hasQuoteGreeks(row) || hasProviderFirstOrderGreeks(row);
+}
+
+function hasRevision2QuoteGreekProvenance(row: QuoteGreekFields): boolean {
+  return row.rate_type === OPTION_QUOTE_GREEKS_RATE_TYPE
+    && isFiniteNumber(row.rate_value ?? null)
+    && row.gamma_source === OPTION_QUOTE_GREEKS_GAMMA_SOURCE;
+}
+
 export function normalizeExistingQuoteGreeks(
   row: QuoteGreekFields,
   defaultSource?: Exclude<QuoteGreeksSource, "computed">,
 ): void {
-  if (!hasQuoteGreeks(row)) return;
+  if (!hasExistingQuoteGreeks(row)) return;
   if (row.greeks_source == null && defaultSource) {
     row.greeks_source = defaultSource;
   }
-  if (row.greeks_source === "computed" && row.greeks_revision == null) {
+  if (
+    row.greeks_source === "computed"
+    && row.greeks_revision == null
+    && hasRevision2QuoteGreekProvenance(row)
+  ) {
     row.greeks_revision = OPTION_QUOTE_GREEKS_REVISION;
   }
 }
@@ -99,6 +130,9 @@ export function computeQuoteGreeks(params: {
     iv: result.iv,
     greeks_source: "computed",
     greeks_revision: OPTION_QUOTE_GREEKS_REVISION,
+    rate_type: OPTION_QUOTE_GREEKS_RATE_TYPE,
+    rate_value: riskFreeRate,
+    gamma_source: OPTION_QUOTE_GREEKS_GAMMA_SOURCE,
   };
 }
 
@@ -138,7 +172,7 @@ export function applyQuoteGreeks<T extends QuoteGreekFields>(params: {
 
   for (const row of rows) {
     stats.rowsVisited++;
-    if (mode !== "compute" && hasQuoteGreeks(row)) {
+    if (mode !== "compute" && hasExistingQuoteGreeks(row)) {
       normalizeExistingQuoteGreeks(row, defaultProviderSource);
       stats.existingGreeksRows++;
       continue;
@@ -186,6 +220,9 @@ export function applyQuoteGreeks<T extends QuoteGreekFields>(params: {
     row.iv = greeks.iv;
     row.greeks_source = greeks.greeks_source;
     row.greeks_revision = greeks.greeks_revision;
+    row.rate_type = greeks.rate_type;
+    row.rate_value = greeks.rate_value;
+    row.gamma_source = greeks.gamma_source;
     stats.computedRows++;
   }
 

@@ -89,6 +89,9 @@ export function quoteParquetGreekProjection(
     projectGreek("iv"),
     `${quoteParquetColumnExpr(columns, alias, "greeks_source", "VARCHAR")} AS greeks_source`,
     `${quoteParquetColumnExpr(columns, alias, "greeks_revision", "INTEGER")} AS greeks_revision`,
+    `${quoteParquetColumnExpr(columns, alias, "rate_type", "VARCHAR")} AS rate_type`,
+    `${quoteParquetColumnExpr(columns, alias, "rate_value", "DOUBLE")} AS rate_value`,
+    `${quoteParquetColumnExpr(columns, alias, "gamma_source", "VARCHAR")} AS gamma_source`,
   ].join(",\n              ");
 }
 
@@ -119,6 +122,9 @@ export function quoteParquetGreekWriteProjection(
     `${castReal("iv")} AS iv`,
     `${quoteParquetColumnExpr(columns, alias, "greeks_source", "VARCHAR")} AS greeks_source`,
     `${quoteParquetColumnExpr(columns, alias, "greeks_revision", "INTEGER")} AS greeks_revision`,
+    `${quoteParquetColumnExpr(columns, alias, "rate_type", "VARCHAR")} AS rate_type`,
+    `${quoteParquetColumnExpr(columns, alias, "rate_value", "DOUBLE")} AS rate_value`,
+    `${quoteParquetColumnExpr(columns, alias, "gamma_source", "VARCHAR")} AS gamma_source`,
   ].join(",\n              ");
 }
 

@@ -31,6 +31,9 @@ export interface OptionQuoteSnapshotRow {
   iv: number | null;
   greeks_source: "massive" | "thetadata" | "computed" | null;
   greeks_revision: number | null;
+  rate_type: string | null;
+  rate_value: number | null;
+  gamma_source: string | null;
 }
 
 export interface OptionQuoteLegFilter {
@@ -151,6 +154,57 @@ function rowMatchesAnyLegFilter(
     return true;
   }
   return false;
+}
+
+const PROJECTED_QUOTE = {
+  delta: 10,
+  gamma: 11,
+  theta: 12,
+  vega: 13,
+  iv: 14,
+  greeksSource: 15,
+  greeksRevision: 16,
+  rateType: 17,
+  rateValue: 18,
+  gammaSource: 19,
+  dteDays: 20,
+} as const;
+
+function parseProjectedQuoteFields(row: unknown[]): Pick<
+  OptionQuoteSnapshotRow,
+  | "delta"
+  | "gamma"
+  | "theta"
+  | "vega"
+  | "iv"
+  | "greeks_source"
+  | "greeks_revision"
+  | "rate_type"
+  | "rate_value"
+  | "gamma_source"
+> {
+  return {
+    delta: row[PROJECTED_QUOTE.delta] == null ? null : Number(row[PROJECTED_QUOTE.delta]),
+    gamma: row[PROJECTED_QUOTE.gamma] == null ? null : Number(row[PROJECTED_QUOTE.gamma]),
+    theta: row[PROJECTED_QUOTE.theta] == null ? null : Number(row[PROJECTED_QUOTE.theta]),
+    vega: row[PROJECTED_QUOTE.vega] == null ? null : Number(row[PROJECTED_QUOTE.vega]),
+    iv: row[PROJECTED_QUOTE.iv] == null ? null : Number(row[PROJECTED_QUOTE.iv]),
+    greeks_source: row[PROJECTED_QUOTE.greeksSource] == null
+      ? null
+      : String(row[PROJECTED_QUOTE.greeksSource]) as OptionQuoteSnapshotRow["greeks_source"],
+    greeks_revision: row[PROJECTED_QUOTE.greeksRevision] == null
+      ? null
+      : Number(row[PROJECTED_QUOTE.greeksRevision]),
+    rate_type: row[PROJECTED_QUOTE.rateType] == null
+      ? null
+      : String(row[PROJECTED_QUOTE.rateType]),
+    rate_value: row[PROJECTED_QUOTE.rateValue] == null
+      ? null
+      : Number(row[PROJECTED_QUOTE.rateValue]),
+    gamma_source: row[PROJECTED_QUOTE.gammaSource] == null
+      ? null
+      : String(row[PROJECTED_QUOTE.gammaSource]),
+  };
 }
 
 export async function readOptionQuoteSnapshotsWindow(
@@ -289,7 +343,7 @@ export async function readOptionQuoteSnapshotsWindow(
     // dte from SQL (integer day count). Every in-JS consumer applies Math.floor()
     // before comparison, so the fractional-time portion that computeFractionalDte
     // used to emit was unused after the DTE envelope checks pushed to SQL.
-    const dte = Number(row[17]);
+    const dte = Number(row[PROJECTED_QUOTE.dteDays]);
     if (activeLegFilters.length > 0) {
       if (!rowMatchesAnyLegFilter(activeLegFilters, contractType, strike, dte)) continue;
     } else {
@@ -309,13 +363,7 @@ export async function readOptionQuoteSnapshotsWindow(
       bid: Number(row[7]),
       ask: Number(row[8]),
       mid: row[9] == null ? (Number(row[7]) + Number(row[8])) / 2 : Number(row[9]),
-      delta: row[10] == null ? null : Number(row[10]),
-      gamma: row[11] == null ? null : Number(row[11]),
-      theta: row[12] == null ? null : Number(row[12]),
-      vega: row[13] == null ? null : Number(row[13]),
-      iv: row[14] == null ? null : Number(row[14]),
-      greeks_source: row[15] == null ? null : String(row[15]) as OptionQuoteSnapshotRow["greeks_source"],
-      greeks_revision: row[16] == null ? null : Number(row[16]),
+      ...parseProjectedQuoteFields(row),
     };
     const bucket = out.get(item.ticker);
     if (bucket) bucket.push(item);
@@ -475,13 +523,7 @@ export async function readOptionQuoteSnapshotsForLookups(params: {
         bid: Number(row[7]),
         ask: Number(row[8]),
         mid: row[9] == null ? (Number(row[7]) + Number(row[8])) / 2 : Number(row[9]),
-        delta: row[10] == null ? null : Number(row[10]),
-        gamma: row[11] == null ? null : Number(row[11]),
-        theta: row[12] == null ? null : Number(row[12]),
-        vega: row[13] == null ? null : Number(row[13]),
-        iv: row[14] == null ? null : Number(row[14]),
-        greeks_source: row[15] == null ? null : String(row[15]) as OptionQuoteSnapshotRow["greeks_source"],
-        greeks_revision: row[16] == null ? null : Number(row[16]),
+        ...parseProjectedQuoteFields(row),
       };
       const rowKey = `${item.ticker}|${item.date}|${item.time}|${item.expiration}`;
       if (seenRows.has(rowKey)) continue;

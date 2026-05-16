@@ -414,13 +414,64 @@ export { filterChain } from './utils/chain-loader.js';
 // Provider classes for capability-resolution testing
 export { ThetaDataProvider } from './utils/providers/thetadata.js';
 
-// ThetaTerminal config helpers (unit testing)
+// ThetaData MDDS provider internals (unit testing)
 export {
-  defaultThetaTerminalHome,
-  legacyThetaTerminalHome,
-  parseJavaMajorVersion,
-  resolveThetaTerminalConfig,
-} from './utils/providers/thetadata-terminal.js';
+  ThetaMddsClient,
+  computeThetaQuoteMidGreekRow,
+  decodeThetaResponseData,
+  indexHistoryEod,
+  indexHistoryOhlc,
+  joinThetaQuotesAndFirstOrderGreeks,
+  normalizeThetaFirstOrderGreekRow,
+  normalizeThetaIndexEodRow,
+  normalizeThetaIndexOhlcRow,
+  normalizeThetaStockEodRow,
+  normalizeThetaStockOhlcRow,
+  OPTION_QUOTE_MID_GREEKS_GAMMA_SOURCE,
+  OPTION_QUOTE_MID_GREEKS_REVISION,
+  optionAtTimeQuote,
+  optionHistoryGreeksFirstOrderBand,
+  optionHistoryGreeksFirstOrder,
+  optionHistoryImpliedVolatilityBand,
+  optionHistoryQuote,
+  optionHistoryQuoteBand,
+  optionListContracts,
+  stockHistoryEod,
+  stockHistoryOhlc,
+  thetaTimestampToEtMinute,
+} from './utils/providers/thetadata/index.js';
+
+// ThetaData MDDS backfill preflight helpers
+export {
+  appendBackfillManifestLineDurable,
+  backfillRewriteSelectSql,
+  backfillManifestPath,
+  backfillPartitionPath,
+  backfillShadowPartitionPath,
+  collectBackfillConcreteFallbacks,
+  estimateBackfillBandRequestCount,
+  estimateBackfillRequestCount,
+  enumerateBackfillDates,
+  formatBackfillManifestLine,
+  groupBackfillTickersByGreekBand,
+  makeBackfillManifestEntry,
+  makeBackfillRunId,
+  parseBackfillOccTicker,
+  projectBackfillWallTimeHours,
+} from './utils/providers/thetadata/backfill.js';
+export type {
+  BackfillBandRequestCountInput,
+  BackfillConcreteFallback,
+  BackfillConcreteFallbackInput,
+  BackfillGreekBandGroup,
+  BackfillManifestEntry,
+  BackfillManifestStatus,
+  BackfillParsedOccTicker,
+  BackfillProjectionInput,
+  BackfillRequestCountInput,
+  BackfillRewriteSelectInput,
+  BackfillStagedGreekRow,
+} from './utils/providers/thetadata/backfill.js';
 
 // Parquet view registration (integration testing)
 export { createMarketParquetViews } from './db/market-views.js';

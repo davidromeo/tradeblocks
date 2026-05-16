@@ -67,9 +67,9 @@ export function registerMarketFetchTools(
     "fetch_quotes",
     {
       description:
-        "Fetch minute-level option quotes. Two modes — pass EITHER 'tickers' (specific OCC contracts, per-ticker provider calls) OR 'underlyings' (every contract under a symbol, one wildcard call per (root, right) per date — ThetaData only). " +
-        "Bulk mode collapses thousands of per-contract fetches to ~4 wire requests per SPX day; use it whenever you want full-chain coverage. " +
-        "Writes to market.option_quote_minutes. The 'source' column tags Massive provider rows: 'nbbo' (real bid/ask via /v3/quotes when MASSIVE_DATA_TIER=quotes) or 'synth_close' (synthesized from /v2/aggs OHLCV close when the user's plan lacks /v3/quotes; bid=ask=close). ThetaData rows currently leave 'source' as NULL pending a follow-up — its data is true NBBO regardless. " +
+        "Fetch minute-level option quotes. Two modes — pass EITHER 'tickers' (specific OCC contracts, per-ticker provider calls) OR 'underlyings' (every contract under a symbol, provider bulk-by-root path — ThetaData only). " +
+        "ThetaData MDDS bulk mode enumerates contracts, fetches concrete quote history in bounded batches, and reuses first-order greeks bands per expiration/day with concrete-greeks fallback for misses. " +
+        "Writes to market.option_quote_minutes. The 'source' column tags Massive provider rows: 'nbbo' (real bid/ask via /v3/quotes when MASSIVE_DATA_TIER=quotes) or 'synth_close' (synthesized from /v2/aggs OHLCV close when the user's plan lacks /v3/quotes; bid=ask=close). ThetaData per-ticker rows are tagged 'nbbo'; ThetaData bulk rows are true NBBO and may persist source as NULL until the bulk row contract carries source. " +
         "Massive falls back automatically on Developer/lower plans; ThetaData (both modes) returns true NBBO. " +
         "Returns status='unsupported' with a clear error only when the active provider lacks the requested mode (e.g., bulk-by-underlying on Massive).",
       inputSchema: z.object({
@@ -86,15 +86,11 @@ export function registerMarketFetchTools(
     async ({ tickers, underlyings, from, to, provider, dry_run }, extra) => {
       await upgradeToReadWrite(baseDir);
       try {
-        // Bulk mode is the only branch that can take multiple minutes per
-        // wire call. When the client opts in via `_meta.progressToken`, we
-        // stream `notifications/progress` after each (root, right, date)
-        // wildcard group and each (underlying, date) flush. Per-ticker mode
-        // is left untouched — per-contract calls are short enough that the
-        // proxy keep-alive problem doesn't apply. We omit `total` because
-        // future bounded-batch provider flows may emit a variable number of
-        // checkpoint events; MCP consumers must handle indeterminate
-        // progress.
+        // Bulk mode can take multiple minutes. When the client opts in via
+        // `_meta.progressToken`, stream `notifications/progress` for provider
+        // root/right checkpoints/completions and each (underlying, date)
+        // flush. Providers may emit extra checkpoint events, so omit a fixed
+        // total instead of pretending all events are known up front.
         const progressToken = extra?._meta?.progressToken;
         let onProgress: BulkProgressReporter | undefined;
         if (progressToken !== undefined && underlyings && underlyings.length > 0 && !dry_run) {
@@ -102,7 +98,11 @@ export function registerMarketFetchTools(
           onProgress = async (event) => {
             progress++;
             const message = event.kind === "group"
-              ? `${event.underlying} ${event.root}/${event.right} ${event.date} done (${event.status})`
+              ? `${event.underlying} ${event.root}/${event.right} ${event.date} ` +
+                `${event.phase === "checkpoint" ? "checkpoint" : "done"} (${event.status})` +
+                (event.totalContracts != null
+                  ? ` ${event.completedContracts ?? 0}/${event.totalContracts} contracts`
+                  : "")
               : `${event.underlying} ${event.date} flushed — ${event.rowsWritten} rows`;
             try {
               await extra.sendNotification({
@@ -188,7 +188,7 @@ export function registerMarketFetchTools(
         select_sql: z.string().describe(
           "SELECT (or WITH ... SELECT) that produces the target store's canonical columns. " +
           "spot_bars columns: (ticker, date, time, open, high, low, close, bid, ask). " +
-          "option_quote_minutes columns: (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source, delta, gamma, theta, vega, iv, greeks_source, greeks_revision); missing greeks columns are filled as null. " +
+          "option_quote_minutes columns: (underlying, date, ticker, time, bid, ask, mid, last_updated_ns, source, delta, gamma, theta, vega, iv, greeks_source, greeks_revision, rate_type, rate_value, gamma_source); missing greeks/provenance columns are filled as null. " +
           "option_chain columns: (underlying, date, ticker, contract_type, strike, expiration, dte, exercise_style).",
         ),
         partition: z.object({
@@ -283,11 +283,10 @@ export function registerMarketFetchTools(
         // that can take multiple minutes. When the caller opts in via
         // `_meta.progressToken`, mirror fetch_quotes: stream
         // `notifications/progress` events so the claude.ai MCP connector's
-        // 60s idle timeout doesn't trip during slow SPX quote bulk fetches.
+        // 60s idle timeout doesn't trip during slow full-chain quote fetches.
         // Per-ticker quote_tickers, spot bars, chain, and VIX context stay
         // silent — they're fast enough that the proxy keep-alive problem
-        // doesn't apply. `total` is omitted to keep the contract consistent
-        // with fetch_quotes (indeterminate progress).
+        // doesn't apply.
         const progressToken = extra?._meta?.progressToken;
         let onProgress: BulkProgressReporter | undefined;
         if (progressToken !== undefined && quote_underlyings && quote_underlyings.length > 0) {
@@ -295,7 +294,11 @@ export function registerMarketFetchTools(
           onProgress = async (event) => {
             progress++;
             const message = event.kind === "group"
-              ? `${event.underlying} ${event.root}/${event.right} ${event.date} done (${event.status})`
+              ? `${event.underlying} ${event.root}/${event.right} ${event.date} ` +
+                `${event.phase === "checkpoint" ? "checkpoint" : "done"} (${event.status})` +
+                (event.totalContracts != null
+                  ? ` ${event.completedContracts ?? 0}/${event.totalContracts} contracts`
+                  : "")
               : `${event.underlying} ${event.date} flushed — ${event.rowsWritten} rows`;
             try {
               await extra.sendNotification({
