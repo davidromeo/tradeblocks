@@ -6,30 +6,7 @@ import { getDataRoot } from "../db/data-root.js";
 import { MarketIngestor } from "../market/ingestor/index.js";
 import type { MarketStores } from "../market/stores/index.js";
 import type { BulkProgressReporter } from "../market/ingestor/types.js";
-import { countBulkQuoteGroupsPerDate } from "../utils/providers/thetadata.js";
 import { createToolOutput } from "../utils/output-formatter.js";
-
-/**
- * Enumerate every calendar date in [from, to] inclusive as "YYYY-MM-DD"
- * strings. MUST match `MarketIngestor.enumerateDates` exactly — the tool
- * handler uses this to pre-compute the `total` field on progress
- * notifications, and `total` must equal the number of events the ingestor
- * actually emits (group events + date-flushed events) or clients see jittery
- * progress bars.
- */
-function enumerateDatesForProgress(from: string, to: string): string[] {
-  const dates: string[] = [];
-  const current = new Date(`${from}T12:00:00Z`);
-  const end = new Date(`${to}T12:00:00Z`);
-  while (current <= end) {
-    const y = current.getUTCFullYear();
-    const m = String(current.getUTCMonth() + 1).padStart(2, "0");
-    const d = String(current.getUTCDate()).padStart(2, "0");
-    dates.push(`${y}-${m}-${d}`);
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-  return dates;
-}
 
 export function registerMarketFetchTools(
   server: McpServer,
@@ -114,18 +91,13 @@ export function registerMarketFetchTools(
         // stream `notifications/progress` after each (root, right, date)
         // wildcard group and each (underlying, date) flush. Per-ticker mode
         // is left untouched — per-contract calls are short enough that the
-        // proxy keep-alive problem doesn't apply.
+        // proxy keep-alive problem doesn't apply. We omit `total` because
+        // future bounded-batch provider flows may emit a variable number of
+        // checkpoint events; MCP consumers must handle indeterminate
+        // progress.
         const progressToken = extra?._meta?.progressToken;
         let onProgress: BulkProgressReporter | undefined;
         if (progressToken !== undefined && underlyings && underlyings.length > 0 && !dry_run) {
-          const dates = enumerateDatesForProgress(from, to);
-          const groupsPerDate = underlyings.reduce(
-            (acc, u) => acc + countBulkQuoteGroupsPerDate(u.toUpperCase()),
-            0,
-          );
-          // total = one event per (root,right,date) group + one per
-          // (underlying,date) flush. Matches what the ingestor emits.
-          const total = groupsPerDate * dates.length + underlyings.length * dates.length;
           let progress = 0;
           onProgress = async (event) => {
             progress++;
@@ -135,7 +107,7 @@ export function registerMarketFetchTools(
             try {
               await extra.sendNotification({
                 method: "notifications/progress",
-                params: { progressToken, progress, total, message },
+                params: { progressToken, progress, message },
               });
             } catch {
               // best-effort: notification failure must not fail the ingest
@@ -312,21 +284,13 @@ export function registerMarketFetchTools(
         // `_meta.progressToken`, mirror fetch_quotes: stream
         // `notifications/progress` events so the claude.ai MCP connector's
         // 60s idle timeout doesn't trip during slow SPX quote bulk fetches.
-        // refresh always passes from=to=asOf to ingestQuotes, so
-        // `dates.length === 1`; we still route through
-        // enumerateDatesForProgress for pattern parity with fetch_quotes.
         // Per-ticker quote_tickers, spot bars, chain, and VIX context stay
         // silent — they're fast enough that the proxy keep-alive problem
-        // doesn't apply.
+        // doesn't apply. `total` is omitted to keep the contract consistent
+        // with fetch_quotes (indeterminate progress).
         const progressToken = extra?._meta?.progressToken;
         let onProgress: BulkProgressReporter | undefined;
         if (progressToken !== undefined && quote_underlyings && quote_underlyings.length > 0) {
-          const dates = enumerateDatesForProgress(asOf, asOf);
-          const groupsPerDate = quote_underlyings.reduce(
-            (acc, u) => acc + countBulkQuoteGroupsPerDate(u.toUpperCase()),
-            0,
-          );
-          const total = groupsPerDate * dates.length + quote_underlyings.length * dates.length;
           let progress = 0;
           onProgress = async (event) => {
             progress++;
@@ -336,7 +300,7 @@ export function registerMarketFetchTools(
             try {
               await extra.sendNotification({
                 method: "notifications/progress",
-                params: { progressToken, progress, total, message },
+                params: { progressToken, progress, message },
               });
             } catch {
               // best-effort: notification failure must not fail the ingest
