@@ -81,12 +81,18 @@ export interface ReplayResult {
  * When providers supply bid/ask data (e.g., option chains), the midpoint is a
  * more accurate mark price than HL2. This is opt-in — existing data without
  * bid/ask continues to use HL2 identically.
+ *
+ * Guards against crossed exchange quotes (bid > ask) by falling back to HL2,
+ * since the computed mid is meaningless in that case.
  */
 export function markPrice(bar: Pick<BarRow, 'high' | 'low' | 'bid' | 'ask'>): number {
-  if (bar.bid != null && bar.ask != null && (bar.bid > 0 || bar.ask > 0)) {
-    return (bar.bid + bar.ask) / 2;
+  const { bid, ask } = bar;
+  const hl2 = (bar.high + bar.low) / 2;
+  if (bid != null && ask != null && (bid > 0 || ask > 0)) {
+    if (bid > 0 && ask > 0 && bid > ask) return hl2;
+    return (bid + ask) / 2;
   }
-  return (bar.high + bar.low) / 2;
+  return hl2;
 }
 
 // ---------------------------------------------------------------------------
