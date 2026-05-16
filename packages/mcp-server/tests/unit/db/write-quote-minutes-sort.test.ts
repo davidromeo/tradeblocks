@@ -26,8 +26,8 @@ afterEach(() => {
 });
 
 describe("writeQuoteMinutesPartition", () => {
-  it("writes parquet rows in (time, ticker) sort order regardless of input order", async () => {
-    // Stage rows in shuffled time order (ticker B at 09:35 BEFORE ticker A at 09:30)
+  it("writes parquet rows in (ticker, time) sort order regardless of input order", async () => {
+    // Stage rows in shuffled ticker order (ticker B at 09:35 BEFORE ticker A at 09:30)
     await conn.run(`
       CREATE TEMP TABLE staging AS
       SELECT * FROM (VALUES
@@ -70,10 +70,10 @@ describe("writeQuoteMinutesPartition", () => {
       `SELECT time, ticker FROM read_parquet('${target}')`,
     );
     const rows = reader.getRows();
-    // Expected order: (09:30, A_TICKER), (09:30, C_TICKER), (09:35, B_TICKER).
+    // Expected order: (A_TICKER, 09:30), (B_TICKER, 09:35), (C_TICKER, 09:30).
     expect(rows.length).toBe(3);
     expect([String(rows[0][0]), String(rows[0][1])]).toEqual(["09:30", "A_TICKER"]);
-    expect([String(rows[1][0]), String(rows[1][1])]).toEqual(["09:30", "C_TICKER"]);
-    expect([String(rows[2][0]), String(rows[2][1])]).toEqual(["09:35", "B_TICKER"]);
+    expect([String(rows[1][0]), String(rows[1][1])]).toEqual(["09:35", "B_TICKER"]);
+    expect([String(rows[2][0]), String(rows[2][1])]).toEqual(["09:30", "C_TICKER"]);
   });
 });
