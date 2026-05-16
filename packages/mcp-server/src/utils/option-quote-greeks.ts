@@ -34,6 +34,12 @@ export interface QuoteGreeksStats {
   unresolvedRows: number;
 }
 
+/**
+ * Greeks computation revision.
+ * - 1 (legacy): hardcoded r = 0.045, q = 0.015
+ * - 2: per-day SOFR rate, q = 0 (rate-convention switch)
+ * - 3: revision 2 + provenance fields (rate_type, rate_value, gamma_source)
+ */
 export const OPTION_QUOTE_GREEKS_REVISION = 3;
 // Convention: SOFR overnight rate + zero dividend yield. Stored alongside each
 // computed greek row via `rate_type`, `rate_value`, and `gamma_source` so older
@@ -67,7 +73,7 @@ function hasExistingQuoteGreeks(row: QuoteGreekFields): boolean {
   return hasQuoteGreeks(row) || hasProviderFirstOrderGreeks(row);
 }
 
-function hasRevision2QuoteGreekProvenance(row: QuoteGreekFields): boolean {
+function hasQuoteGreekProvenanceFields(row: QuoteGreekFields): boolean {
   return row.rate_type === OPTION_QUOTE_GREEKS_RATE_TYPE
     && isFiniteNumber(row.rate_value ?? null)
     && row.gamma_source === OPTION_QUOTE_GREEKS_GAMMA_SOURCE;
@@ -84,7 +90,7 @@ export function normalizeExistingQuoteGreeks(
   if (
     row.greeks_source === "computed"
     && row.greeks_revision == null
-    && hasRevision2QuoteGreekProvenance(row)
+    && hasQuoteGreekProvenanceFields(row)
   ) {
     row.greeks_revision = OPTION_QUOTE_GREEKS_REVISION;
   }
