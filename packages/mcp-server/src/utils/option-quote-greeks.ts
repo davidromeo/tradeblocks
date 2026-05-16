@@ -1,3 +1,4 @@
+import { getSofrRateByKey } from "@tradeblocks/lib";
 import type { ContractRow } from "./chain-loader.js";
 import { computeLegGreeks } from "./black-scholes.js";
 import { computeFractionalDte } from "./option-time.js";
@@ -30,9 +31,8 @@ export interface QuoteGreeksStats {
   unresolvedRows: number;
 }
 
-export const OPTION_QUOTE_GREEKS_REVISION = 1;
-export const OPTION_QUOTE_GREEKS_RISK_FREE_RATE = 0.045;
-export const OPTION_QUOTE_GREEKS_DIVIDEND_YIELD = 0.015;
+export const OPTION_QUOTE_GREEKS_REVISION = 2;
+export const OPTION_QUOTE_GREEKS_DIVIDEND_YIELD = 0;
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -80,13 +80,14 @@ export function computeQuoteGreeks(params: {
   if (!(optionPrice > 0) || !(underlyingPrice > 0) || !(strike > 0)) return null;
   const dte = computeFractionalDte(date, time.slice(0, 5), expiration);
   if (!(dte >= 0)) return null;
+  const riskFreeRate = getSofrRateByKey(date) / 100;
   const result = computeLegGreeks(
     optionPrice,
     underlyingPrice,
     strike,
     dte,
     contractType === "call" ? "C" : "P",
-    OPTION_QUOTE_GREEKS_RISK_FREE_RATE,
+    riskFreeRate,
     OPTION_QUOTE_GREEKS_DIVIDEND_YIELD,
   );
   if (!hasQuoteGreeks(result)) return null;
