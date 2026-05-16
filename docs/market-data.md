@@ -6,10 +6,10 @@ TradeBlocks supports multiple paths for importing market data: CSV files, the Ma
 
 TradeBlocks uses a provider abstraction for external API calls. The active provider is selected via the `MARKET_DATA_PROVIDER` environment variable (default: `"massive"`).
 
-| Provider | Env Var | API Key Env Var | Status |
-|----------|---------|-----------------|--------|
+| Provider | Env Var | Credentials | Status |
+|----------|---------|-------------|--------|
 | Massive.com (Polygon) | `massive` | `MASSIVE_API_KEY` | Shipped |
-| ThetaData | `thetadata` | `THETADATA_API_KEY` | Stub — implement your own |
+| ThetaData MDDS | `thetadata` | `THETADATA_EMAIL` + `THETADATA_PASSWORD`, or `THETADATA_CREDENTIALS_FILE` | Direct MDDS/gRPC provider |
 
 All providers implement the same `MarketDataProvider` interface and normalize responses to the same `BarRow` and `OptionContract` types. Downstream tools (replay, exit analysis, enrichment) work identically regardless of provider.
 
@@ -162,13 +162,52 @@ Import data from an external DuckDB file via SQL query. Reference tables using t
 
 ### Setup
 
-See [Getting Started](getting-started.md#massivecom-api-optional) for API key configuration.
+See [Getting Started](getting-started.md#massivecom-api-optional) for Massive.com API key configuration.
 
-The active provider is selected via `MARKET_DATA_PROVIDER` env var (default: `massive`). Each provider reads its own API key (`MASSIVE_API_KEY`, `THETADATA_API_KEY`, etc.).
+The active provider is selected via `MARKET_DATA_PROVIDER` env var (default: `massive`). Massive.com reads `MASSIVE_API_KEY`.
+
+For ThetaData, set `MARKET_DATA_PROVIDER=thetadata`. The provider connects directly to ThetaData MDDS over gRPC; it does not use ThetaTerminal, a local JVM, or the ThetaData REST terminal service.
+
+Configure MDDS credentials with either:
+
+```bash
+export THETADATA_EMAIL="you@example.com"
+export THETADATA_PASSWORD="your-password"
+```
+
+Or place credentials in a file and point TradeBlocks at it:
+
+```bash
+export THETADATA_CREDENTIALS_FILE="/path/to/thetadata-creds.txt"
+```
+
+The credentials file format is:
+
+```text
+you@example.com
+your-password
+```
+
+Do not commit credentials or put secrets directly in checked-in service files.
+
+Advanced ThetaData MDDS settings are optional:
+
+| Variable | Description |
+|----------|-------------|
+| `THETADATA_MDDS_HOST` | Override the MDDS host |
+| `THETADATA_MDDS_PORT` | Override the MDDS port |
+| `THETADATA_MDDS_MAX_CONCURRENCY` | Limit concurrent MDDS requests |
+| `THETADATA_MDDS_RETRY_ATTEMPTS` | Override retry attempts |
+| `THETADATA_MDDS_RETRY_BASE_MS` | Override retry base delay |
+| `THETADATA_MDDS_RETRY_MAX_MS` | Override retry max delay |
+
+ThetaTerminal-specific settings from the old terminal/REST path no longer apply to `MARKET_DATA_PROVIDER=thetadata`, including `THETADATA_BASE_URL`, `THETADATA_HOME`, `THETADATA_JAR`, `THETADATA_CREDS_FILE`, `THETADATA_SKIP_AUTO_START`, and terminal auto-start flags. `THETADATA_MDDS_CLIENT_TYPE=terminal` is only the MDDS client identity string and does not mean TradeBlocks launches or depends on ThetaTerminal.
+
+ThetaData MDDS supports daily and intraday bars (stocks, indices), option minute quotes, contract lists, and first-order greeks. The option snapshot tool is not yet wired to MDDS — use Massive.com for `fetch_chain` until the MDDS snapshot endpoint lands.
 
 ### fetch_bars
 
-Fetch daily or intraday OHLCV bars from the configured provider and write directly to Parquet.
+Fetch daily or intraday OHLCV bars from the configured provider and write directly to Parquet. Both Massive.com and ThetaData MDDS support this tool; the MDDS path uses stock and index OHLC/EOD endpoints.
 
 **Parameters:**
 - `tickers` — array of plain ticker symbols (e.g., `["SPX", "VIX", "SPY"]`)
@@ -207,6 +246,8 @@ Fetch an option chain snapshot for an underlying on a given date.
 **Parameters:**
 - `underlying` — root symbol (e.g., `"SPX"`)
 - `date` — snapshot date (`YYYY-MM-DD`)
+
+ThetaData MDDS supports contract-list retrieval for this path. Full option snapshot support remains unavailable until the MDDS snapshot endpoint is wired.
 
 ### compute_vix_context
 
