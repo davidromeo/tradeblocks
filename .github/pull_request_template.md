@@ -38,4 +38,4 @@
 
 ---
 
-**Ready to build! 🧱** This PR will automatically deploy a preview on Vercel.
+**Ready to build! 🧱** This PR will automatically deploy a preview on Render.
