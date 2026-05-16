@@ -55,6 +55,9 @@ function parseQuoteRow(row: unknown[]): QuoteRow {
     iv: row[13] == null ? null : Number(row[13]),
     greeks_source: row[14] == null ? null : String(row[14]) as QuoteRow["greeks_source"],
     greeks_revision: row[15] == null ? null : Number(row[15]),
+    rate_type: row[16] == null ? null : String(row[16]),
+    rate_value: row[17] == null ? null : Number(row[17]),
+    gamma_source: row[18] == null ? null : String(row[18]),
   };
 }
 
@@ -80,7 +83,8 @@ export class ParquetQuoteStore extends QuoteStore {
          bid DOUBLE, ask DOUBLE, mid DOUBLE,
          last_updated_ns BIGINT, source VARCHAR,
          delta REAL, gamma REAL, theta REAL, vega REAL, iv REAL,
-         greeks_source VARCHAR, greeks_revision INTEGER
+         greeks_source VARCHAR, greeks_revision INTEGER,
+         rate_type VARCHAR, rate_value DOUBLE, gamma_source VARCHAR
        )`,
     );
     try {
@@ -116,6 +120,12 @@ export class ParquetQuoteStore extends QuoteStore {
           else appender.appendVarchar(q.greeks_source);
           if (q.greeks_revision == null) appender.appendNull();
           else appender.appendInteger(q.greeks_revision);
+          if (q.rate_type == null) appender.appendNull();
+          else appender.appendVarchar(q.rate_type);
+          if (q.rate_value == null) appender.appendNull();
+          else appender.appendDouble(q.rate_value);
+          if (q.gamma_source == null) appender.appendNull();
+          else appender.appendVarchar(q.gamma_source);
           appender.endRow();
         }
         appender.flushSync();
@@ -366,7 +376,7 @@ export class ParquetQuoteStore extends QuoteStore {
       SELECT q.ticker, q.time,
              b.contract_type, b.strike, b.expiration, b.dte,
              q.bid, q.ask,
-             q.delta, q.gamma, q.theta, q.vega, q.iv
+             q.delta, q.gamma, q.theta, q.vega, q.iv, q.greeks_source
         FROM ${quoteSrc} AS q
         JOIN band b ON q.ticker = b.ticker
        WHERE q.time BETWEEN ${safeTimeStart} AND ${safeTimeEnd}
@@ -387,6 +397,7 @@ export class ParquetQuoteStore extends QuoteStore {
       theta: r[10] == null ? null : Number(r[10]),
       vega: r[11] == null ? null : Number(r[11]),
       iv: r[12] == null ? null : Number(r[12]),
+      greeks_source: r[13] == null ? null : String(r[13]) as WindowQuoteRow["greeks_source"],
     }));
   }
 

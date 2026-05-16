@@ -51,6 +51,9 @@ export interface QuoteRow {
   iv?: number | null;
   greeks_source?: "massive" | "thetadata" | "computed" | null;
   greeks_revision?: number | null;
+  rate_type?: string | null;
+  rate_value?: number | null;
+  gamma_source?: string | null;
 }
 
 /**
@@ -117,4 +120,5 @@ export interface WindowQuoteRow {
   theta: number | null;
   vega: number | null;
   iv: number | null;
+  greeks_source: "massive" | "thetadata" | "computed" | null;
 }
