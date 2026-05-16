@@ -133,14 +133,24 @@ export async function writeQuoteMinutesPartition(
   args: { dataDir: string; underlying: string; date: string; selectQuery: string; compression?: string },
 ): Promise<{ rowCount: number }> {
   const def = DATASETS_V3.option_quote_minutes;
-  // Sort rows by (time, ticker) before writing so DuckDB row groups in the
-  // resulting parquet have tight min/max statistics on `time`. Backtester
-  // candidate-snapshot reads target a narrow time window (typically a single
-  // minute), and time-sorted row groups let DuckDB's parquet reader prune
-  // ~98% of row groups for those queries via column-statistics filtering.
+  // Sort rows by (ticker, time) before writing so DuckDB row groups in the
+  // resulting parquet have tight min/max statistics on `ticker`. The
+  // dominant read pattern is ticker-windowed scans across a time range
+  // (querying a specific symbol across many minutes/days), so sorting
+  // partitions by `(ticker, time)` lets DuckDB prune row groups by ticker
+  // first and gives column-statistics benefits within each ticker.
+  //
+  // The previous `(time, ticker)` order favored single-minute multi-ticker
+  // scans; that shape regresses slightly under the new sort, but it is no
+  // longer the dominant consumer pattern.
+  //
   // Wrapping the caller's selectQuery is safer than asking every caller to
   // remember to ORDER BY: writes go through one funnel.
-  const sortedSelect = `SELECT * FROM (${args.selectQuery}) AS q ORDER BY q.time, q.ticker`;
+  //
+  // If you change this, also re-run `tools/sort-quote-parquet.mjs` to
+  // re-sort existing partitions. The tool is idempotent (skips
+  // already-sorted files via row-group ticker stats).
+  const sortedSelect = `SELECT * FROM (${args.selectQuery}) AS q ORDER BY q.ticker, q.time`;
   return writeParquetPartition(conn, {
     baseDir: path.join(resolveMarketDir(args.dataDir), def.subdir),
     partitions: { underlying: args.underlying, date: args.date },
