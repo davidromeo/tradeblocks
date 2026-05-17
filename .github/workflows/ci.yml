@@ -10,6 +10,25 @@ permissions:
   contents: read
 
 jobs:
+  import-boundary:
+    name: Import boundary gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reverse-direction imports from sibling consumer repos must not appear
+      # anywhere under packages/** or app/**. The leading `!` inverts grep's
+      # exit code: pass when there are zero matches.
+      - name: Reverse import gate
+        run: '! git grep -E "(holodeck|private-packages|tradeblocks-private)" -- "packages/**" "app/**"'
+
+      # file:-protocol dependencies pin to local filesystem paths and would
+      # let a sibling repo silently slip into tradeblocks. None are permitted
+      # in the root or any workspace package.
+      - name: "No file: deps gate"
+        run: '! grep -q ''"file:'' package.json packages/*/package.json'
+
   frontend:
     name: Frontend (Next.js)
     runs-on: ubuntu-latest
