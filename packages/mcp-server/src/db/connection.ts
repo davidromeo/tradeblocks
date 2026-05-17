@@ -17,7 +17,8 @@
  *      file exists; see CLAUDE.md §Extension point pattern)
  *
  * On close: CHECKPOINT → DETACH market → closeSync() to flush WAL reliably.
- * On RO open: ATTACH market.duckdb READ_ONLY (no table creation).
+ * On RO open: ATTACH market.duckdb READ_ONLY (no table creation), then invoke
+ *   connection.ext.ts with `mode: "read_only"` (symmetric to the RW hook).
  *
  * DuckDB is single-process: only one process can open a database file at a time
  * (even read-only fails when another process holds a write lock with an active WAL).
@@ -381,6 +382,7 @@ async function openReadWriteConnection(
     await ext.default(connection, {
       baseDir: path.dirname(dbPath),
       marketDbPath: storedMarketDbPath!,
+      mode: "read_write",
     });
   } catch {
     // No extensions present — defaults apply
@@ -420,6 +422,26 @@ async function openReadOnlyConnection(
   if (storedMarketDbPath) {
     await attachMarketDb(connection, storedMarketDbPath, "read_only");
   }
+
+  // Optional extensions on the read-only path. Symmetric to the read-write
+  // hook in openReadWriteConnection — same `connection.ext.js` plugin contract,
+  // distinguished by the `mode` option so a single extension file can branch
+  // on RW vs RO (e.g., skip table-creation side effects, register read-only
+  // views only). connection.ext.ts is intentionally absent in this repo; the
+  // dynamic import fails silently and defaults apply.
+  try {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — connection.ext.ts is intentionally absent in this repo; dynamic import fails silently
+    const ext = await import('./connection.ext.js');
+    await ext.default(connection, {
+      baseDir: path.dirname(dbPath),
+      marketDbPath: storedMarketDbPath!,
+      mode: "read_only",
+    });
+  } catch {
+    // No extensions present — defaults apply
+  }
+
   connectionMode = "read_only";
   return connection;
 }
