@@ -2,6 +2,7 @@
 
 import {
   IconCalendar,
+  IconChartDots,
   IconChartHistogram,
   IconDatabase,
   IconGauge,
@@ -84,6 +85,11 @@ const navData = {
       title: "Trading Calendar",
       href: "/trading-calendar",
       icon: IconCalendar,
+    },
+    {
+      title: "Indicator Analysis",
+      href: "/indicator-analysis",
+      icon: IconChartDots,
     },
     {
       title: "TradeBlocks Assistant",

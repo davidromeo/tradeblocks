@@ -61,6 +61,11 @@ const routeMeta: Record<
     description:
       "Configure account defaults, risk tolerances, and integrations.",
   },
+  "/indicator-analysis": {
+    title: "Indicator Analysis",
+    description:
+      "Bin trades by a static dataset indicator and measure correlation with P&L.",
+  },
 };
 
 export function SiteHeader() {

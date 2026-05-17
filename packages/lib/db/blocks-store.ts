@@ -4,6 +4,7 @@
 
 import { ProcessedBlock, Block } from '../models/block'
 import { STORES, withReadTransaction, withWriteTransaction, promisifyRequest, DatabaseError } from './index'
+import { generateId } from '../utils'
 
 /**
  * Create a new block
@@ -11,7 +12,7 @@ import { STORES, withReadTransaction, withWriteTransaction, promisifyRequest, Da
 export async function createBlock(blockData: Omit<ProcessedBlock, 'id' | 'created' | 'lastModified'>): Promise<ProcessedBlock> {
   const block: ProcessedBlock = {
     ...blockData,
-    id: crypto.randomUUID(),
+    id: generateId(),
     created: new Date(),
     lastModified: new Date(),
   }
