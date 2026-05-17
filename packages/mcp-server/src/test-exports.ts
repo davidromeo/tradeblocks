@@ -283,12 +283,6 @@ export {
   type QuoteGreeksSource,
 } from './utils/option-quote-greeks.js';
 export {
-  readOptionQuoteSnapshotsWindow,
-  readOptionQuoteSnapshotsForLookups,
-  type OptionQuoteSnapshotRow,
-  type OptionQuoteSnapshotLookup,
-} from './utils/option-quote-snapshots.js';
-export {
   describeReadParquetColumns,
   quoteParquetCanonicalProjection,
   readParquetFilesSql,

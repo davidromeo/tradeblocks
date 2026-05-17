@@ -72,10 +72,9 @@ export function quoteParquetGreekProjection(
   needed: readonly GreekColumn[] = ALL_GREEKS,
 ): string {
   // When `needed` excludes a greek, project NULL with the same DuckDB type that
-  // quoteParquetColumnExpr would have used. Downstream OptionQuoteSnapshotRow
-  // parsing reads each column position-wise, so the projection must emit a
-  // value at every position (just NULL when not requested) to keep the row
-  // shape stable.
+  // quoteParquetColumnExpr would have used. Downstream row parsing reads each
+  // column position-wise, so the projection must emit a value at every
+  // position (just NULL when not requested) to keep the row shape stable.
   const wantSet = new Set<GreekColumn>(needed);
   const projectGreek = (name: GreekColumn): string =>
     wantSet.has(name)
