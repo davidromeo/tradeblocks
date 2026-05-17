@@ -1,34 +1,11 @@
 /**
- * Wave A spot-consumer contract tests (Phase 4 Plan 04-01).
+ * Wave A spot-consumer contract tests.
  *
- * Exercises the migrated `checkDataAvailability`, `queryCoverage`, and
+ * Exercises the `checkDataAvailability`, `queryCoverage`, and
  * `importFlatFileDay` consumers against a real `MarketStores` bundle backed by
- * a tmp Parquet fixture. After Wave A migration, every read in these consumers
- * flows through `stores.spot.getCoverage` / `stores.enriched.getCoverage` /
+ * a tmp Parquet fixture. Every read in these consumers flows through
+ * `stores.spot.getCoverage` / `stores.enriched.getCoverage` /
  * `stores.quote.getCoverage`; every write flows through `stores.spot.writeBars`.
- *
- * Inventory of bar-cache.ts external consumers (verified 2026-04-18 at start
- * of plan 04-01):
- *
- *   src/tools/replay.ts                       imports fetchBarsWithCache
- *   src/utils/providers/massive.ts            references fetchBarsWithCache (comment only)
- *   src/backtest/loading/market-data-loader   imports readCachedBars + duplicates
- *                                              intradayDateSource / optionQuoteMinuteSource
- *   src/backtest/orchestrator.ts              imports fetchBarsForLegsBulk
- *   src/test-exports.ts                       re-exports the bar-cache surface
- *
- * Wave A scope (this plan): bar-cache.ts shrunk to keep ONLY the symbols that
- * other in-flight Wave 2 plans (04-02 = replay/loader spot path; 04-04 = option
- * legs / quote-minute-cache) still need so this branch keeps compiling.
- * fetchBarsWithCache, readCachedBars, mergeQuoteBars, fetchBarsForLegsBulk,
- * fetchEntryBarsForCandidates remain alive as a transitional surface — Plans
- * 04-02 and 04-04 finish the demolition.
- *
- * Critically deleted in this plan: enrichWithQuotes (the provider-side fetch
- * helper) plus the Phase 4 D-09 "silent empty" target — bar-cache.ts no longer
- * has any read path that triggers a provider call. fetchBarsWithCache itself
- * still has the API fallback because tools/replay.ts has not yet been migrated;
- * Plan 04-02 deletes it once replay.ts is on stores.
  */
 import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 import {

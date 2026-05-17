@@ -18,7 +18,7 @@
  *     market.option_chain / market.option_quote_minutes view backed by it.
  *
  * Pre-migration external consumers of the symbols touched by this plan:
- *   - tools/replay.ts:284,302         fetchBarsWithCache (option-leg)
+ *   - tools/replay.ts:284,302         option-leg reads
  *   - tools/greeks-attribution.ts:382 SELECT DISTINCT date FROM the retired legacy minute-bar view
  *   - utils/sql-pnl.ts:103            retired legacy minute-bar SELECT + close fallback
  *   - backtest/loading/market-data-loader.ts:498-523  optionQuoteMinuteSource(date)

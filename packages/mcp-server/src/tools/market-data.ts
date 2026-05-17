@@ -991,10 +991,11 @@ export function registerMarketDataTools(
             const list = intradayBarsByKey.get(mapKey) ?? [];
             for (const bar of bars) {
               // Defense-in-depth: skip underlying bars with zero/null OHLC
-              // (provider gaps from the spot ingest). bar-cache leaves these
-              // raw so option tickers can keep legitimate "no trade" zeros;
-              // underlyings always have a real price, so a zero is a bug
-              // that would corrupt downstream high/low/range computations.
+              // (provider gaps from the spot ingest). Raw bars are left
+              // unfiltered upstream so option tickers can keep legitimate
+              // "no trade" zeros; underlyings always have a real price, so
+              // a zero is a bug that would corrupt downstream high/low/range
+              // computations.
               if (
                 !Number.isFinite(bar.open)  || bar.open  <= 0 ||
                 !Number.isFinite(bar.high)  || bar.high  <= 0 ||

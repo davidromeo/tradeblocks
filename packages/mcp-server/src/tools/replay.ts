@@ -272,26 +272,23 @@ export async function handleReplayTrade(
   }
 
   // ----- Fetch minute quotes for each option leg via QuoteStore -----
-  // Phase 4 Plan 04-04 — replaces the prior fetchBarsWithCache option-leg
-  // calls (which had no provider fallback after plan 04-01) with grouped
-  // stores.quote.readQuotes calls. Adapt QuoteRow → BarRow with mid =
-  // (bid+ask)/2 as open/high/low/close (D-14 mid-price contract).
+  // Adapt QuoteRow → BarRow with mid = (bid+ask)/2 as open/high/low/close
+  // (D-14 mid-price contract).
   //
-  // Pitfall 4 — group OCC tickers by underlying before each readQuotes
-  // call because QuoteStore enforces a single-underlying invariant per call.
+  // Pitfall — group OCC tickers by underlying before each readQuotes call
+  // because QuoteStore enforces a single-underlying invariant per call.
   // Typical replays have all legs under one underlying (single SPX trade);
   // multi-underlying replays issue one readQuotes per underlying.
   //
-  // Fallback root logic (SPX→SPXW etc.) is now implicit: the QuoteStore's
+  // Fallback root logic (SPX→SPXW etc.) is implicit: the QuoteStore's
   // tickers.resolve(extractRoot(...)) maps both SPX and SPXW to underlying
   // 'SPX'. The OCC ticker prefix in the chain is whatever the data layer
-  // ingested (typically SPXW). The pre-04-04 code had explicit fallback
-  // because `fetchBarsWithCache` keyed on full OCC ticker; the new path keys
-  // on underlying so the same data is reachable via either root.
+  // ingested (typically SPXW); keying on underlying makes the same data
+  // reachable via either root.
   //
-  // skip_quotes is now a no-op for option-leg reads — quotes ARE the source
-  // of truth here (the cached-bar fallback that skip_quotes used to gate is
-  // gone). Parameter remains in the schema for backward compat with callers.
+  // skip_quotes is a no-op for option-leg reads — quotes ARE the source of
+  // truth here. Parameter remains in the schema for backward compat with
+  // callers.
   void skip_quotes;
 
   const byUnderlying = new Map<string, string[]>();
@@ -370,7 +367,7 @@ export async function handleReplayTrade(
   // SPX/QQQ/etc. always have a real price — a zero in spot is a provider
   // gap (see ParquetSpotStore writer guard), and feeding it into Black-
   // Scholes greeks computation produces nonsense (S=0 → infinite delta etc.).
-  // bar-cache.ts deliberately leaves bars raw so option tickers can keep
+  // Raw bars are left unfiltered upstream so option tickers can keep
   // legitimate "no trade" zero rows; the filtering responsibility lives
   // here at the underlying-consumer site.
   if (underlyingBars.length > 0) {
