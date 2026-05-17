@@ -13,8 +13,6 @@
  *   5. ensureMutableMarketTables() — _sync_metadata, data_coverage
  *   6. createMarketParquetViews() — views over shared Parquet files (opportunistic)
  *   7. ensureSyncTables() / ensureTradeDataTable() / ensureReportingDataTable()
- *   8. connection.ext.ts — optional private extension hook (present only when the ext
- *      file exists; see CLAUDE.md §Extension point pattern)
  *
  * On close: CHECKPOINT → DETACH market → closeSync() to flush WAL reliably.
  * On RO open: ATTACH market.duckdb READ_ONLY (no table creation).
@@ -369,27 +367,9 @@ async function openReadWriteConnection(
   // See market-schemas.ts §D-12 option_quote_minutes block for the canonical pattern.
   await ensureMarketDataTables(connection);
 
-  // Optional extensions (e.g., additional DB attachments).
-  // Phase 4 D-10: the legacy intraday write-table override hook was DELETED —
-  // every spot write now flows through SpotStore.writeBars (no override
-  // mechanism needed). The extension is invoked purely for its side effects —
-  // its return value is ignored.
-  try {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — connection.ext.ts is intentionally absent in this repo; dynamic import fails silently
-    const ext = await import('./connection.ext.js');
-    await ext.default(connection, {
-      baseDir: path.dirname(dbPath),
-      marketDbPath: storedMarketDbPath!,
-    });
-  } catch {
-    // No extensions present — defaults apply
-  }
-
   // One-time metadata migration: DuckDB -> JSON files (Phase 3)
   // Runs only when TRADEBLOCKS_PARQUET=true and JSON files don't yet exist.
-  // Must run AFTER all DuckDB tables are created (profiles, sync, market schemas)
-  // and AFTER any connection.ext.ts (ext-provided tables) have been initialized.
+  // Must run AFTER all DuckDB tables are created (profiles, sync, market schemas).
   try {
     const blocksDir = (await import("../sync/index.js")).getBlocksDir(dataRoot);
     await migrateMetadataToJson(connection, dataRoot, blocksDir);

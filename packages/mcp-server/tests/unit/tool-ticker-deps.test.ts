@@ -7,7 +7,7 @@
  *
  * Project convention: import via `../../src/test-exports.js` (PATTERNS.md
  * §Pattern 6). Plan 04-00 Task 1 surfaces TOOL_TICKER_DEPS + unionTickerDeps
- * through test-exports.ts BEFORE the test-exports.ext.js wildcard.
+ * through test-exports.ts.
  */
 import { describe, it, expect } from '@jest/globals';
 import {
