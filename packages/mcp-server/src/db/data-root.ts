@@ -12,6 +12,10 @@
  * would give each bundle its own _dataRoot, leaving one path correct (set by
  * the CLI parser) and the other null (a consumer reads its own copy and falls
  * back to the default → wrong path).
+ *
+ * Note: globalThis is per-realm. Consumers running this across Workers, VM
+ * contexts, or sandboxed iframes will see the same divergence across realm
+ * boundaries and must coordinate state another way.
  */
 const KEY = "__tradeblocks_data_root__";
 type GlobalSlot = { [KEY]?: string | null };
