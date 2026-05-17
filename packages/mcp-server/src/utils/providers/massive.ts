@@ -527,11 +527,9 @@ export class MassiveProvider implements MarketDataProvider {
       }
     }
 
-    // Quote enrichment (bid/ask backfill + synthetic gap bars) used to be
-    // handled by `fetchBarsWithCache → enrichWithQuotes` in bar-cache.ts.
-    // Phase 4 / D-05 / SEP-01 removed `enrichWithQuotes` (reads no longer
-    // trigger provider writes); the equivalent backfill now lives in the
-    // pipeline-side `enrich_quotes` MCP tool / quote-minute-cache.
+    // Quote enrichment (bid/ask backfill + synthetic gap bars) is handled
+    // out-of-band by the pipeline-side `enrich_quotes` MCP tool /
+    // quote-minute-cache; reads here never trigger provider writes.
 
     return allRows;
   }

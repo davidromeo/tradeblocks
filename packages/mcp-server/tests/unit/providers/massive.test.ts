@@ -698,9 +698,9 @@ describe("Quotes enrichment", () => {
   beforeEach(() => { process.env.MASSIVE_DATA_TIER = "quotes"; });
   afterEach(() => { delete process.env.MASSIVE_DATA_TIER; });
 
-  it("fetchBars returns bars without bid/ask — enrichment handled by bar-cache", async () => {
-    // Quote enrichment moved from fetchBars() to fetchBarsWithCache() in bar-cache.ts.
-    // fetchBars() now returns raw OHLCV bars; bid/ask are added by the cache layer.
+  it("fetchBars returns raw OHLCV bars without bid/ask enrichment", async () => {
+    // fetchBars() returns raw OHLCV bars; bid/ask enrichment is handled
+    // out-of-band by the pipeline-side enrich_quotes tool.
     fetchSpy
       .mockResolvedValueOnce(mockResponse(makeOptionBarsResponse()));
 

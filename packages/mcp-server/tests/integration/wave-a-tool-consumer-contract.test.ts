@@ -196,11 +196,8 @@ describe("wave-a tool/consumer contract — Phase 4 Plan 04-02", () => {
   // -----------------------------------------------------------------------
   describe("tools/replay.ts — underlying bar read", () => {
     it("stores.spot.readBars returns the same SPX bars used by the underlying-bars path", async () => {
-      // Task 2 migrates replay.ts:341 (fetchBarsWithCache for underlying) +
-      // line 393 (legacy daily-view SELECT for VIX IVP) onto stores. The contract
-      // here is that the underlying-bars read returns the fixture rows; the
-      // full handler test stays in tests/integration/trade-replay.test.ts
-      // (option-leg path is plan 04-04).
+      // Contract: the underlying-bars read returns the fixture rows. The
+      // full handler test stays in tests/integration/trade-replay.test.ts.
       const bars = await stores.spot.readBars(
         "SPX",
         "2025-01-02",

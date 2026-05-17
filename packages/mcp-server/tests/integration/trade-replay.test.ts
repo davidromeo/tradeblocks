@@ -74,17 +74,13 @@ describe("replay_trade integration", () => {
       )
     `);
 
-    // Phase 4 Plan 04-02: handleReplayTrade now reads underlying bars via
-    // stores.spot.readBars (formerly fetchBarsWithCache) and VIX IVP via
-    // stores.enriched.read (formerly a raw SELECT against the retired legacy
-    // daily-view for ticker 'VIX').
-    // Create the minimal market schema in the in-memory DuckDB so the migrated
-    // handler-body store calls succeed. The tests intentionally leave these
-    // empty — option-leg bars are still mocked via fetch (plan 04-04 migrates
-    // option legs), and the underlying-bars empty result triggers the
-    // readDailyBars fallback (also empty), then handleReplayTrade omits greeks
-    // — exactly the same observable behavior as pre-migration when both
-    // sources were absent.
+    // handleReplayTrade reads underlying bars via stores.spot.readBars and
+    // VIX IVP via stores.enriched.read. Create the minimal market schema in
+    // the in-memory DuckDB so those store calls succeed. The tests
+    // intentionally leave these empty — option-leg bars are mocked via
+    // fetch, and the underlying-bars empty result triggers the
+    // readDailyBars fallback (also empty), then handleReplayTrade omits
+    // greeks.
     await conn.run(`CREATE SCHEMA IF NOT EXISTS market`);
     await conn.run(`
       CREATE TABLE market.spot (

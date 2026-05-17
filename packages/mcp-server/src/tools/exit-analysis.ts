@@ -179,9 +179,9 @@ async function fetchPriceMap(
     // Defense-in-depth: skip any underlying bar with a zero/null OHLC value.
     // The underlying ticker (SPX/QQQ/etc.) always has a real price — a zero
     // is a provider gap that would corrupt the price map and downstream
-    // trigger comparisons. bar-cache.ts leaves bars raw so option tickers
-    // can keep legitimate "no trade" zero rows; this filter is applied at
-    // the underlying-consumer site.
+    // trigger comparisons. Raw bars are left unfiltered upstream so option
+    // tickers can keep legitimate "no trade" zero rows; this filter is
+    // applied at the underlying-consumer site.
     for (const b of bars) {
       if (
         !Number.isFinite(b.open)  || b.open  <= 0 ||
