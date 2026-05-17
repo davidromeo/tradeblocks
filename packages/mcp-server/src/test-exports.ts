@@ -370,43 +370,12 @@ export {
   batchExitAnalysisSchema,
 } from './tools/batch-exit-analysis.js';
 
-// Export shared bar fetch+cache utility for unit testing.
-export {
-  fetchBarsWithCache,
-  type FetchBarsWithCacheOptions,
-  mergeQuoteBars,
-  getDataTier,
-  readCachedBars,
-  fetchEntryBarsForCandidates,
-  fetchBarsForLegsBulk,
-  type DataTier,
-  type ReadCachedBarsOptions,
-} from './utils/bar-cache.js';
-
 // Export quote enricher pure functions for unit testing
 export { shouldSkipEnrichment, buildEnrichmentPlan } from './utils/quote-enricher.js';
 export type { EnrichmentPlanInput } from './utils/quote-enricher.js';
 
 // SQL tool validator — unit-tested for path-gate + hard-block rules
 export { validateQuery, isUnderDataRoot } from './tools/sql.js';
-
-// Contract selector pure functions (unit testing)
-export {
-  selectByDelta,
-  selectByOtmPct,
-  selectAtm,
-  selectByFixedPremium,
-  selectByOffset,
-  selectStrike,
-} from './utils/contract-selector.js';
-export type { SelectionOptions, SelectionResult } from './utils/contract-selector.js';
-
-// Strategy schema (Zod) for unit testing
-export {
-  StrategyDefinitionSchema,
-  LegDefinitionSchema,
-  StrikeSpecSchema,
-} from './utils/strategy-schema.js';
 
 // Chain loader pure functions (unit testing)
 export { filterChain } from './utils/chain-loader.js';
@@ -762,13 +731,6 @@ export type {
   RowDiff,
 } from './utils/enrichment-verification.js';
 export { calibrateProviderFetch } from './utils/calibration-probe.js';
-export {
-  collectStrategyDeltaTargetBps,
-  collectStrategiesDeltaTargetBps,
-  deltaTargetBasisPoints,
-  getLegStrikeSpec,
-  strategyHasDeltaLegs,
-} from './utils/strategy-delta-targets.js';
 // ============================================================================
 
 // Extension point: additional test exports provided by the optional private extension.
