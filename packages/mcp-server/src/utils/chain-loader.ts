@@ -3,12 +3,12 @@
  *
  * Pure helpers for option chain filtering and deduplication.
  *
- * Phase 4 Plan 04-03: the three-step cache-lifecycle fetch path is GONE
- * (D-05 / SEP-01 — reads never trigger provider fetches). Per-date chain
- * reads now flow through `stores.chain.readChain(underlying, date)`
- * (Phase 2 ChainStore API). Empty array is the new skip signal — the
- * legacy `ChainSkipResult` / `isChainSkip` type-guard pair has been
- * deleted along with the SQL builders that backed the cache lookups.
+ * The three-step cache-lifecycle fetch path is gone — reads never trigger
+ * provider fetches. Per-date chain reads now flow through
+ * `stores.chain.readChain(underlying, date)` (ChainStore API). Empty array
+ * is the skip signal — the legacy `ChainSkipResult` / `isChainSkip`
+ * type-guard pair has been deleted along with the SQL builders that backed
+ * the cache lookups.
  *
  * Surviving public surface (this file):
  *   - filterChain(contracts, filter)        pure DTE / contract-type filter
@@ -17,19 +17,16 @@
  *                                           on-the-wire contract shape (also
  *                                           re-exported from market/stores/types.ts)
  *
- * Transitional surface (Case B — to be removed by plan 04-04):
+ * Transitional surface (deprecated, scheduled for removal):
  *   - ChainLoadResult interface             { contracts: ContractRow[], source: 'cache' }
- *                                           still type-referenced by many backtest
- *                                           internals (entry-resolver, market-data-loader,
- *                                           data-prep, simulation/helpers, types,
- *                                           cache, quote-minute-cache). Plan 04-04
- *                                           atomically rewrites those consumers to
- *                                           accept `ContractRow[]` directly and
- *                                           deletes this interface.
+ *                                           preserved until downstream consumers
+ *                                           are rewritten to accept `ContractRow[]`
+ *                                           directly.
  *
  * Anything not listed above (loadChain, loadChainsBulk, buildCachedChainQuery,
  * optionChainPartitionSource, chainColumnsSql, chainRowFromSql, ChainResult,
- * ChainSkipResult, ChainSkipReason, isChainSkip) was DELETED in plan 04-03.
+ * ChainSkipResult, ChainSkipReason, isChainSkip) was deleted as part of the
+ * ChainStore migration.
  */
 
 // ---------------------------------------------------------------------------
@@ -49,8 +46,8 @@ export interface ContractRow {
 
 /**
  * Transitional shape — see file header. The `source` field is fixed to
- * `'cache'` post-Phase-4 because reads never fetch (SEP-01). Plan 04-04
- * deletes this interface and switches downstream consumers to plain
+ * `'cache'` because reads no longer fetch from a provider. This interface
+ * is scheduled for removal once downstream consumers are switched to plain
  * `ContractRow[]`.
  *
  * Do NOT add new code that constructs ChainLoadResult; use ContractRow[].
@@ -109,28 +106,23 @@ export function filterChain(contracts: ContractRow[], filter: ChainFilterOptions
 }
 
 // ---------------------------------------------------------------------------
-// Transitional throw-stubs (Case B — deleted by plan 04-04)
+// Transitional throw-stubs (deprecated, scheduled for removal)
 //
-// The Phase 4 Plan 04-03 charter is "delete the cache-miss fetchers" — and the
-// concrete read path (Massive HTTP + INSERT OR REPLACE INTO market.option_chain)
-// IS gone. The named symbols below survive ONLY as throw-stubs to keep the
-// worktree compiling between plan 04-03 (Wave 3) and plan 04-04 (also Wave 3),
-// which migrates the remaining callers in:
-//   - src/backtest/loading/data-prep.ts
-//   - src/backtest/loading/market-data-loader.ts
-//   - src/utils/quote-minute-cache.ts
-//   - src/utils/data-pipeline.ts
-// to use `stores.chain.readChain(...)` directly.
+// The cache-miss fetch path (Massive HTTP + INSERT OR REPLACE INTO
+// market.option_chain) is gone. The named symbols below survive ONLY as
+// throw-stubs to keep downstream consumers compiling until they have been
+// rewritten to use `stores.chain.readChain(...)` directly.
 //
 // These stubs MUST NEVER be invoked at runtime. They exist purely so static
-// type-checking and Jest module-graph resolution succeed in the interval
-// between waves. Plan 04-04 deletes them entirely.
+// type-checking and Jest module-graph resolution succeed in the interim.
 // ---------------------------------------------------------------------------
 
 /**
- * @deprecated Phase 4 Plan 04-03 — DELETED. Use `stores.chain.readChain(underlying, date)`
- * instead. Empty array is the new skip signal (replaces ChainSkipResult). This stub
- * throws at runtime to make accidental callers loud; plan 04-04 removes it entirely.
+ * @deprecated Removed in the ChainStore migration. Use
+ * `stores.chain.readChain(underlying, date)` instead — empty array is the
+ * new skip signal (replaces `ChainSkipResult`). This stub throws at runtime
+ * to make accidental callers loud and will be deleted once consumers have
+ * been rewritten.
  */
 export async function loadChain(
   _underlying: string,
@@ -139,15 +131,16 @@ export async function loadChain(
   _opts?: { dataDir?: string; maxDte?: number },
 ): Promise<ChainLoadResult> {
   throw new Error(
-    "chain-loader.loadChain is DELETED in plan 04-03 (Phase 4). " +
-    "Use stores.chain.readChain(underlying, date) instead — empty array is the new skip signal. " +
-    "Plan 04-04 (Wave 3) removes this stub.",
+    "chain-loader.loadChain has been removed. " +
+    "Use stores.chain.readChain(underlying, date) instead — empty array is the new skip signal.",
   );
 }
 
 /**
- * @deprecated Phase 4 Plan 04-03 — DELETED. Use a `for (const date of dates)` loop
- * with `stores.chain.readChain(underlying, date)` instead. Plan 04-04 removes this stub.
+ * @deprecated Removed in the ChainStore migration. Use a
+ * `for (const date of dates)` loop with `stores.chain.readChain(underlying, date)`
+ * instead. This stub throws at runtime and will be deleted once consumers
+ * have been rewritten.
  */
 export async function loadChainsBulk(
   _underlying: string,
@@ -156,8 +149,7 @@ export async function loadChainsBulk(
   _opts?: { dataDir?: string },
 ): Promise<Map<string, ChainLoadResult>> {
   throw new Error(
-    "chain-loader.loadChainsBulk is DELETED in plan 04-03 (Phase 4). " +
-    "Use a per-date loop with stores.chain.readChain(underlying, date) instead. " +
-    "Plan 04-04 (Wave 3) removes this stub.",
+    "chain-loader.loadChainsBulk has been removed. " +
+    "Use a per-date loop with stores.chain.readChain(underlying, date) instead.",
   );
 }

@@ -1,18 +1,17 @@
 /**
  * Unit tests for chain-loader.ts.
  *
- * Phase 4 Plan 04-03: the three-step cache-lifecycle fetch path was
- * deleted (D-05 / SEP-01 — reads never trigger provider fetches). The
- * surviving public surface is the pure-utility set: `filterChain` +
- * `deduplicateContracts` + `ContractRow`. The legacy `loadChain` /
- * `loadChainsBulk` / `isChainSkip` cases are removed; equivalent
- * coverage of the new path lives in
+ * The three-step cache-lifecycle fetch path was deleted (reads no longer
+ * trigger provider fetches). The surviving public surface is the
+ * pure-utility set: `filterChain` + `deduplicateContracts` + `ContractRow`.
+ * The legacy `loadChain` / `loadChainsBulk` / `isChainSkip` cases are
+ * removed; equivalent coverage of the new path lives in
  * `tests/integration/wave-b-chain-consumer-contract.test.ts`
  * (orchestrator now calls `stores.chain.readChain`).
  *
- * Original requirements covered: CHAIN-03 (filter-by-DTE/contract_type),
- * CHAIN-04 historical skip semantics — superseded by the empty-array
- * skip signal asserted in wave-b-chain-consumer-contract.test.ts.
+ * Original requirements covered: filter-by-DTE / contract_type;
+ * historical skip semantics are superseded by the empty-array skip
+ * signal asserted in wave-b-chain-consumer-contract.test.ts.
  */
 
 import { filterChain, type ContractRow } from "../../src/test-exports.js";
