@@ -53,4 +53,34 @@ export default tseslint.config(
       ],
     },
   },
+  // IMPORT BOUNDARY: block reverse-direction imports from sibling consumers.
+  // tradeblocks is a public library; no consumer module may leak into it.
+  // Paired with tsconfig `paths` lockdown and the CI "Reverse import gate".
+  {
+    files: ["**/*.{js,jsx,ts,tsx,mjs,cjs}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../holodeck/*", "**/../holodeck/*"],
+              message:
+                "Imports from sibling consumer repos are forbidden. tradeblocks must not depend on holodeck or any private sibling.",
+            },
+            {
+              group: ["**/private-packages/*"],
+              message:
+                "private-packages/* is reserved for private consumers. Public tradeblocks code must not import from it.",
+            },
+            {
+              group: ["@tradeblocks-private/*"],
+              message:
+                "@tradeblocks-private/* is a private scope. Public tradeblocks code must not import from it.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
