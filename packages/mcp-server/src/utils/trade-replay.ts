@@ -82,14 +82,17 @@ export interface ReplayResult {
  * more accurate mark price than HL2. This is opt-in — existing data without
  * bid/ask continues to use HL2 identically.
  *
- * Guards against crossed exchange quotes (bid > ask) by falling back to HL2,
- * since the computed mid is meaningless in that case.
+ * Guards against broken exchange quotes (crossed bid>ask; blown ask>10×bid
+ * with mid>$1) by falling back to HL2.
  */
 export function markPrice(bar: Pick<BarRow, 'high' | 'low' | 'bid' | 'ask'>): number {
   const { bid, ask } = bar;
   const hl2 = (bar.high + bar.low) / 2;
   if (bid != null && ask != null && (bid > 0 || ask > 0)) {
-    if (bid > 0 && ask > 0 && bid > ask) return hl2;
+    if (bid > 0 && ask > 0) {
+      if (bid > ask) return hl2;
+      if (ask > 10 * bid && (bid + ask) / 2 > 1) return hl2;
+    }
     return (bid + ask) / 2;
   }
   return hl2;
