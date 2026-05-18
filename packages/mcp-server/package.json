@@ -97,9 +97,17 @@
       "types": "./src/market/stores/index.ts",
       "import": "./src/market/stores/index.ts"
     },
+    "./market/stores/types": {
+      "types": "./src/market/stores/types.ts",
+      "import": "./src/market/stores/types.ts"
+    },
     "./market/tickers": {
       "types": "./src/market/tickers/index.ts",
       "import": "./src/market/tickers/index.ts"
+    },
+    "./market/tickers/registry": {
+      "types": "./src/market/tickers/registry.ts",
+      "import": "./src/market/tickers/registry.ts"
     },
     "./market/tickers/resolver": {
       "types": "./src/market/tickers/resolver.ts",
@@ -108,6 +116,10 @@
     "./market/tickers/schemas": {
       "types": "./src/market/tickers/schemas.ts",
       "import": "./src/market/tickers/schemas.ts"
+    },
+    "./test-exports": {
+      "types": "./src/test-exports.ts",
+      "import": "./src/test-exports.ts"
     }
   },
   "scripts": {
