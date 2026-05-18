@@ -128,6 +128,7 @@
     "fix-http-import": "node -e \"const fs=require('fs');const f='server/index.js';let c=fs.readFileSync(f,'utf8');c=c.replace(/\\.\\/http-server-[A-Z0-9]+\\.js/g,'./http-server.js');fs.writeFileSync(f,c);\" && rm -f server/http-server-*.js server/http-server-*.map",
     "dev": "tsup --watch",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "verify:exports": "node scripts/verify-exports-surface.mjs",
     "mcpb:pack": "npm run build && node scripts/pack-mcpb.js",
     "pack:beta": "npm run build && npm pack --pack-destination .",
     "prepublishOnly": "npm run build"
