@@ -204,17 +204,17 @@ describe("chain-loader + quote-enricher — exported API shape after surgical de
     expect(quoteEnricher.shouldSkipEnrichment(199)).toBe(false);
   });
 
-  it("quote-enricher: fetch loop is deleted (or stubbed to throw — Plan 04-06 wires backfillQuotes)", async () => {
+  it("quote-enricher: fetch loop is deleted (or stubbed to throw)", async () => {
     // Either the function is fully gone OR it survives as a throw-stub. The
-    // contract for plan 04-03 is "no provider fetch happens here". A throw-stub
-    // satisfies that and keeps callers in data-pipeline.ts type-checking until
-    // plan 04-06 swaps the implementation.
+    // contract is "no provider fetch happens here". A throw-stub satisfies
+    // that and keeps any remaining callers type-checking until they are
+    // rewritten to use `backfillQuotes(stores, ...)`.
     const stub = (quoteEnricher as unknown as Record<string, unknown>).enrichQuotesForTickers;
     if (typeof stub === "function") {
-      // Stub variant: must throw with the plan-04-03 marker so any accidental
-      // call is loud and traceable to the right plan. Call with an arg shape
-      // that satisfies whatever defensive guards the stub may have so it
-      // reaches the throw — the precise signature is documented in SUMMARY.md.
+      // Stub variant: must throw with a marker pointing at the replacement
+      // API so any accidental call is loud and traceable. Call with an arg
+      // shape that satisfies whatever defensive guards the stub may have so
+      // it reaches the throw.
       const fn = stub as (...args: unknown[]) => Promise<unknown> | unknown;
       let caught: unknown = null;
       try {
@@ -224,7 +224,9 @@ describe("chain-loader + quote-enricher — exported API shape after surgical de
         caught = e;
       }
       expect(caught).not.toBeNull();
-      expect(String((caught as Error).message)).toMatch(/plan 04-03/i);
+      // The message must mention the replacement API so future readers can
+      // find it.
+      expect(String((caught as Error).message)).toContain("backfillQuotes");
     } else {
       expect(stub).toBeUndefined();
     }

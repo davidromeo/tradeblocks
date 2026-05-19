@@ -3,21 +3,17 @@
  *
  * Pure helpers for option-quote enrichment planning.
  *
- * Phase 4 Plan 04-03: the I/O fetch loop (`enrichQuotesForTickers`) and its
- * coverage-probe helper (`fetchExistingCoverage`) were deleted — reads never
- * trigger provider fetches (D-05 / SEP-01).
- *
- * Phase 4 Plan 04-06 (Wave 5): the transitional `enrichQuotesForTickers`
- * throw-stub is now DELETED — every caller routes through
- * `backfillQuotes(stores, ...)` from `utils/quote-backfill.ts`.
+ * The I/O fetch loop (`enrichQuotesForTickers`) and its coverage-probe
+ * helper (`fetchExistingCoverage`) were deleted — reads no longer trigger
+ * provider fetches. Every caller routes through `backfillQuotes(stores, ...)`
+ * from `utils/quote-backfill.ts`.
  *
  * Surviving public surface (this file):
  *   - shouldSkipEnrichment(barCount, threshold)   pure density check
  *   - buildEnrichmentPlan(input)                  pure planner — groups
  *                                                 (ticker, date) combos
- *                                                 needing enrichment.
- *                                                 Reused by backfillQuotes
- *                                                 (Plan 04-06 / B2 / Path A).
+ *                                                 needing enrichment. Reused
+ *                                                 by backfillQuotes.
  *   - QuoteEnrichmentResult                       result-shape type — preserved
  *                                                 because internal callers may
  *                                                 still reference it; structurally
@@ -37,9 +33,9 @@ export interface EnrichmentPlanItem {
 
 /**
  * Result shape returned by the (deleted) `enrichQuotesForTickers` function.
- * Plan 04-06 swapped every call site to `backfillQuotes` whose result type
- * (`BackfillQuotesResult`) is structurally identical. We keep this alias as a
- * stable internal type name; callers may import either.
+ * Every call site has been switched to `backfillQuotes`, whose result type
+ * (`BackfillQuotesResult`) is structurally identical. This alias is kept
+ * as a stable internal type name; callers may import either.
  */
 export interface QuoteEnrichmentResult {
   tickersProcessed: number;
@@ -123,7 +119,6 @@ function expandDateRange(fromDate: string, toDate: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 4 Plan 04-06: the `enrichQuotesForTickers` throw-stub from plan 04-03
-// is DELETED. Callers were migrated to `backfillQuotes(stores, ...)` from
-// `utils/quote-backfill.ts` in this same plan.
+// The `enrichQuotesForTickers` throw-stub has been deleted. All callers now
+// route through `backfillQuotes(stores, ...)` from `utils/quote-backfill.ts`.
 // ---------------------------------------------------------------------------
