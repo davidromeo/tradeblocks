@@ -478,11 +478,9 @@ export type { FlatImportLogEntry } from './db/json-adapters.js';
 export { migrateMetadataToJson, type MigrationResult } from './db/json-migration.js';
 
 // ============================================================================
-// Market Data 3.0 — Phase 1 exports (MUST appear BEFORE the ext.ts wildcard below)
+// Market Data 3.0 — Phase 1 exports
 //
 // Per CONTEXT.md D-19: all Phase 1 modules are SHARED code; they re-export here.
-// Adding new symbols AFTER the `export * from './test-exports.ext.js'` line
-// silently masks them (RESEARCH.md Pitfall 9).
 // ============================================================================
 
 // Store interfaces + factory (Plan 01)
@@ -552,8 +550,6 @@ export {
 // Wave 1 deliverables: pure SQL builders, RTH aggregation helper, partition
 // enumerator, and the enrichment watermark JSON adapter. Concrete store
 // classes ship in Waves 2-3 and will re-export below in later plans.
-//
-// MUST appear BEFORE the './test-exports.ext.js' wildcard (Pitfall 10).
 // ============================================================================
 
 // Pure SQL builders (Plan 02-01)
@@ -600,8 +596,6 @@ export type { EnrichmentWatermarks } from './db/json-adapters.js';
 // Concrete classes ship one task at a time per Plan 02-03. Each task's
 // subset of exports is added here so tests can import the concrete class
 // names directly via `../../../src/test-exports.js`.
-//
-// MUST appear BEFORE the './test-exports.ext.js' wildcard (Pitfall 10).
 // ============================================================================
 
 // Concrete Spot store pair (Plan 02-03 Task 1)
@@ -628,8 +622,6 @@ export { DuckdbQuoteStore } from './market/stores/duckdb-quote-store.js';
 // Phase 1 abstract EnrichedStore and accept an injected SpotStore in their
 // constructors so that the enricher's IO boundaries (minute-bar reads,
 // watermark get/upsert) are satisfied without reimplementing the math.
-//
-// MUST appear BEFORE the './test-exports.ext.js' wildcard (Pitfall 10).
 // ============================================================================
 
 // Concrete Enriched store pair (Plan 02-04 Task 2)
@@ -672,8 +664,6 @@ export type {
 // The .mjs script itself is NOT re-exported (CONTEXT.md D-26 — scripts with
 // filesystem effects cannot be unit-tested cleanly via test-exports; unit tests
 // target the pure helpers).
-//
-// MUST appear BEFORE the './test-exports.ext.js' wildcard (RESEARCH §Pitfall 7).
 // ============================================================================
 
 export {
@@ -693,8 +683,6 @@ export type { GroupResult } from './utils/migrate-option-data-helpers.js';
 //
 // RESOLVE-02: Tool Dependency Registry
 // SEP-01: pipeline-side backfill helper (plan 04-06)
-//
-// MUST appear BEFORE the './test-exports.ext.js' wildcard (PATTERNS.md Pattern 6 / Pitfall 10).
 // ============================================================================
 export { TOOL_TICKER_DEPS, unionTickerDeps } from './utils/tool-ticker-deps.js';
 // ============================================================================
@@ -703,7 +691,6 @@ export { TOOL_TICKER_DEPS, unionTickerDeps } from './utils/tool-ticker-deps.js';
 // Market Data 3.0 — Phase 5 exports (Spot Backfill + Enrichment Rebuild)
 //
 // D-17/D-19: verification helper, sample-date selector, calibration probe.
-// MUST appear BEFORE the './test-exports.ext.js' wildcard (PATTERNS.md Pitfall 10).
 // ============================================================================
 export {
   selectVerificationSampleDates,
@@ -726,6 +713,3 @@ export type {
 } from './utils/enrichment-verification.js';
 export { calibrateProviderFetch } from './utils/calibration-probe.js';
 // ============================================================================
-
-// Extension point: additional test exports provided by the optional private extension.
-export * from './test-exports.ext.js';

@@ -1,4 +1,4 @@
-import { buildOccTicker } from "./thetadata.ext.js";
+import { buildOccTicker } from "../trade-replay.js";
 import {
   ThetaMddsClient,
   indexHistoryEod,

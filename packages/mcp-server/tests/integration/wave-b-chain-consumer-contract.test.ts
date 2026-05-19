@@ -37,7 +37,7 @@
  * Plan 04-03 migrates the orchestrator only (Task 3); plans 04-04
  * (Wave 3 option-leg path) and 04-06 (Wave 5 pipeline rewrite) handle
  * the rest. Some symbols (`ChainLoadResult` interface; chain-loader
- * `loadChainsBulk`/`loadChain` re-exports in test-exports.ext.ts) are
+ * `loadChainsBulk`/`loadChain` re-exports in test-exports.ts) are
  * preserved as transitional surface so the worktree compiles between
  * waves — see SUMMARY.md for the explicit Case B documentation.
  */

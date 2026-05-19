@@ -13,9 +13,7 @@
  * Until then `npm run build` must succeed and imports must compile cleanly.
  */
 import { describe, it, expect } from "@jest/globals";
-// Import directly from source files, not via test-exports, because a sibling
-// re-export in test-exports.ext.ts pulls a .mjs devtool module that Jest can't
-// parse in this repo's current config (pre-existing issue from earlier commits).
+// Imported directly from source files rather than via test-exports.
 import { extractRoot, rootToUnderlying } from "../../../../src/market/tickers/resolver.js";
 import { TickerRegistry } from "../../../../src/market/tickers/registry.js";
 
