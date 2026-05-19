@@ -29,6 +29,12 @@ jobs:
       - name: "No file: deps gate"
         run: '! grep -q ''"file:'' package.json packages/*/package.json'
 
+      # The tradeblocks-mcp exports map is the package's published surface.
+      # Verify every target file resolves on disk and that no excluded
+      # subpaths have crept in. See the script's header for the policy.
+      - name: Verify mcp-server exports surface
+        run: node packages/mcp-server/scripts/verify-exports-surface.mjs
+
   frontend:
     name: Frontend (Next.js)
     runs-on: ubuntu-latest
