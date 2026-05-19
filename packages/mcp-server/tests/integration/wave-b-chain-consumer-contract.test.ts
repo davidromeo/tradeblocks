@@ -1,45 +1,29 @@
 /**
- * Wave B chain-consumer contract tests (Phase 4 Plan 04-03).
+ * Chain-consumer contract tests.
  *
  * Exercises the migrated orchestrator chain-read path and the surviving
  * pure-utility surface of `utils/chain-loader.ts` after the surgical
  * deletion of `loadChain` / `loadChainsBulk` / `buildCachedChainQuery`
  * / `optionChainPartitionSource` and the chain-skip Result types.
  *
- * Wave B scope (this plan):
- *   - chain-loader.ts: delete the three-step cache-lifecycle fetch path,
- *     the SQL builders, and the skip-result types. Preserve the pure
- *     utilities (`filterChain` / `deduplicateContracts`) plus the
- *     `ContractRow` type alias and (transitionally per Case B) the
- *     `ChainLoadResult` interface so plan 04-04 can clean it up
- *     atomically with the remaining backtest internals.
- *   - quote-enricher.ts: delete `enrichQuotesForTickers` /
- *     `fetchExistingCoverage`. Preserve the pure planners
- *     (`shouldSkipEnrichment` / `buildEnrichmentPlan`).
- *   - market-datasets.ts: drop `option_chain` / `option_quote_minutes`
- *     from `CanonicalPartitionedDataset` (D-12) — the new 3.0 layout is
+ * Scope:
+ *   - chain-loader.ts: the three-step cache-lifecycle fetch path, the SQL
+ *     builders, and the skip-result types are deleted. Pure utilities
+ *     (`filterChain` / `deduplicateContracts`) are preserved, along with
+ *     the `ContractRow` type alias and (transitionally) the
+ *     `ChainLoadResult` interface.
+ *   - quote-enricher.ts: `enrichQuotesForTickers` and
+ *     `fetchExistingCoverage` are deleted. Pure planners
+ *     (`shouldSkipEnrichment` / `buildEnrichmentPlan`) are preserved.
+ *   - market-datasets.ts: `option_chain` and `option_quote_minutes` are
+ *     dropped from `CanonicalPartitionedDataset` — the 3.0 layout is
  *     served via `DATASETS_V3` exclusively.
- *   - backtest/orchestrator.ts: per-date chain read goes through
- *     `stores.chain.readChain(...)`; empty-array is the new skip signal
- *     replacing `isChainSkip`.
+ *   - Per-date chain reads go through `stores.chain.readChain(...)`;
+ *     empty array is the new skip signal replacing `isChainSkip`.
  *
- * Pre-deletion external consumers of the deleted symbols (verified at
- * start of plan 04-03):
- *
- *   src/backtest/orchestrator.ts                      loadChain + isChainSkip + ChainLoadResult
- *   src/backtest/loading/data-prep.ts                 loadChainsBulk + ChainLoadResult
- *   src/backtest/loading/market-data-loader.ts        loadChainsBulk + ChainLoadResult
- *   src/utils/quote-minute-cache.ts                   loadChainsBulk + loadChain + ChainLoadResult
- *   src/utils/data-pipeline.ts                        loadChainsBulk + loadChain
- *   src/tools/data-pipeline.ts                        enrichQuotesForTickers (3 call sites)
- *   src/utils/data-pipeline.ts                        enrichQuotesForTickers (1 call site)
- *
- * Plan 04-03 migrates the orchestrator only (Task 3); plans 04-04
- * (Wave 3 option-leg path) and 04-06 (Wave 5 pipeline rewrite) handle
- * the rest. Some symbols (`ChainLoadResult` interface; chain-loader
- * `loadChainsBulk`/`loadChain` re-exports in test-exports.ts) are
- * preserved as transitional surface so the worktree compiles between
- * waves — see SUMMARY.md for the explicit Case B documentation.
+ * Transitional surface still exported (`ChainLoadResult` interface; the
+ * throw-stubs for `loadChain` / `loadChainsBulk`) is preserved so
+ * downstream consumers continue to compile during the rewrite.
  */
 import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 import {
@@ -168,20 +152,20 @@ describe("chain-loader + quote-enricher — exported API shape after surgical de
   });
 
   it("chain-loader: SQL builders + cache-lifecycle internals are deleted", () => {
-    // Three-step cache lifecycle gone (D-05 / SEP-01 — reads never trigger fetches).
-    // The SQL builders and partition-source helpers that backed the deleted
-    // cache reads are also gone.
+    // The three-step cache lifecycle is gone — reads never trigger provider
+    // fetches. The SQL builders and partition-source helpers that backed the
+    // deleted cache reads are also gone.
     expect((chainLoader as unknown as Record<string, unknown>).buildCachedChainQuery).toBeUndefined();
     expect((chainLoader as unknown as Record<string, unknown>).optionChainPartitionSource).toBeUndefined();
     expect((chainLoader as unknown as Record<string, unknown>).chainColumnsSql).toBeUndefined();
     expect((chainLoader as unknown as Record<string, unknown>).chainRowFromSql).toBeUndefined();
   });
 
-  it("chain-loader: loadChain / loadChainsBulk are throw-stubs (Case B — plan 04-04 deletes)", async () => {
-    // The fetch implementations are gone. The named exports survive transitionally
-    // to keep the worktree compiling between plan 04-03 (Wave 3) and plan 04-04
-    // (Wave 3) which migrates the remaining backtest-internals callers. Calling
-    // them at runtime must throw with a marker referring to plan 04-03.
+  it("chain-loader: loadChain / loadChainsBulk are throw-stubs", async () => {
+    // The fetch implementations are gone. The named exports survive
+    // transitionally so downstream consumers continue to compile. Calling
+    // them at runtime must throw with a marker pointing at the replacement
+    // API (stores.chain.readChain).
     const loadChain = (chainLoader as unknown as Record<string, unknown>).loadChain;
     const loadChainsBulk = (chainLoader as unknown as Record<string, unknown>).loadChainsBulk;
 
@@ -198,8 +182,9 @@ describe("chain-loader + quote-enricher — exported API shape after surgical de
         caught = e;
       }
       expect(caught).not.toBeNull();
-      expect(String((caught as Error).message)).toMatch(/plan 04-03/i);
-      // Sanity: the message names the symbol so future grep-walkers find the right plan.
+      // Message must point readers at the replacement API.
+      expect(String((caught as Error).message)).toContain("stores.chain.readChain");
+      // Sanity: the message names the symbol so future grep-walkers can find it.
       expect(String((caught as Error).message)).toContain(name === "loadChain" ? "loadChain" : "loadChainsBulk");
     }
   });
