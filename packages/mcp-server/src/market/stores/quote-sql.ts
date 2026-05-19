@@ -1,11 +1,10 @@
 /**
- * Pure SQL builder for QuoteStore reads (Market Data 3.0 — Phase 2 Wave 1).
+ * Pure SQL builder for QuoteStore reads.
  *
- * Emits the multi-ticker grouped-series read pattern (CONTEXT.md D-06): one
- * partition targeted by underlying + date range, with an `IN (...)` filter over
- * the OCC ticker list. Callers are responsible for having validated that every
- * OCC ticker resolves to the same underlying (D-07); this builder trusts its
- * caller on that front.
+ * Emits a multi-ticker grouped-series read: one partition targeted by
+ * underlying + date range, with an `IN (...)` filter over the OCC ticker list.
+ * Callers are responsible for having validated that every OCC ticker resolves
+ * to the same underlying; this builder trusts its caller on that front.
  *
  * Param layout:
  *   $1        → underlying
@@ -13,8 +12,8 @@
  *   $3        → to   (date)
  *   $4..$N    → occTickers (variable-length IN list)
  *
- * Purity contract (CONTEXT.md D-05): pure function, no DuckDB value-level
- * imports. Tests in `tests/unit/market/stores/quote-sql.test.ts`.
+ * Purity contract: pure function, no DuckDB value-level imports. Tests in
+ * `tests/unit/market/stores/quote-sql.test.ts`.
  */
 import type { BuiltSQL } from "./spot-sql.js";
 

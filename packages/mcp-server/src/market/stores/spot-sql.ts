@@ -1,18 +1,19 @@
 /**
- * Pure SQL builders for SpotStore reads (Market Data 3.0 — Phase 2 Wave 1).
+ * Pure SQL builders for SpotStore reads.
  *
  * Every export is a pure function: given primitive inputs, it returns
  * `{ sql, params }` where `params` are positional bindings for DuckDB's
  * `$1`/`$2`/`$3` placeholders.
  *
- * Purity contract (CONTEXT.md D-05, PATTERNS.md "Pure SQL builders"):
+ * Purity contract:
  *   - No `this` / no `ctx` / no DB-connection value-level import
  *   - No side effects; no IO
- *   - Composable — concrete stores in Waves 2-3 feed the result to `conn.run()`
+ *   - Composable — concrete stores feed the result to `conn.run()`
  *
- * Security note (T-2-02): user-controlled values (ticker, from, to) are bound
+ * Security note: user-controlled values (ticker, from, to) are bound
  * positionally. The SQL strings never interpolate untrusted text. Partition-
- * value whitelisting + positional binding together mitigate SQL injection.
+ * value whitelisting at higher layers plus positional binding here together
+ * mitigate SQL injection.
  */
 
 /**
@@ -47,9 +48,8 @@ export function buildReadBarsSQL(
  * Aggregate minute bars in `market.spot` into RTH daily OHLCV rows.
  *
  * Uses DuckDB aggregate `first(col ORDER BY time)` / `last(col ORDER BY time)`
- * idioms (PATTERNS.md "rth-aggregation.ts"; RESEARCH.md Pitfall 3). Window-
- * function equivalents are explicitly avoided — they do NOT coexist with
- * `GROUP BY` and are a common source of incorrect ordering.
+ * idioms. Window-function equivalents are explicitly avoided — they do NOT
+ * coexist with `GROUP BY` and are a common source of incorrect ordering.
  */
 export function buildReadDailyBarsSQL(
   ticker: string,
@@ -87,9 +87,8 @@ export function buildReadDailyBarsSQL(
 /**
  * Project `(date, open)` using the RTH first-open aggregate.
  *
- * Used by the enricher Tier 2 VIX RTH open call site (RESEARCH.md "Enricher IO
- * Refactor Surface" call site 5) where only the opening tick of the VIX family
- * is needed for term-structure context computation.
+ * Used by the enricher's VIX RTH open path, where only the opening tick of
+ * the VIX family is needed for term-structure context computation.
  */
 export function buildReadRthOpensSQL(
   ticker: string,

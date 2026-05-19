@@ -1,5 +1,5 @@
 /**
- * Pure SQL builder for EnrichedStore reads (Market Data 3.0 — Phase 2 Wave 1).
+ * Pure SQL builder for EnrichedStore reads.
  *
  * The enriched read supports two optional joins controlled by flags:
  *   - `includeOhlcv`   → LEFT JOIN a daily RTH aggregate of `market.spot`
@@ -11,9 +11,8 @@
  * (`$1=ticker`, `$2=from`, `$3=to`) — the builder never duplicates params
  * just because a flag is flipped.
  *
- * Purity contract (PATTERNS.md "Pure SQL builders"; CONTEXT.md D-05): no `this`,
- * no `ctx`, no DB-connection value-level imports. Tests live in
- * `tests/unit/market/stores/enriched-sql.test.ts`.
+ * Purity contract: no `this`, no `ctx`, no DB-connection value-level imports.
+ * Tests live in `tests/unit/market/stores/enriched-sql.test.ts`.
  */
 import { rthDailyAggregateSubquery } from "./rth-aggregation.js";
 import type { BuiltSQL } from "./spot-sql.js";
