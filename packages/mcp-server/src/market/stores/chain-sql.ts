@@ -1,12 +1,12 @@
 /**
- * Pure SQL builder for ChainStore reads (Market Data 3.0 — Phase 2 Wave 1).
+ * Pure SQL builder for ChainStore reads.
  *
  * Option chains are partitioned by (underlying, date). A single `readChain`
  * call targets exactly one partition, so the builder binds two positional
  * parameters: $1=underlying, $2=date.
  *
- * Purity contract (CONTEXT.md D-05): no `this`, no `ctx`, no DuckDB value-level
- * imports. Tests in `tests/unit/market/stores/chain-sql.test.ts`.
+ * Purity contract: no `this`, no `ctx`, no DuckDB value-level imports. Tests
+ * in `tests/unit/market/stores/chain-sql.test.ts`.
  */
 import type { BuiltSQL } from "./spot-sql.js";
 
